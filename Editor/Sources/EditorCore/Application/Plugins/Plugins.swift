@@ -429,8 +429,8 @@ extension EditorApplication {
         let languageBinding = pluginSession.bindings[PluginLanguageService.pluginID]
         if dynamicScriptManager.languagePlugin.bind(languageBinding,
             client: languageBinding == nil ? nil : pluginSession.hostClient) {
-            workstation.scripts.stopLanguageService()
-            if languageBinding != nil { workstation.scripts.startLanguageService() }
+            workstation.scripts.stopLanguageServiceForPluginChange()
+            if languageBinding != nil { workstation.scripts.startLanguageServiceForPluginChange() }
         }
         await pendingAISetupTask?.value
         pendingAISetupTask = nil

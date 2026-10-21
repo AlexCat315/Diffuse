@@ -1,5 +1,5 @@
-internal import Foundation
-internal import GuavaUICompose
+import Foundation
+import GuavaUICompose
 
 struct ScriptLanguageEditHistory {
     struct Change {
@@ -16,24 +16,6 @@ struct ScriptLanguageEditHistory {
         undo.append(changes)
         if undo.count > 50 { undo.removeFirst() }
         redo.removeAll()
-    }
-}
-
-public enum ScriptLanguageEditError: Error, LocalizedError, Sendable {
-    case staleDocument(String)
-    case invalidRange
-    case overlappingEdits
-    case duplicateDocument
-    case noHistory
-
-    public var errorDescription: String? {
-        switch self {
-        case let .staleDocument(name): "The script changed while the language operation was running: \(name). Request the operation again."
-        case .invalidRange: "The language server returned an invalid text range."
-        case .overlappingEdits: "The language server returned overlapping text edits."
-        case .duplicateDocument: "The language server returned multiple edit groups for the same document."
-        case .noHistory: "There is no language operation to undo or redo."
-        }
     }
 }
 

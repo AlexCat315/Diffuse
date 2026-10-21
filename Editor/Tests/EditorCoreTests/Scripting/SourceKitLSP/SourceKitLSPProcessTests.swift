@@ -94,6 +94,45 @@ struct SourceKitLSPProcessTests {
         #expect(events.values.last?.state == .inactive)
     }
 
+    @Test("syntax replies keep analysis checking until a semantic result is available")
+    func syntaxDoesNotConfirmHealth() async throws {
+        let fixture = try LSPProcessFixture()
+        defer { fixture.remove() }
+        let support = fixture.support()
+        let file = DynamicScriptManager.ScriptFile(url: fixture.root.appendingPathComponent("Scripts/Demo.swift"))
+        try await support.start(sources: [.init(file: file, text: "let value = 1")], onDiagnostics: { _ in })
+        _ = try await support.documentSymbols(scriptID: file.identifier)
+        _ = try await support.formatting(scriptID: file.identifier)
+        _ = try await support.completion(scriptID: file.identifier, at: .init(line: 0, character: 4))
+        #expect((await support.languageServiceDetails()).health == .checking)
+        _ = try await support.hover(scriptID: file.identifier, at: .init(line: 0, character: 4))
+        #expect((await support.languageServiceDetails()).health == .healthy)
+        await support.stop()
+    }
+
+    @Test("automatic recovery clears environment failures owned by the old connection")
+    func recoveryClearsEnvironmentFailure() async throws {
+        let fixture = try LSPProcessFixture(mode: "environment-first-connection")
+        defer { fixture.remove() }
+        let support = fixture.support()
+        let file = DynamicScriptManager.ScriptFile(url: fixture.root.appendingPathComponent("Scripts/Demo.swift"))
+        try await support.start(sources: [.init(file: file, text: "let value = 1")], onDiagnostics: { _ in })
+        try await waitUntil {
+            if case .degraded = (await support.languageServiceDetails()).health { return true }
+            return false
+        }
+        _ = try? await support.hover(scriptID: file.identifier, at: .init(line: 0, character: 4))
+        try await waitUntil {
+            let ready = await support.isReady
+            return try fixture.launchCount() == 2 && ready
+        }
+        #expect((await support.languageServiceDetails()).health == .checking)
+        _ = try await support.hover(scriptID: file.identifier, at: .init(line: 0, character: 4))
+        #expect((await support.languageServiceDetails()).health == .healthy)
+        #expect((await support.languageServiceDetails()).logs.contains { $0.message.contains("standard library") })
+        await support.stop()
+    }
+
     @Test("Repeated crashes stop after three automatic recovery attempts")
     func boundedRecovery() async throws {
         let fixture = try LSPProcessFixture(mode: "crash-after-open")
@@ -342,7 +381,7 @@ while true {
     let message = (try? JSONSerialization.jsonObject(with: Data(body), options: [.fragmentsAllowed])) as? [String: Any] ?? [:]
     let method = message["method"] as? String
 
-    if method == "test/crash" || (method == "textDocument/hover" && count == 1 && mode == "crash-first-hover") {
+    if method == "test/crash" || (method == "textDocument/hover" && count == 1 && ["crash-first-hover", "environment-first-connection"].contains(mode)) {
         crash(31)
     }
     if method == "textDocument/didOpen" {
@@ -354,6 +393,17 @@ while true {
         }
         if mode == "crash-after-open" {
             DispatchQueue.global().asyncAfter(deadline: .now() + 0.15) { exit(32) }
+        }
+        if mode == "environment-first-connection" {
+            let diagnostics: [[String: Any]] = count == 1 ? [[
+                "range": ["start": ["line": 0, "character": 0], "end": ["line": 0, "character": 1]],
+                "severity": 1, "message": "Loading the standard library failed",
+            ]] : []
+            if count == 1 {
+                send(["jsonrpc": "2.0", "method": "window/logMessage", "params": ["type": 1, "message": "Loading the standard library failed"]])
+            }
+            send(["jsonrpc": "2.0", "method": "textDocument/publishDiagnostics",
+                  "params": ["uri": document?["uri"] as? String ?? "", "version": 1, "diagnostics": diagnostics]])
         }
     }
     if method == "exit" { exit(0) }
@@ -369,12 +419,19 @@ while true {
         if method == "textDocument/hover" {
             result = ["contents": ["kind": "markdown", "value": "recovered symbol"]]
         }
+        if method == "textDocument/documentSymbol" {
+            result = [["name": "value", "kind": 13,
+                       "range": ["start": ["line": 0, "character": 4], "end": ["line": 0, "character": 9]]]]
+        }
+        if method == "textDocument/formatting" { result = [Any]() }
+        if method == "textDocument/completion" { result = ["items": [Any](), "isIncomplete": false] }
         if method == "test/burst" {
             for index in 0..<200 {
                 send(["jsonrpc": "2.0", "method": "test/notification", "params": index], fragmented: true)
             }
             result = 200
         }
+        if method == "test/large" { result = String(repeating: "Swift 🥭\n", count: 80_000) }
         send(["jsonrpc": "2.0", "id": id, "result": result])
     }
 }

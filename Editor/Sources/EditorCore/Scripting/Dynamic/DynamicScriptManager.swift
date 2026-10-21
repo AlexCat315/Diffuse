@@ -59,8 +59,11 @@ public final class DynamicScriptManager: @unchecked Sendable {
     private let assetRegistry: ScriptAssetRegistry
     private let trustStore: ScriptProjectTrustStore
     private let buildCoordinator: DynamicScriptBuildCoordinator
-    private let languageSupport: ScriptLanguageSupport?
-    private let languageSupportUnavailableMessage: String?
+    private let analysisConfiguration: ScriptAnalysisConfiguration
+    private let toolchainSession: ScriptToolchainSession
+    private var languageSupport: ScriptLanguageSupport? { toolchainSession.state.support }
+    private var languageSupportUnavailableMessage: String? { toolchainSession.state.failure }
+    public var swiftToolchain: SwiftToolchain? { toolchainSession.state.toolchain }
     let languagePlugin: PluginLanguageService
 
     @MainActor private var statusByScriptID: [String: CompilationStatus] = [:]
@@ -88,38 +91,26 @@ public final class DynamicScriptManager: @unchecked Sendable {
         self.languagePlugin = languagePlugin
         self.assetRegistry = ScriptAssetRegistry(projectDirectory: projectDirectory)
         self.trustStore = ScriptProjectTrustStore(storageURL: scriptTrustStorageURL)
-        let compiler = SwiftScriptCompiler(
-            swiftcPath: Self.resolvedCompilerPath(override: swiftCompilerPath),
-            includePaths: engineModulePaths,
-            clangModuleMapPaths: clangModuleMapPaths,
-            clangIncludePaths: clangIncludePaths,
-            outputDirectory: Self.scriptsBuildDirectory(projectDirectory: projectDirectory)
-        )
+        let configuration = ScriptAnalysisConfiguration(scriptsDirectory: Self.scriptsDirectory(projectDirectory: projectDirectory),
+            buildDirectory: Self.scriptsBuildDirectory(projectDirectory: projectDirectory), engineModulePaths: engineModulePaths,
+            clangModuleMapPaths: clangModuleMapPaths, clangIncludePaths: clangIncludePaths)
+        self.analysisConfiguration = configuration
+        let resolution = Result { try SwiftToolchainResolver.resolve(compilerOverride: swiftCompilerPath) }
+        let toolchain = try? resolution.get()
+        let compiler = configuration.compiler(toolchain: toolchain, fallback: Self.resolvedCompilerPath(override: swiftCompilerPath))
         self.buildCoordinator = DynamicScriptBuildCoordinator(
             compiler: SwiftScriptCompilerDriver(compiler: compiler),
             loader: SwiftScriptLoader(),
             scriptRuntime: scriptRuntime
         )
 
-        if !engineModulePaths.isEmpty {
-            do {
-                let executable = try SourceKitLSPExecutableLocator.resolveExecutableURL()
-                self.languageSupport = ScriptLanguageSupport(
-                    scriptsDirectoryURL: Self.scriptsDirectory(projectDirectory: projectDirectory),
-                    engineModulePaths: engineModulePaths,
-                    clangModuleMapPaths: clangModuleMapPaths,
-                    clangIncludePaths: clangIncludePaths,
-                    executableURL: executable,
-                    connect: { [languagePlugin] in try languagePlugin.connect($0) }
-                )
-                self.languageSupportUnavailableMessage = nil
-            } catch {
-                self.languageSupport = nil
-                self.languageSupportUnavailableMessage = error.localizedDescription
-            }
-        } else {
-            self.languageSupport = nil
-            self.languageSupportUnavailableMessage = "Could not locate built Engine Swift modules for script analysis."
+        switch resolution {
+        case let .success(toolchain):
+            self.toolchainSession = ScriptToolchainSession(.init(toolchain: toolchain,
+                support: engineModulePaths.isEmpty ? nil : configuration.support(toolchain: toolchain, plugin: languagePlugin),
+                failure: engineModulePaths.isEmpty ? "Could not locate built Engine Swift modules for script analysis." : nil))
+        case let .failure(error):
+            self.toolchainSession = ScriptToolchainSession(.init(failure: error.localizedDescription))
         }
     }
 
@@ -199,6 +190,10 @@ public final class DynamicScriptManager: @unchecked Sendable {
         guard let languageSupport else {
             throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
         }
+        if let toolchain = swiftToolchain {
+            let configuration = analysisConfiguration
+            try await configuration.validate(toolchain)
+        }
         try await languageSupport.start(sources: sources, onDiagnostics: onDiagnostics, onStateChange: onStateChange,
                                         onDetailsChange: onDetailsChange)
     }
@@ -219,6 +214,51 @@ public final class DynamicScriptManager: @unchecked Sendable {
 
     public func stopLanguageService() async {
         await languageSupport?.stop()
+    }
+
+    func configureSwiftToolchain(path: String?, preferencesDirectory: URL = SwiftToolchainPreferences.directory,
+                                 activation: ScriptToolchainActivation) async throws {
+        let previousPreferences = SwiftToolchainPreferences.load(from: preferencesDirectory)
+        var preferences = previousPreferences
+        preferences.selectedPath = path?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if preferences.selectedPath?.isEmpty == true { preferences.selectedPath = nil }
+        let configuration = analysisConfiguration
+        let toolchain = try await Task.detached { [preferences] in
+            try SwiftToolchainResolver.resolve(preferences: preferences)
+        }.value
+        try await configuration.validate(toolchain)
+        try Task.checkCancellation()
+        let previousState = toolchainSession.state
+        let compiler = SwiftScriptCompilerDriver(compiler: configuration.compiler(toolchain: toolchain,
+            fallback: toolchain.compilerURL.path))
+        let previousCompiler = try await buildCoordinator.beginCompilerChange(compiler)
+        var didReplaceState = false
+        do {
+            await activation.suspend()
+            try Task.checkCancellation()
+            try preferences.save(to: preferencesDirectory)
+            toolchainSession.replace(.init(toolchain: toolchain, support: configuration.support(toolchain: toolchain, plugin: languagePlugin)))
+            didReplaceState = true
+            try await activation.activate()
+            try Task.checkCancellation()
+            await buildCoordinator.finishCompilerChange()
+        } catch {
+            let failure = error
+            var recoveryFailures = [String]()
+            if didReplaceState {
+                await languageSupport?.stop()
+                toolchainSession.replace(previousState)
+                do { try previousPreferences.save(to: preferencesDirectory) }
+                catch { recoveryFailures.append(error.localizedDescription) }
+                do { try await activation.recover() }
+                catch { recoveryFailures.append(error.localizedDescription) }
+            }
+            await buildCoordinator.finishCompilerChange(restoring: previousCompiler)
+            if !recoveryFailures.isEmpty {
+                throw SwiftToolchainError.unavailable("\(failure.localizedDescription)\nCould not fully restore the previous Swift configuration: \(recoveryFailures.joined(separator: "\n"))")
+            }
+            throw error
+        }
     }
 
     // MARK: - Native-code trust boundary
@@ -293,6 +333,10 @@ public final class DynamicScriptManager: @unchecked Sendable {
 
     public func languageServiceDetails() async -> ScriptLanguageServiceDetails? {
         await languageSupport?.languageServiceDetails()
+    }
+
+    public func referenceDocument(documentURI: String) async throws -> String? {
+        try await performOnLanguageService { try await $0.referenceDocument(documentURI: documentURI) }
     }
 
     private func performOnLanguageService<T: Sendable>(

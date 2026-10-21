@@ -63,7 +63,8 @@ public struct ProjectScriptBuildConfiguration: Sendable {
         return Self(engineModulePaths: modulePaths,
                     clangModuleMapPaths: moduleMaps,
                     clangIncludePaths: configuredPaths("GUAVA_ENGINE_CLANG_INCLUDE_PATHS") ?? includePaths.sorted(),
-                    swiftCompilerPath: DynamicScriptManager.resolvedCompilerPath(environment: environment))
+                    swiftCompilerPath: (try? SwiftToolchainResolver.resolve(environment: environment))?.compilerURL.path
+                        ?? DynamicScriptManager.resolvedCompilerPath(environment: environment))
     }
 }
 
@@ -146,12 +147,14 @@ public struct ProjectCompiledScripts: Codable, Sendable, Equatable {
             $0[$1, default: 0] += 1
         }
         let compiledDirectory = outputDirectory.appendingPathComponent("Scripts/Compiled", isDirectory: true)
-        let compiler = SwiftScriptCompiler(swiftcPath: configuration.swiftCompilerPath,
+        let toolchain = try? SwiftToolchainResolver.resolve(compilerOverride: configuration.swiftCompilerPath)
+        let compiler = SwiftScriptCompiler(swiftcPath: toolchain?.compilerURL.path ?? configuration.swiftCompilerPath,
                                             includePaths: configuration.engineModulePaths,
                                             clangModuleMapPaths: configuration.clangModuleMapPaths,
                                             clangIncludePaths: configuration.clangIncludePaths,
                                             outputDirectory: compiledDirectory,
-                                            hostModuleName: "GuavaPlayer")
+                                            hostModuleName: "GuavaPlayer",
+                                            environment: toolchain?.environment ?? ProcessInfo.processInfo.environment)
         var entries: [Entry] = []
         for asset in assets {
             let result = try compiler.compile(sourcePath: asset.url.path, scriptID: asset.id.runtimeIdentifier)

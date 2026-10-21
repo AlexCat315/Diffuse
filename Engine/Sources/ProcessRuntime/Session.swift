@@ -38,6 +38,7 @@ public final class ProcessSession: @unchecked Sendable {
         process.standardInput = input
         process.standardOutput = output
         process.standardError = errors
+        ProcessPlatform.prepareInput(input.fileHandleForWriting)
         installReader(output.fileHandleForReading, isError: false)
         installReader(errors.fileHandleForReading, isError: true)
         process.terminationHandler = { [weak self] process in self?.terminated(process.terminationStatus) }
@@ -61,7 +62,7 @@ public final class ProcessSession: @unchecked Sendable {
         try state.enqueue(data.count, maximum: budget.pendingInputBytes)
         writer.async { [self] in
             defer { state.wrote(data.count) }
-            do { try input.fileHandleForWriting.write(contentsOf: data) }
+            do { try ProcessPlatform.write(data, to: input.fileHandleForWriting) }
             catch { fail(error) }
         }
     }

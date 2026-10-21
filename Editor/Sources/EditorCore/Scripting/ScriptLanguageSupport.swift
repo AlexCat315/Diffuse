@@ -30,6 +30,7 @@ public actor ScriptLanguageSupport {
     private let executableURL: URL
     private let environment: [String: String]
     private let connectTransport: (@Sendable (ProcessCommand) throws -> LanguageServerTransport)?
+    private let memoryUsage: (@Sendable () -> UInt64?)?
 
     private var client: LSPClient?
     private struct DocumentSession {
@@ -40,6 +41,7 @@ public actor ScriptLanguageSupport {
         var protocolVersion = 1
         var changeTask: Task<Void, Never>?
         var diagnostics: [Data] = []
+        var environmentFailure: String?
     }
     private var sessions: [String: DocumentSession] = [:]
     private var diagnosticsHandler: DiagnosticsHandler?
@@ -47,6 +49,7 @@ public actor ScriptLanguageSupport {
     private var stateRevision: UInt64 = 0
     private var details = ScriptLanguageServiceDetails(executablePath: "")
     private var detailsHandler: DetailsHandler?
+    private var environmentFailure: String?
 
     public init(scriptsDirectoryURL: URL,
                 engineModulePaths: [String],
@@ -54,15 +57,21 @@ public actor ScriptLanguageSupport {
                 clangIncludePaths: [String] = [],
                 executableURL: URL,
                 environment: [String: String] = [:],
-                connect: (@Sendable (ProcessCommand) throws -> LanguageServerTransport)? = nil) {
+                connect: (@Sendable (ProcessCommand) throws -> LanguageServerTransport)? = nil,
+                memoryUsage: (@Sendable () -> UInt64?)? = nil) {
         self.workspace = ScriptLanguageWorkspace(scriptsDirectoryURL: scriptsDirectoryURL,
                                                  engineModulePaths: engineModulePaths,
                                                  clangModuleMapPaths: clangModuleMapPaths,
                                                  clangIncludePaths: clangIncludePaths,
-                                                 sdkURL: environment["SDKROOT"].map { URL(fileURLWithPath: $0) })
+                                                 sdkURL: environment["SDKROOT"].map { URL(fileURLWithPath: $0) },
+                                                 resourceDirectoryURL: environment["SWIFT_EXEC"].map {
+                                                     URL(fileURLWithPath: $0).deletingLastPathComponent().deletingLastPathComponent()
+                                                         .appendingPathComponent("lib/swift", isDirectory: true)
+                                                 })
         self.executableURL = executableURL
         self.environment = environment
         self.connectTransport = connect
+        self.memoryUsage = memoryUsage
     }
 
     // MARK: - Session lifecycle
@@ -77,6 +86,7 @@ public actor ScriptLanguageSupport {
         diagnosticsHandler = onDiagnostics
         detailsHandler = onDetailsChange
         details = ScriptLanguageServiceDetails(executablePath: executableURL.path)
+        environmentFailure = nil
         let generation = lifecycle.generation
         setState(.starting)
         do {
@@ -105,6 +115,9 @@ public actor ScriptLanguageSupport {
     }
 
     public func stop() async {
+        lifecycle.metricsTask?.cancel()
+        lifecycle.metricsTask = nil
+        details.residentMemoryBytes = nil
         let wasReady = isReady
         lifecycle.generation = UUID()
         lifecycle.recoveryTask?.cancel()
@@ -125,9 +138,16 @@ public actor ScriptLanguageSupport {
 
     private func connect(generation: UUID) async throws {
         guard lifecycle.generation == generation else { throw CancellationError() }
+        environmentFailure = nil
+        details.health = .checking
+        details.indexing = nil
+        details.residentMemoryBytes = nil
+        for identifier in sessions.keys {
+            sessions[identifier]?.environmentFailure = nil
+            sessions[identifier]?.diagnostics = []
+        }
         setState(.starting)
-        let scratch = workspace.rootURL.appendingPathComponent(".build", isDirectory: true)
-        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let scratch = try workspace.prepareScratch(executableURL: executableURL, environment: environment)
         var command = ProcessCommand(executable: executableURL, directory: workspace.rootURL)
         command.arguments = SourceKitLSPCommandLine.arguments(for: workspace.rootURL, scratchURL: scratch,
             capabilities: SourceKitLSPExecutableLocator.probeCapabilities(executableURL: executableURL))
@@ -135,6 +155,9 @@ public actor ScriptLanguageSupport {
         command.environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
         var configuration = LanguageServerConfiguration(command: command, workspace: workspace.rootURL)
         configuration.connect = connectTransport
+        var fallback: [String: Any] = ["swiftCompilerFlags": workspace.includeFlags]
+        if let sdk = workspace.sdkURL { fallback["sdk"] = sdk.path }
+        configuration.initializationOptions = try LSPJSON.data(["fallbackBuildSystem": fallback])
         let client = LSPClient(configuration: configuration)
         let connectionID = UUID()
         self.client = client
@@ -160,6 +183,14 @@ public actor ScriptLanguageSupport {
               await client.isRunning else { throw LSPClientError.notRunning }
         lifecycle.readySince = ContinuousClock.now
         setState(.ready)
+        lifecycle.metricsTask?.cancel()
+        lifecycle.metricsTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                guard let self else { return }
+                await self.refreshMemoryUsage()
+            }
+        }
         for (id, session) in sessions where session.current != session.sent {
             await sendChange(scriptID: id, revision: session.revision)
         }
@@ -280,6 +311,20 @@ public actor ScriptLanguageSupport {
 
     public func languageServiceDetails() -> ScriptLanguageServiceDetails { details }
 
+    public func referenceDocument(documentURI: String) async throws -> String? {
+        guard URL(string: documentURI)?.scheme == "sourcekit-lsp", isReady, let client else { return nil }
+        let connectionID = lifecycle.connectionID
+        let payload = try await client.request("workspace/getReferenceDocument", params: LSPJSON.data(["uri": documentURI]),
+                                               timeout: Self.queryTimeout)
+        guard connectionID == lifecycle.connectionID, let payload,
+              let object = try JSONSerialization.jsonObject(with: payload, options: [.fragmentsAllowed]) as? [String: Any],
+              let content = object["content"] as? String else { return nil }
+        guard content.utf8.count <= 16_777_216 else {
+            throw ScriptLanguageSupportError.unavailable("The generated reference document is too large to open.")
+        }
+        return content
+    }
+
     func diagnosticPayloads(scriptID: String) -> [Data] { sessions[scriptID]?.diagnostics ?? [] }
 
     func semanticRequest(_ method: String, scriptID: String,
@@ -292,7 +337,7 @@ public actor ScriptLanguageSupport {
                                                timeout: Self.queryTimeout)
         guard connectionID == lifecycle.connectionID else { throw LSPClientError.notRunning }
         try validateContext(context)
-        if details.health == .checking, payload != nil { details.health = .healthy; publishDetails() }
+        markSemanticResponse(payload, method: method)
         return ScriptSemanticResponse(payload: payload, context: context)
     }
 
@@ -310,8 +355,8 @@ public actor ScriptLanguageSupport {
         var documents: [String: ScriptSemanticContext.Document] = [:]
         for (identifier, session) in sessions {
             let document = ScriptSemanticContext.Document(scriptID: identifier, revision: session.revision, version: session.protocolVersion)
-            documents[session.document.analysisURL.standardizedFileURL.absoluteString] = document
-            documents[session.document.sourceURL.standardizedFileURL.absoluteString] = document
+            documents[ScriptSemanticContext.documentKey(session.document.analysisURL.absoluteString)] = document
+            documents[ScriptSemanticContext.documentKey(session.document.sourceURL.absoluteString)] = document
         }
         return ScriptSemanticContext(documents: documents, generation: lifecycle.generation)
     }
@@ -354,7 +399,11 @@ public actor ScriptLanguageSupport {
                                                           triggerCharacter: triggerCharacter)
         }
         do {
-            return try await client.request(method, params: params, timeout: Self.queryTimeout)
+            let connectionID = lifecycle.connectionID
+            let payload = try await client.request(method, params: params, timeout: Self.queryTimeout)
+            guard connectionID == lifecycle.connectionID else { throw LSPClientError.notRunning }
+            markSemanticResponse(payload, method: method)
+            return payload
         } catch LSPClientError.requestTimedOut {
             // A competing index build made the answer late, not wrong. Let the
             // popup dismiss itself; the next hover will likely succeed.
@@ -401,7 +450,7 @@ public actor ScriptLanguageSupport {
         handleServiceNotification(notification)
         guard let published = ScriptLanguageReplies.parseDiagnostics(notification),
               let entry = sessions.first(where: {
-                  $0.value.document.analysisURL.standardizedFileURL.absoluteString == published.uri
+                  ScriptSemanticContext.documentKey($0.value.document.analysisURL.absoluteString) == ScriptSemanticContext.documentKey(published.uri)
               }) else { return }
 
         // Diagnostics are computed against a snapshot; results older than the
@@ -415,11 +464,13 @@ public actor ScriptLanguageSupport {
            let diagnostics = object["diagnostics"] as? [[String: Any]] {
             sessions[entry.key]?.diagnostics = diagnostics.compactMap { try? JSONSerialization.data(withJSONObject: $0) }
         }
-        if let failure = published.diagnostics.first(where: { Self.isEnvironmentFailure($0.message) }) {
-            details.health = .degraded(failure.message)
-            recordLanguageLog(failure.message, level: .error)
+        let failure = published.diagnostics.first(where: { Self.isEnvironmentFailure($0.message) })?.message
+        sessions[entry.key]?.environmentFailure = failure
+        if let reason = environmentFailure ?? sessions.values.compactMap(\.environmentFailure).sorted().first {
+            details.health = .degraded(reason)
+            recordLanguageLog(reason, level: .error)
         } else {
-            details.health = .healthy
+            if case .degraded = details.health { details.health = .checking }
             publishDetails()
         }
         diagnosticsHandler?(ScriptLanguageDiagnosticUpdate(scriptID: entry.key,
@@ -429,7 +480,11 @@ public actor ScriptLanguageSupport {
     }
 
     private func scriptIdentifier(forDocumentURI uri: String) -> String? {
-        sessions.first { $0.value.document.analysisURL.standardizedFileURL.absoluteString == uri }?.key
+        let key = ScriptSemanticContext.documentKey(uri)
+        return sessions.first {
+            ScriptSemanticContext.documentKey($0.value.document.analysisURL.absoluteString) == key
+                || ScriptSemanticContext.documentKey($0.value.document.sourceURL.absoluteString) == key
+        }?.key
     }
 
     private func handleServiceNotification(_ notification: LSPNotification) {
@@ -444,7 +499,7 @@ public actor ScriptLanguageSupport {
             case 4: level = .debug
             default: level = .info
             }
-            if Self.isEnvironmentFailure(message) { details.health = .degraded(message) }
+            if Self.isEnvironmentFailure(message) { environmentFailure = message; details.health = .degraded(message) }
             recordLanguageLog(message, level: level)
         case "$/progress":
             guard let value = object["value"] as? [String: Any], let kind = value["kind"] as? String else { return }
@@ -473,5 +528,21 @@ public actor ScriptLanguageSupport {
     private func publishDetails() {
         details.revision &+= 1
         detailsHandler?(details)
+    }
+
+    private func refreshMemoryUsage() {
+        guard isReady else { return }
+        let bytes = memoryUsage?()
+        guard details.residentMemoryBytes != bytes else { return }
+        details.residentMemoryBytes = bytes
+        publishDetails()
+    }
+
+    private func markSemanticResponse(_ payload: Data?, method: String) {
+        guard details.health == .checking, environmentFailure == nil,
+              !sessions.values.contains(where: { $0.environmentFailure != nil }),
+              ScriptLanguageSemanticEvidence.confirmsAnalysis(method: method, payload: payload) else { return }
+        details.health = .healthy
+        publishDetails()
     }
 }

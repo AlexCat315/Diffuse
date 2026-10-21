@@ -1,5 +1,5 @@
-internal import Foundation
-internal import LanguageServerRuntime
+import Foundation
+import LanguageServerRuntime
 
 extension ScriptLanguageSupport {
     public func references(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
@@ -8,7 +8,7 @@ extension ScriptLanguageSupport {
         }
         return ScriptLanguageReplies.parseDefinition(response.payload).map { location in
             ScriptDefinitionLocation(documentURI: location.documentURI,
-                                     scriptID: response.context.documents[location.documentURI]?.scriptID, span: location.span)
+                                     scriptID: response.context.document(for: location.documentURI)?.scriptID, span: location.span)
         }
     }
 

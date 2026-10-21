@@ -9,6 +9,7 @@ final class ProcessEntry: @unchecked Sendable {
     private var update: PluginProcessUpdate
     private let maximumBytes: Int
     private var consumer: Task<Void, Never>?
+    private var lastMemorySample = ContinuousClock.now
 
     init(session: ProcessSession, generation: UUID, permissionID: String, maximumBytes: Int) {
         self.permissionID = permissionID
@@ -38,11 +39,22 @@ final class ProcessEntry: @unchecked Sendable {
         }
         if overflow { session.cancel() }
     }
-    private func failed(_ error: Error) { lock.withLock { update.failure = String(describing: error) } }
+    private func failed(_ error: Error) {
+        lock.withLock { if update.failure == nil { update.failure = String(describing: error) } }
+    }
     func poll() -> PluginProcessUpdate {
         lock.withLock {
-            let result = update
-            update.stdout = Data(); update.stderr = Data()
+            if lastMemorySample.duration(to: .now) >= .seconds(1) {
+                update.residentMemoryBytes = session.isRunning ? PluginProcessMemory.residentBytes(processID: session.processIdentifier) : nil
+                lastMemorySample = .now
+            }
+            var result = update
+            let chunkBytes = 131_072
+            result.stdout = Data(update.stdout.prefix(chunkBytes))
+            result.stderr = Data(update.stderr.prefix(chunkBytes))
+            update.stdout.removeFirst(result.stdout.count)
+            update.stderr.removeFirst(result.stderr.count)
+            if !update.stdout.isEmpty || !update.stderr.isEmpty { result.exitStatus = nil }
             return result
         }
     }

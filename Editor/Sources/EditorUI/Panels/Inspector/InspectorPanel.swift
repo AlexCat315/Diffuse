@@ -89,17 +89,17 @@ struct InspectorPanel: View {
                     EditorPanelSearchBar(
                         L("Search Properties"),
                         text: searchBinding,
-                        summary: trimmedSearchText.isEmpty
-                            ? "\(totalFieldCount)"
-                            : "\(visibleFieldCount) / \(totalFieldCount)",
+                        // The count only answers a search; idle, it is noise.
+                        summary: trimmedSearchText.isEmpty ? nil : "\(visibleFieldCount) / \(totalFieldCount)",
                         onCancel: { updateSearchText("") }
                     ) {
                         let hasExpanded = sections.contains { !collapsedIDs.contains($0.id) }
-                        EditorPanelIconButton(hasExpanded ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight,
-                                              tooltip: hasExpanded ? L("Collapse All") : L("Expand All"),
-                                              isEnabled: trimmedSearchText.isEmpty && !sections.isEmpty) {
+                        Button(icon: .resource(UIIcons.Navigation.chevronsUpDown),
+                               size: 13,
+                               isEnabled: trimmedSearchText.isEmpty && !sections.isEmpty,
+                               tooltip: hasExpanded ? L("Collapse All") : L("Expand All")) {
                             setSections(sections, collapsed: hasExpanded)
-                        }
+                        }.buttonStyle(EditorChromeButtonStyle(height: 24))
                     }
 
                 }
@@ -459,7 +459,10 @@ struct InspectorPanel: View {
                             layout: isAdvanced ? .fullWidth : field.value.preferredRowLayout,
                             sizing: isAdvanced ? .intrinsic : field.value.preferredRowSizing) {
                 if isAdvanced {
-                    DisclosureGroup(field.label, isExpanded: expansion) { value }
+                    // Advanced editors stay quiet: a caption-weight disclosure.
+                    DisclosureGroup(isExpanded: expansion) { value } label: {
+                        Text(field.label, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted)
+                    }
                         .debugName("inspector-advanced-\(fieldID)")
                 } else {
                     value
@@ -467,7 +470,7 @@ struct InspectorPanel: View {
             }
         }
 
-        return sections.flatMap { section -> [PropertyGridSection] in
+        func layoutSections(_ section: EditorInspectorSection) -> [PropertyGridSection] {
             let startsCollapsed = collapsedIDs.contains(section.id)
             let layout = section.componentTypeID.map { scene.inspectorRenderers.layout(forComponentTypeID: $0) }
                 ?? .standard
@@ -478,14 +481,8 @@ struct InspectorPanel: View {
                     startsCollapsed: startsCollapsed,
                     isEditable: isEditable,
                     isPaused: store.playbackState == .paused,
-                    canAddScript: isEditable && store.selectedEntityIDs.count <= 1,
                     documents: scripts?.wrappedValue.documents ?? [],
-                    addOptions: scene.availableScriptOptions,
                     onOpenScript: onOpenScript,
-                    addScript: { identifier in
-                        guard let id = store.selectedEntityID else { return }
-                        _ = scene.addScriptBinding(to: id, identifier: identifier)
-                    },
                     row: { field, sectionID in
                         row(for: field, sectionID: sectionID, requiresDirectMatch: true)
                     }))
@@ -508,6 +505,31 @@ struct InspectorPanel: View {
                 ]
             }
         }
+        // Each component card carries its own Reset / Remove menu.
+        return sections.flatMap { section -> [PropertyGridSection] in
+            var built = layoutSections(section)
+            // Script cards carry their own menu (open, change, remove).
+            if let typeID = section.componentTypeID, isEditable, let card = built.first,
+               scene.inspectorRenderers.layout(forComponentTypeID: typeID) != .scriptBindings {
+                built[0] = withComponentMenu(card, typeID: typeID)
+            }
+            return built
+        }
+    }
+
+    private func withComponentMenu(_ section: PropertyGridSection, typeID: String) -> PropertyGridSection {
+        let targets = store.selectedEntityIDs.isEmpty ? Set(store.selectedEntityID.map { [$0] } ?? []) : store.selectedEntityIDs
+        let menu = InspectorComponentMenu(typeID: typeID, title: section.title,
+                                          entityIDs: targets, scene: scene, store: store)
+        let trailing = AnyView(Row(alignment: .center, spacing: 2) {
+            if let existing = section.headerTrailing { existing }
+            menu
+        })
+        return PropertyGridSection(id: section.id, title: section.title, rows: section.rows,
+                                   isCollapsible: section.isCollapsible, startsCollapsed: section.startsCollapsed,
+                                   children: section.children, headerLeading: section.headerLeading,
+                                   headerTrailing: trailing, footer: section.footer, badge: section.badge,
+                                   showsRowCount: section.showsRowCount)
     }
 
     private func propertyValue(_ field: EditorInspectorField, identity: String,
@@ -838,228 +860,91 @@ private extension EditorInspectorFieldValue {
     }
 }
 
-
-/// Inspector affordances for adding and removing optional SceneRuntime
-/// components. Structural components such as name and transform stay outside
-/// these menus so an entity cannot be left in an invalid editor state.
+/// The end of the card list: one way to add an optional component.
+/// Reset and Remove live on each component card (`InspectorComponentMenu`);
+/// structural components such as name and transform never offer them.
 private struct ComponentActionsBar: View {
     let store: EditorStore
     let scene: EditorSceneAdapter
     let entityIDs: Set<UInt64>
     let isAuthoringEnabled: Bool
     @State private var isAddPresented: Bool = false
-    @State private var isRemovePresented: Bool = false
-    @State private var isResetPresented: Bool = false
 
     var body: some View {
-        let addableKinds = scene.addableComponentSchemas(on: entityIDs).filter { InspectorWorkspacePolicy.allows($0, in: store.workspaceMode) }
-        let commonKinds = scene.commonComponentSchemas(on: entityIDs).filter { InspectorWorkspacePolicy.allows($0, in: store.workspaceMode) }
+        // A bare Script component means nothing; scripts are added by choosing one.
+        let addableKinds = scene.addableComponentSchemas(on: entityIDs).filter {
+            InspectorWorkspacePolicy.allows($0, in: store.workspaceMode)
+                && scene.inspectorRenderers.layout(forComponentTypeID: $0.typeID) != .scriptBindings
+        }
+        let scripts = entityIDs.count == 1 && store.workspaceMode.profile.features.contains(.scripting)
+            ? scene.availableScriptOptions : []
         let containsLockedEntity = entityIDs.contains { scene.isEntityLocked($0) }
-        let canMutate = isAuthoringEnabled && !containsLockedEntity && !entityIDs.isEmpty
-        return Row(alignment: .center, spacing: 6) {
+        let canAdd = isAuthoringEnabled && !containsLockedEntity && !entityIDs.isEmpty
+            && !(addableKinds.isEmpty && scripts.isEmpty)
+        return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             if !isAuthoringEnabled {
-                Text(L("Stop simulation to edit the scene"))
-                    .font(.caption)
-                    .foregroundColor(.warning)
-                    .padding(horizontal: 4, vertical: 4)
+                notice(L("Stop simulation to edit the scene"))
             } else if containsLockedEntity {
-                Text(L("Selection contains locked entities — unlock them in Hierarchy to edit components"))
-                    .font(.caption)
-                    .foregroundColor(.warning)
-                    .padding(horizontal: 4, vertical: 4)
+                notice(L("Selection contains locked entities — unlock them in Hierarchy to edit components"))
             } else {
-                if addableKinds.isEmpty {
-                    actionLabel(symbol: "+",
-                                title: L("Add"),
-                                color: .accent,
-                                isEnabled: false)
-                } else {
-                    Popover(isPresented: exclusivePresentation(for: .add),
-                            width: 280,
-                            placement: .bottomTrailing, surface: .content, overflow: .flip,
-                            onKey: dismissOnEscape(.add)) {
-                        actionLabel(symbol: "+",
-                                    title: L("Add"),
-                                    color: .accent,
-                                    isEnabled: canMutate)
-                    } content: {
-                        InspectorComponentPicker(kinds: addableKinds,
-                                                 action: .add,
-                                                 targetCount: entityIDs.count,
-                                                 isPresented: exclusivePresentation(for: .add)) { kind in
-                            perform(.add, kind: kind)
+                Popover(isPresented: $isAddPresented, isEnabled: canAdd, width: 280,
+                        placement: .top, surface: .content, overflow: .flip,
+                        onKey: { event, phase in
+                            guard phase == .target || phase == .bubble,
+                                  event.scancode == ComposeScancode.escape else { return .ignored }
+                            isAddPresented = false
+                            return .handled
+                        }) {
+                    Row(alignment: .center, spacing: 6) {
+                        Icon(UIIcons.Action.plus, size: 12, color: canAdd ? .accent : .onSurfaceMuted)
+                        Text(L("Add Component"), lineLimit: 1).font(.label)
+                            .foregroundColor(canAdd ? .onSurface : .onSurfaceMuted)
+                    }.padding(horizontal: 12).frame(height: .points(32))
+                        .background(.surfaceRaised).cornerRadius(10)
+                } content: {
+                    InspectorComponentPicker(kinds: addableKinds, scripts: scripts, targetCount: entityIDs.count,
+                                             isPresented: $isAddPresented, onSelect: { kind in
+                        if !scene.addComponent(kind.typeID, to: entityIDs) {
+                            store.dispatch(.appendConsoleMessage("Could not add component", severity: .error,
+                                                                 detail: kind.displayName))
                         }
-                    }
-                }
-
-                if commonKinds.isEmpty {
-                    actionLabel(symbol: "↺",
-                                title: L("Reset"),
-                                color: .onSurfaceVariant,
-                                isEnabled: false)
-                    actionLabel(symbol: "−",
-                                title: L("Remove"),
-                                color: .error,
-                                isEnabled: false)
-                } else {
-                    Popover(isPresented: exclusivePresentation(for: .reset),
-                            width: 280,
-                            placement: .bottomTrailing, surface: .content, overflow: .flip,
-                            onKey: dismissOnEscape(.reset)) {
-                        actionLabel(symbol: "↺",
-                                    title: L("Reset"),
-                                    color: .onSurfaceVariant,
-                                    isEnabled: canMutate)
-                    } content: {
-                        InspectorComponentPicker(kinds: commonKinds,
-                                                 action: .reset,
-                                                 targetCount: entityIDs.count,
-                                                 isPresented: exclusivePresentation(for: .reset)) { kind in
-                            perform(.reset, kind: kind)
+                    }, onSelectScript: { identifier in
+                        guard let id = entityIDs.first, scene.addScriptBinding(to: id, identifier: identifier) else {
+                            store.dispatch(.appendConsoleMessage("Could not add script", severity: .error,
+                                                                 detail: identifier))
+                            return
                         }
-                    }
-
-                    Popover(isPresented: exclusivePresentation(for: .remove),
-                            width: 280,
-                            placement: .bottomTrailing, surface: .content, overflow: .flip,
-                            onKey: dismissOnEscape(.remove)) {
-                        actionLabel(symbol: "−",
-                                    title: L("Remove"),
-                                    color: .error,
-                                    isEnabled: canMutate)
-                    } content: {
-                        InspectorComponentPicker(kinds: commonKinds,
-                                                 action: .remove,
-                                                 targetCount: entityIDs.count,
-                                                 isPresented: exclusivePresentation(for: .remove)) { kind in
-                            perform(.remove, kind: kind)
-                        }
-                    }
-                }
+                    })
+                }.debugName("inspector-add-component")
             }
         }
-        .padding(horizontal: 6, vertical: 4)
+        .padding(EdgeInsets(leading: 8, bottom: 8, trailing: 8))
     }
 
-    private func actionLabel(symbol: String,
-                             title: String,
-                             color: SemanticColorRef,
-                             isEnabled: Bool) -> some View {
-        Row(alignment: .center, spacing: 5) {
-            Text(symbol, lineLimit: 1)
-                .font(.bodyStrong)
-                .foregroundColor(isEnabled ? color : .onSurfaceMuted)
-            Text(title, lineLimit: 1)
-                .font(.caption)
-                .foregroundColor(isEnabled ? .onSurface : .onSurfaceMuted)
-        }
-        .padding(horizontal: 9, vertical: 5)
-        .background(.surfaceSunken)
-        .cornerRadius(4)
-    }
-
-    /// Component menus are mutually exclusive so a fast switch between Add,
-    /// Reset and Remove never leaves stacked portal overlays behind.
-    private func exclusivePresentation(for action: InspectorComponentAction) -> Binding<Bool> {
-        Binding(
-            get: {
-                switch action {
-                case .add: return isAddPresented
-                case .reset: return isResetPresented
-                case .remove: return isRemovePresented
-                }
-            },
-            set: { isPresented in
-                if isPresented {
-                    isAddPresented = action == .add
-                    isResetPresented = action == .reset
-                    isRemovePresented = action == .remove
-                } else {
-                    switch action {
-                    case .add: isAddPresented = false
-                    case .reset: isResetPresented = false
-                    case .remove: isRemovePresented = false
-                    }
-                }
-            }
-        )
-    }
-
-    private func dismissOnEscape(_ action: InspectorComponentAction)
-        -> (KeyEvent, EventPhase) -> EventResult {
-        { event, phase in
-            guard phase == .target || phase == .bubble,
-                  event.scancode == ComposeScancode.escape else {
-                return .ignored
-            }
-            exclusivePresentation(for: action).wrappedValue = false
-            return .handled
-        }
-    }
-
-    private func perform(_ action: InspectorComponentAction,
-                         kind: ComponentSchema) {
-        let succeeded: Bool
-        switch action {
-        case .add:
-            succeeded = scene.addComponent(kind.typeID, to: entityIDs)
-        case .reset:
-            succeeded = scene.resetComponent(kind.typeID, on: entityIDs)
-        case .remove:
-            succeeded = scene.removeComponent(kind.typeID, from: entityIDs)
-        }
-        if !succeeded {
-            store.dispatch(.appendConsoleMessage(
-                action.failureMessage,
-                severity: .error,
-                detail: kind.displayName
-            ))
-        }
+    private func notice(_ text: String) -> some View {
+        Text(text).font(.caption).foregroundColor(.warning).padding(horizontal: 4, vertical: 4)
     }
 }
 
-private enum InspectorComponentAction: Equatable {
-    case add
-    case reset
-    case remove
-
-    var title: String {
-        switch self {
-        case .add: return L("Add Component")
-        case .reset: return L("Reset Component")
-        case .remove: return L("Remove Component")
-        }
-    }
-
-    var failureMessage: String {
-        switch self {
-        case .add: return "Could not add component"
-        case .reset: return "Could not reset component"
-        case .remove: return "Could not remove component"
-        }
-    }
-
-    var menuRole: MenuItemRole {
-        switch self {
-        case .remove: return .destructive
-        case .add, .reset: return .normal
-        }
-    }
-}
-
+/// One picker for everything an entity can gain: components by category,
+/// then the project's scripts (each becomes its own component card).
 private struct InspectorComponentPicker: View {
     let kinds: [ComponentSchema]
-    let action: InspectorComponentAction
+    var scripts: [EditorInspectorStringOption] = []
     let targetCount: Int
     let isPresented: Binding<Bool>
     let onSelect: (ComponentSchema) -> Void
+    var onSelectScript: (String) -> Void = { _ in }
     @State private var searchText: TextBuffer = ""
 
     var body: some View {
         let filteredKinds = InspectorComponentFilter.filter(kinds, query: searchText.stringValue)
+        let query = searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filteredScripts = query.isEmpty ? scripts
+            : scripts.filter { $0.label.range(of: query, options: .caseInsensitive) != nil }
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: 6) {
-                Text(action.title)
+                Text(L("Add Component"))
                     .font(.bodyStrong)
                     .foregroundColor(.onSurface)
                     .flex()
@@ -1069,7 +954,7 @@ private struct InspectorComponentPicker: View {
 
             EditorPanelSearchBar(L("Search Components"),
                                  text: $searchText,
-                                 summary: "\(filteredKinds.count)",
+                                 summary: "\(filteredKinds.count + filteredScripts.count)",
                                  onCancel: {
                 if searchText.isEmpty {
                     isPresented.wrappedValue = false
@@ -1078,26 +963,21 @@ private struct InspectorComponentPicker: View {
                 }
             })
 
-            Divider()
-
-            if filteredKinds.isEmpty {
+            if filteredKinds.isEmpty && filteredScripts.isEmpty {
                 EditorPanelEmptyState(L("No matching components"),
                                       detail: searchText.isEmpty ? nil : "\"\(searchText.stringValue)\"")
                     .frame(height: 110)
             } else {
-                Menu(menuEntries(for: filteredKinds),
+                Menu(menuEntries(for: filteredKinds, scripts: filteredScripts),
                      width: 280,
                      maxVisibleRows: 15,
                      onItemActivated: { isPresented.wrappedValue = false })
             }
         }
-        .background(.surface)
-        .cornerRadius(5)
-        .border(.border, width: 1)
-        .clipped()
     }
 
-    private func menuEntries(for filteredKinds: [ComponentSchema]) -> [MenuEntry] {
+    private func menuEntries(for filteredKinds: [ComponentSchema],
+                             scripts: [EditorInspectorStringOption]) -> [MenuEntry] {
         var entries: [MenuEntry] = []
         for category in ComponentCategory.allCases {
             let categoryKinds = filteredKinds.filter { $0.category == category }
@@ -1113,11 +993,18 @@ private struct InspectorComponentPicker: View {
             )))
             entries.append(contentsOf: categoryKinds.map { kind in
                 .item(MenuItem(
-                    id: "\(action)-component-\(kind.typeID)",
+                    id: "add-component-\(kind.typeID)",
                     title: L(kind.displayName),
-                    role: action.menuRole,
                     action: { onSelect(kind) }
                 ))
+            })
+        }
+        if !scripts.isEmpty {
+            if !entries.isEmpty { entries.append(.separator("component-category-scripts")) }
+            entries.append(.label(id: "component-category-title-scripts", title: L("Scripts")))
+            entries.append(contentsOf: scripts.map { option in
+                .item(MenuItem(id: "add-script-\(option.value)", title: option.label,
+                               action: { onSelectScript(option.value) }))
             })
         }
         return entries

@@ -107,7 +107,8 @@ extension EditorApplication {
                                                             engineModulePaths: Self.resolveEngineModulePaths(),
                                                             clangModuleMapPaths: Self.resolveEngineClangModuleMapPaths(),
                                                             clangIncludePaths: Self.resolveEngineClangIncludePaths(),
-                                                            swiftCompilerPath: DynamicScriptManager.resolvedCompilerPath()
+                                                            swiftCompilerPath: dynamicScriptManager.swiftToolchain?.compilerURL.path
+                                                                ?? DynamicScriptManager.resolvedCompilerPath()
                                                         ),
                                                         to: output)
             if playerExecutableURL != nil {

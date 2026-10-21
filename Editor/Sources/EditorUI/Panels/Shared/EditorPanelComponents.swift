@@ -168,28 +168,32 @@ struct EditorPanelIconButton: View {
     }
 }
 
-/// Row chrome shared by the outline and file trees: a 2pt accent edge marks
-/// the selection, with selection, search-hit and hover fills.
+/// Row chrome shared by the outline and file trees: an inset rounded pill,
+/// like the tabs, with a soft accent tint for the selection. No edge bar and
+/// no full-width block, so a selected row reads as part of the card.
 struct EditorTreeRowStyle: TreeRowStyle {
     func makeBody(configuration: TreeRowStyleConfiguration) -> some View {
         let t = configuration.theme
         let bg: Color = {
-            if configuration.isSelected { return t.colors.selection }
+            if configuration.isSelected { return t.colors.accentMuted }
             if configuration.isSearchHit { return t.colors.stateLayerSelected }
             if configuration.isHovered { return t.colors.stateLayerHover }
-            return Color(r: 0, g: 0, b: 0, a: 0)
+            return .clear
         }()
 
-        return Row(alignment: .center, spacing: 0) {
-            Box {}.frame(width: .points(2), height: .percent(100))
-                .background(configuration.isSelected ? t.colors.accent : .clear)
-            configuration.content
-                .flex(1, shrink: 1, basis: 0)
-                .padding(horizontal: 6)
+        // The wrapper owns the inset: padding and background share a node.
+        return Box(direction: .row, alignItems: .stretch, spacing: 0) {
+            Row(alignment: .center, spacing: 0) {
+                configuration.content
+                    .flex(1, shrink: 1, basis: 0)
+                    .padding(horizontal: 6)
+            }
+            .flex(1, shrink: 1, basis: 0)
+            .background(bg)
+            .cornerRadius(6)
+            .clipped()
         }
-        .frame(height: 24)
-        .clipped()
-        .background(bg)
+        .padding(horizontal: 6, vertical: 1)
         .opacity(configuration.isEnabled ? 1 : 0.55)
     }
 }

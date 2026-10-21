@@ -8,6 +8,18 @@ import AppKit
 
 struct ScriptPanel: View {
     let app: EditorApplication
+    @State private var semantic: ScriptSemanticSession
+
+    init(app: EditorApplication) {
+        self.app = app
+        self._semantic = State(wrappedValue: ScriptSemanticSession(app: app))
+    }
+
+    var body: some View { ScriptPanelContent(app: app, semantic: semantic) }
+}
+
+private struct ScriptPanelContent: View {
+    let app: EditorApplication
 
     private var _workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
     private let semantic: ScriptSemanticSession
@@ -20,10 +32,9 @@ struct ScriptPanel: View {
     @State private var isActionsMenuPresented = false
     @State private var isFileMenuPresented = false
 
-    init(app: EditorApplication) {
+    init(app: EditorApplication, semantic: ScriptSemanticSession) {
         self.app = app
         self._workspace = Observed(\.snapshot, on: app.workstation.scripts)
-        let semantic = ScriptSemanticSession(app: app)
         self.semantic = semantic
         self.semanticRevision = Observed(\.revision, on: semantic)
     }

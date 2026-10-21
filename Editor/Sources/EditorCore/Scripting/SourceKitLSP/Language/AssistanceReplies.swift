@@ -1,4 +1,4 @@
-internal import Foundation
+import Foundation
 
 enum ScriptAssistanceReplies {
     static func signatures(_ data: Data?) -> ScriptSignatureHelp? {

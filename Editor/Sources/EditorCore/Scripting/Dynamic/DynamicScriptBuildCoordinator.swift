@@ -61,7 +61,8 @@ actor DynamicScriptBuildCoordinator {
         let cancellation: ScriptCompilationCancellationToken
     }
 
-    private let compiler: any DynamicScriptCompiling
+    private var compiler: any DynamicScriptCompiling
+    private var isChangingCompiler = false
     private let loader: any DynamicScriptLibraryLoading
     private let scriptRuntime: ScriptRuntime
 
@@ -82,9 +83,27 @@ actor DynamicScriptBuildCoordinator {
         self.scriptRuntime = scriptRuntime
     }
 
+    func beginCompilerChange(_ compiler: any DynamicScriptCompiling) throws -> any DynamicScriptCompiling {
+        guard !isChangingCompiler, activeCompilations.isEmpty else {
+            throw SwiftToolchainError.unavailable("Wait for script compilation to finish before changing the Swift toolchain.")
+        }
+        let previous = self.compiler
+        isChangingCompiler = true
+        self.compiler = compiler
+        return previous
+    }
+
+    func finishCompilerChange(restoring compiler: (any DynamicScriptCompiling)? = nil) {
+        if let compiler { self.compiler = compiler }
+        isChangingCompiler = false
+    }
+
     func build(scriptID: String,
                legacyIdentifiers: [String],
                sourceURL: URL) async -> DynamicScriptBuildOutcome {
+        guard !isChangingCompiler else {
+            return .failed(message: "The Swift toolchain is being changed. Retry script compilation when the change finishes.")
+        }
         activeCompilations[scriptID]?.cancellation.cancel()
         nextRequestID &+= 1
         let requestID = nextRequestID

@@ -28,6 +28,7 @@ public enum Scancode {
     public static let digit4: UInt32 = 33
     public static let digit5: UInt32 = 34
     public static let comma: UInt32 = 54
+    public static let period: UInt32 = 55
     public static let `return`: UInt32 = 40
     public static let escape: UInt32 = 41
     public static let backspace: UInt32 = 42
@@ -46,6 +47,7 @@ public enum Scancode {
     public static let f1: UInt32 = 58
     public static let f2: UInt32 = 59
     public static let f9: UInt32 = 66
+    public static let f12: UInt32 = 69
 }
 
 /// Unambiguous spelling for clients that also import an engine/runtime module

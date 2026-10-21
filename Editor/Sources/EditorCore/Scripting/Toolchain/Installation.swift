@@ -1,7 +1,12 @@
 public import Foundation
-private import ProcessRuntime
+import ProcessRuntime
 #if canImport(FoundationNetworking)
-private import FoundationNetworking
+import FoundationNetworking
+#endif
+#if os(macOS)
+import Darwin
+#elseif os(Linux)
+import Glibc
 #endif
 
 public struct SwiftToolchainRelease: Sendable, Equatable, Identifiable {
@@ -47,18 +52,20 @@ public actor SwiftToolchainInstallation {
         guard !isInstalling else { throw SwiftToolchainError.installationInProgress }
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        let lockURL = directory.appendingPathComponent(".installation-lock")
-        do { try Data().write(to: lockURL, options: .withoutOverwriting) }
-        catch { throw SwiftToolchainError.installationInProgress }
+        let lease = try SwiftToolchainInstallLease(directory: directory)
         isInstalling = true
         let staging = directory.appendingPathComponent(".staging-\(UUID().uuidString)")
         defer {
             isInstalling = false
             try? fileManager.removeItem(at: staging)
-            try? fileManager.removeItem(at: lockURL)
+            lease.close()
         }
         do {
             try Task.checkCancellation()
+            for child in try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                where child.lastPathComponent.hasPrefix(".staging-") && child != staging {
+                try fileManager.removeItem(at: child)
+            }
             let destination = installURL(version: release.version)
             guard !fileManager.fileExists(atPath: destination.path) else {
                 let toolchain = try SwiftToolchainResolver.resolve(compilerOverride: destination.path)
@@ -94,8 +101,14 @@ public actor SwiftToolchainInstallation {
             try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Task.checkCancellation()
             try fileManager.moveItem(at: payload, to: destination)
+            let installed: SwiftToolchain
+            do { installed = try SwiftToolchainResolver.resolve(compilerOverride: destination.path) }
+            catch {
+                try? fileManager.removeItem(at: destination)
+                throw error
+            }
             onProgress(.completed(destination))
-            return try SwiftToolchainResolver.resolve(compilerOverride: destination.path)
+            return installed
         } catch {
             if Task.isCancelled || error is CancellationError {
                 onProgress(.cancelled)
@@ -108,9 +121,11 @@ public actor SwiftToolchainInstallation {
 
     public func remove(version: String) throws {
         guard Self.releases.contains(where: { $0.version == version }) else { throw SwiftToolchainError.unsupportedPlatform }
-        guard !isInstalling, !FileManager.default.fileExists(atPath: directory.appendingPathComponent(".installation-lock").path) else {
+        guard !isInstalling else {
             throw SwiftToolchainError.installationInProgress
         }
+        let lease = try SwiftToolchainInstallLease(directory: directory)
+        defer { lease.close() }
         let target = installURL(version: version)
         if let selected = SwiftToolchainPreferences.load(from: directory).selectedPath,
            URL(fileURLWithPath: selected).standardizedFileURL.path.hasPrefix(target.standardizedFileURL.path) {
@@ -178,6 +193,35 @@ public actor SwiftToolchainInstallation {
             throw SwiftToolchainError.invalidInstallation(String(decoding: output.stderr + output.stdout, as: UTF8.self))
         }
         return output
+    }
+}
+
+private struct SwiftToolchainInstallLease {
+    let descriptor: Int32
+
+    init(directory: URL) throws {
+        #if os(macOS) || os(Linux)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent(".installation-lock")
+        descriptor = open(url.path, O_CREAT | O_RDWR | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { throw SwiftToolchainError.installationInProgress }
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            Self.closeDescriptor(descriptor)
+            throw SwiftToolchainError.installationInProgress
+        }
+        #else
+        throw SwiftToolchainError.unsupportedPlatform
+        #endif
+    }
+
+    func close() { Self.closeDescriptor(descriptor) }
+
+    private static func closeDescriptor(_ descriptor: Int32) {
+        #if os(macOS)
+        _ = Darwin.close(descriptor)
+        #elseif os(Linux)
+        _ = Glibc.close(descriptor)
+        #endif
     }
 }
 

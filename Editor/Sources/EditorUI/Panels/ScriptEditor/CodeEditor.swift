@@ -100,6 +100,7 @@ struct ScriptCodeEditor: View {
                     input.decoration.selectionColor = theme.colors.selection
                 }
                 .textFieldStyle(.editor)
+                .flex(1, shrink: 1, basis: 0)
                 .contextMenu(entries: { languageEntries })
                 .font(.mono).font(.monospaced(size: 15)).lineHeight(24)
                 .accessibilityLabel(L("Source code"))

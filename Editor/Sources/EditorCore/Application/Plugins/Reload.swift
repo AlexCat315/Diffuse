@@ -30,7 +30,7 @@ extension EditorApplication {
         let processContext = try pluginProcessContext(for: binding.authorization.host)
         if pluginID == PluginLanguageService.pluginID {
             dynamicScriptManager.languagePlugin.bind(nil)
-            workstation.scripts.stopLanguageService()
+            workstation.scripts.stopLanguageServiceForPluginChange()
         }
         do {
             try await Task.detached(priority: .userInitiated) {

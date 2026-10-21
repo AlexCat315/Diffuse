@@ -49,6 +49,29 @@ private final class BuildCoordinatorLoaderStub: DynamicScriptLibraryLoading, @un
 
 @Suite("Dynamic script build coordinator", .serialized)
 struct DynamicScriptBuildCoordinatorTests {
+    @Test("toolchain activation blocks new builds and restores the previous compiler on failure")
+    func compilerChangeBlocksBuilds() async throws {
+        let loader = BuildCoordinatorLoaderStub()
+        let coordinator = DynamicScriptBuildCoordinator(compiler: BuildCoordinatorCompilerStub(), loader: loader,
+                                                       scriptRuntime: ScriptRuntime())
+        let previous = try await coordinator.beginCompilerChange(BuildCoordinatorCompilerStub())
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("toolchain.swift")
+        let blocked = await coordinator.build(scriptID: "scripts.toolchain", legacyIdentifiers: [], sourceURL: source)
+        guard case let .failed(message) = blocked else {
+            Issue.record("A build must not run while its toolchain is being activated")
+            return
+        }
+        #expect(message.contains("toolchain is being changed"))
+        #expect(loader.loadedPaths.isEmpty)
+        do {
+            _ = try await coordinator.beginCompilerChange(BuildCoordinatorCompilerStub())
+            Issue.record("A second compiler change must not overlap activation")
+        } catch {}
+        await coordinator.finishCompilerChange(restoring: previous)
+        #expect(await coordinator.build(scriptID: "scripts.toolchain", legacyIdentifiers: [], sourceURL: source)
+            == .succeeded(stdout: "", stderr: ""))
+    }
+
     @Test("only the newest overlapping build may reach the loader")
     func newestBuildWins() async {
         let loader = BuildCoordinatorLoaderStub()

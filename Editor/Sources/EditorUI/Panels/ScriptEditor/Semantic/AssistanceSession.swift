@@ -28,11 +28,11 @@ enum ScriptSemanticCommand: CaseIterable, Equatable {
         let alt = modifiers.contains(.alt)
         if event.scancode == Scancode.f12, modifiers.isDisjoint(with: [.gui, .ctrl, .alt]) { return shift ? .references : .definition }
         if event.scancode == Scancode.f2, modifiers.isEmpty { return .rename }
-        if primary, event.scancode == 55, !alt { return .codeActions }
+        if primary, event.scancode == Scancode.period, !alt { return .codeActions }
         if primary, shift, event.scancode == Scancode.space { return .signature }
         if primary, shift, event.scancode == Scancode.o { return .symbols }
         if alt, shift, event.scancode == Scancode.f { return .format }
-        if alt, !primary, event.scancode == Scancode.left { return .back }
+        if alt, !primary, event.scancode == Scancode.arrowLeft { return .back }
         if primary, event.scancode == Scancode.z { return shift ? .redo : .undo }
         return nil
     }
@@ -252,20 +252,33 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
             do {
                 let resolved = action.needsResolution ? try await self.app.dynamicScriptManager.resolveCodeAction(action) : action
                 guard self.isCurrent(token, document: document) else { return }
-                if let edit = resolved.edit {
+                if let edit = try Self.applicableEdit(resolved) {
                     try self.app.workstation.scripts.applyLanguageEdit(edit); self.dismiss()
                 } else { self.presentation.message = L("This action has no applicable edits"); self.presentation.isBusy = false; self.publish() }
             } catch { if self.requestID == token { self.show(error) } }
         }
     }
 
+    static func applicableEdit(_ action: ScriptCodeAction) throws -> ScriptWorkspaceEdit? {
+        if let reason = action.disabledReason { throw ScriptLanguageEditError.disabledAction(reason) }
+        return action.edit
+    }
+
     func open(_ location: ScriptDefinitionLocation) {
         guard let current = currentLocation else { return }
-        do {
-            try navigate(ScriptSemanticLocation(scriptID: location.scriptID, fileURL: URL(string: location.documentURI), position: location.span.start))
-            navigation.record(current)
-            presentation = .init(); publish()
-        } catch { show(error) }
+        requestTask?.cancel()
+        let token = UUID(); requestID = token
+        presentation = .init(title: ScriptSemanticCommand.definition.title, isBusy: true)
+        publish()
+        requestTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await self.navigate(ScriptSemanticLocation(scriptID: location.scriptID, fileURL: URL(string: location.documentURI), position: location.span.start))
+                guard self.requestID == token else { return }
+                self.navigation.record(current)
+                self.presentation = .init(); self.publish()
+            } catch { if self.requestID == token { self.show(error) } }
+        }
     }
 
     func open(_ symbol: ScriptDocumentSymbol) {
@@ -283,17 +296,27 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
             position: ScriptSourceCoordinates.position(in: document.source, atCharacterIndex: caret.caretIndex))
     }
 
-    private func navigate(_ location: ScriptSemanticLocation) throws {
+    @MainActor
+    private func navigate(_ location: ScriptSemanticLocation) async throws {
         if let id = location.scriptID {
-            guard app.workstation.scripts.select(scriptID: id) else { return }
+            guard app.workstation.scripts.select(scriptID: id) else { throw CocoaError(.fileWriteUnknown) }
             externalDocument = nil
             app.navigateToIssue(.script(id: id, line: location.position.line, column: location.position.character))
-        } else if let url = location.fileURL, url.isFileURL {
-            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-            guard let size = attributes[.size] as? NSNumber, size.intValue <= 16 * 1024 * 1024 else {
-                throw CocoaError(.fileReadTooLarge)
+        } else if let url = location.fileURL {
+            let source: String
+            if url.isFileURL {
+                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                guard let size = attributes[.size] as? NSNumber, size.intValue <= 16 * 1024 * 1024 else {
+                    throw CocoaError(.fileReadTooLarge)
+                }
+                source = try String(contentsOf: url, encoding: .utf8)
+            } else if let content = try await app.dynamicScriptManager.referenceDocument(documentURI: url.absoluteString) {
+                source = content
+            } else {
+                throw CocoaError(.fileReadUnsupportedScheme)
             }
-            externalDocument = ScriptSemanticExternalDocument(url: url, source: TextBuffer(try String(contentsOf: url, encoding: .utf8)),
+            try Task.checkCancellation()
+            externalDocument = ScriptSemanticExternalDocument(url: url, source: TextBuffer(source),
                 navigation: EditorScriptNavigationRequest(scriptID: url.absoluteString, line: location.position.line, column: location.position.character))
         } else { throw CocoaError(.fileReadUnsupportedScheme) }
         caret = .initial
@@ -301,7 +324,16 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
 
     private func goBack() {
         guard let previous = navigation.back() else { externalDocument = nil; dismiss(); return }
-        do { try navigate(previous); dismiss() } catch { show(error) }
+        requestTask?.cancel()
+        let token = UUID(); requestID = token
+        requestTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await self.navigate(previous)
+                guard self.requestID == token else { return }
+                self.dismiss()
+            } catch { if self.requestID == token { self.show(error) } }
+        }
     }
 
     private func show(_ error: Error) {

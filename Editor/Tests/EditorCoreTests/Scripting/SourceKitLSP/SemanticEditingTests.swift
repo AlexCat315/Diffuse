@@ -1,7 +1,7 @@
-internal import Foundation
-internal import GuavaUICompose
-internal import LanguageServerRuntime
-internal import Testing
+import Foundation
+import GuavaUICompose
+import LanguageServerRuntime
+import Testing
 @testable import EditorCore
 
 @Suite("Swift semantic editing protocol")
@@ -22,6 +22,25 @@ struct SemanticEditingTests {
         #expect(document.sourceRevision == 42)
         #expect(document.edits.first?.text == "value😀")
         #expect(document.edits.first?.range.end.character == 9)
+    }
+
+    @Test("canonical language-server paths map back to the same known document")
+    func canonicalDocumentPaths() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = root.appendingPathComponent("Original")
+        let linked = root.appendingPathComponent("Linked")
+        try FileManager.default.createDirectory(at: original, withIntermediateDirectories: true)
+        try Data("let value = 1".utf8).write(to: original.appendingPathComponent("Script.swift"))
+        try FileManager.default.createSymbolicLink(at: linked, withDestinationURL: original)
+        let originalURI = original.appendingPathComponent("Script.swift").absoluteString
+        let returnedURI = linked.appendingPathComponent("Script.swift").absoluteString
+        let context = ScriptSemanticContext(documents: [ScriptSemanticContext.documentKey(originalURI):
+            .init(scriptID: "script.one", revision: 42, version: 7)])
+        let payload = Data("{\"changes\":{\"\(returnedURI)\":[{\"range\":\(range),\"newText\":\"value\"}]}}".utf8)
+        let edit = try ScriptEditingReplies.workspaceEdit(payload, context: context)
+        #expect(edit.documents.first?.scriptID == "script.one")
+        #expect(context.document(for: returnedURI)?.revision == 42)
     }
 
     @Test("versioned changes reject stale versions and unknown files atomically")
@@ -88,5 +107,20 @@ struct SemanticEditingTests {
         #expect(details.logs.first?.id == 51)
         #expect(details.logs.last?.id == 350)
         #expect(details.health == .checking)
+    }
+
+    @Test("syntax-only and empty results do not confirm semantic analysis")
+    func semanticEvidence() {
+        let empty = Data("[]".utf8)
+        let completion = Data(#"{"items":[],"isIncomplete":false}"#.utf8)
+        let symbol = Data("[{\"name\":\"Game\",\"kind\":23,\"range\":\(range)}]".utf8)
+        #expect(!ScriptLanguageSemanticEvidence.confirmsAnalysis(method: "textDocument/documentSymbol", payload: symbol))
+        #expect(!ScriptLanguageSemanticEvidence.confirmsAnalysis(method: "textDocument/formatting", payload: empty))
+        #expect(!ScriptLanguageSemanticEvidence.confirmsAnalysis(method: "textDocument/codeAction", payload: empty))
+        #expect(!ScriptLanguageSemanticEvidence.confirmsAnalysis(method: "textDocument/completion", payload: completion))
+        #expect(!ScriptLanguageSemanticEvidence.confirmsAnalysis(method: "textDocument/definition", payload: empty))
+        #expect(!ScriptLanguageSemanticEvidence.confirmsAnalysis(method: "textDocument/hover", payload: Data("null".utf8)))
+        #expect(ScriptLanguageSemanticEvidence.confirmsAnalysis(method: "textDocument/hover",
+                                                               payload: Data(#"{"contents":{"kind":"plaintext","value":"String"}}"#.utf8)))
     }
 }

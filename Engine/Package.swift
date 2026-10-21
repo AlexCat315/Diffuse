@@ -569,6 +569,7 @@ let package = Package(
                 .product(name: "GuavaLogging", package: "Logging"),
                 "CapabilityRuntime",
                 "PluginRuntime",
+                "ProcessRuntime",
             ],
             resources: [.copy("Fixtures")]
         ),

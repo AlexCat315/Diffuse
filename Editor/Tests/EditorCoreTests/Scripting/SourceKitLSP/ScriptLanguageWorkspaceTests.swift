@@ -28,7 +28,9 @@ struct ScriptLanguageWorkspaceTests {
         let workspace = ScriptLanguageWorkspace(scriptsDirectoryURL: scriptsDirectory,
                                                 engineModulePaths: [modulePath],
                                                 clangModuleMapPaths: [moduleMapPath],
-                                                clangIncludePaths: [includePath])
+                                                clangIncludePaths: [includePath],
+                                                sdkURL: root.appendingPathComponent("macOS.sdk"),
+                                                resourceDirectoryURL: root.appendingPathComponent("Toolchain/usr/lib/swift"))
         let documents = try workspace.synchronize(scripts)
         let first = try #require(documents[scripts[0].0.identifier])
         let second = try #require(documents[scripts[1].0.identifier])
@@ -44,6 +46,8 @@ struct ScriptLanguageWorkspaceTests {
         #expect(manifest.contains(modulePath))
         #expect(manifest.contains("-fmodule-map-file=\(moduleMapPath)"))
         #expect(manifest.contains("-I\(includePath)"))
+        #expect(manifest.contains("-sdk"))
+        #expect(manifest.contains("-resource-dir"))
         #expect(manifest.contains(first.targetName))
         #expect(manifest.contains(second.targetName))
 

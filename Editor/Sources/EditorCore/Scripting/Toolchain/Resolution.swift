@@ -1,6 +1,6 @@
 public import Foundation
-private import ProcessRuntime
-private import ScriptRuntime
+import ProcessRuntime
+import ScriptRuntime
 
 public struct SwiftToolchain: Sendable, Equatable {
     public let compilerURL: URL
@@ -8,7 +8,7 @@ public struct SwiftToolchain: Sendable, Equatable {
     public let rootURL: URL
     public let version: String
     public let sdkURL: URL?
-    public let environment: [String: String]
+    let environment: [String: String]
 }
 
 public enum SwiftToolchainError: Error, LocalizedError, Sendable, Equatable {
@@ -30,26 +30,34 @@ public enum SwiftToolchainError: Error, LocalizedError, Sendable, Equatable {
 
 public enum SwiftToolchainResolver {
     public static func resolve(compilerOverride: String? = nil,
-                               environment: [String: String] = ProcessInfo.processInfo.environment) throws -> SwiftToolchain {
+                               environment: [String: String] = ProcessInfo.processInfo.environment,
+                               preferences: SwiftToolchainPreferences = .load()) throws -> SwiftToolchain {
         let explicit = [compilerOverride, environment["GUAVA_SWIFTC_PATH"], environment["GUAVA_SWIFT_TOOLCHAIN_PATH"],
-                        SwiftToolchainPreferences.load().selectedPath].compactMap { value -> String? in
+                        preferences.selectedPath].compactMap { value -> String? in
             guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
             return value
         }.first
-        let compiler: URL
         if let explicit {
-            compiler = try compilerURL(at: explicit, environment: environment)
+            return try inspect(compilerURL: compilerURL(at: explicit, environment: environment), environment: environment)
         } else if let lsp = environment[SourceKitLSPExecutableLocator.overrideEnvironmentKey], !lsp.isEmpty {
             let executable = try SwiftScriptCompiler.resolveExecutableURL(for: lsp, environment: environment)
-            compiler = try compilerURL(at: executable.deletingLastPathComponent().path, environment: environment)
-        } else if let found = try? SwiftScriptCompiler.resolveExecutableURL(for: "swiftc", environment: environment) {
-            compiler = found
-        } else if let found = try? xcrun("--find", "swiftc", environment: environment) {
-            compiler = URL(fileURLWithPath: found)
-        } else {
-            throw SwiftToolchainError.unavailable("No Swift toolchain was found. Select a toolchain path or install an official Swift release.")
+            return try inspect(compilerURL: compilerURL(at: executable.deletingLastPathComponent().path, environment: environment), environment: environment)
         }
-        return try inspect(compilerURL: compiler, environment: environment)
+        var candidates = [URL]()
+        if let found = try? SwiftScriptCompiler.resolveExecutableURL(for: "swiftc", environment: environment) { candidates.append(found) }
+        if let found = try? xcrun("--find", "swiftc", environment: environment) { candidates.append(URL(fileURLWithPath: found)) }
+        for release in SwiftToolchainInstallation.releases {
+            let path = SwiftToolchainPreferences.directory.appendingPathComponent("Installed/swift-\(release.version).xctoolchain").path
+            if let found = try? compilerURL(at: path, environment: environment) { candidates.append(found) }
+        }
+        var failures = [String]()
+        for candidate in candidates {
+            do { return try inspect(compilerURL: candidate, environment: environment) }
+            catch { failures.append(error.localizedDescription) }
+        }
+        throw SwiftToolchainError.unavailable(failures.isEmpty
+            ? "No Swift toolchain was found. Select a toolchain path or install an official Swift release."
+            : failures.joined(separator: "\n"))
     }
 
     public static func installed(environment: [String: String] = ProcessInfo.processInfo.environment) -> [SwiftToolchain] {
@@ -60,6 +68,12 @@ public enum SwiftToolchainResolver {
         #if os(macOS)
         roots.append(contentsOf: [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Developer/Toolchains"),
                                   URL(fileURLWithPath: "/Library/Developer/Toolchains")])
+        for directory in [URL(fileURLWithPath: "/Applications"), FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")] {
+            for application in (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+                where application.lastPathComponent.hasPrefix("Xcode") && application.pathExtension == "app" {
+                candidates.append(application.path)
+            }
+        }
         #else
         let home = environment["SWIFTLY_TOOLCHAINS_DIR"].map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/swiftly/toolchains")
@@ -83,7 +97,8 @@ public enum SwiftToolchainResolver {
         var isDirectory = ObjCBool(false)
         if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
             let root = URL(fileURLWithPath: path)
-            for relative in ["usr/bin/\(compilerName)", "bin/\(compilerName)", compilerName] {
+            for relative in ["usr/bin/\(compilerName)", "bin/\(compilerName)", compilerName,
+                             "Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/\(compilerName)"] {
                 let candidate = root.appendingPathComponent(relative)
                 if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
             }
@@ -96,6 +111,10 @@ public enum SwiftToolchainResolver {
         var launchEnvironment = environment
         let sdk: URL?
         #if os(macOS)
+        let path = compilerURL.resolvingSymlinksInPath().path
+        if let range = path.range(of: "/Contents/Developer/Toolchains/") {
+            launchEnvironment["DEVELOPER_DIR"] = String(path[..<range.lowerBound]) + "/Contents/Developer"
+        }
         if let configured = environment["SDKROOT"], !configured.isEmpty {
             let url = URL(fileURLWithPath: configured)
             guard FileManager.default.fileExists(atPath: url.appendingPathComponent("SDKSettings.json").path)
@@ -104,7 +123,7 @@ public enum SwiftToolchainResolver {
             }
             sdk = url
         } else {
-            sdk = try URL(fileURLWithPath: xcrun("--sdk", "macosx", "--show-sdk-path", environment: environment))
+            sdk = try URL(fileURLWithPath: xcrun("--sdk", "macosx", "--show-sdk-path", environment: launchEnvironment))
         }
         launchEnvironment["SDKROOT"] = sdk?.path
         #else

@@ -10,7 +10,7 @@ import Testing
 @Suite("Viewport navigation controls", .serialized)
 @MainActor
 struct ViewportNavigationControlsTests {
-    @Test("view menu activates axis views and snap fields commit independent steps")
+    @Test("camera menu activates projection and axis views; snap fields commit independent steps")
     func menusAndSnapFields() throws {
         try WorkbenchUITestSupport.withEnvironment { registry, focus in
             let previousPortals = PortalStoreHolder.current
@@ -25,14 +25,15 @@ struct ViewportNavigationControlsTests {
                 PointerCaptureHolder.current = previousCapture
             }
             let store = EditorStore()
+            let scene = EditorSceneAdapter(seedPreviewScene: false)
             var selectedAxis: SIMD3<Float>?
             var selectedProjection: RenderCamera.Projection?
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: LayerRoot {
                 Column(alignment: .leading, spacing: 10) {
-                    ViewportProjectionSelector(camera: RenderCamera(eye: SIMD3<Float>(0, 0, 5), target: .zero),
-                        isEnabled: true, onSelectProjection: { selectedProjection = $0 },
-                        onSelectAxis: { selectedAxis = $0 })
+                    ViewportCameraMenu(scene: scene, isEnabled: true, canFrameSelection: false,
+                                       onSelectProjection: { selectedProjection = $0 },
+                                       onSelectAxis: { selectedAxis = $0 }, onFrameSelection: {})
                     ViewportSnapSelector(store: store, isEnabled: true)
                 }
             }.theme(EditorVisualTheme.make(dark: true)))
@@ -57,12 +58,14 @@ struct ViewportNavigationControlsTests {
                 })
             }
             settle()
-            try WorkbenchUITestSupport.activate("viewport-projection-selector", in: graph.tree.root, registry: registry)
+            try WorkbenchUITestSupport.activate("viewport-camera-menu", in: graph.tree.root, registry: registry)
             settle()
             click(try menuItem("viewport-orthographic"))
             #expect(selectedProjection == .orthographic && portals.entries.isEmpty)
-            try WorkbenchUITestSupport.activate("viewport-projection-selector", in: graph.tree.root, registry: registry)
+            try WorkbenchUITestSupport.activate("viewport-camera-menu", in: graph.tree.root, registry: registry)
             settle()
+            // Axis views live in a submenu of the camera menu.
+            click(try menuItem("viewport-axis-views"))
             click(try menuItem("viewport-view-bottom"))
             #expect(selectedAxis == SIMD3<Float>(0, 1, 0) && portals.entries.isEmpty)
 

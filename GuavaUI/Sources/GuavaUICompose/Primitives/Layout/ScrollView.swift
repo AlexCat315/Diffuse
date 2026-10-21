@@ -636,8 +636,12 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             let visibleTrackColor = trackColor.multipliedAlpha(opacity)
             let visibleThumbColor = thumbColor.multipliedAlpha(opacity)
 
+            // Sub-point overflow is layout rounding, not content to scroll to;
+            // drawing a bar for it puts a scrollbar under every fitting strip.
+            let overflowTolerance: Float = 0.5
+
             // Vertical bar.
-            if (axes == .vertical || axes == .both), contentH > viewH, viewH > 0 {
+            if (axes == .vertical || axes == .both), contentH > viewH + overflowTolerance, viewH > 0 {
                 let trackX = Float(origin.x + viewport.maxX) - trackThickness - trackInset
                 let trackY = Float(origin.y + viewport.minY) + trackInset
                 let trackH = viewH - 2 * trackInset
@@ -663,7 +667,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             }
 
             // Horizontal bar.
-            if (axes == .horizontal || axes == .both), contentW > viewW, viewW > 0 {
+            if (axes == .horizontal || axes == .both), contentW > viewW + overflowTolerance, viewW > 0 {
                 let trackY = Float(origin.y + viewport.maxY) - trackThickness - trackInset
                 let trackX = Float(origin.x + viewport.minX) + trackInset
                 let trackW = viewW - 2 * trackInset

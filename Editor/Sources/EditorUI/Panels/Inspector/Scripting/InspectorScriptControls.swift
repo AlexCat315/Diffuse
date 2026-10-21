@@ -2,8 +2,9 @@ import EditorCore
 import GuavaUI
 import GuavaUIRuntime
 
-/// Identity, source navigation and structural actions stay in the behavior's
-/// header. They are independent hit targets, outside its collapse button.
+/// The trailing half of a script row: status, the on/off switch and one menu
+/// for everything else (open, change, remove). Independent hit targets,
+/// outside the row's collapse button.
 struct InspectorScriptHeaderActions: View {
     let group: EditorInspectorFieldGroup
     let fields: [EditorInspectorField]
@@ -11,22 +12,28 @@ struct InspectorScriptHeaderActions: View {
     let isEditable: Bool
     let isPaused: Bool
     let onOpenScript: ((String) -> Void)?
+    var isOn: Binding<Bool>?
     @State private var isMenuPresented = false
     @State private var isChoosingScript = false
 
     var body: some View {
-        Row(alignment: .center, spacing: 4) {
-            Text(status.label).lineLimit(1).font(.caption).foregroundColor(status.color)
-                .frame(maxWidth: 64).clipped()
-                .debugName("inspector-script-status-\(group.id)")
-            if let identifier = group.sourceIdentifier, let onOpenScript {
-                Button(icon: .resource(.svg(named: "script", in: EditorAppResourceBundle.bundle, subdirectory: "PanelIcons")),
-                       size: 12, tooltip: L("Open Script")) { onOpenScript(identifier) }
-                    .buttonStyle(.ghost)
-                    .debugName("inspector-script-open-\(group.id)")
+        Row(alignment: .center, spacing: 8) {
+            if !status.label.isEmpty {
+                Row(alignment: .center, spacing: 5) {
+                    Box {}.frame(width: 6, height: 6).background(status.color).cornerRadius(3)
+                    Text(status.label).lineLimit(1).font(.caption).foregroundColor(.onSurfaceMuted)
+                }.frame(maxWidth: 96).clipped()
+                    .debugName("inspector-script-status-\(group.id)")
+            }
+            if let isOn {
+                Toggle(isOn: isOn, isEnabled: isEditable).controlSize(.small)
+                    .accessibility { $0.label = L("Enabled") }
+                    .debugName("inspector-script-enabled-\(group.id)")
             }
             Popover(isPresented: $isMenuPresented, width: 220, surface: .content, overflow: .flip) {
-                Text("···").font(.bodyStrong).padding(horizontal: 4, vertical: 3)
+                Icon(UIIcons.Action.moreHorizontal, size: 13, color: .onSurfaceMuted)
+                    .frame(width: 24, height: 24)
+                    .accessibility { $0.label = L("More") }
             } content: {
                 Menu(isChoosingScript ? scriptEntries : actionEntries, width: 220, maxVisibleRows: 12,
                      onItemActivated: {})
@@ -55,9 +62,16 @@ struct InspectorScriptHeaderActions: View {
     }
 
     private var actionEntries: [MenuEntry] {
-        var entries: [MenuEntry] = [.item(MenuItem(id: "change", title: L("Change Script…"), isEnabled: isEditable) {
+        var entries: [MenuEntry] = []
+        if let identifier = group.sourceIdentifier, let onOpenScript {
+            entries.append(.item(MenuItem(id: "open", title: L("Open Script")) {
+                isMenuPresented = false
+                onOpenScript(identifier)
+            }))
+        }
+        entries.append(.item(MenuItem(id: "change", title: L("Change Script…"), isEnabled: isEditable) {
             isChoosingScript = true
-        })]
+        }))
         for fieldID in group.actionFieldIDs {
             guard let field = fields.first(where: { $0.id == fieldID }),
                   case let .action(title, destructive, action) = field.value else { continue }
@@ -85,24 +99,3 @@ struct InspectorScriptHeaderActions: View {
     }
 }
 
-struct InspectorScriptAddButton: View {
-    let options: [EditorInspectorStringOption]
-    let isEnabled: Bool
-    let onAdd: (String) -> Void
-    @State private var isPresented = false
-
-    var body: some View {
-        Popover(isPresented: $isPresented, isEnabled: isEnabled, width: 240, surface: .content, overflow: .flip) {
-            Row(alignment: .center, spacing: 5) {
-                Text("+").font(.caption).foregroundColor(.onSurfaceVariant)
-                Text(L("Add Script")).font(.caption).foregroundColor(.onSurfaceVariant)
-            }
-            .padding(horizontal: 6, vertical: 4)
-        } content: {
-            Menu(options.map { option in
-                .item(MenuItem(id: option.value, title: option.label, isEnabled: isEnabled) { onAdd(option.value) })
-            }, width: 240, maxVisibleRows: 12, onItemActivated: { isPresented = false })
-        }
-        .debugName("inspector-add-script")
-    }
-}

@@ -67,7 +67,7 @@ public final class PluginProcessService: @unchecked Sendable {
                 command.arguments = request.arguments
                 command.environment = request.environment
                 var budget = ProcessBudget()
-                budget.outputBytes = 262_144
+                budget.outputBytes = 33_554_432
                 budget.lifetimeMilliseconds = rule.lifetimeMilliseconds
                 let session = try ProcessSession(command: command, budget: budget)
                 let entry = ProcessEntry(session: session, generation: mount.generation, permissionID: rule.id, maximumBytes: budget.outputBytes)

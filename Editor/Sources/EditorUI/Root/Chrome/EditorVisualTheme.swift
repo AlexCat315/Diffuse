@@ -8,18 +8,20 @@ enum EditorVisualTheme {
         var theme = dark ? Theme.defaultDark : Theme.defaultLight
         if dark {
             // Three layers, never separated by rules: the canvas, rounded panes
-            // (surface) resting on it, and cards (surfaceRaised) inside panes.
-            theme.colors.background = Color(red: 0x0B, green: 0x0E, blue: 0x0D)
-            theme.colors.surface = Color(red: 0x16, green: 0x1B, blue: 0x1A)
+            // (surface) on it, and cards (surfaceRaised) inside panes. Charcoal,
+            // not black: each layer is one clear step lighter, so the window
+            // never reads as one dark mass.
+            theme.colors.background = Color(red: 0x14, green: 0x17, blue: 0x16)
+            theme.colors.surface = Color(red: 0x1D, green: 0x21, blue: 0x20)
             theme.colors.surfaceVariant = EditorCodePalette.selectedTab
-            theme.colors.surfaceSunken = Color(red: 0x10, green: 0x14, blue: 0x13)
+            theme.colors.surfaceSunken = Color(red: 0x17, green: 0x1B, blue: 0x1A)
             // Cards inside a pane: one step above the pane, never outlined.
-            theme.colors.surfaceRaised = Color(red: 0x1E, green: 0x24, blue: 0x22)
+            theme.colors.surfaceRaised = Color(red: 0x27, green: 0x2C, blue: 0x2A)
             theme.colors.onSurface = EditorCodePalette.foreground
-            theme.colors.onSurfaceVariant = Color(red: 0xA6, green: 0xAE, blue: 0xAA)
+            theme.colors.onSurfaceVariant = Color(red: 0xB6, green: 0xBE, blue: 0xBA)
             theme.colors.onSurfaceMuted = EditorCodePalette.muted
-            theme.colors.border = Color.white.multipliedAlpha(0.06)
-            theme.colors.divider = Color.white.multipliedAlpha(0.06)
+            theme.colors.border = Color.white.multipliedAlpha(0.08)
+            theme.colors.divider = Color.white.multipliedAlpha(0.08)
             theme.colors.accent = EditorCodePalette.accent
             theme.colors.accentMuted = EditorCodePalette.accent.multipliedAlpha(0.12)
             theme.colors.selection = EditorCodePalette.accent.multipliedAlpha(0.16)
@@ -38,7 +40,7 @@ enum EditorVisualTheme {
             theme.colors.accentMuted = Color(red: 0x27, green: 0x7B, blue: 0x50, alpha: 0x16)
             theme.colors.selection = Color(red: 0x27, green: 0x7B, blue: 0x50, alpha: 0x24)
         }
-        theme.colors.surfaceFloating = dark ? Color(red: 24, green: 29, blue: 28, alpha: 240) : .white
+        theme.colors.surfaceFloating = dark ? Color(red: 0x2E, green: 0x34, blue: 0x31, alpha: 245) : .white
         theme.colors.surfaceOverlay = theme.colors.surfaceRaised
         theme.extensions[EditorChromeTokens.self].agent = dark
             ? Color(red: 0xF0, green: 0x7D, blue: 0x96)
@@ -92,9 +94,9 @@ enum EditorCodePalette {
     static let background = Color(red: 0x17, green: 0x1C, blue: 0x1B)
     static let gutter = Color(red: 0x11, green: 0x15, blue: 0x15)
     static let header = Color(red: 0x1D, green: 0x23, blue: 0x21)
-    static let selectedTab = Color(red: 0x25, green: 0x2D, blue: 0x2A)
-    static let foreground = Color(red: 0xE6, green: 0xEA, blue: 0xE8)
-    static let muted = Color(red: 0x71, green: 0x79, blue: 0x76)
+    static let selectedTab = Color(red: 0x33, green: 0x3A, blue: 0x37)
+    static let foreground = Color(red: 0xEC, green: 0xEF, blue: 0xED)
+    static let muted = Color(red: 0x8B, green: 0x94, blue: 0x8F)
     static let lineNumber = Color(red: 0x71, green: 0x79, blue: 0x76)
     static let accent = Color(red: 0x5F, green: 0xAF, blue: 0x82)
 }

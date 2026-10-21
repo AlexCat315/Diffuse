@@ -18,7 +18,8 @@ extension EditorApplication {
         }
         for rule in permissions.processes {
             if rule.command == "sourcekit-lsp" {
-                let executable = try SwiftToolchainResolver.resolve().languageServerURL
+                let executable = try dynamicScriptManager.swiftToolchain?.languageServerURL
+                    ?? SwiftToolchainResolver.resolve().languageServerURL
                 let resolved = executable.resolvingSymlinksInPath()
                 guard resolved.path != root.path, !resolved.path.hasPrefix(root.path + "/") else {
                     throw PluginProcessError.commandNotBound(rule.command)

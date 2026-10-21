@@ -9,6 +9,7 @@ struct ScriptLanguageLifecycle {
     var recoveryAttempt = 0
     var recoveryTask: Task<Void, Never>?
     var readySince: ContinuousClock.Instant?
+    var metricsTask: Task<Void, Never>?
 }
 
 /// Revision orders UI deliveries across stop, restart and recovery callbacks.

@@ -248,7 +248,9 @@ private struct _StatefulPropertyGrid: View {
                 .debugName("property-section-header-\(section.id)")
                 if let trailing = section.headerTrailing { trailing }
             }
-            .padding(horizontal: 8, vertical: 3)
+            // A nested header lines up with the parent's rows (7pt row inset)
+            // instead of stepping in by another card inset.
+            .padding(horizontal: nested ? 7 : 8, vertical: 3)
             .frame(minWidth: 0, minHeight: section.headerLeading == nil && section.headerTrailing == nil ? 26 : 32)
 
             AnimatedVisibility(isVisible: !isCollapsed) {
@@ -262,9 +264,9 @@ private struct _StatefulPropertyGrid: View {
                         rowViews(section.rows, sectionID: section.id)
                     }
                     childViews(section.children)
-                    if let footer = section.footer { footer.padding(horizontal: 6, vertical: 4) }
+                    if let footer = section.footer { footer.padding(horizontal: 7, vertical: 4) }
                 }
-                .padding(EdgeInsets(top: 0, leading: 8, bottom: 8, trailing: 8))
+                .padding(nested ? EdgeInsets(bottom: 4) : EdgeInsets(top: 0, leading: 8, bottom: 8, trailing: 8))
             }
         }
         .background(nested ? .clear : .surfaceRaised)
@@ -379,9 +381,9 @@ private struct _StatefulPropertyGrid: View {
             .padding(horizontal: 7, vertical: 0)
         }
         .padding(vertical: verticalPadding)
-        .frame(
-            height: row.sizing == .fixed ? .points(rowHeight) : .auto,
-            minHeight: row.sizing == .intrinsic ? rowHeight : 0)
+        // Intrinsic rows size to their content: a one-line hint or a disclosure
+        // must not inherit the editable-control minimum height.
+        .frame(height: row.sizing == .fixed ? .points(rowHeight) : .auto)
     }
 
     private func sizedValue(for row: PropertyGridRow, height: Float?) -> AnyView {

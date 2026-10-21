@@ -1,4 +1,4 @@
-internal import Foundation
+import Foundation
 
 enum ScriptEditingReplies {
     static func workspaceEdit(_ data: Data?, context: ScriptSemanticContext) throws -> ScriptWorkspaceEdit {
@@ -9,7 +9,7 @@ enum ScriptEditingReplies {
         var documents: [String: ScriptDocumentEdit] = [:]
         func append(uri: String, version: Int?, edits: Any?) throws {
             guard let url = URL(string: uri), url.isFileURL,
-                  let document = context.documents[url.standardizedFileURL.absoluteString] else {
+                  let document = context.document(for: uri) else {
                 throw ScriptLanguageEditError.externalDocument(uri)
             }
             if let version, version != document.version { throw ScriptLanguageEditError.staleDocument(document.scriptID) }

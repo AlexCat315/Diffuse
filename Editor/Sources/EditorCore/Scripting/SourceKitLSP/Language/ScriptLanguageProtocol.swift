@@ -219,8 +219,8 @@ public enum ScriptLanguageReplies {
             // `target*` pair and may carry a different selection range.
             let uri = object["uri"] as? String ?? object["targetUri"] as? String
             let span = parseSpan(object["range"])
-                ?? parseSpan(object["targetRange"])
                 ?? parseSpan(object["targetSelectionRange"])
+                ?? parseSpan(object["targetRange"])
             guard let uri, let span else { return nil }
             return ScriptDefinitionLocation(documentURI: uri, scriptID: nil, span: span)
         }

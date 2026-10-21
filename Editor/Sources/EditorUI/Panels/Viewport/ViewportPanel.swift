@@ -57,132 +57,110 @@ struct ViewportPanel: View {
                                               isSceneEditable: playbackState == .stopped,
                                               isSelectionEditable: selectionCanTransform)
 
-            ViewportHost(surface: surface,
-                         onInputEvent: { event in
-                             handleViewportInput(event)
-                         },
-                         onDrawableSizeChange: { app.setViewportDrawableSize($0) },
-                         onScreenFrameChange: { frame in
-                             EditorViewportDropTarget.frame = frame
-                         },
-                         onDrawOverlay: { list, frame in
-                             drawGizmoOverlay(list: list,
-                                              frame: frame,
-                                              mode: gizmoMode,
-                                              shadingMode: shadingMode,
-                                              physicsDebugOptions: physicsDebugOptions,
-                                              physicsDebugScope: physicsDebugScope,
-                                              selectedID: selectedEntityID,
-                                              selectedIDs: selectedEntityIDs)
-                         }) {
-                Box(direction: .column, alignItems: .stretch) {
-                    Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                        if !surface.isValid {
-                            ViewportIdleCard()
-                        } else if let activeDrag {
-                            DropTargetCard(label: activeDrag.displayName,
-                                           kindLabel: activeDrag.kindLabel)
-                        } else {
-                            EmptyView()
+            // Controls live in a header row of the pane; the render below is
+            // left to the scene.
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                Row(alignment: .center, spacing: 6) {
+                    ViewportToolControls(snapStore: app.store,
+                                         gizmoMode: gizmoMode,
+                                         gizmoSpace: gizmoSpace,
+                                         playbackState: playbackState,
+                                         onSelectGizmoMode: { mode in
+                                             if gizmoMode != mode { store.dispatch(.setGizmoMode(mode)) }
+                                         },
+                                         onSelectGizmoSpace: { space in
+                                             if gizmoSpace != space { store.dispatch(.setGizmoSpace(space)) }
+                                         })
+                    Spacer(minLength: 0)
+                    ViewportCameraMenu(scene: scene,
+                                       isEnabled: EditorSceneAuthoringPolicy.canEditScene(during: playbackState),
+                                       canFrameSelection: entity != nil,
+                                       onSelectProjection: { scene.setViewportProjection($0) },
+                                       onSelectAxis: { scene.lookAlongAxis($0, orthographic: true) },
+                                       onFrameSelection: {
+                                           scene.frameEntities(
+                                               selectedEntityIDs.isEmpty
+                                                   ? Set(selectedEntityID.map { [$0] } ?? [])
+                                                   : selectedEntityIDs,
+                                               viewportAspectRatio: viewportAspectRatio(for: surface)
+                                           )
+                                       })
+                    ViewportDisplayMenu(
+                        state: ViewportDisplayState(
+                            shading: shadingMode,
+                            grid: gridEnabled,
+                            shadows: shadowsEnabled,
+                            renderScalePercent: renderScalePercent,
+                            interactionDownscale: interactionDownscaleEnabled,
+                            realtime: realtimeEnabled,
+                            physics: store.workspaceMode.profile.features.contains(.simulation)
+                                ? (physicsDebugOptions, physicsDebugScope) : nil),
+                        actions: ViewportDisplayActions(
+                            selectShading: { app.setViewportShadingMode($0) },
+                            toggleGrid: { app.setViewportGridEnabled(!gridEnabled) },
+                            toggleShadows: { app.setViewportShadowsEnabled(!shadowsEnabled) },
+                            selectRenderScale: { app.setViewportRenderScalePercent($0) },
+                            toggleInteractionDownscale: {
+                                app.setViewportInteractionDownscaleEnabled(!interactionDownscaleEnabled)
+                            },
+                            toggleRealtime: { app.setViewportRealtimeEnabled(!realtimeEnabled) },
+                            setPhysicsOptions: { store.dispatch(.setPhysicsDebugOverlayOptions($0)) },
+                            setPhysicsScope: { store.dispatch(.setPhysicsDebugOverlayScope($0)) }))
+                }
+                .padding(horizontal: 6)
+                .frame(height: 40)
+                .debugName("viewport-header")
+                ViewportHost(surface: surface,
+                             onInputEvent: { event in
+                                 handleViewportInput(event)
+                             },
+                             onDrawableSizeChange: { app.setViewportDrawableSize($0) },
+                             onScreenFrameChange: { frame in
+                                 EditorViewportDropTarget.frame = frame
+                             },
+                             onDrawOverlay: { list, frame in
+                                 drawGizmoOverlay(list: list,
+                                                  frame: frame,
+                                                  mode: gizmoMode,
+                                                  shadingMode: shadingMode,
+                                                  physicsDebugOptions: physicsDebugOptions,
+                                                  physicsDebugScope: physicsDebugScope,
+                                                  selectedID: selectedEntityID,
+                                                  selectedIDs: selectedEntityIDs)
+                             }) {
+                    Box(direction: .column, alignItems: .stretch) {
+                        Box(direction: .column, alignItems: .center, justifyContent: .center) {
+                            if !surface.isValid {
+                                ViewportIdleCard()
+                            } else if let activeDrag {
+                                DropTargetCard(label: activeDrag.displayName,
+                                               kindLabel: activeDrag.kindLabel)
+                            } else {
+                                EmptyView()
+                            }
+                        }
+                        .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+    
+                        // The scene carries only the view cube; every other control
+                        // sits in the header above the render, never over it.
+                        ViewportChromeInputBlocker {
+                            ViewCubeControl(scene: scene)
+                        }
+                        .frame(width: 64)
+                        .absolutePosition(top: 10, right: 10)
+    
+                        // Selection, scale and run state already show in the title bar,
+                        // status bar and toolbar; only a lock warns from inside the scene.
+                        if selectionContainsLockedEntity {
+                            EditorPanelBadge(L("Locked"), foreground: .warning)
+                                .absolutePosition(right: 10, bottom: 10)
                         }
                     }
                     .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
-
-                    ViewportChromeLayout {
-                        ViewportChromeInputBlocker {
-                            ViewportInfoBar(entity: entity,
-                                            camera: camera,
-                                            snapStore: app.store,
-                                            gizmoMode: gizmoMode,
-                                            gizmoSpace: gizmoSpace,
-                                            shadingMode: shadingMode,
-                                            shadowsEnabled: shadowsEnabled,
-                                            gridEnabled: gridEnabled,
-                                            renderScalePercent: renderScalePercent,
-                                            interactionDownscaleEnabled: interactionDownscaleEnabled,
-                                            realtimeEnabled: realtimeEnabled,
-                                            physicsDebugOptions: physicsDebugOptions,
-                                            physicsDebugScope: physicsDebugScope,
-                                            playbackState: playbackState,
-                                            onSelectGizmoMode: { mode in
-                                                if gizmoMode != mode {
-                                                    store.dispatch(.setGizmoMode(mode))
-                                                }
-                                            },
-                                            onSelectGizmoSpace: { space in
-                                                if gizmoSpace != space {
-                                                    store.dispatch(.setGizmoSpace(space))
-                                                }
-                                            },
-                                            onSelectShadingMode: { mode in
-                                                app.setViewportShadingMode(mode)
-                                            },
-                                            onSelectProjection: { projection in
-                                                scene.setViewportProjection(projection)
-                                            },
-                                            onSelectViewAxis: { axis in
-                                                scene.lookAlongAxis(axis, orthographic: true)
-                                            },
-                                            onToggleShadows: {
-                                                app.setViewportShadowsEnabled(!shadowsEnabled)
-                                            },
-                                            onToggleGrid: {
-                                                app.setViewportGridEnabled(!gridEnabled)
-                                            },
-                                            onSelectRenderScale: { percent in
-                                                app.setViewportRenderScalePercent(percent)
-                                            },
-                                            onToggleInteractionDownscale: {
-                                                app.setViewportInteractionDownscaleEnabled(!interactionDownscaleEnabled)
-                                            },
-                                            onToggleRealtime: {
-                                                app.setViewportRealtimeEnabled(!realtimeEnabled)
-                                            },
-                                            onSetPhysicsDebugOptions: { options in
-                                                store.dispatch(.setPhysicsDebugOverlayOptions(options))
-                                            },
-                                            onSetPhysicsDebugScope: { scope in
-                                                store.dispatch(.setPhysicsDebugOverlayScope(scope))
-                                            },
-                                            onFrameSelection: {
-                                                scene.frameEntities(
-                                                    selectedEntityIDs.isEmpty
-                                                        ? Set(selectedEntityID.map { [$0] } ?? [])
-                                                        : selectedEntityIDs,
-                                                    viewportAspectRatio: viewportAspectRatio(for: surface)
-                                                )
-                                            })
-                        }
-                    } cube: {
-                        ViewportChromeInputBlocker {
-                            Column(alignment: .center, spacing: 4) {
-                                ViewCubeControl(scene: scene)
-                                ViewportNavigationSelector(scene: scene)
-                            }
-                        }
-                    }
-
-                    if !physicsDebugOptions.isEmpty {
-                        PhysicsDebugLegend(
-                            options: physicsDebugOptions,
-                            scope: physicsDebugScope
-                        )
-                            .absolutePosition(left: 10, bottom: 10)
-                    }
-
-                    ViewportStatusBar(surface: surface,
-                                      entity: entity,
-                                      selectionCount: selectedEntityIDs.count,
-                                      selectionContainsLockedEntity: selectionContainsLockedEntity,
-                                      renderScalePercent: renderScalePercent,
-                                      realtimeEnabled: realtimeEnabled,
-                                      playbackState: playbackState)
-                        .absolutePosition(right: 10, bottom: 10)
                 }
-                .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+                .flex()
+                .background(.surfaceSunken)
             }
-            .flex()
-            .background(.surfaceSunken)
         }
     }
 
@@ -1146,31 +1124,6 @@ struct ViewportPanel: View {
     }
 }
 
-/// Keeps the flexible toolbar and fixed view cube in one layout context.
-/// Independent absolute overlays can overlap visually and, more seriously,
-/// let the cube's chrome-priority hit region swallow transport controls.
-struct ViewportChromeLayout<Toolbar: View, Cube: View>: View {
-    let toolbar: Toolbar
-    let cube: Cube
-
-    init(@ViewBuilder toolbar: () -> Toolbar,
-         @ViewBuilder cube: () -> Cube) {
-        self.toolbar = toolbar()
-        self.cube = cube()
-    }
-
-    var body: some View {
-        Column(alignment: .leading, spacing: 8) {
-            toolbar.frame(width: .percent(100), minWidth: 0)
-            Row(alignment: .top, spacing: 0) {
-                Spacer(minLength: 0)
-                cube.frame(width: 64)
-            }.padding(horizontal: 10).frame(width: .percent(100))
-        }.absolutePosition(left: 0, top: 0, right: 0)
-
-    }
-}
-
 func viewportPopoverDismissOnEscape(_ isPresented: Binding<Bool>)
     -> (KeyEvent, EventPhase) -> EventResult {
     { event, phase in
@@ -1580,356 +1533,57 @@ private struct ViewCubeControl: _PrimitiveView {
     }
 }
 
-private struct ViewportInfoBar: View {
-    let entity: EditorSceneEntitySummary?
-    let camera: RenderCamera
+/// The left of the viewport header: what the pointer does. The tool switcher,
+/// the transform space and snapping; how the scene is seen lives in the
+/// camera and display menus on the right.
+private struct ViewportToolControls: View {
     let snapStore: EditorStore
     let gizmoMode: EditorGizmoMode
     let gizmoSpace: EditorGizmoSpace
-    let shadingMode: EditorViewportShadingMode
-    let shadowsEnabled: Bool
-    let gridEnabled: Bool
-    let renderScalePercent: Int
-    let interactionDownscaleEnabled: Bool
-    let realtimeEnabled: Bool
-    let physicsDebugOptions: EditorPhysicsDebugOverlayOptions
-    let physicsDebugScope: EditorPhysicsDebugOverlayScope
     let playbackState: PlaybackState
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
-    let onSelectShadingMode: (EditorViewportShadingMode) -> Void
-    let onSelectProjection: (RenderCamera.Projection) -> Void
-    let onSelectViewAxis: (SIMD3<Float>) -> Void
-    let onToggleShadows: () -> Void
-    let onToggleGrid: () -> Void
-    let onSelectRenderScale: (Int) -> Void
-    let onToggleInteractionDownscale: () -> Void
-    let onToggleRealtime: () -> Void
-    let onSetPhysicsDebugOptions: (EditorPhysicsDebugOverlayOptions) -> Void
-    let onSetPhysicsDebugScope: (EditorPhysicsDebugOverlayScope) -> Void
-    let onFrameSelection: () -> Void
 
     var body: some View {
-        Box(direction: .row,
-            alignItems: .center,
-            wrap: .wrap,
-            spacing: 3) {
+        Row(alignment: .center, spacing: 8) {
             Row(alignment: .center, spacing: 2) {
-                Button(icon: .resource(ViewportToolbarIcon.cursor.resource),
-                           size: 15,
-                           isEnabled: isAuthoringEnabled,
-                           isSelected: gizmoMode == .none,
-                           tooltip: "\(L("Pick")) · Q") {
-                    onSelectGizmoMode(.none)
-                }
-                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
-                Button(icon: .resource(ViewportToolbarIcon.boxSelect.resource),
-                       size: 15,
-                       isEnabled: isAuthoringEnabled,
-                       isSelected: gizmoMode == .boxSelect,
-                       tooltip: "\(L("Box Select")) · B") {
-                    onSelectGizmoMode(.boxSelect)
-                }
-                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
-                Button(icon: .resource(ViewportToolbarIcon.translate.resource),
-                           size: 15,
-                           isEnabled: isAuthoringEnabled,
-                           isSelected: gizmoMode == .translate,
-                           tooltip: "\(L("Move")) · W") {
-                    onSelectGizmoMode(.translate)
-                }
-                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
-                Button(icon: .resource(ViewportToolbarIcon.rotate.resource),
-                           size: 15,
-                           isEnabled: isAuthoringEnabled,
-                           isSelected: gizmoMode == .rotate,
-                           tooltip: "\(L("Rotate")) · E") {
-                    onSelectGizmoMode(.rotate)
-                }
-                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
-                Button(icon: .resource(ViewportToolbarIcon.scale.resource),
-                           size: 15,
-                           isEnabled: isAuthoringEnabled,
-                           isSelected: gizmoMode == .scale,
-                           tooltip: "\(L("Scale")) · R") {
-                    onSelectGizmoMode(.scale)
-                }
-                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
-
-                ToggleChip(label: gizmoSpace == .local ? L("Local") : L("World"),
-                           isActive: gizmoSpace == .local,
-                           isEnabled: isAuthoringEnabled) {
-                    onSelectGizmoSpace(gizmoSpace == .local ? .world : .local)
-                }
-
-                Button(icon: .resource(ViewportToolbarIcon.frameSelected.resource),
-                       size: 15,
-                       isEnabled: entity != nil,
-                       tooltip: "\(L("Frame Selected")) · F",
-                       action: onFrameSelection)
-                    .buttonStyle(.plain)
-                ViewportSnapSelector(store: snapStore, isEnabled: isAuthoringEnabled)
+                tool(.none, icon: .cursor, title: L("Pick"), key: "Q")
+                tool(.boxSelect, icon: .boxSelect, title: L("Box Select"), key: "B")
+                tool(.translate, icon: .translate, title: L("Move"), key: "W")
+                tool(.rotate, icon: .rotate, title: L("Rotate"), key: "E")
+                tool(.scale, icon: .scale, title: L("Scale"), key: "R")
             }
-            .padding(horizontal: 2)
+            .padding(2)
+            .background(.surfaceSunken)
+            .cornerRadius(8)
+            .debugName("viewport-tools")
 
-            Row(alignment: .center, spacing: 5) {
-                ViewportProjectionSelector(camera: camera,
-                                           isEnabled: isAuthoringEnabled,
-                                           onSelectProjection: onSelectProjection,
-                                           onSelectAxis: onSelectViewAxis)
-                ViewModeSelector(shadingMode: shadingMode,
-                                 onSelect: onSelectShadingMode)
-                Button(icon: .resource(ViewportToolbarIcon.wireframe.resource),
-                       size: 15,
-                       isSelected: gridEnabled,
-                       tooltip: L("Reference Grid"),
-                       action: onToggleGrid)
-                    .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
-                Button(icon: .resource(ViewportToolbarIcon.shadows.resource),
-                           size: 15,
-                           isSelected: shadowsEnabled,
-                           tooltip: L("Shadows")) {
-                    onToggleShadows()
-                }
-                .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
-
-                RenderScaleSelector(percent: renderScalePercent,
-                                    interactionDownscaleEnabled: interactionDownscaleEnabled,
-                                    realtimeEnabled: realtimeEnabled,
-                                    onSelect: onSelectRenderScale,
-                                    onToggleInteractionDownscale: onToggleInteractionDownscale,
-                                    onToggleRealtime: onToggleRealtime)
-
-                if snapStore.workspaceMode.profile.features.contains(.simulation) {
-                PhysicsDebugSelector(
-                    options: physicsDebugOptions,
-                    scope: physicsDebugScope,
-                    onSetOptions: onSetPhysicsDebugOptions,
-                    onSetScope: onSetPhysicsDebugScope,
-                    compact: true
-                )
-                }
+            Button(icon: .resource(gizmoSpace == .local ? UIIcons.Editor.box : UIIcons.Shape.globe),
+                   size: 14,
+                   isEnabled: isAuthoringEnabled,
+                   tooltip: gizmoSpace == .local ? L("Local") : L("World")) {
+                onSelectGizmoSpace(gizmoSpace == .local ? .world : .local)
             }
-            .padding(horizontal: 2)
+            .buttonStyle(ViewportIconButtonStyle())
+            .debugName("viewport-space")
+            ViewportSnapSelector(store: snapStore, isEnabled: isAuthoringEnabled)
         }
-        .padding(horizontal: 6, vertical: 3)
-        .background(.surface)
-        .border(.divider, width: 1)
+    }
+
+    private func tool(_ mode: EditorGizmoMode, icon: ViewportToolbarIcon, title: String, key: String) -> some View {
+        Button(icon: .resource(icon.resource),
+               size: 14,
+               isEnabled: isAuthoringEnabled,
+               isSelected: gizmoMode == mode,
+               tooltip: "\(title) · \(key)") {
+            onSelectGizmoMode(mode)
+        }
+        .buttonStyle(ViewportSegmentStyle())
+        .accessibility { $0.label = title; $0.state.isSelected = gizmoMode == mode }
     }
 
     private var isAuthoringEnabled: Bool {
         EditorSceneAuthoringPolicy.canEditScene(during: playbackState)
-    }
-}
-
-private struct ToggleChip: View {
-    let label: String
-    let isActive: Bool
-    let isEnabled: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(isEnabled: isEnabled, isSelected: isActive, action: onTap) {
-            Text(label, lineLimit: 1)
-        }
-        .buttonStyle(ToolbarToggleButtonStyle { $0.height = 24 })
-    }
-}
-
-private struct PhysicsDebugSelector: View {
-    let options: EditorPhysicsDebugOverlayOptions
-    let scope: EditorPhysicsDebugOverlayScope
-    let onSetOptions: (EditorPhysicsDebugOverlayOptions) -> Void
-    let onSetScope: (EditorPhysicsDebugOverlayScope) -> Void
-    var compact = false
-    @State private var isPresented: Bool = false
-
-    var body: some View {
-        Popover(isPresented: $isPresented,
-                width: 210, surface: .content, overflow: .flip,
-                onKey: viewportPopoverDismissOnEscape($isPresented)) {
-            Row(alignment: .center, spacing: 5) {
-                if compact {
-                    Text("DBG").font(.caption)
-                        .foregroundColor(options.isEmpty ? .onSurfaceMuted : .accent)
-                } else {
-                    Text("\(L("Physics Debug")) · \(scopeLabel)", lineLimit: 1)
-                        .font(.caption)
-                        .foregroundColor(options.isEmpty ? .onSurfaceMuted : .onSurface)
-                }
-                Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
-            }
-            .padding(horizontal: 8, vertical: 4)
-            .background(options.isEmpty ? .surfaceSunken : .surfaceVariant)
-            .cornerRadius(3)
-        } content: {
-            Menu(menuEntries, width: 210, maxVisibleRows: 12, onItemActivated: {
-                isPresented = false
-            })
-        }
-    }
-
-    private var menuEntries: [MenuEntry] {
-        var entries: [MenuEntry] = [
-            .item(MenuItem(
-                id: "physics-debug-scope-selected",
-                title: L("Selected Entity"),
-                isSelected: scope == .selected,
-                action: { onSetScope(.selected) }
-            )),
-            .item(MenuItem(
-                id: "physics-debug-scope-scene",
-                title: L("Entire Scene"),
-                isSelected: scope == .scene,
-                action: { onSetScope(.scene) }
-            )),
-            .separator(id: "physics-debug-scope-separator"),
-            .item(MenuItem(
-                id: "physics-debug-all",
-                title: L("Show All"),
-                isSelected: options == .all,
-                action: { onSetOptions(.all) }
-            )),
-            .item(MenuItem(
-                id: "physics-debug-none",
-                title: L("Hide All"),
-                isSelected: options.isEmpty,
-                action: { onSetOptions([]) }
-            )),
-            .separator(id: "physics-debug-separator"),
-        ]
-        entries.append(toggleEntry(id: "shapes", title: L("Collider Shapes"), option: .shapes))
-        entries.append(toggleEntry(id: "bounds", title: L("AABB / Sleep"), option: .bounds))
-        entries.append(toggleEntry(id: "contacts", title: L("Contacts / Normals"), option: .contacts))
-        entries.append(toggleEntry(id: "joints", title: L("Joints / Limits"), option: .joints))
-        entries.append(toggleEntry(id: "characters", title: L("Character Ground"), option: .characters))
-        return entries
-    }
-
-    private var scopeLabel: String {
-        scope == .scene ? L("Scene") : L("Selected")
-    }
-
-    private func toggleEntry(
-        id: String,
-        title: String,
-        option: EditorPhysicsDebugOverlayOptions
-    ) -> MenuEntry {
-        .item(MenuItem(
-            id: "physics-debug-\(id)",
-            title: title,
-            isSelected: options.contains(option),
-            action: {
-                var next = options
-                if next.contains(option) { next.remove(option) }
-                else { next.insert(option) }
-                onSetOptions(next)
-            }
-        ))
-    }
-}
-
-private struct PhysicsDebugLegend: View {
-    let options: EditorPhysicsDebugOverlayOptions
-    let scope: EditorPhysicsDebugOverlayScope
-    @State private var showsDetails = false
-
-    var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 3) {
-            Button(action: { showsDetails.toggle() }) {
-                Row(alignment: .center, spacing: 6) {
-                    Text("\(L("Physics Debug")) · \(scope == .scene ? L("Scene") : L("Selected"))")
-                        .font(.caption).foregroundColor(.onSurface)
-                    Icon(showsDetails ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight,
-                         size: 8, color: .onSurfaceMuted)
-                }
-            }
-            .buttonStyle(.plain)
-            .controlSize(.mini)
-            if showsDetails {
-                if options.contains(.shapes) {
-                    entry(L("Collider / Trigger"), Color(r: 0.20, g: 0.88, b: 1.0, a: 1))
-                }
-                if options.contains(.bounds) {
-                    entry(L("AABB / Sleeping"), Color(r: 0.24, g: 0.62, b: 1.0, a: 1))
-                }
-                if options.contains(.contacts) {
-                    entry(L("Contact / Normal"), Color(r: 1.0, g: 0.72, b: 0.12, a: 1))
-                }
-                if options.contains(.joints) {
-                    entry(L("Joint / Limit"), Color(r: 1.0, g: 0.48, b: 0.16, a: 1))
-                }
-                if options.contains(.characters) {
-                    entry(L("Character Ground"), Color(r: 0.22, g: 1.0, b: 0.42, a: 1))
-                }
-            }
-        }
-        .padding(horizontal: 8, vertical: 6)
-        .background(.surfaceFloating)
-        .cornerRadius(6)
-        .border(.divider, width: 1)
-        .theme(EditorVisualTheme.make(dark: true))
-    }
-
-    private func entry(_ label: String, _ color: Color) -> some View {
-        Row(alignment: .center, spacing: 6) {
-            Box { EmptyView() }
-                .frame(width: 12, height: 3)
-                .background(color)
-                .cornerRadius(1)
-            Text(label, lineLimit: 1)
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
-        }
-    }
-}
-
-private struct ViewportStatusBar: View {
-    let surface: ViewportSurfaceState
-    let entity: EditorSceneEntitySummary?
-    let selectionCount: Int
-    let selectionContainsLockedEntity: Bool
-    let renderScalePercent: Int
-    let realtimeEnabled: Bool
-    let playbackState: PlaybackState
-
-    var body: some View {
-        Row(alignment: .center, spacing: 6) {
-            Text(entity?.name ?? L("No selection"), lineLimit: 1)
-                .font(.caption)
-                .foregroundColor(entity == nil ? .onSurfaceMuted : .onSurfaceVariant)
-
-            if selectionCount > 1 {
-                EditorPanelBadge("\(selectionCount) \(L("selected"))", foreground: .accent)
-            }
-            if selectionContainsLockedEntity {
-                EditorPanelBadge(L("Locked"), foreground: .warning)
-            }
-
-            if surface.isValid {
-                EditorPanelBadge("\(surface.region.size.width)×\(surface.region.size.height)")
-            }
-            EditorPanelBadge("\(renderScalePercent)%")
-            if realtimeEnabled {
-                EditorPanelBadge(L("Realtime"), foreground: .accent)
-            }
-            if playbackState != .stopped {
-                EditorPanelBadge(playbackLabel,
-                                 foreground: playbackState == .playing ? .accent : .warning)
-            }
-        }
-        .padding(horizontal: 8, vertical: 5)
-        .background(.surfaceFloating)
-        .cornerRadius(6)
-        .border(.divider, width: 1)
-    }
-
-    private var playbackLabel: String {
-        switch playbackState {
-        case .stopped: return L("Stop")
-        case .playing: return L("Play")
-        case .paused: return L("Pause")
-        }
     }
 }
 
@@ -1939,18 +1593,9 @@ private enum ViewportToolbarIcon: String {
     case translate = "direction-arrows"
     case rotate = "toolbar-arrow-path"
     case scale = "arrows-pointing-out"
-    case lit = "toolbar-eye"
-    case wireframe = "grid-pattern"
-    case shadows = "light-bulb"
-    case frameSelected = "crosshair"
-    case play
-    case pause
-    case stop
 
     var resource: BundleImageResource {
-        .svg(named: rawValue,
-             in: EditorAppResourceBundle.bundle,
-             subdirectory: self == .shadows ? "HierarchyIcons" : "ToolbarIcons")
+        .svg(named: rawValue, in: EditorAppResourceBundle.bundle, subdirectory: "ToolbarIcons")
     }
 }
 
@@ -1994,111 +1639,5 @@ private struct DropTargetCard: View {
         .background(.surfaceFloating)
         .cornerRadius(10)
         .border(.focusRing, width: 2)
-    }
-}
-
-/// Unreal-style screen percentage for the 3D viewport: presentation size is
-/// fixed, the engine renders `percent` of it and the composite upscales.
-private struct RenderScaleSelector: View {
-    let percent: Int
-    let interactionDownscaleEnabled: Bool
-    let realtimeEnabled: Bool
-    let onSelect: (Int) -> Void
-    let onToggleInteractionDownscale: () -> Void
-    let onToggleRealtime: () -> Void
-    @State private var isPresented: Bool = false
-
-    private static let presets = [50, 75, 100, 150, 200]
-
-    var body: some View {
-        Popover(isPresented: $isPresented,
-                width: 168, surface: .content, overflow: .flip,
-                onKey: viewportPopoverDismissOnEscape($isPresented)) {
-            Row(alignment: .center, spacing: 5) {
-                Text("\(percent)%", lineLimit: 1)
-                    .font(.caption)
-                    .foregroundColor(.onSurface)
-                Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
-            }
-            .padding(horizontal: 8, vertical: 4)
-            .background(.surfaceSunken)
-            .cornerRadius(3)
-        } content: {
-            Menu(menuEntries, width: 168, maxVisibleRows: 8, onItemActivated: {
-                isPresented = false
-            })
-        }
-    }
-
-    private var menuEntries: [MenuEntry] {
-        var entries: [MenuEntry] = Self.presets.map { preset in
-            .item(MenuItem(id: "renderscale-\(preset)",
-                           title: "\(preset)%",
-                           isSelected: preset == percent,
-                           action: { onSelect(preset) }))
-        }
-        entries.append(.separator(id: "renderscale-sep"))
-        entries.append(.item(MenuItem(id: "renderscale-interaction",
-                                      title: L("Downscale while navigating"),
-                                      isSelected: interactionDownscaleEnabled,
-                                      action: { onToggleInteractionDownscale() })))
-        entries.append(.item(MenuItem(id: "renderscale-realtime",
-                                      title: L("Realtime"),
-                                      isSelected: realtimeEnabled,
-                                      action: { onToggleRealtime() })))
-        return entries
-    }
-}
-
-private struct ViewModeSelector: View {
-    let shadingMode: EditorViewportShadingMode
-    let onSelect: (EditorViewportShadingMode) -> Void
-    @State private var isPresented: Bool = false
-
-    var body: some View {
-        Popover(isPresented: $isPresented,
-                width: 128, surface: .content, overflow: .flip,
-                onKey: viewportPopoverDismissOnEscape($isPresented)) {
-            Row(alignment: .center, spacing: 5) {
-                Text(Self.label(for: shadingMode), lineLimit: 1)
-                    .font(.caption)
-                    .foregroundColor(.onSurface)
-                Icon(UIIcons.Navigation.chevronDown, size: 8, color: .onSurfaceMuted)
-            }
-            .padding(horizontal: 8, vertical: 4)
-            .background(.surfaceSunken)
-            .cornerRadius(3)
-        } content: {
-            Menu(menuEntries, width: 128, maxVisibleRows: 8, onItemActivated: {
-                isPresented = false
-            })
-        }
-    }
-
-    private var menuEntries: [MenuEntry] {
-        var entries: [MenuEntry] = []
-        let shaded: [EditorViewportShadingMode] = [.lit, .unlit, .baseColor, .normal, .roughness, .metallic]
-        for mode in shaded {
-            entries.append(.item(MenuItem(id: "viewmode-\(mode.rawValue)",
-                                          title: Self.label(for: mode),
-                                          action: { onSelect(mode) })))
-        }
-        entries.append(.separator(id: "viewmode-sep"))
-        entries.append(.item(MenuItem(id: "viewmode-wireframe",
-                                      title: Self.label(for: .wireframe),
-                                      action: { onSelect(.wireframe) })))
-        return entries
-    }
-
-    private static func label(for mode: EditorViewportShadingMode) -> String {
-        switch mode {
-        case .lit: return L("Lit")
-        case .unlit: return L("Unlit")
-        case .baseColor: return L("Base Color")
-        case .normal: return L("Normal")
-        case .roughness: return L("Roughness")
-        case .metallic: return L("Metallic")
-        case .wireframe: return L("Wireframe")
-        }
     }
 }

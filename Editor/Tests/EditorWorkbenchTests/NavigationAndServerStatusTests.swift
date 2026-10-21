@@ -34,7 +34,8 @@ struct NavigationAndServerStatusTests {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: LayerRoot {
                 Column(alignment: .leading, spacing: 20) {
-                    ViewportNavigationSelector(scene: app.scene)
+                    ViewportCameraMenu(scene: app.scene, isEnabled: true, canFrameSelection: false,
+                                       onSelectProjection: { _ in }, onSelectAxis: { _ in }, onFrameSelection: {})
                     LanguageServerStatus(app: app, snapshot: app.workstation.scripts.snapshot, onCommand: {
                         if case .openSettings = $0 { settingsOpened = true }
                     })
@@ -52,13 +53,28 @@ struct NavigationAndServerStatusTests {
                 settle()
             }
             settle()
-            try activate("viewport-navigation")
-            try activate("viewport-orbit-right")
+            func choose(_ id: String) {
+                guard let item = WorkbenchUITestSupport.firstNode(graph.tree.root, matching: {
+                    $0.attachments["__menu_item_id"] as? AnyHashable == AnyHashable(id)
+                }) else { Issue.record("missing menu item \(id)"); return }
+                let frame = item.absoluteFrame
+                let click = MouseButtonEvent(button: .left, x: Float(frame.midX), y: Float(frame.midY), clicks: 1)
+                dispatcher.dispatch(.mouseButtonDown(click))
+                dispatcher.dispatch(.mouseButtonUp(click))
+                settle()
+            }
+            // Stepwise navigation lives in the camera menu's submenu.
+            try activate("viewport-camera-menu")
+            choose("viewport-step-navigation")
+            choose("viewport-orbit-right")
             #expect(app.scene.currentRenderCamera() != originalCamera)
             let orbited = app.scene.currentRenderCamera()
-            try activate("viewport-pan-left")
+            try activate("viewport-camera-menu")
+            choose("viewport-step-navigation")
+            choose("viewport-pan-left")
             #expect(app.scene.currentRenderCamera().target != orbited.target)
-            try activate("viewport-reset-view")
+            try activate("viewport-camera-menu")
+            choose("viewport-reset-view")
             #expect(app.scene.currentRenderCamera() == originalCamera)
             let afterNavigation = app.scene.manifest()
             #expect(afterNavigation.roots == originalScene.roots)

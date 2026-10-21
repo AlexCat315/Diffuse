@@ -9,11 +9,16 @@ final class PluginLanguageService: @unchecked Sendable {
     private var binding: PluginExecutionBinding?
     private var client: PluginHostProcessClient?
 
+    var isBound: Bool { lock.withLock { binding != nil && client != nil } }
+    private var memoryBytes: UInt64?
+    var residentMemoryBytes: UInt64? { lock.withLock { memoryBytes } }
+
     @discardableResult
     func bind(_ binding: PluginExecutionBinding?, client: PluginHostProcessClient? = nil) -> Bool {
         lock.withLock {
             let changed = self.binding?.authority != binding?.authority || self.client !== client
             self.binding = binding; self.client = client
+            memoryBytes = nil
             return changed
         }
     }
@@ -40,11 +45,12 @@ final class PluginLanguageService: @unchecked Sendable {
         start.environment = command.environment.filter { keys.contains($0.key) }
         let handle = try invoke(start).handle
         let (events, continuation) = AsyncThrowingStream<ProcessEvent, Error>.makeStream(bufferingPolicy: .bufferingOldest(64))
-        let poller = Task.detached {
+        let poller = Task.detached { [weak self] in
             do {
                 while !Task.isCancelled {
                     var poll = PluginProcessRequest(.poll); poll.handle = handle
                     let update = try invoke(poll)
+                    self?.lock.withLock { self?.memoryBytes = update.residentMemoryBytes }
                     for event in [update.stdout.isEmpty ? nil : ProcessEvent.stdout(update.stdout),
                                   update.stderr.isEmpty ? nil : ProcessEvent.stderr(update.stderr)].compactMap({ $0 }) {
                         if case .dropped = continuation.yield(event) { throw ProcessRuntimeError.outputLimit }

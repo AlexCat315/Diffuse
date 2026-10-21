@@ -1,4 +1,4 @@
-internal import Foundation
+import Foundation
 
 public struct ScriptWorkspaceEdit: Sendable, Equatable {
     public let documents: [ScriptDocumentEdit]
@@ -42,6 +42,11 @@ public enum ScriptLanguageEditError: Error, LocalizedError, Sendable, Equatable 
     case unsupportedResourceOperation
     case staleDocument(String)
     case unsupportedCommand
+    case invalidRange
+    case overlappingEdits
+    case duplicateDocument
+    case noHistory
+    case disabledAction(String)
 
     public var errorDescription: String? {
         switch self {
@@ -50,6 +55,11 @@ public enum ScriptLanguageEditError: Error, LocalizedError, Sendable, Equatable 
         case .unsupportedResourceOperation: "Creating, moving, or deleting files through a language action is not supported."
         case let .staleDocument(identifier): "The script changed while the language action was running: \(identifier)"
         case .unsupportedCommand: "This language action requires a server command that cannot be applied safely."
+        case .invalidRange: "The language server returned an invalid text range."
+        case .overlappingEdits: "The language server returned overlapping text edits."
+        case .duplicateDocument: "The language server returned multiple edit groups for the same document."
+        case .noHistory: "There is no language operation to undo or redo."
+        case let .disabledAction(reason): reason
         }
     }
 }
@@ -66,6 +76,15 @@ struct ScriptSemanticContext: Sendable, Equatable {
     init(documents: [String: Document], generation: UUID = UUID()) {
         self.documents = documents
         self.generation = generation
+    }
+
+    func document(for uri: String) -> Document? {
+        documents[Self.documentKey(uri)]
+    }
+
+    static func documentKey(_ uri: String) -> String {
+        guard let url = URL(string: uri), url.isFileURL else { return uri }
+        return url.resolvingSymlinksInPath().standardizedFileURL.absoluteString
     }
 }
 

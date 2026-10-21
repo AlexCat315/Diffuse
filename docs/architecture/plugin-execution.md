@@ -27,6 +27,10 @@ Component 源码位于 `Editor/Plugins/SwiftSupport/component.wat`，生成的 `
 
 底栏“语言服务”显示当前 Swift 服务状态，SourceKit-LSP 子菜单提供日志、启动/重启和停止操作。停止只暂停当前会话，不撤销插件授权或修改持久化启用选择；文件刷新不会自动恢复，用户可以显式启动，重新启用/重载插件也会重建服务。
 
+底栏另行区分进程状态与语义分析健康度。服务初始化成功只表示传输就绪；收到诊断或有效语义响应后才显示分析正常，标准库、SDK、模块加载错误会单独显示为分析不可用。面板保留有界的独立服务日志，显示服务端索引进度、实际工具链版本与路径、SDK 路径及可获取的进程 RSS；获取不到内存信息时不显示估计值。
+
+工具链检测、安装、安全边界及编辑器语义操作见 [Swift 语言支持](../components/swift-language-support.md)。
+
 `guava build/run Editor` 根据 `targets.desktopHelpers` 构建和捆绑 GuavaPluginHost；macOS 放在 `Contents/Helpers` 并单独签名，Windows/Linux 放在 `Tools`。Swift 工具链需要单独安装，插件不携带编译器或 SourceKit-LSP 二进制。
 
 `guava run` 通过宿主环境 `GUAVA_BUILD_PRODUCTS_PATH` 传递本次构建产物位置，让打包后的编辑器仍能发现脚本分析所需的 Swift 模块和 Clang module map。显式 `GUAVA_ENGINE_*` 覆盖仍优先；安装后的 SDK 需要提供对应模块路径，项目文件不能配置这些宿主路径。

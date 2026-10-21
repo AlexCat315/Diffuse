@@ -47,7 +47,7 @@ struct DocumentFilesPanel: View {
                     options.selection.expandedKeys = Binding(
                         get: { Set(expandedFolders.compactMap { keys[$0] }) },
                         set: { expanded = Set($0.map(\.id)) })
-                    options.layout.rowHeight = 24
+                    options.layout.rowHeight = 26
                     options.layout.rowSpacing = 0
                     options.layout.indentation = 14
                     options.layout.disclosureWidth = 18

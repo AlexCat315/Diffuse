@@ -23,6 +23,7 @@ public struct PluginProcessUpdate: Codable, Sendable {
     public var stderr: Data = Data()
     public var exitStatus: Int32?
     public var failure: String?
+    public var residentMemoryBytes: UInt64?
     public init(handle: UUID) { self.handle = handle }
 }
 

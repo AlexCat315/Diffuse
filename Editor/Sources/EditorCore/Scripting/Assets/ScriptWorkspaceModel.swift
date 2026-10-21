@@ -62,6 +62,8 @@ public struct ScriptWorkspaceSnapshot: Sendable, Equatable {
     public var languageServiceState: ScriptLanguageServiceState
     public var isLanguageServiceMessageDismissed = false
     public var languageServiceDetails: ScriptLanguageServiceDetails? = nil
+    public var swiftToolchain: SwiftToolchain? = nil
+    public var toolchainActivity: ScriptToolchainActivity = .idle
     public var trustState: ScriptProjectTrustState
     public var trustWarning: String?
 
@@ -93,7 +95,9 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     private var languageServiceRevision: UInt64 = 0
     private var languageServiceTask: Task<Void, Never>?
     private var languageServiceSuspended = false
+    private var toolchainLanguageIntent: ScriptToolchainLanguageIntent?
     private var languageEditHistory = ScriptLanguageEditHistory()
+    private var toolchainActivityGeneration = UUID()
 
     public private(set) var snapshot: ScriptWorkspaceSnapshot
 
@@ -117,6 +121,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             trustState: manager.projectTrustState,
             trustWarning: manager.trustStoreWarning
         )
+        self.snapshot.swiftToolchain = manager.swiftToolchain
         let weakModel = WeakScriptWorkspaceModel(self)
         directoryMonitor.start {
             Task { @MainActor in weakModel.value?.refreshFromDisk() }
@@ -132,10 +137,21 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     }
 
     public func stopLanguageService() {
+        toolchainLanguageIntent?.suspended = true
+        suspendLanguageService()
+    }
+
+    func stopLanguageServiceForPluginChange() {
+        suspendLanguageService()
+    }
+
+    private func suspendLanguageService() {
         languageServiceSuspended = true
         languageServiceGeneration = UUID()
         didStartLanguageService = false
         snapshot.languageServiceState = .inactive
+        snapshot.languageServiceDetails?.residentMemoryBytes = nil
+        snapshot.languageServiceDetails?.indexing = nil
         for index in snapshot.documents.indices { snapshot.documents[index].diagnostics = [] }
         publish()
         languageServiceTask?.cancel()
@@ -145,12 +161,18 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     }
 
     public func startLanguageService() {
+        if toolchainLanguageIntent != nil {
+            toolchainLanguageIntent?.suspended = false
+            return
+        }
         languageServiceSuspended = false
         guard !didStartLanguageService, !snapshot.documents.isEmpty else { return }
         didStartLanguageService = true
         let generation = UUID()
         languageServiceGeneration = generation
+        languageServiceRevision = 0
         snapshot.languageServiceState = .starting
+        snapshot.languageServiceDetails = nil
         snapshot.isLanguageServiceMessageDismissed = false
         publish()
         let model = self
@@ -160,19 +182,20 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             await previousTask?.value
             guard !Task.isCancelled else { return }
             do {
-                try await manager.startLanguageService(sources: sources, onDiagnostics: { update in
-                    Task { @MainActor in
-                        guard model.languageServiceGeneration == generation else { return }
+                try await manager.startLanguageService(sources: sources, onDiagnostics: { [weak model] update in
+                    Task { @MainActor [weak model] in
+                        guard let model, model.languageServiceGeneration == generation else { return }
                         model.applyDiagnostics(update)
                     }
-                }, onStateChange: { update in
-                    Task { @MainActor in
-                        guard model.languageServiceGeneration == generation else { return }
+                }, onStateChange: { [weak model] update in
+                    Task { @MainActor [weak model] in
+                        guard let model, model.languageServiceGeneration == generation else { return }
                         model.applyLanguageServiceState(update)
                     }
-                }, onDetailsChange: { details in
-                    Task { @MainActor in
-                        guard model.languageServiceGeneration == generation else { return }
+                }, onDetailsChange: { [weak model] details in
+                    Task { @MainActor [weak model] in
+                        guard let model, model.languageServiceGeneration == generation else { return }
+                        guard details.revision >= (model.snapshot.languageServiceDetails?.revision ?? 0) else { return }
                         model.snapshot.languageServiceDetails = details
                         model.publish()
                     }
@@ -196,6 +219,11 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
                 }
             }
         }
+    }
+
+    func startLanguageServiceForPluginChange() {
+        guard toolchainLanguageIntent == nil else { return }
+        startLanguageService()
     }
 
     @discardableResult
@@ -707,6 +735,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         }
         guard didStartLanguageService else { return }
         snapshot.languageServiceState = .starting
+        snapshot.languageServiceDetails = nil
         snapshot.isLanguageServiceMessageDismissed = false
         publish()
         let model = self
@@ -756,6 +785,60 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     public func retryLanguageService() {
         didStartLanguageService = false
         startLanguageService()
+    }
+
+    @MainActor
+    func configureSwiftToolchain(path: String?, preferencesDirectory: URL = SwiftToolchainPreferences.directory,
+                                activate: @escaping @MainActor @Sendable () async throws -> Void,
+                                recover: @escaping @MainActor @Sendable () async throws -> Void) async throws {
+        toolchainActivityGeneration = UUID()
+        snapshot.toolchainActivity = .selecting
+        toolchainLanguageIntent = ScriptToolchainLanguageIntent(suspended: languageServiceSuspended)
+        publish()
+        let activation = ScriptToolchainActivation(suspend: { [self] in
+            toolchainLanguageIntent?.didSuspend = true
+            suspendLanguageService()
+            await languageServiceTask?.value
+        }, activate: activate, recover: recover)
+        do {
+            try await manager.configureSwiftToolchain(path: path, preferencesDirectory: preferencesDirectory, activation: activation)
+            snapshot.swiftToolchain = manager.swiftToolchain
+            snapshot.languageServiceDetails = nil
+            finishToolchainLanguageServiceChange()
+            snapshot.toolchainActivity = .idle
+            publish()
+        } catch {
+            snapshot.swiftToolchain = manager.swiftToolchain
+            finishToolchainLanguageServiceChange()
+            snapshot.toolchainActivity = error is CancellationError
+                ? .installation(.cancelled) : .failed(error.localizedDescription)
+            publish()
+            throw error
+        }
+    }
+
+    private func finishToolchainLanguageServiceChange() {
+        guard let intent = toolchainLanguageIntent else { return }
+        toolchainLanguageIntent = nil
+        guard intent.didSuspend || intent.suspended != languageServiceSuspended else { return }
+        if intent.suspended || !manager.languagePlugin.isBound {
+            suspendLanguageService()
+        } else {
+            startLanguageService()
+        }
+    }
+
+    func beginToolchainActivity(_ activity: ScriptToolchainActivity) -> UUID {
+        toolchainActivityGeneration = UUID()
+        snapshot.toolchainActivity = activity
+        publish()
+        return toolchainActivityGeneration
+    }
+
+    func reportToolchainActivity(_ activity: ScriptToolchainActivity, generation: UUID) {
+        guard generation == toolchainActivityGeneration else { return }
+        snapshot.toolchainActivity = activity
+        publish()
     }
 
     private func applyDiagnostics(_ update: ScriptLanguageDiagnosticUpdate) {

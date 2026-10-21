@@ -186,7 +186,7 @@ struct HierarchyPanel: View {
                         tree.selection.primaryKey = selectionKey
                         tree.selection.multipleKeys = multiSelectionKeys
                         tree.selection.expandedKeys = expandedKeysBinding
-                        tree.layout.rowHeight = 24
+                        tree.layout.rowHeight = 26
                         tree.layout.rowSpacing = 0
                         tree.layout.indentation = 16
                         tree.layout.disclosureWidth = 18

@@ -3,7 +3,7 @@
   "records" : [
     {
       "access" : "read",
-      "authorisedAt" : 814256439.726428,
+      "authorisedAt" : 814269134.44158,
       "capabilitySchemaHashes" : {
         "studio.swift-support.language-server" : "9486d1596af88a0ca7af4decb6503f4fc97a0944dbb6b92a7931b587aab0b378"
       },
@@ -33,6 +33,8 @@
               "DEVELOPER_DIR",
               "SDKROOT",
               "TOOLCHAINS",
+              "SOURCEKIT_TOOLCHAIN_PATH",
+              "SWIFT_EXEC",
               "SWIFTLY_BIN_DIR",
               "SWIFTLY_HOME_DIR",
               "SWIFTLY_TOOLCHAINS_DIR",

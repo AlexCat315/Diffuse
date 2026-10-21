@@ -15,6 +15,7 @@ struct ScriptLanguageWorkspace {
     let clangModuleMapPaths: [String]
     let clangIncludePaths: [String]
     var sdkURL: URL? = nil
+    var resourceDirectoryURL: URL? = nil
 
     var rootURL: URL {
         scriptsDirectoryURL
@@ -29,6 +30,7 @@ struct ScriptLanguageWorkspace {
     func synchronize(_ scripts: [(DynamicScriptManager.ScriptFile, String)]) throws -> [String: Document] {
         let fileManager = FileManager.default
         let sourcesURL = rootURL.appendingPathComponent("Sources", isDirectory: true)
+        try validateGeneratedLocation(sourcesURL)
         try fileManager.createDirectory(at: sourcesURL, withIntermediateDirectories: true)
 
         let documents = scripts.map { file, _ in
@@ -43,6 +45,7 @@ struct ScriptLanguageWorkspace {
 
         for (file, source) in scripts {
             guard let document = documents.first(where: { $0.scriptID == file.identifier }) else { continue }
+            try validateGeneratedLocation(document.analysisURL)
             try fileManager.createDirectory(at: document.analysisURL.deletingLastPathComponent(),
                                              withIntermediateDirectories: true)
             try writeIfChanged(source, to: document.analysisURL)
@@ -64,6 +67,15 @@ struct ScriptLanguageWorkspace {
         try writeIfChanged(source, to: document.analysisURL)
     }
 
+    func validateGeneratedLocation(_ url: URL) throws {
+        let scripts = scriptsDirectoryURL.resolvingSymlinksInPath().standardizedFileURL.path
+        let root = rootURL.resolvingSymlinksInPath().standardizedFileURL.path
+        let target = url.resolvingSymlinksInPath().standardizedFileURL.path
+        guard root.hasPrefix(scripts + "/"), target.hasPrefix(root + "/") else {
+            throw ScriptLanguageSupportError.unavailable("The generated Swift analysis workspace must remain inside the scripts directory.")
+        }
+    }
+
     static func targetName(for scriptID: String) -> String {
         let base = scriptID.unicodeScalars
             .map { CharacterSet.alphanumerics.contains($0) ? String($0) : "_" }
@@ -79,9 +91,10 @@ struct ScriptLanguageWorkspace {
     /// uses, so the language server sees *exactly* the same modules as the
     /// dynamic-script compiler — instead of trying to build the whole engine
     /// package (which pulls graphics/SDL3/Jolt and never finishes).
-    private var includeFlags: [String] {
+    var includeFlags: [String] {
         var flags: [String] = []
         if let sdkURL { flags.append(contentsOf: ["-sdk", sdkURL.path]) }
+        if let resourceDirectoryURL { flags.append(contentsOf: ["-resource-dir", resourceDirectoryURL.path]) }
         for path in engineModulePaths { flags.append(contentsOf: ["-I", path]) }
         for path in clangIncludePaths { flags.append(contentsOf: ["-Xcc", "-I\(path)"]) }
         for path in clangModuleMapPaths { flags.append(contentsOf: ["-Xcc", "-fmodule-map-file=\(path)"]) }
@@ -115,6 +128,7 @@ struct ScriptLanguageWorkspace {
     }
 
     private func writeIfChanged(_ contents: String, to url: URL) throws {
+        try validateGeneratedLocation(url)
         if let current = try? String(contentsOf: url, encoding: .utf8), current == contents {
             return
         }

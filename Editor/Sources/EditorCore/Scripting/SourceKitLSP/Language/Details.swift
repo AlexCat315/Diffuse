@@ -25,6 +25,7 @@ public struct ScriptLanguageServiceDetails: Sendable, Equatable {
     public internal(set) var health: ScriptAnalysisHealth = .checking
     public internal(set) var indexing: ScriptIndexProgress?
     public internal(set) var logs: [ScriptLanguageLogEntry] = []
+    public internal(set) var residentMemoryBytes: UInt64?
     public let executablePath: String
 
     public init(executablePath: String) { self.executablePath = executablePath }
@@ -33,5 +34,22 @@ public struct ScriptLanguageServiceDetails: Sendable, Equatable {
         revision &+= 1
         logs.append(ScriptLanguageLogEntry(id: revision, date: Date(), level: level, message: String(message.prefix(8_192))))
         if logs.count > 300 { logs.removeFirst(logs.count - 300) }
+    }
+}
+
+enum ScriptLanguageSemanticEvidence {
+    static func confirmsAnalysis(method: String, payload: Data?) -> Bool {
+        switch method {
+        case "textDocument/hover":
+            return ScriptLanguageReplies.parseHover(payload).map { !$0.isEmpty } ?? false
+        case "textDocument/completion":
+            return !ScriptLanguageReplies.parseCompletion(payload).items.isEmpty
+        case "textDocument/definition", "textDocument/references":
+            return !ScriptLanguageReplies.parseDefinition(payload).isEmpty
+        case "textDocument/signatureHelp":
+            return ScriptAssistanceReplies.signatures(payload) != nil
+        default:
+            return false
+        }
     }
 }

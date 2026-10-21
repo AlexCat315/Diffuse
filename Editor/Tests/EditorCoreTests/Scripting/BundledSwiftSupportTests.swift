@@ -10,16 +10,24 @@ import GuavaUICompose
 
 @Suite("Bundled Swift Support")
 struct BundledSwiftSupportTests {
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["GUAVA_TEST_REAL_SOURCEKIT"] == "1"), .timeLimit(.minutes(2)))
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["GUAVA_TEST_REAL_SOURCEKIT"] == "1"), .timeLimit(.minutes(3)))
     func realSourceKitSemanticQueries() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let scripts = root.appendingPathComponent("Scripts")
         try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
         let file = DynamicScriptManager.ScriptFile(url: scripts.appendingPathComponent("Example.swift"))
-        let source = "let greeting = \"hello\"\ngreeting.\n"
+        let toolchain = try SwiftToolchainResolver.resolve()
+        let configuration = ProjectScriptBuildConfiguration.discover(for: toolchain.compilerURL)
+        let imports = configuration.engineModulePaths.isEmpty ? "" : "import ScriptRuntime\nimport SceneRuntime\n"
+        if !configuration.engineModulePaths.isEmpty {
+            try await toolchain.validateAnalysis(engineModulePaths: configuration.engineModulePaths,
+                clangModuleMapPaths: configuration.clangModuleMapPaths, clangIncludePaths: configuration.clangIncludePaths)
+        }
+        let firstLine = imports.isEmpty ? 0 : 2
+        let source = imports + "let greeting = \"hello\"\ngreeting.\n"
         try Data(source.utf8).write(to: file.url)
-        let executable = try SourceKitLSPExecutableLocator.resolveExecutableURL()
+        let executable = toolchain.languageServerURL
         let client = PluginHostProcessClient(executableURL: try #require(EditorPluginHostLocator.resolve()))
         defer { client.stop() }
         let inspection = try client.inspectPlugin(at: BundledPlugins.swiftSupport)
@@ -29,19 +37,54 @@ struct BundledSwiftSupportTests {
             authorization: PluginAuthorizationRecord(inspection: inspection), processContext: context)
         let adapter = PluginLanguageService()
         adapter.bind(binding, client: client)
-        let support = ScriptLanguageSupport(scriptsDirectoryURL: scripts, engineModulePaths: [],
-            executableURL: executable, connect: { try adapter.connect($0) })
+        let support = ScriptLanguageSupport(scriptsDirectoryURL: scripts, engineModulePaths: configuration.engineModulePaths,
+            clangModuleMapPaths: configuration.clangModuleMapPaths, clangIncludePaths: configuration.clangIncludePaths,
+            executableURL: executable, environment: toolchain.environment, connect: { try adapter.connect($0) })
         try await support.start(sources: [ScriptLanguageSource(file: file, text: TextBuffer(source))], onDiagnostics: { _ in })
         do {
             var completion = ScriptCompletionResult(items: [], isIncomplete: false)
             for _ in 0..<8 {
-                completion = try await support.completion(scriptID: file.identifier, at: .init(line: 1, character: 9))
+                completion = try await support.completion(scriptID: file.identifier, at: .init(line: firstLine + 1, character: 9))
                 if !completion.items.isEmpty { break }
                 try await Task.sleep(for: .seconds(1))
             }
             #expect(completion.items.contains { $0.label.contains("uppercased") })
-            let hover = try await support.hover(scriptID: file.identifier, at: .init(line: 0, character: 6))
+            var hover: ScriptHoverResult?
+            for _ in 0..<8 {
+                hover = try await support.hover(scriptID: file.identifier, at: .init(line: firstLine, character: 6))
+                if hover?.contents.contains("String") == true { break }
+                try await Task.sleep(for: .milliseconds(500))
+            }
             #expect(hover?.contents.contains("String") == true)
+            var edited = ScriptLanguageSource(file: file, text: TextBuffer(imports
+                + "func greet(_ name: String) -> String { name }\nlet message = greet(\"hello\")\n"))
+            edited.revision = 1
+            try await support.update(scriptID: file.identifier, text: edited.text, revision: edited.revision)
+            var locations: [ScriptDefinitionLocation] = []
+            for _ in 0..<8 {
+                locations = try await support.definition(scriptID: file.identifier, at: .init(line: firstLine + 1, character: 16))
+                if locations.contains(where: { $0.scriptID == file.identifier }) { break }
+                try await Task.sleep(for: .milliseconds(500))
+            }
+            #expect(locations.contains { $0.scriptID == file.identifier && $0.span.start.line == firstLine },
+                "Definition locations: \(String(describing: locations))")
+            let symbols = try await support.documentSymbols(scriptID: file.identifier)
+            #expect(symbols.contains { $0.name.contains("greet") })
+            let preparation = try await support.prepareRename(scriptID: file.identifier, at: .init(line: firstLine, character: 6))
+            #expect(preparation != nil)
+            let rename = try await support.rename(scriptID: file.identifier, at: .init(line: firstLine, character: 6), newName: "welcome")
+            #expect(rename.documents.first?.scriptID == file.identifier)
+            #expect(rename.documents.first?.sourceRevision == 1)
+            #expect((rename.documents.first?.edits.count ?? 0) >= 2)
+            let typeLocations = try await support.definition(scriptID: file.identifier, at: .init(line: firstLine, character: 21))
+            for location in typeLocations where URL(string: location.documentURI)?.scheme == "sourcekit-lsp" {
+                let reference = try await support.referenceDocument(documentURI: location.documentURI)
+                #expect(reference?.contains("String") == true)
+            }
+            let formatted = try await support.formatting(scriptID: file.identifier)
+            #expect(formatted.documents.allSatisfy { $0.scriptID == file.identifier && $0.sourceRevision == 1 })
+            let details = await support.languageServiceDetails()
+            #expect(details.health == .healthy)
             await support.stop()
         } catch {
             await support.stop()
@@ -99,6 +142,9 @@ struct BundledSwiftSupportTests {
         let burst = try await language.request("test/burst", timeout: .seconds(10))
         #expect(String(decoding: try #require(burst), as: UTF8.self) == "200")
         #expect(try fixture.openedDocuments() == [text])
+        let large = try #require(try await language.request("test/large", timeout: .seconds(15)))
+        #expect(try JSONSerialization.jsonObject(with: large, options: [.fragmentsAllowed]) as? String
+            == String(repeating: "Swift 🥭\n", count: 80_000))
         try client.unloadPlugin(at: url)
         let deadline = ContinuousClock.now.advanced(by: .seconds(5))
         while await language.isRunning, ContinuousClock.now < deadline {
