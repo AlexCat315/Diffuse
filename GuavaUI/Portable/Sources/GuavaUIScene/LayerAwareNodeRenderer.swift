@@ -264,15 +264,17 @@ public final class LayerAwareNodeRenderer {
         }
     }
 
-    /// A cached leaf was clipped where it was recorded. If it touched a rounded
-    /// corner there, or would touch one after moving, re-record it instead of
-    /// translating geometry that was cut for the old position.
+    /// A cached leaf was clipped where it was recorded. If the mask cut any of
+    /// it there, or it would touch a rounded corner after moving, re-record it
+    /// instead of translating geometry that was cut for the old position. A
+    /// leaf recorded entirely outside the mask kept its vertices but lost every
+    /// triangle, so moving it into view would paint nothing.
     private static func crossesRoundedCorner(_ bounds: UIRect?, from old: Affine2D, to new: Affine2D, clips: [UIClip]) -> Bool {
-        let masks = clips.compactMap(\.mask)
+        let masks = clips.compactMap(\.mask).filter { $0.radius > 0 }
         guard !masks.isEmpty else { return false }
         guard let bounds else { return true }
         let moved = UIRect(x: bounds.x + new.e - old.e, y: bounds.y + new.f - old.f, width: bounds.width, height: bounds.height)
-        return masks.contains { $0.touchesCorner(bounds) || $0.touchesCorner(moved) }
+        return masks.contains { !$0.contains(bounds) || $0.touchesCorner(moved) }
     }
 
     // MARK: - Painter helpers (mirror NodeRenderer.swift)

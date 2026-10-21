@@ -28,7 +28,7 @@ public struct UIRoundedRect: Equatable, Sendable {
 
     /// Whether `bounds` lies where the rounded edge cannot cut it: inside the
     /// rectangle and clear of all four corner squares.
-    func contains(_ bounds: UIRect) -> Bool {
+    package func contains(_ bounds: UIRect) -> Bool {
         let inside = bounds.minX >= rect.minX && bounds.maxX <= rect.maxX
             && bounds.minY >= rect.minY && bounds.maxY <= rect.maxY
         guard inside else { return false }

@@ -85,4 +85,35 @@ struct RoundedClipTests {
             #expect(covers(16, 16, in: list, color: red))           // inside the arc
         }
     }
+
+    @Test("A cached leaf recorded outside a rounded clip paints once its parent moves it into view")
+    func leafMovedIntoRoundedClip() {
+        // An inspector section header first laid out below its scrolling pane,
+        // then pulled up when the sections above it settle. The mask dropped
+        // every triangle while the label sat outside the pane, so reusing that
+        // cache at the new position paints nothing.
+        let root = Node(), pane = Node(), header = Node(), label = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 200, height: 300)
+        pane.frame = CGRect(x: 0, y: 0, width: 200, height: 100)
+        pane.cornerRadius = 8; pane.clipsToBounds = true
+        header.frame = CGRect(x: 0, y: 150, width: 200, height: 20)
+        label.frame = CGRect(x: 20, y: 0, width: 60, height: 20)
+        label.updateDraw(identity: "label") { [red] list, origin in
+            list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 60, height: 20), color: red)
+        }
+        root.addChild(pane); pane.addChild(header); header.addChild(label)
+        let tree = NodeTree(); tree.root = root
+        let render = RenderTree(); render.install(rootNode: root)
+        let renderer = LayerAwareNodeRenderer()
+
+        let offscreen = DrawList(); renderer.render(tree: render, into: offscreen)
+        #expect(!covers(50, 160, in: offscreen, color: red))
+
+        header.frame.origin.y = 40
+        let layered = DrawList(); renderer.render(tree: render, into: layered)
+        let direct = DrawList(); NodeRenderer().render(root: root, into: direct)
+        for list in [direct, layered] {
+            #expect(covers(50, 50, in: list, color: red))
+        }
+    }
 }
