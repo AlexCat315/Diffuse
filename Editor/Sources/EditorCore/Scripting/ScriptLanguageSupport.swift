@@ -159,6 +159,13 @@ public actor ScriptLanguageSupport {
     private func setState(_ state: ScriptLanguageServiceState) {
         guard lifecycle.state != state else { return }
         lifecycle.state = state
+        let logger = LogSystem.logger("com.guava.editor.lsp")
+        switch state {
+        case .inactive: logger.info("Swift language server stopped")
+        case .starting: logger.info("Swift language server starting")
+        case .ready: logger.info("Swift language server ready")
+        case let .unavailable(message): logger.warning("Swift language server unavailable: \(message)")
+        }
         stateRevision &+= 1
         lifecycle.onStateChange?(ScriptLanguageServiceUpdate(revision: stateRevision, state: state))
     }

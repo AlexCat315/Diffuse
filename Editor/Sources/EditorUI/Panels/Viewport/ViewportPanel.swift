@@ -155,7 +155,10 @@ struct ViewportPanel: View {
                         }
                     } cube: {
                         ViewportChromeInputBlocker {
-                            ViewCubeControl(scene: scene)
+                            Column(alignment: .center, spacing: 4) {
+                                ViewCubeControl(scene: scene)
+                                ViewportNavigationSelector(scene: scene)
+                            }
                         }
                     }
 
@@ -417,7 +420,18 @@ struct ViewportPanel: View {
                 return
             }
             // wheel.y > 0 表示向上滚（拉近）。每格缩放系数 ~0.9 / 1.1。
-            let step = wheel.displacement(lineStep: 10, pageWidth: 30, pageHeight: 30).y / 10
+            let displacement = wheel.displacement(lineStep: 10, pageWidth: 30, pageHeight: 30)
+            let modifiers = app.inputState.modifiers
+            if let frame = EditorViewportDropTarget.frame, modifiers.hasAlt || modifiers.hasShift {
+                if modifiers.hasAlt {
+                    scene.orbitCamera(deltaScreenX: displacement.x, deltaScreenY: displacement.y, in: frame)
+                } else {
+                    scene.panCamera(deltaScreenX: displacement.x, deltaScreenY: displacement.y, in: frame)
+                }
+                app.enqueueViewportInput(event)
+                return
+            }
+            let step = displacement.y / 10
             if abs(step) > 0 {
                 let factor = wheelZoomRatio(step)
                 scene.zoomCamera(factor: factor)
@@ -708,6 +722,13 @@ struct ViewportPanel: View {
                          toX: tip.x, toY: tip.y,
                          thickness: thickness, color: color)
             let handleSize: Float = isActive ? 12 : 9
+            if let environment = TextEnvironmentHolder.current {
+                let label = ["X", "Y", "Z"][axis.rawValue]
+                let layout = environment.cachedLayout(text: label, font: Font(size: 11, weight: .semibold),
+                    lineHeight: 14, maxWidth: .infinity, alignment: .leading)
+                list.addText(layout, origin: (tip.x + handleSize, tip.y - 7), color: color,
+                    textureID: environment.atlasTextureID, atlas: environment.atlas)
+            }
             switch tipShape {
             case .square, .filledSquare:
                 list.addRect(UIRect(x: tip.x - handleSize * 0.5 - 1,
@@ -1143,7 +1164,7 @@ struct ViewportChromeLayout<Toolbar: View, Cube: View>: View {
             toolbar.frame(width: .percent(100), minWidth: 0)
             Row(alignment: .top, spacing: 0) {
                 Spacer(minLength: 0)
-                cube.frame(width: 64, height: 64)
+                cube.frame(width: 64)
             }.padding(horizontal: 10).frame(width: .percent(100))
         }.absolutePosition(left: 0, top: 0, right: 0)
 

@@ -1053,6 +1053,12 @@ extension EditorSceneAdapter {
 
     // MARK: - Camera control
 
+    public func resetViewportView() {
+        let camera = Self.defaultViewportCamera
+        setEditorCameraPose(eye: camera.eye, target: camera.target, up: camera.up,
+                            projection: camera.projection, orthographicHeight: camera.orthographicHeight)
+    }
+
     /// Switch projection without changing the apparent scale at the focus plane.
     public func setViewportProjection(_ projection: RenderCamera.Projection) {
         guard isAuthoringEnabled else { return }

@@ -91,6 +91,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     private var languageServiceGeneration = UUID()
     private var languageServiceRevision: UInt64 = 0
     private var languageServiceTask: Task<Void, Never>?
+    private var languageServiceSuspended = false
 
     public private(set) var snapshot: ScriptWorkspaceSnapshot
 
@@ -128,10 +129,12 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         stopLanguageService()
     }
 
-    func stopLanguageService() {
+    public func stopLanguageService() {
+        languageServiceSuspended = true
         languageServiceGeneration = UUID()
         didStartLanguageService = false
         snapshot.languageServiceState = .inactive
+        for index in snapshot.documents.indices { snapshot.documents[index].diagnostics = [] }
         publish()
         languageServiceTask?.cancel()
         // Stop can interrupt initialize; waiting for its task first would keep
@@ -140,6 +143,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     }
 
     public func startLanguageService() {
+        languageServiceSuspended = false
         guard !didStartLanguageService, !snapshot.documents.isEmpty else { return }
         didStartLanguageService = true
         let generation = UUID()
@@ -589,6 +593,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     }
 
     private func synchronizeLanguageService() {
+        guard !languageServiceSuspended else { return }
         if snapshot.documents.isEmpty {
             languageServiceGeneration = UUID()
             didStartLanguageService = false

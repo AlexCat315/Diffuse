@@ -25,6 +25,8 @@ Component 源码位于 `Editor/Plugins/SwiftSupport/component.wat`，生成的 `
 
 本机安装 SourceKit-LSP 后，可运行 `GUAVA_TEST_REAL_SOURCEKIT=1 ./guava test Editor --filter BundledSwiftSupportTests`，额外验证通过真实插件和隔离宿主获得 String 成员补全及类型悬浮提示。
 
+底栏“语言服务”显示当前 Swift 服务状态，SourceKit-LSP 子菜单提供日志、启动/重启和停止操作。停止只暂停当前会话，不撤销插件授权或修改持久化启用选择；文件刷新不会自动恢复，用户可以显式启动，重新启用/重载插件也会重建服务。
+
 `guava build/run Editor` 根据 `targets.desktopHelpers` 构建和捆绑 GuavaPluginHost；macOS 放在 `Contents/Helpers` 并单独签名，Windows/Linux 放在 `Tools`。Swift 工具链需要单独安装，插件不携带编译器或 SourceKit-LSP 二进制。
 
 `guava run` 通过宿主环境 `GUAVA_BUILD_PRODUCTS_PATH` 传递本次构建产物位置，让打包后的编辑器仍能发现脚本分析所需的 Swift 模块和 Clang module map。显式 `GUAVA_ENGINE_*` 覆盖仍优先；安装后的 SDK 需要提供对应模块路径，项目文件不能配置这些宿主路径。

@@ -14,7 +14,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         didSet { scene.setScriptDriver(scriptRuntime) }
     }
     // Navigation is session state, independent of authored game cameras.
-    var editorViewportCamera = RenderCamera.fallbackPerspective
+    static let defaultViewportCamera = RenderCamera(eye: SIMD3<Float>(6, 4, 8), target: .zero)
+    var editorViewportCamera = EditorSceneAdapter.defaultViewportCamera
     public private(set) var usesEditorViewportCamera = false
     public var onViewportCameraChanged: (() -> Void)?
 

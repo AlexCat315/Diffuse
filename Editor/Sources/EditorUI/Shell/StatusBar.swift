@@ -67,6 +67,7 @@ struct EditorStatusBar: View {
                 Divider(axis: .vertical).frame(height: 12)
             }
             activity(snapshot)
+            LanguageServerStatus(app: app, snapshot: snapshot, onCommand: onCommand)
             agent
         }
         .padding(horizontal: 12, vertical: 0)
