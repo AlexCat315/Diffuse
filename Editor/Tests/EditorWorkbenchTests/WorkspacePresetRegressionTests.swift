@@ -22,7 +22,7 @@ struct WorkspacePresetRegressionTests {
             if case let .submenu(menu) = item { return menu.title }
             return nil
         }
-        #expect(nested == ["Space", "布局"])
+        #expect(nested == ["Space", "布局", "面板"])
         #expect(catalog.entries.first { $0.id == "workspace.level" }?.title == "玩法")
         #expect(L(EditorLayoutPreset.levelWorkbench.title) == "场景与脚本")
         #expect(L(EditorLayoutPreset.modelingSculpt.title) == "视口优先")
@@ -136,5 +136,67 @@ struct WorkspacePresetRegressionTests {
         #expect(controller.document.groupContaining(panelID: "inspector")?.isCollapsed == false)
         EditorCommandDispatcher.handle(.restorePanels, app: app, controller: controller, registry: registry, fromCommandPalette: true)
         #expect(!controller.document.groups.values.contains { $0.isCollapsed })
+    } }
+
+    @Test("Area toggles collapse every group on an edge, then restore them; the center never collapses")
+    func panelAreaToggles() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-area-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
+        defer { app.shutdown() }
+        let registry = registry()
+        // Cinematics splits the bottom edge into two groups.
+        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
+            mode: .level, preset: .levelCinematics, registry: registry))
+        let bottom = try #require(controller.document.slots[.bottom]?.layout?.leafGroupIDs)
+        #expect(bottom.count == 2)
+        func handle(_ command: EditorCommand) {
+            EditorCommandDispatcher.handle(command, app: app, controller: controller, registry: registry,
+                                           fromCommandPalette: true)
+        }
+        handle(.togglePanelArea(.bottom))
+        #expect(bottom.allSatisfy { controller.document.groups[$0]?.isCollapsed == true })
+        #expect(controller.document.groups["leading"]?.isCollapsed == false)
+        handle(.togglePanelArea(.bottom))
+        #expect(bottom.allSatisfy { controller.document.groups[$0]?.isCollapsed == false })
+
+        // One collapsed group still counts as showing: the toggle hides the rest.
+        _ = controller.dispatch(.collapse(bottom[0]))
+        handle(.togglePanelArea(.bottom))
+        #expect(bottom.allSatisfy { controller.document.groups[$0]?.isCollapsed == true })
+
+        handle(.togglePanelArea(.leading))
+        #expect(controller.document.groups["leading"]?.isCollapsed == true)
+        #expect(controller.document.groups["center"]?.isCollapsed == false)
+    } }
+
+    @Test("Clicking the rail entry of the showing panel collapses its group; clicking again restores it")
+    func railToggle() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-rail-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
+        defer { app.shutdown() }
+        let registry = registry()
+        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
+            mode: .level, preset: .levelDefault, registry: registry))
+        func handle(_ command: EditorCommand) {
+            EditorCommandDispatcher.handle(command, app: app, controller: controller, registry: registry,
+                                           fromCommandPalette: true)
+        }
+        #expect(controller.document.groups["trailing"]?.activePanelID == "inspector")
+        // A different panel in the same group switches tabs instead of collapsing.
+        handle(.togglePanel("intent-input"))
+        #expect(controller.document.groups["trailing"]?.activePanelID == "intent-input")
+        #expect(controller.document.groups["trailing"]?.isCollapsed == false)
+        handle(.togglePanel("intent-input"))
+        #expect(controller.document.groups["trailing"]?.isCollapsed == true)
+        handle(.togglePanel("intent-input"))
+        #expect(controller.document.groups["trailing"]?.isCollapsed == false)
+        #expect(controller.document.groups["trailing"]?.activePanelID == "intent-input")
+        // The viewport cannot collapse, so its rail entry keeps it showing.
+        handle(.togglePanel("viewport"))
+        #expect(controller.document.groupContaining(panelID: "viewport")?.isCollapsed == false)
     } }
 }

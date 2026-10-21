@@ -33,7 +33,6 @@ struct DocumentFilesPanel: View {
                     expanded = expandedFolders
                 }
             }
-            Divider()
             if tree.isEmpty {
                 EditorPanelEmptyState(L("No text files"), detail: L("Add files to the project folder, then refresh."))
                     .flex()
@@ -71,7 +70,6 @@ struct DocumentFilesPanel: View {
                 .flex()
                 .treeRowStyle(EditorTreeRowStyle(), scope: .row)
             }
-            Divider()
             Row(alignment: .center, spacing: 6) {
                 Icon(UIIcons.File.folder, size: 11, color: .onSurfaceMuted)
                 Text("\(index.count) \(L("files"))").font(.caption).foregroundColor(.onSurfaceMuted)

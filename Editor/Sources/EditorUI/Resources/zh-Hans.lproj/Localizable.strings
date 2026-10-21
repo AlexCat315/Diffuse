@@ -969,4 +969,27 @@
 "Unapplied Agent changes" = "Agent 更改尚未应用";
 "Preferences are saved on this computer." = "偏好设置保存在这台电脑上。";
 "Discard changes" = "放弃更改";
+
+/* Workbench feedback and panel areas */
+"Panels" = "面板";
+"Toggle Left Sidebar" = "切换左侧栏";
+"Toggle Right Sidebar" = "切换右侧栏";
+"Toggle Bottom Panel" = "切换底部面板";
+"Stop the game to edit the scene" = "停止试玩后才能编辑场景";
+"Stop simulation before duplicating entities" = "停止试玩后才能复制实体";
+"Stop simulation before deleting entities" = "停止试玩后才能删除实体";
+"Stop simulation before adding entities" = "停止试玩后才能添加实体";
+"Scene saved" = "场景已保存";
+"Could not save the scene" = "无法保存场景";
+"Show Problems" = "查看问题";
+"Saved" = "已保存";
+"Game stopped" = "已停止试玩";
+"This Space does not run the game." = "当前 Space 不运行游戏。";
+"Layout reset" = "布局已重置";
+"No closed panel to reopen" = "没有可重新打开的面板";
+"Stop the game to send a request" = "停止试玩后才能发送请求";
+"Review the pending changes first" = "请先审阅待确认的更改";
+"Summarize this file" = "总结这个文件";
+"Find problems in this file" = "找出这个文件的问题";
+"Recently used" = "最近使用";
 "Enable Swift Support" = "启用 Swift 支持";

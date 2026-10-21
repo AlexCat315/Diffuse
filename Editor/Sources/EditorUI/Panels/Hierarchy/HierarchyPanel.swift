@@ -168,7 +168,6 @@ struct HierarchyPanel: View {
                     }
                 }
 
-                Divider()
 
                 if hierarchyRoots.isEmpty {
                     EditorPanelEmptyState(

@@ -36,6 +36,7 @@ struct CommandPaletteOverlay: View {
     var availableHeight: Float = 720
     @State private var selectedIndex = 0
     @State private var resultsOffset = CGPoint.zero
+    static let rowHeight: Float = 44
     private var resultsHeight: Float { max(80, min(320, availableHeight - 168)) }
 
     private struct ResultItem {
@@ -53,7 +54,9 @@ struct CommandPaletteOverlay: View {
         ModalBarrier(onBackgroundTap: dismiss) {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 8) {
-                    Icon(UIIcons.Status.sparkles, size: 16, color: EditorChromeTokens.agentColor)
+                    let scope = EditorPaletteScope(query: app.store.commandPaletteQuery.stringValue)
+                    Icon(scope.icon, size: 16, color: scope == .intent ? EditorChromeTokens.agentColor : .onSurfaceVariant)
+                        .debugName("command-palette-scope")
                     TextField(L("Tell Guava what you want to do… (> commands, @ files, # entities)"), text: Binding(get: { app.store.commandPaletteQuery }, set: {
                             selectedIndex = 0
                             resultsOffset = .zero
@@ -84,11 +87,11 @@ struct CommandPaletteOverlay: View {
                     Button(icon: .resource(UIIcons.Action.x), size: 12, tooltip: L("Close"), action: dismiss)
                         .buttonStyle(EditorChromeButtonStyle(height: 24))
                 }.padding(12)
-                if let entity = app.scene.entitySummary(id: app.store.selectedEntityID) {
+                let focus = EditorWorkFocus(app: app, documents: app.workstation.documents.snapshot)
+                if focus.leaf != nil {
                     Row(alignment: .center, spacing: 6) {
                         Text(L("Context")).font(.caption).foregroundColor(.onSurfaceMuted)
-                        Icon(UIIcons.Editor.box, size: 11, color: .accent)
-                        Text(entity.name, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceVariant)
+                        EditorFocusChip(focus: focus)
                     }.padding(horizontal: 14, vertical: 7)
                 }
                 Divider()
@@ -106,9 +109,13 @@ struct CommandPaletteOverlay: View {
                                         Text(item.title, lineLimit: 1).font(.label)
                                         Text(item.detail, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted)
                                     }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0)
-                                    Text(item.shortcut).font(.mono).foregroundColor(.onSurfaceVariant)
-                                }.padding(horizontal: 10, vertical: 6).frame(width: .percent(100), minWidth: 0)
-                            }.buttonStyle(.ghost).frame(width: .percent(100)).frame(height: 56))
+                                    if !item.shortcut.isEmpty {
+                                        // The same keycap as the title-bar intent field.
+                                        Text(item.shortcut).font(.caption).foregroundColor(.onSurfaceVariant)
+                                            .padding(horizontal: 4).border(.borderStrong, width: 1).cornerRadius(3)
+                                    }
+                                }.padding(horizontal: 10, vertical: 5).frame(width: .percent(100), minWidth: 0)
+                            }.buttonStyle(.ghost).frame(width: .percent(100)).frame(height: Self.rowHeight))
                         }
                     }.padding(4).frame(width: .percent(100))
                 }.frame(height: resultsHeight).debugName("command-palette-results")
@@ -129,12 +136,15 @@ struct CommandPaletteOverlay: View {
         let resourcesOnly = raw.hasPrefix("@")
         let entitiesOnly = raw.hasPrefix("#")
         let query = commandsOnly || resourcesOnly || entitiesOnly ? String(raw.dropFirst()).trimmingCharacters(in: .whitespaces) : raw
+        let recent = EditorRecentCommands.of(app).ids
         var entries: [ResultItem] = []
         if !resourcesOnly && !entitiesOnly {
             entries = EditorCommandSearch.commands(app: app).map { command in
-                ResultItem(id: command.id, title: command.title, detail: L("Command"), shortcut: command.shortcut?.label ?? "",
+                ResultItem(id: command.id, title: command.title,
+                           detail: recent.contains(command.id) ? L("Recently used") : L("Command"), shortcut: command.shortcut?.label ?? "",
                            enabled: command.isEnabled, searchText: command.title + " " + command.keywords + " " + command.id,
                            perform: {
+                    EditorRecentCommands.of(app).record(command.id)
                     EditorCommandDispatcher.handle(command.command, app: app, controller: controller,
                         registry: registry, fromCommandPalette: true)
                 })
@@ -176,7 +186,12 @@ struct CommandPaletteOverlay: View {
         var matches = entries.compactMap { entry -> (ResultItem, Int)? in
             EditorCommandSearch.score(query, in: entry.searchText).map { (entry, $0) }
         }.sorted { lhs, rhs in
-            lhs.1 == rhs.1 ? lhs.0.id < rhs.0.id : lhs.1 > rhs.1
+            // With nothing typed, the commands used most recently lead.
+            if query.isEmpty {
+                let left = recent.firstIndex(of: lhs.0.id) ?? Int.max, right = recent.firstIndex(of: rhs.0.id) ?? Int.max
+                if left != right { return left < right }
+            }
+            return lhs.1 == rhs.1 ? lhs.0.id < rhs.0.id : lhs.1 > rhs.1
         }.prefix(60).map { $0.0 }
         if !commandsOnly && !resourcesOnly && !entitiesOnly {
             let text = raw
@@ -203,12 +218,35 @@ struct CommandPaletteOverlay: View {
 
     private func select(_ index: Int) {
         selectedIndex = index
-        let top = CGFloat(index * 58 + 4)
+        let row = CGFloat(Self.rowHeight)
+        let top = CGFloat(index) * (row + 2) + 4
         if top < resultsOffset.y { resultsOffset.y = top }
-        else if top + 56 > resultsOffset.y + CGFloat(resultsHeight) {
-            resultsOffset.y = top + 56 - CGFloat(resultsHeight)
+        else if top + row > resultsOffset.y + CGFloat(resultsHeight) {
+            resultsOffset.y = top + row - CGFloat(resultsHeight)
         }
     }
 
     private func dismiss() { app.store.dispatch(.setCommandPaletteVisible(false)) }
+}
+
+/// Palette commands run in this window, newest first. Session-only.
+final class EditorRecentCommands {
+    private(set) var ids: [String] = []
+    static let limit = 5
+
+    nonisolated(unsafe) private static var byApplication: [ObjectIdentifier: EditorRecentCommands] = [:]
+
+    static func of(_ app: EditorApplication) -> EditorRecentCommands {
+        let key = ObjectIdentifier(app)
+        if let existing = byApplication[key] { return existing }
+        let created = EditorRecentCommands()
+        byApplication[key] = created
+        return created
+    }
+
+    func record(_ id: String) {
+        ids.removeAll { $0 == id }
+        ids.insert(id, at: 0)
+        if ids.count > Self.limit { ids.removeLast(ids.count - Self.limit) }
+    }
 }

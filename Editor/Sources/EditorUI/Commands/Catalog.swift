@@ -115,6 +115,16 @@ struct EditorCommandCatalog {
     func entry(matching event: KeyEvent) -> EditorCommandEntry? {
         entries.first { $0.shortcut?.matches(event) == true }
     }
+
+    /// A chord that is unavailable only because the game is running. Bare keys
+    /// such as Delete stay silent: during play they usually belong to the game.
+    static func isBlockedOnlyByPlayback(_ entry: EditorCommandEntry, in context: EditorCommandContext) -> Bool {
+        guard context.playbackState != .stopped, !entry.isEnabled,
+              entry.shortcut?.modifiers.isEmpty == false else { return false }
+        var stopped = context
+        stopped.playbackState = .stopped
+        return make(stopped).entries.contains { $0.id == entry.id && $0.isEnabled }
+    }
 }
 
 private extension EditorCommandItem {
@@ -277,6 +287,14 @@ private struct Builder {
                 entry("layout.reset", "Reset Layout", "layout workspace 重置布局", .init(.digit(0)),
                       command: .resetLayout),
             ])),
+            .submenu(menu("panels", "Panels", [
+                entry("area.leading", "Toggle Left Sidebar", "sidebar left panel hide show 左侧栏 侧边栏 显示 隐藏",
+                      .init(.letter("l"), [.primary, .option]), command: .togglePanelArea(.leading)),
+                entry("area.trailing", "Toggle Right Sidebar", "sidebar right panel hide show 右侧栏 侧边栏 显示 隐藏",
+                      .init(.letter("r"), [.primary, .option]), command: .togglePanelArea(.trailing)),
+                entry("area.bottom", "Toggle Bottom Panel", "bottom panel console hide show 底部面板 控制台 显示 隐藏",
+                      .init(.letter("j")), command: .togglePanelArea(.bottom)),
+            ])),
             .separator,
             entry("layout.viewport", "Maximize Viewport", "maximize 最大化视口", command: .maximizePanel("viewport")),
             entry("layout.scripts", "Maximize Scripts", "maximize 最大化脚本", command: .maximizePanel("scripts")),
@@ -293,16 +311,17 @@ private struct Builder {
             entry("agent.intent", "Ask Guava...", "", .init(.letter("k")), command: .showCommandPalette(.intent),
                   inPalette: false),
             .separator,
-            entry("agent.show", "Agent", "agent assistant conversation 智能体 对话", command: .showPanel("intent-input")),
-            entry("agent.review", "Review", "agent review approval 审阅", command: .showPanel("intent-input")),
+            // Pending reviews sit at the top of the Agent thread, so one entry serves both.
+            entry("agent.show", "Agent", "agent assistant conversation review approval 智能体 对话 审阅",
+                  command: .showPanel("intent-input")),
             entry("journal.show", "Session Journal", "history activity journal 历史 日志", command: .showPanel("journal")),
         ])
     }
 
     private var run: EditorCommandMenu {
         let state = context.playbackState
-        func transport(_ target: PlaybackState, _ title: String) -> EditorCommandItem {
-            entry("playback." + target.rawValue, title, "game preview 游戏试玩", command: .setPlaybackState(target),
+        func transport(_ target: PlaybackState, _ title: String, _ shortcut: EditorShortcut? = nil) -> EditorCommandItem {
+            entry("playback." + target.rawValue, title, "game preview 游戏试玩", shortcut, command: .setPlaybackState(target),
                   enabled: isGame && EditorPlaybackCommandPolicy.canTransition(from: state, to: target),
                   selected: state == target)
         }
@@ -311,7 +330,7 @@ private struct Builder {
                   command: .togglePlayback, enabled: isGame),
             transport(.playing, "Play"),
             transport(.paused, "Pause"),
-            transport(.stopped, "Stop"),
+            transport(.stopped, "Stop", .init(.enter, [.primary, .shift])),
             .separator,
             entry("project.build", "Build Project", "export build 导出构建", .init(.letter("b")),
                   command: .buildProject, enabled: isGame),

@@ -16,7 +16,6 @@ struct SessionJournal: View {
                     Spacer(minLength: 0)
                     EditorPanelBadge("r\(store.sceneRevision)")
                 }
-                Divider()
                 ScrollView(.vertical, scrollbarGutter: .stable) {
                     Column(alignment: .leading, spacing: 0) {
                         if store.agentTasks.isEmpty && store.operations.isEmpty && store.consoleEntries.isEmpty {
@@ -70,7 +69,6 @@ struct SessionJournal: View {
                     if !detail.isEmpty { Text(detail, lineLimit: 2).font(.caption).foregroundColor(.onSurfaceMuted) }
                 }.flex().frame(minWidth: 0)
             }.padding(vertical: 9)
-            Divider()
         }.frame(width: .percent(100), minWidth: 0)
     }
 }

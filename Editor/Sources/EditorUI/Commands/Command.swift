@@ -1,4 +1,7 @@
 internal import EditorCore
+private import Foundation
+internal import GuavaUI
+internal import GuavaUIRuntime
 
 /// Every user-invokable editor action. Menus, the title-bar menu, the command
 /// palette and keyboard shortcuts all resolve to these values.
@@ -10,6 +13,9 @@ enum EditorCommand {
     case showPanel(String)
     case maximizePanel(String)
     case restorePanels
+    case togglePanelArea(EditorPanelArea)
+    /// The activity rail: open the panel, or collapse its group when it is already showing.
+    case togglePanel(String)
     case saveLayout
     case closeProject
     case newScene
@@ -60,6 +66,28 @@ enum EditorPaletteScope: String, CaseIterable {
         case .commands: ">"
         case .resources: "@"
         case .entities: "#"
+        }
+    }
+}
+
+/// A docked edge of the workbench that collapses and expands as a whole.
+enum EditorPanelArea: CaseIterable {
+    case leading, trailing, bottom
+}
+
+extension EditorPaletteScope {
+    /// The scope a typed query asks for, read from its leading prefix.
+    init(query: String) {
+        let raw = query.trimmingCharacters(in: .whitespaces)
+        self = Self.allCases.first { !$0.prefix.isEmpty && raw.hasPrefix($0.prefix) } ?? .intent
+    }
+
+    var icon: BundleImageResource {
+        switch self {
+        case .intent: UIIcons.Status.sparkles
+        case .commands: UIIcons.Editor.terminal
+        case .resources: UIIcons.File.file
+        case .entities: UIIcons.Editor.box
         }
     }
 }

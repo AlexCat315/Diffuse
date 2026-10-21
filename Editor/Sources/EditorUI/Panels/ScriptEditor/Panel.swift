@@ -26,7 +26,6 @@ struct ScriptPanel: View {
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             toolbar
-            Divider()
             trustBanner
             Box(direction: .row, alignItems: .stretch, spacing: 0) {
                 if isNavigatorVisible {
@@ -186,7 +185,6 @@ struct ScriptPanel: View {
                 text: $searchText,
                 summary: searchText.isEmpty ? nil : "\(visibleDocuments.count) / \(scriptFiles.count)"
             )
-            Divider()
             if scriptFiles.isEmpty {
                 EditorPanelEmptyState(
                     L("No scripts yet"),
@@ -206,7 +204,6 @@ struct ScriptPanel: View {
                 .background(.surfaceSunken)
                 .flex(1, shrink: 1)
             }
-            Divider()
             Row(alignment: .center, spacing: 6) {
                 Text("Scripts/", lineLimit: 1)
                     .font(.mono)
@@ -224,7 +221,6 @@ struct ScriptPanel: View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             if let selectedScript {
                 editorHeader(selectedScript)
-                Divider()
                 externalChangeBanner
                 ScriptCodeEditor(source: sourceText,
                                  annotations: Binding(get: {

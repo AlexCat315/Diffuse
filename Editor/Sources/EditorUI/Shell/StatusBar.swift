@@ -14,6 +14,7 @@ struct EditorStatusBar: View {
     private var workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
     private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
     private var layout: Observed<WorkspaceController, UInt64>
+    @State private var isSpaceMenuPresented = false
 
     init(app: EditorApplication, controller: WorkspaceController, onCommand: @escaping (EditorCommand) -> Void) {
         self.app = app
@@ -70,7 +71,6 @@ struct EditorStatusBar: View {
         }
         .padding(horizontal: 12, vertical: 0)
         .frame(height: 24)
-        .background(.surfaceRaised)
         .debugName("editor-status-bar")
     }
 
@@ -103,10 +103,21 @@ struct EditorStatusBar: View {
         .debugName("editor-status-problems")
     }
 
-    private func space(_ space: EditorSpace) -> some View {
-        Row(alignment: .center, spacing: 5) {
-            Icon(space.icon, size: 11, color: .onSurfaceMuted)
-            Text(L(space.title) + " Space").font(.caption).foregroundColor(.onSurfaceMuted)
+    /// The current Space; clicking it switches Spaces like the title-bar menu.
+    private func space(_ current: EditorSpace) -> some View {
+        Popover(isPresented: $isSpaceMenuPresented, width: 200, placement: .topLeading, surface: .content, overflow: .flip) {
+            Row(alignment: .center, spacing: 5) {
+                Icon(current.icon, size: 11, color: .onSurfaceMuted)
+                Text(L(current.title)).font(.caption).foregroundColor(.onSurfaceMuted)
+            }.padding(horizontal: 6).frame(height: 20)
+                .accessibility { $0.label = L("Space") + " " + L(current.title) }
+        } content: {
+            Menu(EditorSpace.allCases.map { space in
+                .item(MenuItem(id: space.rawValue, title: L(space.title), isSelected: current == space, action: {
+                    isSpaceMenuPresented = false
+                    onCommand(.setWorkspaceMode(space.mode))
+                }))
+            }, width: 200)
         }.debugName("editor-status-space")
     }
 

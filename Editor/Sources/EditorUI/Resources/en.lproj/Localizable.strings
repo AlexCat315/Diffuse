@@ -915,4 +915,27 @@
 "Unapplied Agent changes" = "Unapplied Agent changes";
 "Preferences are saved on this computer." = "Preferences are saved on this computer.";
 "Discard changes" = "Discard changes";
+
+/* Workbench feedback and panel areas */
+"Panels" = "Panels";
+"Toggle Left Sidebar" = "Toggle Left Sidebar";
+"Toggle Right Sidebar" = "Toggle Right Sidebar";
+"Toggle Bottom Panel" = "Toggle Bottom Panel";
+"Stop the game to edit the scene" = "Stop the game to edit the scene";
+"Stop simulation before duplicating entities" = "Stop the game before duplicating entities";
+"Stop simulation before deleting entities" = "Stop the game before deleting entities";
+"Stop simulation before adding entities" = "Stop the game before adding entities";
+"Scene saved" = "Scene saved";
+"Could not save the scene" = "Could not save the scene";
+"Show Problems" = "Show Problems";
+"Saved" = "Saved";
+"Game stopped" = "Game stopped";
+"This Space does not run the game." = "This Space does not run the game.";
+"Layout reset" = "Layout reset";
+"No closed panel to reopen" = "No closed panel to reopen";
+"Stop the game to send a request" = "Stop the game to send a request";
+"Review the pending changes first" = "Review the pending changes first";
+"Summarize this file" = "Summarize this file";
+"Find problems in this file" = "Find problems in this file";
+"Recently used" = "Recently used";
 "Enable Swift Support" = "Enable Swift Support";

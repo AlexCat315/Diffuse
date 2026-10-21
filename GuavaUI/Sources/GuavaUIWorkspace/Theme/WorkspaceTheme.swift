@@ -5,6 +5,13 @@ import GuavaUIRuntime
 public enum WorkspacePanelStyle: Sendable {
     case card
     case continuous
+    /// Dense-workbench controls on borderless rounded panes. The split
+    /// thickness becomes an empty gutter, so the window canvas separates
+    /// panes instead of a drawn rule.
+    case soft
+
+    /// Continuous and soft panes share compact tabs and one trailing menu.
+    var usesCompactControls: Bool { self != .card }
 }
 
 /// Workspace metrics. Panels are cards, so the geometry stays compact: two

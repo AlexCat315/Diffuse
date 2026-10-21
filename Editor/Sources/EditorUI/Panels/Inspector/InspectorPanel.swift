@@ -83,7 +83,6 @@ struct InspectorPanel: View {
                         Button(L("Return to Inspector")) { store.dispatch(.setInspectorSceneSettingsVisible(false)) }
                             .buttonStyle(.ghost)
                     }.padding(6)
-                    Divider()
                 }
 
                 if !sections.isEmpty {
@@ -103,7 +102,6 @@ struct InspectorPanel: View {
                         }
                     }
 
-                    Divider()
                 }
 
                 if filteredSections.isEmpty {
@@ -138,7 +136,6 @@ struct InspectorPanel: View {
                         .flex()
                 }
                 if let entity, !showingSceneSettings, sectionFilter == nil {
-                    Divider()
                     ComponentActionsBar(store: store,
                                         scene: scene,
                                         entityIDs: selectedEntityIDs.isEmpty ? [entity.id] : selectedEntityIDs,

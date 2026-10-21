@@ -20,9 +20,12 @@ private extension View {
     func workspaceCardSurface(_ fill: SemanticColorRef) -> some View {
         WorkspacePanelStyleReader { style in
             ThemeReader { theme in
-                if style == .continuous {
+                switch style {
+                case .continuous:
                     self.background(fill).clipped()
-                } else {
+                case .soft:
+                    self.background(fill).cornerRadius(theme.radius.lg).clipped()
+                case .card:
                     self
                         .background(fill)
                         .cornerRadius(theme.radius.xl)
@@ -806,7 +809,7 @@ private struct _WorkspaceTabBar: View {
 
     private func tabBar(scaler: TextScaler, style: WorkspacePanelStyle) -> some View {
         let slotID = document.slotContaining(groupID: group.id)
-        let compactControls = style == .continuous
+        let compactControls = style.usesCompactControls
         let canCollapse = slotID != nil && slotID != .center && group.panels.contains {
             document.panels[$0]?.isCollapsible == true
         }
@@ -1157,9 +1160,10 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let workspace = resolveWorkspaceTheme(on: node)
         let height = max(26, node.compositionValue(of: TextScalerEnvironment.key).scale(workspace.tabBarHeight))
-        let style = workspace.panelStyle == .continuous
+        // Soft panes use selection blocks everywhere; a top rule would cut the rounded corner.
+        let style = workspace.panelStyle.usesCompactControls
             ? AnyButtonStyle(WorkspaceContinuousTabStyle(height: height,
-                isStage: document.slotContaining(groupID: groupID) == .center))
+                isStage: workspace.panelStyle == .continuous && document.slotContaining(groupID: groupID) == .center))
             : AnyButtonStyle(TabButtonStyle(height: height))
         // Resolve the title color eagerly from this (parented) host node's theme
         // and pass it to `Text` directly. The button style's deferred
@@ -1535,7 +1539,7 @@ private struct _WorkspaceSplitDividerLine: _PrimitiveView {
         let theme = resolveWorkspaceTheme(on: node)
         // The hairline between two cards. The parent keeps the invisible grab
         // area around it, so this node contributes only the visible rule.
-        node.animatableSet(\.backgroundColor, to: node.theme.colors.divider)
+        node.animatableSet(\.backgroundColor, to: theme.panelStyle == .soft ? .clear : node.theme.colors.divider)
         let thickness = max(1, theme.splitDividerThickness)
         switch axis {
         case .vertical:

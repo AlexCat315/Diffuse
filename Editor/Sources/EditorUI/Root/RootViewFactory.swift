@@ -211,7 +211,7 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.inspector", panelIcon("inspector"))
         WorkspacePanelIconCatalog.register("panel.viewport", panelIcon("globe", subdirectory: "ToolbarIcons"))
         WorkspacePanelIconCatalog.register("panel.console", panelIcon("console"))
-        WorkspacePanelIconCatalog.register("panel.assets", panelIcon("folder", subdirectory: "ToolbarIcons"))
+        WorkspacePanelIconCatalog.register("panel.assets", panelIcon("package", subdirectory: "ToolbarIcons"))
         WorkspacePanelIconCatalog.register("panel.intent-input", panelIcon("ai-intent"))
         WorkspacePanelIconCatalog.register("panel.render-pipeline", panelIcon("render"))
         WorkspacePanelIconCatalog.register("panel.animation", panelIcon("render"))

@@ -10,17 +10,20 @@ struct ConsolePanel: View {
     let store: EditorStore
     var onNavigate: ((EditorIssueTarget) -> Void)? = nil
     let outputSelector: AnyView?
+    /// Window-level feedback, so a copy confirmation never pushes the list down.
+    var notify: (String, StatusTone) -> Void = { _, _ in }
     @State private var searchText: TextBuffer = ""
     @State private var enabledSeverities: Set<EditorConsoleSeverity> = Set(EditorConsoleSeverity.allCases)
     @State private var selectedEntryID: UInt64? = nil
     @State private var followsLatest: Bool = true
-    @State private var copyStatus: String? = nil
     @State private var actionsPresented = false
 
-    init(store: EditorStore, onNavigate: ((EditorIssueTarget) -> Void)? = nil, outputSelector: AnyView? = nil) {
+    init(store: EditorStore, onNavigate: ((EditorIssueTarget) -> Void)? = nil, outputSelector: AnyView? = nil,
+         notify: @escaping (String, StatusTone) -> Void = { _, _ in }) {
         self.store = store
         self.onNavigate = onNavigate
         self.outputSelector = outputSelector
+        self.notify = notify
         _searchText = State(wrappedValue: "")
         _enabledSeverities = State(wrappedValue: Set(EditorConsoleSeverity.allCases))
     }
@@ -76,20 +79,11 @@ struct ConsolePanel: View {
                        isEnabled: !entries.isEmpty, tooltip: L("Clear")) {
                     store.dispatch(.clearConsole)
                     selectedEntryID = nil
-                    copyStatus = nil
                 }.buttonStyle(EditorChromeButtonStyle(height: 22))
               }
             }
           }.frame(height: 32)
 
-            if let copyStatus {
-                Text(copyStatus)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                    .padding(horizontal: 10, vertical: 3)
-            }
-
-            Divider()
 
             if entries.isEmpty {
                 EditorPanelEmptyState(
@@ -114,7 +108,6 @@ struct ConsolePanel: View {
                                             isSelected: selectedEntryID == entry.id,
                                             onSelect: {
                                                 selectedEntryID = entry.id
-                                                copyStatus = nil
                                             })
                             if let nextStep = entry.nextStep, selectedEntryID == entry.id {
                                 Text(L(nextStep)).font(.caption).foregroundColor(.warning)
@@ -165,7 +158,6 @@ struct ConsolePanel: View {
                 .item(MenuItem(id: "clear", title: L("Clear"), isEnabled: !entries.isEmpty, action: {
                     store.dispatch(.clearConsole)
                     selectedEntryID = nil
-                    copyStatus = nil
                 })),
             ], width: 220, onDismiss: { actionsPresented = false })
         }.debugName("editor-console-actions")
@@ -173,11 +165,11 @@ struct ConsolePanel: View {
 
     private func copy(_ entries: [EditorConsoleEntry]) {
         guard let writeClipboard = ClipboardHolder.write else {
-            copyStatus = L("Clipboard is unavailable")
+            notify(L("Clipboard is unavailable"), .warning)
             return
         }
         writeClipboard(ConsoleEntryExport.formatted(entries))
-        copyStatus = String(format: L("Copied %lld messages"), Int64(entries.count))
+        notify(String(format: L("Copied %lld messages"), Int64(entries.count)), .success)
     }
 }
 

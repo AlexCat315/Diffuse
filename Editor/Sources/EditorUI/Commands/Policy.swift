@@ -6,7 +6,7 @@ enum EditorWorkspaceCommandPolicy {
         let profile = mode.profile
         switch command {
         case .showScripts: return profile.allowsPanel("scripts")
-        case .showPanel(let id), .maximizePanel(let id): return profile.allowsPanel(id)
+        case .showPanel(let id), .togglePanel(let id), .maximizePanel(let id): return profile.allowsPanel(id)
         case .showSceneSettings, .newScene, .openScene, .saveScene, .duplicateSelection, .deleteSelection,
              .selectAll, .clearSelection, .invertSelection, .selectDescendants, .spawnEntity, .frameSelection,
              .toggleSelectionVisibility, .toggleSelectionLock:

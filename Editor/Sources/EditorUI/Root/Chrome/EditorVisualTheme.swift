@@ -7,11 +7,13 @@ enum EditorVisualTheme {
     static func make(dark: Bool) -> Theme {
         var theme = dark ? Theme.defaultDark : Theme.defaultLight
         if dark {
-            theme.colors.background = Color(red: 0x0F, green: 0x13, blue: 0x12)
-            theme.colors.surface = Color(red: 0x13, green: 0x18, blue: 0x17)
+            // Panes are rounded cards on a darker canvas: the gap between two
+            // cards separates them, so the chrome needs no drawn rules.
+            theme.colors.background = Color(red: 0x0B, green: 0x0E, blue: 0x0D)
+            theme.colors.surface = Color(red: 0x16, green: 0x1B, blue: 0x1A)
             theme.colors.surfaceVariant = EditorCodePalette.selectedTab
-            theme.colors.surfaceSunken = theme.colors.background
-            theme.colors.surfaceRaised = Color(red: 0x17, green: 0x1C, blue: 0x1B)
+            theme.colors.surfaceSunken = Color(red: 0x10, green: 0x14, blue: 0x13)
+            theme.colors.surfaceRaised = theme.colors.surface
             theme.colors.onSurface = EditorCodePalette.foreground
             theme.colors.onSurfaceVariant = Color(red: 0xA6, green: 0xAE, blue: 0xAA)
             theme.colors.onSurfaceMuted = EditorCodePalette.muted
@@ -21,11 +23,11 @@ enum EditorVisualTheme {
             theme.colors.accentMuted = EditorCodePalette.accent.multipliedAlpha(0.12)
             theme.colors.selection = EditorCodePalette.accent.multipliedAlpha(0.16)
         } else {
-            theme.colors.background = Color(red: 0xE9, green: 0xED, blue: 0xEA)
-            theme.colors.surface = Color(red: 0xF3, green: 0xF5, blue: 0xF3)
+            theme.colors.background = Color(red: 0xE3, green: 0xE8, blue: 0xE5)
+            theme.colors.surface = Color(red: 0xFB, green: 0xFC, blue: 0xFB)
             theme.colors.surfaceVariant = Color(red: 0xE9, green: 0xED, blue: 0xEA)
-            theme.colors.surfaceSunken = Color(red: 0xFC, green: 0xFD, blue: 0xFC)
-            theme.colors.surfaceRaised = .white
+            theme.colors.surfaceSunken = Color(red: 0xF2, green: 0xF4, blue: 0xF2)
+            theme.colors.surfaceRaised = theme.colors.surface
             theme.colors.onSurface = Color(red: 0x25, green: 0x30, blue: 0x2B)
             theme.colors.onSurfaceVariant = Color(red: 0x57, green: 0x65, blue: 0x5E)
             theme.colors.onSurfaceMuted = Color(red: 0x6B, green: 0x7A, blue: 0x71)
@@ -47,7 +49,7 @@ enum EditorVisualTheme {
         theme.typography.mono = .init(font: .monospaced(size: 11), lineHeight: 17)
         theme.radius.sm = 5
         theme.radius.md = 7
-        theme.radius.lg = 9
+        theme.radius.lg = 10
         theme.colors.onBackground = theme.colors.onSurface
         theme.colors.borderStrong = dark ? Color.white.multipliedAlpha(0.10) : theme.colors.border
         theme.colors.accentHover = dark ? Color(red: 0x69, green: 0xB9, blue: 0x8B) : Color(red: 0x20, green: 0x6A, blue: 0x44)

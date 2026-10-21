@@ -21,14 +21,14 @@ struct EditorOutputPanel: View {
             switch app.store.outputTab {
             case .logs:
                 ConsolePanel(store: app.store, onNavigate: app.navigateToIssue,
-                             outputSelector: AnyView(OutputModeSelector(store: app.store, problemCount: count)))
+                             outputSelector: AnyView(OutputModeSelector(store: app.store, problemCount: count)),
+                             notify: { [app] title, tone in EditorNotifications.of(app).post(title, id: "console-copy", tone: tone) })
                     .flex()
             case .problems:
                 EditorPanelToolbar {
                     OutputModeSelector(store: app.store, problemCount: count)
                     Spacer(minLength: 0)
                 }
-                Divider()
                 problems(snapshot.documents, failures: failures).flex()
             case .build:
                 buildOutput(snapshot.selectedDocument, problemCount: count).flex()

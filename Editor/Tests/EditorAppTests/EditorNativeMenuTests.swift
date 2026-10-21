@@ -53,7 +53,7 @@ struct EditorNativeMenuTests {
     }
 
     @MainActor
-    @Test("View nests Space and Layout as native submenus with their key equivalents")
+    @Test("View nests Space, Layout and Panels as native submenus with their key equivalents")
     func nestedSubmenus() {
         let bar = EditorNativeMenuBuilder.make(catalog: catalog()) { _ in }
         let view = bar.menus.first { $0.title == L("View") }
@@ -61,7 +61,7 @@ struct EditorNativeMenuTests {
             if case let .submenu(menu) = item { return menu }
             return nil
         } ?? []
-        #expect(submenus.map(\.title) == [L("Space"), L("Layout")])
+        #expect(submenus.map(\.title) == [L("Space"), L("Layout"), L("Panels")])
         #expect(actions(submenus.first?.items ?? []).filter { !$0.keyEquivalent.isEmpty }.map(\.keyEquivalent)
             == ["1", "2", "3", "4", "5"])
     }

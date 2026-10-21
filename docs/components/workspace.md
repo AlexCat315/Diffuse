@@ -4,7 +4,7 @@ GuavaUI 的 docking 系统公开名称是 `GuavaUIWorkspace` 模块和 `Workspac
 
 ## 模型与操作
 
-`WorkspaceTheme.panelStyle` 默认为 `.card`。密集桌面工作台可选择 `.continuous`，去掉面板外层圆角、阴影和边框。中央槽使用铺满高度的标签与顶部选中线，其他槽使用紧凑选中块；每组只保留一个尾部菜单，包含面板选择、最大化及允许时的收起操作，单面板组也能访问这些操作。分屏、拖拽命中区域和文档状态保持相同。Editor 使用 32pt 标签栏与 1pt 分隔线。
+`WorkspaceTheme.panelStyle` 默认为 `.card`。密集桌面工作台可选择 `.continuous`，去掉面板外层圆角、阴影和边框；`.soft` 使用同样的紧凑标签与尾部菜单，但面板是无边框、无阴影的圆角块（`radius.lg`），`splitDividerThickness` 变成不绘制分隔线的间隙，由窗口底色分隔面板，所有槽都使用选中块标签。中央槽使用铺满高度的标签与顶部选中线，其他槽使用紧凑选中块；每组只保留一个尾部菜单，包含面板选择、最大化及允许时的收起操作，单面板组也能访问这些操作。分屏、拖拽命中区域和文档状态保持相同。Editor 使用 `.soft`、32pt 标签栏与 6pt 间隙。
 
 - `WorkspacePanel`：软件定义的稳定面板 ID、标题、图标键、关闭/拖拽/折叠能力与 `WorkspacePanelSizing` 内容尺寸契约。
 - `WorkspaceTabGroup`：面板顺序、activePanelID、折叠状态与 pinnedPanelIDs。

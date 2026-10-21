@@ -12,6 +12,7 @@ struct DocumentsPanel: View {
     private var observed: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
     @State private var confirmingClose: String?
     @State private var isMorePresented = false
+    @State private var hoveredClose: String?
 
     init(model: EditorDocumentWorkspace, onOpenFile: @escaping () -> Void = {}) {
         self.model = model
@@ -25,9 +26,7 @@ struct DocumentsPanel: View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             if let document = snapshot.selected {
                 tabs(documents, selected: document.path)
-                Divider()
                 pathBar(document)
-                Divider()
                 if let error = snapshot.error {
                     Row(alignment: .center, spacing: 8) {
                         Icon(UIIcons.Status.alertTriangle, size: 12, color: .error)
@@ -47,13 +46,14 @@ struct DocumentsPanel: View {
     // MARK: Tabs
 
     private func tabs(_ documents: [TextDocument], selected: String) -> some View {
-        Box(direction: .row, alignItems: .stretch, spacing: 0) {
-            Box(direction: .row, alignItems: .stretch, spacing: 0) {
+        Box(direction: .row, alignItems: .center, spacing: 0) {
+            Box(direction: .row, alignItems: .center, spacing: 2) {
                 for document in documents {
                     AnyView(tab(document, isSelected: document.path == selected))
                 }
             }.flex(1, shrink: 1).frame(minWidth: 0).clipped()
         }
+        .padding(horizontal: 4)
         .frame(height: 32)
         .background(.surface)
         .debugName("document-tabs")
@@ -70,17 +70,15 @@ struct DocumentsPanel: View {
                     Text(name, lineLimit: 1).font(.label)
                         .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
                         .frame(maxWidth: 180)
-                }.padding(EdgeInsets(leading: 12, trailing: 4))
-            }.buttonStyle(.plain).frame(height: 32)
+                }.padding(EdgeInsets(leading: 10, trailing: 4))
+            }.buttonStyle(.plain).frame(height: 26)
             closeControl(document)
         }
-        .padding(EdgeInsets(trailing: 6))
-        .frame(height: 32)
-        .background(isSelected ? .background : .clear)
-        .overlay(alignment: .top) {
-            Box {}.frame(width: .percent(100), height: .points(2)).background(isSelected ? .accent : .clear)
-        }
-        .overlay(alignment: .trailing) { Box {}.frame(width: .points(1), height: .percent(100)).background(.divider) }
+        .padding(EdgeInsets(trailing: 4))
+        .frame(height: 26)
+        // A selection pill, like the workbench tabs: no rules between or above tabs.
+        .background(isSelected ? .surfaceVariant : .clear)
+        .cornerRadius(6)
         .accessibility { $0.label = name; $0.state.isSelected = isSelected }
         .debugName("document-tab-" + document.path)
     }
@@ -93,9 +91,16 @@ struct DocumentsPanel: View {
             Popover(isPresented: Binding(get: { confirmingClose == document.path },
                                          set: { confirmingClose = $0 ? document.path : nil }),
                     width: 260, placement: .bottom, surface: .bubble, overflow: .constrain) {
+                // The unsaved dot turns into the close mark under the pointer.
                 Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                    Box {}.frame(width: 7, height: 7).background(.warning).cornerRadius(4)
+                    if hoveredClose == document.path {
+                        Icon(UIIcons.Action.x, size: 10, color: .onSurfaceVariant)
+                    } else {
+                        Box {}.frame(width: 7, height: 7).background(.warning).cornerRadius(4)
+                    }
                 }.frame(width: 18, height: 18)
+                    .background(hoveredClose == document.path ? .stateLayerHover : .clear).cornerRadius(4)
+                    .onHover { hoveredClose = $0 ? document.path : (hoveredClose == document.path ? nil : hoveredClose) }
                     .accessibility { $0.label = L("Close") + " " + document.path }
             } content: {
                 Column(alignment: .leading, spacing: 10) {
@@ -140,9 +145,6 @@ struct DocumentsPanel: View {
             if document.isDirty {
                 Text(L("Unsaved")).font(.caption).foregroundColor(.warning)
             }
-            Text(kind.name).font(.caption).foregroundColor(.onSurfaceMuted)
-            Text("UTF-8").font(.caption).foregroundColor(.onSurfaceMuted)
-            Text(document.text.contains("\r\n") ? "CRLF" : "LF").font(.caption).foregroundColor(.onSurfaceMuted)
             Button(isEnabled: document.isDirty, tooltip: L("Save") + " " + EditorShortcut(.letter("s")).label) {
                 model.save(document.path)
             } label: {

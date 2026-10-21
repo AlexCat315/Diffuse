@@ -21,22 +21,23 @@ struct EditorRootView: View {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
 
-                        EditorTitleBar(app: app, width: windowWidth, onCommand: cb.handleMenuCommand)
-                        Divider()
+                        // Title bar, rail and status bar rest on the canvas; only panes are cards.
+                        EditorCanvasChrome {
+                            EditorTitleBar(app: app, width: windowWidth, onCommand: cb.handleMenuCommand)
+                        }
                         Box(direction: .row, alignItems: .stretch, spacing: 0) {
                             EditorActivityRail(app: app, controller: controller, onCommand: cb.handleMenuCommand)
-                            Divider(axis: .vertical)
                             WorkspaceView(controller: controller,
                                            registry: registry, compact: windowWidth < 1000)
                                 .flex()
                                 .frame(minWidth: 0, minHeight: 0)
-                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, splitDividerThickness: 1,
-                                                              animatesLayout: true, panelStyle: .continuous))
+                                .padding(EdgeInsets(trailing: 6))
+                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, splitDividerThickness: 6,
+                                                              animatesLayout: true, panelStyle: .soft))
                                 .layoutRole("editor-workspace")
                                 .debugName("editor-workspace")
                         }.flex().frame(minWidth: 0, minHeight: 0)
 
-                        Divider()
                         EditorStatusBar(app: app, controller: controller, onCommand: cb.handleMenuCommand)
                     }
                     .background(.background)
@@ -48,6 +49,7 @@ struct EditorRootView: View {
                     .modifier(EditorWindowSizeObserver(width: $windowWidth, height: $windowHeight))
                 } portals: {
                     PortalHost()
+                    EditorNotificationHost(notifications: .of(app))
                     CommandPalettePresentation(app: app, controller: controller, registry: registry,
                                                availableHeight: windowHeight)
                     if let pendingClose = store.pendingCloseRequest {
@@ -85,11 +87,29 @@ private struct EditorCallbacks {
         }
         handleMenuCommand = perform
         handleShortcut = { key in
-            EditorShortcutHandler.handle(key,
-                                         catalog: .make(EditorCommandContext(app: app)),
-                                         commandPaletteVisible: commandPaletteVisible,
-                                         closeCommandPalette: { app.store.dispatch(.setCommandPaletteVisible(false)) },
-                                         perform: perform)
+            let context = EditorCommandContext(app: app)
+            return EditorShortcutHandler.handle(key,
+                                                catalog: .make(context),
+                                                commandPaletteVisible: commandPaletteVisible,
+                                                closeCommandPalette: { app.store.dispatch(.setCommandPaletteVisible(false)) },
+                                                perform: perform,
+                                                unavailable: { entry in
+                guard EditorCommandCatalog.isBlockedOnlyByPlayback(entry, in: context) else { return }
+                EditorNotifications.of(app).postBlockedByPlayback(L("Stop the game to edit the scene"), app: app)
+            })
+        }
+    }
+}
+
+/// Paints chrome that hosts its own `.surface` background on the window canvas.
+private struct EditorCanvasChrome<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ThemeReader { theme in
+            var canvas = theme
+            canvas.colors.surface = theme.colors.background
+            return content().theme(canvas)
         }
     }
 }

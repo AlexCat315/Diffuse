@@ -278,6 +278,47 @@ struct CommandCatalogTests {
         #expect(catalog.entry(matching: key(Scancode.s, [.lgui, .lalt])) == nil)
     }
 
+    @Test("View → Panels toggles each docked edge in every Space")
+    func panelAreas() throws {
+        for mode in [EditorWorkspaceMode.documents, .video, .level, .scripting, .modeling, .animation] {
+            let view = try #require(make(workspace: mode).menus.first { $0.id == "view" })
+            let panels = try #require(submenu("panels", in: view))
+            let areas = entries(panels.items).compactMap { entry -> EditorPanelArea? in
+                if case let .togglePanelArea(area) = entry.command { return area }
+                return nil
+            }
+            #expect(areas == [.leading, .trailing, .bottom])
+        }
+        let bottom = try #require(full().entries.first { $0.id == "area.bottom" })
+        #expect(bottom.shortcut == EditorShortcut(.letter("j")))
+    }
+
+    @Test("Stop has its own chord and is only available while the game runs")
+    func stopShortcut() throws {
+        let stop = try #require(make(.playing).entries.first { $0.id == "playback.stopped" })
+        #expect(stop.shortcut == EditorShortcut(.enter, [.primary, .shift]))
+        #expect(stop.isEnabled)
+        #expect(make().entries.first { $0.id == "playback.stopped" }?.isEnabled == false)
+    }
+
+    @Test("Only chords refused because the game runs are reported as blocked by playback")
+    func blockedOnlyByPlayback() throws {
+        let playing = EditorCommandContext(workspaceMode: .level, playbackState: .playing, hasSelection: true)
+        let catalog = EditorCommandCatalog.make(playing)
+        let duplicate = try #require(catalog.entries.first { $0.id == "edit.duplicate" })
+        #expect(EditorCommandCatalog.isBlockedOnlyByPlayback(duplicate, in: playing))
+        // Bare Delete belongs to the game while it runs.
+        let delete = try #require(catalog.entries.first { $0.id == "edit.delete" })
+        #expect(!EditorCommandCatalog.isBlockedOnlyByPlayback(delete, in: playing))
+        // Nothing selected: playback is not the only reason.
+        let empty = EditorCommandContext(workspaceMode: .level, playbackState: .playing)
+        let noSelection = try #require(EditorCommandCatalog.make(empty).entries.first { $0.id == "edit.duplicate" })
+        #expect(!EditorCommandCatalog.isBlockedOnlyByPlayback(noSelection, in: empty))
+        let stopped = EditorCommandContext(workspaceMode: .level, hasSelection: true)
+        let enabled = try #require(EditorCommandCatalog.make(stopped).entries.first { $0.id == "edit.duplicate" })
+        #expect(!EditorCommandCatalog.isBlockedOnlyByPlayback(enabled, in: stopped))
+    }
+
     private func entries(_ items: [EditorCommandItem]) -> [EditorCommandEntry] {
         items.flatMap { item -> [EditorCommandEntry] in
             switch item {

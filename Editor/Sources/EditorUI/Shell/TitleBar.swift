@@ -1,5 +1,4 @@
 internal import EditorCore
-internal import StudioDocuments
 private import Foundation
 internal import GuavaUI
 internal import GuavaUIRuntime
@@ -35,16 +34,19 @@ struct EditorTitleBar: View {
                     if width >= 1180, let branch = EditorProjectBranch.name(in: app.projectDirectory) {
                         Row(alignment: .center, spacing: 4) {
                             Icon(UIIcons.Editor.gitBranch, size: 11, color: .onSurfaceMuted)
-                            Text(branch, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted).frame(maxWidth: 90)
+                            Text(branch, lineLimit: 1).truncated().font(.caption).foregroundColor(.onSurfaceMuted)
+                                .frame(maxWidth: 110).clipped()
                         }.accessibility { $0.label = L("Branch") + " " + branch }.id("title-branch").debugName("editor-branch")
                     }
                     if width >= 1180 {
                         breadcrumb(focus).flex(0, shrink: 1).frame(minWidth: 0, maxWidth: 320).clipped().id("title-selection")
                     }
-                    WindowDragRegion().frame(width: 8).id("title-drag")
+                    WindowDragRegion().frame(width: 8).flex(0, shrink: 0).id("title-drag")
                     // The intent field takes the room left between focus and Spaces.
                     if width >= 1100 {
-                        intent(focus).frame(minWidth: 180, maxWidth: 560).flex(1, shrink: 1).id("title-intent")
+                        // A zero basis lets the field give way when the row overflows; its
+                        // full-width frame would otherwise pin the basis to the whole row.
+                        intent(focus).frame(minWidth: 180, maxWidth: 560).flex(1, shrink: 1, basis: 0).id("title-intent")
                         WindowDragRegion().flex(0.001, shrink: 1).frame(minWidth: 8).id("title-drag-fill")
                     } else {
                         intent(focus).frame(width: 32).id("title-intent")
@@ -59,7 +61,11 @@ struct EditorTitleBar: View {
                                               onCommand: onCommand)
                             .id("title-playback")
                     }
-                }.flex().frame(minWidth: 0)
+                }
+                // The shell adds its own drag region after this row, and both grow
+                // equally. A full-width basis that shrinks to fit claims all free
+                // space, so the trailing controls reach the window edge.
+                .frame(width: .percent(100), minWidth: 0).flex(1, shrink: 1)
             }
         }
         .frame(height: 40).debugName("editor-title-bar")
@@ -117,34 +123,9 @@ struct EditorTitleBar: View {
 
     // MARK: Focus
 
-    /// What the window is working on: the open document in text Spaces, the
-    /// selected entity in scene Spaces.
-    private struct Focus {
-        var rootIcon: BundleImageResource
-        var trail: [String]
-        var leaf: String?
-        var leafIcon: BundleImageResource?
-        var isDirty = false
-    }
+    private var focus: EditorWorkFocus { EditorWorkFocus(app: app, documents: documents.wrappedValue) }
 
-    private var focus: Focus {
-        let features = app.store.workspaceMode.profile.features
-        if !features.contains(.scene) {
-            let snapshot = documents.wrappedValue
-            guard let path = snapshot.selectedPath else {
-                return Focus(rootIcon: UIIcons.File.folder, trail: [L("Files")])
-            }
-            let parts = path.split(separator: "/").map(String.init)
-            let document = snapshot.selected
-            return Focus(rootIcon: UIIcons.File.folder, trail: Array(parts.dropLast()), leaf: parts.last,
-                         leafIcon: DocumentKind(path: path).icon, isDirty: document?.isDirty == true)
-        }
-        let entity = app.scene.entitySummary(id: app.store.selectedEntityID)
-        return Focus(rootIcon: UIIcons.Shape.globe, trail: [L("Scene")], leaf: entity?.name,
-                     leafIcon: entity == nil ? nil : UIIcons.Editor.box)
-    }
-
-    private func breadcrumb(_ focus: Focus) -> some View {
+    private func breadcrumb(_ focus: EditorWorkFocus) -> some View {
         Row(alignment: .center, spacing: 5) {
             Icon(focus.rootIcon, size: 12, color: .onSurfaceMuted)
             for (index, part) in focus.trail.enumerated() {
@@ -165,7 +146,7 @@ struct EditorTitleBar: View {
 
     // MARK: Intent
 
-    private func intent(_ focus: Focus) -> some View {
+    private func intent(_ focus: EditorWorkFocus) -> some View {
         let shortcut = catalog.entries.first { $0.id == "agent.intent" }?.shortcut?.label ?? ""
         return Button(tooltip: L("Tell Guava what you want to do…")) {
             onCommand(.showCommandPalette(.intent))
@@ -198,8 +179,9 @@ struct EditorTitleBar: View {
         let working = app.store.agentTasks.contains { $0.phase == .planning }
         // Two overlapping avatars; the surface-coloured ring separates them.
         return ZStack(alignment: .leading) {
+            // An icon, not a word: "You" overflows a 24pt circle in longer languages.
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                Text(L("You"), lineLimit: 1).font(.caption).foregroundColor(Color(red: 0xDD, green: 0xF2, blue: 0xE5))
+                Icon(UIIcons.User.user, size: 12, color: Color(red: 0xDD, green: 0xF2, blue: 0xE5))
             }
             .frame(width: 24, height: 24).background(Color(red: 0x3C, green: 0x6E, blue: 0x55)).cornerRadius(12)
             .border(.surface, width: 2)

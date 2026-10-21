@@ -12,10 +12,12 @@ struct IntentInputPanel: View {
     let app: EditorApplication
     private let draft: AgentDraft
     @State private var inputText: TextBuffer
+    private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
 
     init(app: EditorApplication, draft: AgentDraft) {
         self.app = app
         self.draft = draft
+        documents = Observed(\.snapshot, on: app.workstation.documents)
         _inputText = State(wrappedValue: draft.text)
     }
 
@@ -32,13 +34,12 @@ struct IntentInputPanel: View {
                         Button(L("Cancel")) { app.cancelAgentTask() }
                             .buttonStyle(EditorChromeButtonStyle(height: 22))
                     }
-                    Button(icon: .resource(UIIcons.Action.moreHorizontal), size: 13,
+                    Button(icon: .resource(UIIcons.Action.trash), size: 12,
                            isEnabled: !busy && !store.chatMessages.isEmpty,
                            tooltip: L("Clear conversation"),
                            action: { store.dispatch(.clearChatHistory) })
                         .buttonStyle(EditorChromeButtonStyle(height: 22))
                 }
-                Divider()
                 ScrollView(.vertical, scrollbarGutter: .stable) {
                     Column(alignment: .leading, spacing: 12) {
                         if let request = store.pendingConfirmationRequest {
@@ -51,7 +52,6 @@ struct IntentInputPanel: View {
                         }
                 }.padding(12).frame(width: .percent(100), minWidth: 0)
                 }.flex().frame(minWidth: 0, minHeight: 0)
-                Divider()
                 composer(busy: busy)
             }.flex().frame(minWidth: 0, minHeight: 0).background(.surface)
                 .debugName("editor-agent-thread")
@@ -76,8 +76,13 @@ struct IntentInputPanel: View {
                 }.padding(vertical: 4)
             }
             Text(L("TRY A STARTING POINT")).font(.caption).foregroundColor(.onSurfaceMuted).padding(EdgeInsets(top: 12))
-            suggestion(L("Explain the current selection"))
-            suggestion(L("Help me plan the next step"))
+            if app.store.workspaceMode.profile.features.contains(.scene) {
+                suggestion(L("Explain the current selection"))
+                suggestion(L("Help me plan the next step"))
+            } else {
+                suggestion(L("Summarize this file"))
+                suggestion(L("Find problems in this file"))
+            }
             suggestion(L("Find issues in this project"))
         }.padding(vertical: 16).frame(width: .percent(100), minWidth: 0)
     }
@@ -93,34 +98,43 @@ struct IntentInputPanel: View {
         }.buttonStyle(.plain).frame(width: .percent(100))
     }
 
+    /// Padding and background share a node, so the inset around the bordered
+    /// field needs its own wrapper; a second `.padding` would replace the first.
     private func composer(busy: Bool) -> some View {
-        Column(alignment: .leading, spacing: 8) {
-            if let entity = app.scene.entitySummary(id: app.store.selectedEntityID) {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            Column(alignment: .leading, spacing: 8) {
+                let focus = EditorWorkFocus(app: app, documents: documents.wrappedValue)
+                if focus.leaf != nil { EditorFocusChip(focus: focus) }
+                TextField(L("Describe what you want to do…"), text: Binding(get: { inputText }, set: updateDraft)) { input in
+                    input.layout.axis = .vertical
+                    input.layout.maxVisibleLines = 5
+                    input.events.onSubmit = submitInput
+                }.font(.body).textFieldStyle(AgentComposerFieldStyle())
+                    .frame(width: .percent(100), minHeight: 48).debugName("editor-agent-composer")
                 Row(alignment: .center, spacing: 5) {
-                    Icon(UIIcons.Editor.box, size: 11, color: .accent)
-                    Text(entity.name, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceVariant)
-                }.padding(horizontal: 6, vertical: 3).background(.surfaceVariant).cornerRadius(4)
-            }
-            TextField(L("Describe what you want to do…"), text: Binding(get: { inputText }, set: updateDraft)) { input in
-                input.layout.axis = .vertical
-                input.layout.maxVisibleLines = 5
-                input.events.onSubmit = submitInput
-            }.font(.body).textFieldStyle(AgentComposerFieldStyle())
-                .frame(width: .percent(100), minHeight: 48).debugName("editor-agent-composer")
-            Row(alignment: .center, spacing: 5) {
-                Icon(UIIcons.Status.shieldCheck, size: 11, color: .onSurfaceMuted)
-                Text(L("Review before applying")).font(.caption).foregroundColor(.onSurfaceMuted)
-                Spacer(minLength: 0)
-                Button(icon: .resource(UIIcons.Navigation.arrowUp), size: 13,
-                       isEnabled: app.isAIAvailable && app.isSceneAuthoringEnabled && !busy
-                           && !inputText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                       tooltip: L("Send"), action: submitInput)
-                    .buttonStyle(EditorChromeButtonStyle(height: 26, agent: true))
-                    .background(EditorChromeTokens.agentColor.opacity(0.14)).cornerRadius(6)
-                    .debugName("editor-agent-send")
-            }.frame(width: .percent(100), minWidth: 0)
-        }.padding(10).background(.surfaceSunken).cornerRadius(9).border(.borderStrong, width: 1)
-            .padding(8).frame(width: .percent(100), minWidth: 0)
+                    Icon(UIIcons.Status.shieldCheck, size: 11, color: .onSurfaceMuted)
+                    Text(sendHint(busy: busy), lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted)
+                        .flex(0, shrink: 1).frame(minWidth: 0).debugName("editor-agent-hint")
+                    Spacer(minLength: 0)
+                    Button(icon: .resource(UIIcons.Navigation.arrowUp), size: 13,
+                           isEnabled: app.isAIAvailable && app.isSceneAuthoringEnabled && !busy
+                               && !inputText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                           tooltip: L("Send"), action: submitInput)
+                        .buttonStyle(EditorChromeButtonStyle(height: 26, agent: true))
+                        .background(EditorChromeTokens.agentColor.opacity(0.14)).cornerRadius(6)
+                        .debugName("editor-agent-send")
+                }.frame(width: .percent(100), minWidth: 0)
+            }.padding(10).background(.surfaceSunken).cornerRadius(10).border(.borderStrong, width: 1)
+        }.padding(EdgeInsets(top: 4, leading: 8, bottom: 8, trailing: 8)).frame(width: .percent(100), minWidth: 0)
+    }
+
+    /// Why Send is unavailable, or the review promise when it is.
+    private func sendHint(busy: Bool) -> String {
+        if !app.isAIAvailable { return L("Agent offline") }
+        if !app.isSceneAuthoringEnabled { return L("Stop the game to send a request") }
+        if app.store.pendingConfirmationRequest != nil { return L("Review the pending changes first") }
+        if busy { return L("Guava is working") }
+        return L("Review before applying")
     }
 
     private func updateDraft(_ text: TextBuffer) { draft.text = text; inputText = text }

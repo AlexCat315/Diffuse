@@ -71,7 +71,7 @@ struct AuthoringWorkspaceTests {
         let commands = EditorCommandSearch.commands(app: app)
         #expect(!commands.contains { $0.id == "scripts.show" || $0.id == "project.build" || $0.id.hasPrefix("playback.") })
         #expect(commands.contains { $0.id == "agent.show" })
-        #expect(commands.contains { $0.id == "agent.review" })
+        #expect(commands.first { $0.id == "agent.show" }?.keywords.contains("审阅") == true)
         let catalog = EditorCommandCatalog.make(EditorCommandContext(app: app))
         #expect(!catalog.menus.contains { $0.id == "run" })
         #expect(catalog.entries.contains { $0.id == "layout.modelingSculpt" })
@@ -116,7 +116,7 @@ struct AuthoringWorkspaceTests {
         #expect(title.absoluteFrame.height == 40)
         let rail = try #require(frames.first { $0.debugName == "editor-activity-rail" })
         #expect(rail.absoluteFrame.width == 44)
-        #expect(rail.absoluteFrame.minY == 41)
+        #expect(rail.absoluteFrame.minY == 40)
         for name in ["workspace-panel-hierarchy", "workspace-panel-viewport", "workspace-panel-inspector", "workspace-panel-console"] {
             let frame = try #require(frames.first { $0.debugName == name })
             #expect(frame.absoluteFrame.width >= 220)
@@ -138,7 +138,7 @@ struct AuthoringWorkspaceTests {
     } }
 
     @Test("Title controls stay inside narrow and wide windows with either menu presentation",
-          arguments: [Float(390), Float(720), Float(1280), Float(1600)], [EditorMenuPresentation.native, .titleBar])
+          arguments: [Float(390), Float(720), Float(1280), Float(1440), Float(1600)], [EditorMenuPresentation.native, .titleBar])
     func titleWidths(width: Float, menu: EditorMenuPresentation) throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -157,6 +157,12 @@ struct AuthoringWorkspaceTests {
                 #expect(frame.minY >= 0 && frame.maxY <= 40)
             }
         }
+        // The trailing cluster ends at the window edge; free space belongs between
+        // the intent field and the Spaces, never after the last control.
+        let trailing = frames.filter { ["editor-spaces", "editor-spaces-menu", "editor-presence",
+                                        "editor-playback-toolbar"].contains($0.debugName) }
+            .map(\.absoluteFrame.maxX).max() ?? 0
+        #expect(trailing >= CGFloat(width) - 12, "trailing controls end at \(trailing) in \(width)")
         let titleMenu = frames.first { $0.debugName == "editor-title-menu" }
         if menu == .titleBar {
             // The command tree leads the title bar, before the project switcher.

@@ -98,7 +98,6 @@ struct AssetBrowserPanel: View {
                                     onImport: { importAssets() },
                                     onReload: { reloadAssets() })
 
-                Divider()
 
                 AssetBreadcrumbBar(rootName: rootName,
                                    currentFolder: currentFolder,
@@ -109,14 +108,12 @@ struct AssetBrowserPanel: View {
                                    onNavigate: { navigate(to: $0) })
                     .padding(horizontal: 10, vertical: 5)
 
-                Divider()
 
                 if let reloadStatusMessage {
                     Text(reloadStatusMessage)
                         .font(.caption)
                         .foregroundColor(reloadStatusIsError ? .error : .success)
                         .padding(horizontal: 10, vertical: 5)
-                    Divider()
                 }
 
                 if hasWorkflowDetails {
@@ -131,7 +128,6 @@ struct AssetBrowserPanel: View {
                 }
 
                 if !selectedAssets.isEmpty && !hasWorkflowDetails {
-                    Divider()
                     AssetSelectionBar(
                         assets: selectedAssets,
                         isAddEnabled: store.playbackState == .stopped,

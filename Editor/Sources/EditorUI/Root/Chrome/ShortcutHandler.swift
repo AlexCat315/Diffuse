@@ -9,7 +9,8 @@ enum EditorShortcutHandler {
                        catalog: EditorCommandCatalog,
                        commandPaletteVisible: Bool,
                        closeCommandPalette: () -> Void,
-                       perform: (EditorCommand) -> Void) -> Bool {
+                       perform: (EditorCommand) -> Void,
+                       unavailable: (EditorCommandEntry) -> Void = { _ in }) -> Bool {
         guard !key.isRepeat else { return false }
 
         // Escape dismisses the palette before anything else sees it.
@@ -24,6 +25,8 @@ enum EditorShortcutHandler {
         if commandPaletteVisible, entry.shortcut?.key == .enter { return false }
         if EditorCommandDispatcher.isEnabled(entry.command, sceneCommandEnabled: entry.isEnabled) {
             perform(entry.command)
+        } else {
+            unavailable(entry)
         }
         return true
     }
