@@ -2,6 +2,9 @@ internal import Foundation
 internal import ProcessRuntime
 
 final class ProcessEntry: @unchecked Sendable {
+    /// Output returned by one poll. Only editor entry points reach processes,
+    /// under the larger host-entry-point limits.
+    static let chunkBytes = 4 * 1_048_576
     let session: ProcessSession
     let generation: UUID
     let permissionID: String
@@ -49,9 +52,8 @@ final class ProcessEntry: @unchecked Sendable {
                 lastMemorySample = .now
             }
             var result = update
-            let chunkBytes = 131_072
-            result.stdout = Data(update.stdout.prefix(chunkBytes))
-            result.stderr = Data(update.stderr.prefix(chunkBytes))
+            result.stdout = Data(update.stdout.prefix(Self.chunkBytes))
+            result.stderr = Data(update.stderr.prefix(Self.chunkBytes))
             update.stdout.removeFirst(result.stdout.count)
             update.stderr.removeFirst(result.stderr.count)
             if !update.stdout.isEmpty || !update.stderr.isEmpty { result.exitStatus = nil }

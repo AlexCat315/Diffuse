@@ -74,7 +74,6 @@ struct SourceKitLSPExecutableLocatorTests {
         #endif
 
         #expect(capabilities.supportsDefaultWorkspaceType)
-        #expect(capabilities.supportsScratchPath)
         #expect(!capabilities.supportsBypassWorkspaceTrust)
     }
 
@@ -90,18 +89,14 @@ struct SourceKitLSPExecutableLocatorTests {
     @Test("builds only arguments the toolchain advertises")
     func buildsMatchingArguments() {
         let capabilities = SourceKitLSPCapabilities(supportsDefaultWorkspaceType: true,
-                                                    supportsScratchPath: true,
                                                     supportsBypassWorkspaceTrust: false)
         let workspace = URL(fileURLWithPath: "/tmp/ws", isDirectory: true)
-        let scratch = URL(fileURLWithPath: "/tmp/ws/.build", isDirectory: true)
 
         let arguments = SourceKitLSPCommandLine.arguments(for: workspace,
-                                                         scratchURL: scratch,
                                                          capabilities: capabilities)
 
         #expect(arguments == [
             "--default-workspace-type", "swiftPM",
-            "--scratch-path", scratch.path,
         ])
         #expect(!arguments.contains("--bypass-workspace-trust"))
     }

@@ -25,6 +25,13 @@ import Testing
     #expect(request.value(.id) == "com.example.app")
 }
 
+@Test func pluginBuildTakesADirectoryAndAnOutput() throws {
+    let request = try Arguments(["plugin", "build", "Editor/Plugins/Git", "--output", "Git.guavaplugin"])
+    #expect(request.operation == .pluginBuild)
+    #expect(request.subject == "Editor/Plugins/Git")
+    #expect(request.value(.output) == "Git.guavaplugin")
+}
+
 @Test(arguments: [
     ["create", "app"], ["create", "android", "App"], ["create", "app", "App", "--android"],
     ["run", "--android", "--mac"], ["build", "--debug", "--release"], ["run", "--output"],
@@ -34,6 +41,7 @@ import Testing
     ["doctor", "App"], ["unknown"], ["build", "--configuration", "release"],
     ["build", "--android", "--device", "123"], ["clean", "--engine-root", "/SDK"],
     ["devices", "--ndk", "/NDK"], ["internal", "android-compile", "--mac"],
+    ["plugin"], ["plugin", "build"], ["plugin", "build", "Git", "--mac"], ["plugin", "build", "Git", "--release"],
 ]) func invalidCommandsFail(arguments: [String]) {
     #expect(throws: (any Error).self) { try Arguments(arguments) }
 }

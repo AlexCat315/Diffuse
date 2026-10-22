@@ -50,6 +50,15 @@ extension ScriptLanguageWorkspace {
         if previous != identity, manager.fileExists(atPath: scratch.path) { try manager.removeItem(at: scratch) }
         try manager.createDirectory(at: scratch, withIntermediateDirectories: true)
         try JSONEncoder().encode(identity).write(to: identityURL, options: .atomic)
+        // The server also serves the project folder, so the scratch path is this
+        // package's own setting rather than a command-line flag for every package.
+        let configuration = rootURL.appendingPathComponent(".sourcekit-lsp/config.json")
+        try validateGeneratedLocation(configuration)
+        try manager.createDirectory(at: configuration.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: ["swiftPM": ["scratchPath": scratch.path]], options: [.sortedKeys])
+            .write(to: configuration, options: .atomic)
+        // Generated and machine-local: keep it out of the project's version control.
+        try Data("*\n".utf8).write(to: rootURL.appendingPathComponent(".gitignore"), options: .atomic)
         return scratch
     }
 }

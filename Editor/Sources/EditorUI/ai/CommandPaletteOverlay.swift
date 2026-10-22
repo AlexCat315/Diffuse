@@ -163,7 +163,7 @@ struct CommandPaletteOverlay: View {
                         })
                 }
             }
-            entries += app.workstation.scripts.snapshot.documents.map { document in
+            entries += app.workstation.scripts.snapshot.scripts.map { document in
                 ResultItem(id: "script/" + document.file.identifier, title: document.file.displayName + ".swift",
                     detail: "Scripts/", shortcut: "", enabled: true,
                     searchText: document.file.displayName + " " + document.file.identifier,

@@ -9,35 +9,27 @@ import Foundation
 /// client probes support instead of hard-coding a list.
 public struct SourceKitLSPCapabilities: Sendable, Equatable {
     public let supportsDefaultWorkspaceType: Bool
-    public let supportsScratchPath: Bool
     public let supportsBypassWorkspaceTrust: Bool
 
     public init(supportsDefaultWorkspaceType: Bool,
-                supportsScratchPath: Bool,
                 supportsBypassWorkspaceTrust: Bool) {
         self.supportsDefaultWorkspaceType = supportsDefaultWorkspaceType
-        self.supportsScratchPath = supportsScratchPath
         self.supportsBypassWorkspaceTrust = supportsBypassWorkspaceTrust
     }
 
     /// Everything we currently know how to ask for, gated only by actual
     /// support — the probe could not run, so assume the modern set is present.
     public static let optimistic = SourceKitLSPCapabilities(supportsDefaultWorkspaceType: true,
-                                                            supportsScratchPath: true,
                                                             supportsBypassWorkspaceTrust: true)
 }
 
 /// Turns capabilities into the argument list the client launches with.
 public enum SourceKitLSPCommandLine {
     public static func arguments(for workspaceURL: URL,
-                                 scratchURL: URL,
                                  capabilities: SourceKitLSPCapabilities) -> [String] {
         var arguments: [String] = []
         if capabilities.supportsDefaultWorkspaceType {
             arguments.append(contentsOf: ["--default-workspace-type", "swiftPM"])
-        }
-        if capabilities.supportsScratchPath {
-            arguments.append(contentsOf: ["--scratch-path", scratchURL.path])
         }
         if capabilities.supportsBypassWorkspaceTrust {
             arguments.append("--bypass-workspace-trust")
@@ -68,7 +60,6 @@ extension SourceKitLSPExecutableLocator {
         guard !help.isEmpty else { return .optimistic }
         return SourceKitLSPCapabilities(
             supportsDefaultWorkspaceType: help.contains("--default-workspace-type"),
-            supportsScratchPath: help.contains("--scratch-path"),
             supportsBypassWorkspaceTrust: help.contains("--bypass-workspace-trust")
         )
     }

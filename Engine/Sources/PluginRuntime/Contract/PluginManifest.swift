@@ -39,6 +39,17 @@ public struct PluginResourceLimits: Codable, Sendable, Equatable {
     }
 
     public static let secureDefault = PluginResourceLimits()
+
+    /// For `host.processes[].entryPoints`: the editor calls them with whole tool
+    /// output, the model never does. Size and fuel bounds are lifted to what
+    /// the runtime can hold; the preparation deadline still bounds each call.
+    public static let hostEntryPoint: PluginResourceLimits = {
+        var limits = PluginResourceLimits()
+        limits.maximumMemoryBytes = 256 * 1_024 * 1_024
+        limits.maximumOutputBytes = 256 * 1_024 * 1_024
+        limits.fuelPerInvocation = 1_000_000_000_000
+        return limits
+    }()
 }
 
 /// `plugin.json` contains package identity and authority only. Capability input
@@ -55,6 +66,7 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
     /// kind then id so the value is deterministic for digests and comparisons.
     public var requires: [PluginRequirement]
     public var host: PluginHostPermissions
+    public var contributes: PluginContributions
 
     public init(id: String,
                 version: Int,
@@ -64,13 +76,15 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
                 imports: [PluginImportPermission] = [],
                 composableHostCapabilities: [String] = [],
                 requires: [PluginRequirement] = [],
-                host: PluginHostPermissions = .init()) {
+                host: PluginHostPermissions = .init(),
+                contributes: PluginContributions = .init()) {
         self.id = id
         self.version = version
         self.name = CapabilityContract.sanitiseMetadata(name, maximumLength: 80)
         self.description = CapabilityContract.sanitiseMetadata(description, maximumLength: 1_024)
         self.access = access
         self.host = host
+        self.contributes = contributes
         self.imports = Array(Set(imports.map(\.rawValue))).compactMap(PluginImportPermission.init(rawValue:)).sorted {
             $0.rawValue < $1.rawValue
         }
@@ -92,13 +106,14 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
                                                                     forKey: .composableHostCapabilities),
                   requires: try container.decodeIfPresent([PluginRequirement].self,
                                                           forKey: .requires) ?? [],
-                  host: try container.decodeIfPresent(PluginHostPermissions.self, forKey: .host) ?? .init())
+                  host: try container.decodeIfPresent(PluginHostPermissions.self, forKey: .host) ?? .init(),
+                  contributes: try container.decodeIfPresent(PluginContributions.self, forKey: .contributes) ?? .init())
     }
 
     enum CodingKeys: String, CodingKey {
         case id, version, name, description, access, imports
         case composableHostCapabilities = "composable_host_capabilities"
-        case requires, host
+        case requires, host, contributes
     }
 }
 
@@ -116,10 +131,12 @@ public enum PluginManifestValidationError: Error, Sendable, Equatable, CustomStr
     case duplicateRequirement(String)
     case requirementOnSelf(String)
     case invalidHostPermissions
+    case invalidContribution(String)
 
     public var description: String {
         switch self {
         case .invalidHostPermissions: return "invalid plugin process permissions"
+        case let .invalidContribution(point): return "invalid plugin contribution '\(point)'"
         case .invalidIdentifier: return "plugin id must match [a-z][a-z0-9.-]{2,63}"
         case .invalidVersion: return "plugin version must be positive"
         case .emptyName: return "plugin name must not be empty"
@@ -147,7 +164,7 @@ public enum PluginManifestValidator {
     ]
     private static let allowedFields: Set<String> = [
         "id", "version", "name", "description", "access", "imports",
-        "composable_host_capabilities", "requires", "host",
+        "composable_host_capabilities", "requires", "host", "contributes",
     ]
 
     public static func decodeAndValidate(_ data: Data,
@@ -171,7 +188,8 @@ public enum PluginManifestValidator {
                                            imports: decoded.imports,
                                            composableHostCapabilities: decoded.composableHostCapabilities,
                                            requires: decoded.requires,
-                                           host: decoded.host)
+                                           host: decoded.host,
+                                           contributes: decoded.contributes)
         try validate(manifest, registry: registry)
         return manifest
     }
@@ -179,6 +197,7 @@ public enum PluginManifestValidator {
     public static func validate(_ manifest: GuavaPluginManifest,
                                 registry: CapabilityRegistry = .default) throws {
         try manifest.host.validate(imports: manifest.imports)
+        try manifest.contributes.validate(host: manifest.host)
         let pattern = "^[a-z][a-z0-9.-]{2,63}$"
         guard manifest.id.range(of: pattern, options: .regularExpression) != nil else {
             throw PluginManifestValidationError.invalidIdentifier

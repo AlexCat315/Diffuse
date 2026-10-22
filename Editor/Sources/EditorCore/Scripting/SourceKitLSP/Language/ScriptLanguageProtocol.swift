@@ -23,6 +23,10 @@ public enum ScriptLanguageQueries {
         ])
     }
 
+    public static func didClose(uri: String) throws -> Data {
+        try LSPJSON.data(["textDocument": ["uri": uri]])
+    }
+
     public static func didChange(uri: String, previous: TextBuffer, current: TextBuffer, version: Int) throws -> Data? {
         guard let delta = current.editDelta(from: previous) else { return nil }
         let start = ScriptSourceCoordinates.position(in: previous, atUTF8Offset: delta.startUTF8Offset)

@@ -5,6 +5,27 @@ import Testing
 
 @Suite("Script language workspace", .serialized)
 struct ScriptLanguageWorkspaceTests {
+    @Test("project Swift files are analyzed in place, beside a package kept in the project's .guava")
+    func analyzesProjectSourcesInPlace() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("Sources/App/Model.swift")
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "struct Model {}\n".write(to: file, atomically: true, encoding: .utf8)
+        let workspace = ScriptLanguageWorkspace(scriptsDirectoryURL: root.appendingPathComponent("Scripts", isDirectory: true),
+                                                engineModulePaths: [], clangModuleMapPaths: [], clangIncludePaths: [])
+        let source = DynamicScriptManager.ScriptFile(url: file)
+        let document = try #require(try workspace.synchronize([], projectSources: [source])[source.identifier])
+        #expect(document.analysisURL == file)
+        #expect(workspace.rootURL.path.hasPrefix(root.appendingPathComponent(".guava").path))
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Scripts").path))
+        #expect(try !String(contentsOf: workspace.packageManifestURL, encoding: .utf8).contains("Model"))
+        _ = try workspace.prepareScratch(executableURL: root.appendingPathComponent("sourcekit-lsp"), environment: [:])
+        #expect(try String(contentsOf: workspace.rootURL.appendingPathComponent(".gitignore"), encoding: .utf8) == "*\n")
+        let configuration = try Data(contentsOf: workspace.rootURL.appendingPathComponent(".sourcekit-lsp/config.json"))
+        #expect(String(decoding: configuration, as: UTF8.self).contains("scratchPath"))
+    }
+
     @Test("creates an isolated SwiftPM target and shadow URI for every script")
     func createsIsolatedTargetsForScripts() throws {
         let root = FileManager.default.temporaryDirectory

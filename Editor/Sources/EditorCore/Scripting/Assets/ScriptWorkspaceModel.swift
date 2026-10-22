@@ -48,6 +48,9 @@ public struct ScriptWorkspaceDocument: Sendable, Equatable {
     public var output = ""
     public var diagnostics: [ScriptLanguageDiagnostic] = []
     public var externalChange: ScriptExternalChangeState = .none
+    /// A Swift file elsewhere in the project, open in a tab: analyzed by the
+    /// language service like a script, saved in place, never built into the game.
+    public var isProjectSource = false
 
     public private(set) var isDirty = false
     public init(file: DynamicScriptManager.ScriptFile, source: TextBuffer) {
@@ -71,6 +74,9 @@ public struct ScriptWorkspaceSnapshot: Sendable, Equatable {
         guard let selectedScriptID else { return nil }
         return documents.first { $0.file.identifier == selectedScriptID }
     }
+
+    /// Gameplay scripts under `Scripts/`, which build into the game.
+    public var scripts: [ScriptWorkspaceDocument] { documents.filter { !$0.isProjectSource } }
 }
 
 /// Single source of truth for script documents, diagnostics, build revisions,
@@ -248,6 +254,48 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     public func persist(scriptID: String) -> Bool {
         guard let index = documentIndex(scriptID: scriptID) else { return false }
         return persist(scriptAt: index)
+    }
+
+    /// Opens a Swift file outside `Scripts/` for the language service and
+    /// returns its identifier; an open file keeps its identifier.
+    @discardableResult
+    public func openProjectSource(_ url: URL) -> String? {
+        let url = url.standardizedFileURL
+        if let open = snapshot.documents.first(where: { $0.file.url.standardizedFileURL == url }) {
+            return open.file.identifier
+        }
+        guard let text = try? manager.readSource(at: url) else { return nil }
+        var document = ScriptWorkspaceDocument(file: DynamicScriptManager.ScriptFile(url: url), source: TextBuffer(text))
+        document.isProjectSource = true
+        snapshot.documents.append(document)
+        sortDocuments()
+        publish()
+        if didStartLanguageService {
+            var source = ScriptLanguageSource(file: document.file, text: document.source)
+            source.isProjectSource = true
+            Task { [manager] in try? await manager.openProjectSource(source) }
+        } else {
+            synchronizeLanguageService()
+        }
+        return document.file.identifier
+    }
+
+    /// Forgets a project source whose tab closed; scripts are never closed.
+    public func closeProjectSource(scriptID: String) {
+        guard let index = documentIndex(scriptID: scriptID), snapshot.documents[index].isProjectSource else { return }
+        snapshot.documents.remove(at: index)
+        if snapshot.selectedScriptID == scriptID { snapshot.selectedScriptID = snapshot.documents.first?.file.identifier }
+        publish()
+        if snapshot.documents.isEmpty {
+            synchronizeLanguageService()
+        } else {
+            Task { [manager] in await manager.closeProjectSource(scriptID: scriptID) }
+        }
+    }
+
+    private func projectSourceChange(_ document: ScriptWorkspaceDocument) -> ScriptExternalChangeState {
+        guard let disk = try? manager.readSource(at: document.file.url) else { return .deletedOnDisk }
+        return disk == document.savedSource.stringValue ? .none : .modifiedOnDisk(source: disk)
     }
 
     /// Drops unsaved edits and returns to the saved text.
@@ -452,7 +500,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             snapshot.trustState = manager.projectTrustState
             snapshot.trustWarning = nil
             if !trusted {
-                for index in snapshot.documents.indices {
+                for index in snapshot.documents.indices where !snapshot.documents[index].isProjectSource {
                     let revision = snapshot.documents[index].editRevision
                     snapshot.documents[index].buildState = .blocked(
                         revision: revision,
@@ -468,7 +516,8 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     }
 
     public func compile(scriptID: String) {
-        guard let index = documentIndex(scriptID: scriptID), persist(scriptAt: index) else { return }
+        guard let index = documentIndex(scriptID: scriptID), !snapshot.documents[index].isProjectSource,
+              persist(scriptAt: index) else { return }
         let document = snapshot.documents[index]
         let revision = document.editRevision
         snapshot.documents[index].buildState = .building(revision: revision)
@@ -506,7 +555,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     }
 
     public func markAllBuildsStarted() {
-        for index in snapshot.documents.indices {
+        for index in snapshot.documents.indices where !snapshot.documents[index].isProjectSource {
             let revision = snapshot.documents[index].savedRevision
             if snapshot.trustState.allowsExecution {
                 snapshot.documents[index].buildState = .building(revision: revision)
@@ -649,6 +698,18 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
 
             for index in snapshot.documents.indices.reversed() {
                 let document = snapshot.documents[index]
+                if document.isProjectSource {
+                    let change = projectSourceChange(document)
+                    if case let .modifiedOnDisk(source) = change, !document.isDirty {
+                        adoptDiskSource(source, at: index)
+                        didChange = true
+                        needsLanguageRefresh = true
+                    } else if snapshot.documents[index].externalChange != change {
+                        snapshot.documents[index].externalChange = change
+                        didChange = true
+                    }
+                    continue
+                }
                 guard let diskFile = filesByID[document.file.identifier] else {
                     if document.isDirty {
                         if snapshot.documents[index].externalChange != .deletedOnDisk {
@@ -730,6 +791,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         snapshot.documents.map { document in
             var source = ScriptLanguageSource(file: document.file, text: document.source)
             source.revision = document.editRevision
+            source.isProjectSource = document.isProjectSource
             return source
         }
     }

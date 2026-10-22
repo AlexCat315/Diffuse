@@ -156,14 +156,24 @@ struct BundledSwiftSupportTests {
         #expect(throws: (any Error).self) { try adapter.connect(command) }
     }
 
-    @Test func packageAndGeneratedComponentMatch() throws {
+    /// Bundled packages are built from `Editor/Plugins/<Name>` with `guava plugin build`;
+    /// their manifests and contracts must be the sources'.
+    @Test func bundledPackagesMatchTheirSources() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        for package in BundledPlugins.catalog.map(\.package) {
+            let source = root.appendingPathComponent("Plugins/" + package.deletingPathExtension().lastPathComponent)
+            for file in ["plugin.json", "capabilities.wit"] {
+                #expect(try Data(contentsOf: source.appendingPathComponent(file)) == Data(contentsOf: package.appendingPathComponent(file)),
+                        "\(package.lastPathComponent)/\(file) is out of date; run guava plugin build")
+            }
+        }
+    }
+
+    @Test func packageComponentHonorsItsContract() throws {
         let package = try PluginPackageLoader().load(at: BundledPlugins.swiftSupport)
         #expect(package.manifest.id == "studio.swift-support")
         #expect(package.manifest.host.processes.first?.command == "sourcekit-lsp")
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let source = try String(contentsOf: root.appendingPathComponent("Plugins/SwiftSupport/component.wat"), encoding: .utf8)
-        #expect(try EmbeddedWasmtimeComponentRuntime.compileComponentWAT(source) == Data(contentsOf: package.componentURL))
         let runtime = try EmbeddedWasmtimeComponentRuntime()
         try runtime.validateComponent(package, limits: .secureDefault)
         let inspection = PluginInspection(package: package, contracts: PluginWITContractDeriver.contracts(for: package))

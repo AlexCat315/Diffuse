@@ -92,8 +92,8 @@ public actor ScriptLanguageSupport {
         let generation = lifecycle.generation
         setState(.starting)
         do {
-            let sourceTuples = sources.map { ($0.file, $0.text.stringValue) }
-            let documents = try workspace.synchronize(sourceTuples)
+            let scripts = sources.filter { !$0.isProjectSource }.map { ($0.file, $0.text.stringValue) }
+            let documents = try workspace.synchronize(scripts, projectSources: sources.filter(\.isProjectSource).map(\.file))
             sessions = Dictionary(uniqueKeysWithValues: sources.compactMap { source in
                 documents[source.file.identifier].map { (source.file.identifier, DocumentSession(document: $0, current: source.text, sent: source.text, revision: source.revision)) }
             })
@@ -114,6 +114,25 @@ public actor ScriptLanguageSupport {
         let stateHandler = lifecycle.onStateChange
         let detailsHandler = detailsHandler
         try await start(sources: sources, onDiagnostics: handler, onStateChange: stateHandler, onDetailsChange: detailsHandler)
+    }
+
+    /// Adds a project file to the running session. Scripts change the generated
+    /// package and need a restart; a project file is opened where it is.
+    public func openProjectSource(_ source: ScriptLanguageSource) async throws {
+        let id = source.file.identifier
+        guard sessions[id] == nil else { return }
+        let document = ScriptLanguageWorkspace.projectDocument(for: source.file)
+        sessions[id] = DocumentSession(document: document, current: source.text, sent: source.text, revision: source.revision)
+        if isReady { try await open(source.text.stringValue, document: document, version: 1) }
+    }
+
+    public func closeProjectSource(scriptID: String) async {
+        guard let session = sessions.removeValue(forKey: scriptID) else { return }
+        session.changeTask?.cancel()
+        guard isReady, let client,
+              let params = try? ScriptLanguageQueries.didClose(uri: session.document.analysisURL.standardizedFileURL.absoluteString)
+        else { return }
+        try? await client.notify("textDocument/didClose", params: params)
     }
 
     public func stop() async {
@@ -149,17 +168,21 @@ public actor ScriptLanguageSupport {
             sessions[identifier]?.diagnostics = []
         }
         setState(.starting)
-        let scratch = try workspace.prepareScratch(executableURL: executableURL, environment: environment)
+        _ = try workspace.prepareScratch(executableURL: executableURL, environment: environment)
         var command = ProcessCommand(executable: executableURL, directory: workspace.rootURL)
-        command.arguments = SourceKitLSPCommandLine.arguments(for: workspace.rootURL, scratchURL: scratch,
+        command.arguments = SourceKitLSPCommandLine.arguments(for: workspace.rootURL,
             capabilities: SourceKitLSPExecutableLocator.probeCapabilities(executableURL: executableURL))
         command.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
         command.environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
         var configuration = LanguageServerConfiguration(command: command, workspace: workspace.rootURL)
+        // The project folder is a second root: its own Swift files and package are
+        // analyzed in place, and its package keeps a background index under
+        // `.build/index-build`, so the next session starts from what was indexed.
+        configuration.additionalWorkspaces = [workspace.projectRootURL]
         configuration.connect = connectTransport
         var fallback: [String: Any] = ["swiftCompilerFlags": workspace.includeFlags]
         if let sdk = workspace.sdkURL { fallback["sdk"] = sdk.path }
-        configuration.initializationOptions = try LSPJSON.data(["fallbackBuildSystem": fallback])
+        configuration.initializationOptions = try LSPJSON.data(["fallbackBuildSystem": fallback, "backgroundIndexing": true])
         let client = LSPClient(configuration: configuration)
         let connectionID = UUID()
         self.client = client

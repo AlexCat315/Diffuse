@@ -35,7 +35,8 @@ struct PluginRuntimeTests {
         #expect(throws: PluginHostFrameError.trailingBytes) {
             try PluginHostFrameCodec.decode(PluginHostRequest.self, from: trailing)
         }
-        var oversized = Data([0x00, 0x10, 0x00, 0x01])
+        let length = UInt32(PluginHostFrameCodec.maximumFrameBytes + 1)
+        var oversized = Data([UInt8(length >> 24), UInt8(length >> 16 & 0xFF), UInt8(length >> 8 & 0xFF), UInt8(length & 0xFF)])
         oversized.append(Data(repeating: 0, count: 4))
         #expect(throws: PluginHostFrameError.frameTooLarge) {
             try PluginHostFrameCodec.decode(PluginHostRequest.self, from: oversized)

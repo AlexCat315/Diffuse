@@ -30,8 +30,8 @@ struct PluginSettings: View {
             }
             SettingsCard(L("Installed"), subtitle: L("Plugins run isolated and only get the access you approve.")) {
                 Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                    swiftSupportRow(management: management, isBusy: busy || !available)
-                    for plugin in management.enabled where plugin.id != PluginRow.swiftSupportID {
+                    BundledPluginRows(app: app, management: management, isBusy: busy || !available) { actions(for: $0, isBusy: busy) }
+                    for plugin in management.enabled where !app.bundledPlugins.contains(where: { $0.id == plugin.id }) {
                         PluginRow(listing: PluginListing(plugin), isEnabled: true, isBusy: busy,
                                   onToggle: { _ in Task { @MainActor in await app.disablePluginFromManagement(id: plugin.id) } },
                                   actions: actions(for: plugin, isBusy: busy))
@@ -51,21 +51,6 @@ struct PluginSettings: View {
                 }
             }
         }
-    }
-
-    /// The bundled plugin stays listed while disabled, so it can be switched
-    /// back on without hunting for its package.
-    private func swiftSupportRow(management: EditorPluginManagementState, isBusy: Bool) -> some View {
-        let enabled = management.enabled.first { $0.id == PluginRow.swiftSupportID }
-        return PluginRow(listing: enabled.map(PluginListing.init) ?? .swiftSupport, isEnabled: enabled != nil, isBusy: isBusy,
-            onToggle: { on in
-                Task { @MainActor in
-                    if on { await app.inspectBundledSwiftSupport() }
-                    else { await app.disablePluginFromManagement(id: PluginRow.swiftSupportID) }
-                }
-            },
-            actions: enabled.map { actions(for: $0, isBusy: isBusy) } ?? [])
-            .debugName("settings-plugin-swift-support")
     }
 
     private func actions(for plugin: EditorPluginInspectionSummary, isBusy: Bool) -> [MenuEntry] {
@@ -90,6 +75,43 @@ struct PluginSettings: View {
             display.requestOpenFolder(defaultPath: app.projectDirectory) { path in
                 guard let path else { return }
                 Task { @MainActor in await app.inspectPluginForManagement(at: URL(fileURLWithPath: path, isDirectory: true)) }
+            }
+        }
+    }
+}
+
+/// Every plugin that ships with the editor, listed whether on or off, wherever
+/// it runs. Its switch is the project's choice.
+private struct BundledPluginRows: View, @unchecked Sendable {
+    let app: EditorApplication
+    let management: EditorPluginManagementState
+    let isBusy: Bool
+    let actions: (EditorPluginInspectionSummary) -> [MenuEntry]
+    private let versionControl: Observed<EditorVersionControl, VersionControlSnapshot>
+
+    init(app: EditorApplication, management: EditorPluginManagementState, isBusy: Bool,
+         actions: @escaping (EditorPluginInspectionSummary) -> [MenuEntry]) {
+        self.app = app
+        self.management = management
+        self.isBusy = isBusy
+        self.actions = actions
+        versionControl = Observed(\.snapshot, on: app.workstation.versionControl)
+    }
+
+    var body: some View {
+        let snapshot = versionControl.wrappedValue
+        Box(direction: .column, alignItems: .stretch, spacing: 8) {
+            for plugin in app.bundledPlugins {
+                let loaded = management.enabled.first { $0.id == plugin.id }
+                let state: (enabled: Bool, missing: String?) = switch plugin.host {
+                case .application: (loaded != nil, nil)
+                case let .versionControl(system):
+                    (!snapshot.disabledSystems.contains(system), snapshot.installedSystems.contains(system) ? nil : plugin.commands.first)
+                }
+                AnyView(PluginRow(listing: PluginListing(bundled: plugin, loaded: loaded, missingCommand: state.missing),
+                                  isEnabled: state.enabled, isBusy: isBusy || snapshot.operation != nil,
+                                  onToggle: { on in Task { @MainActor in await app.setBundledPlugin(plugin, enabled: on) } },
+                                  actions: loaded.map(actions) ?? []))
             }
         }
     }

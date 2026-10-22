@@ -176,7 +176,9 @@ public enum PluginHostFrameError: Error, Sendable, Equatable {
 
 /// Four-byte big-endian length prefix followed by one JSON payload.
 public enum PluginHostFrameCodec {
-    public static let maximumFrameBytes = 1_024 * 1_024
+    /// Transport bound only: each capability's own output limit still applies,
+    /// 1 MiB for AI capabilities. Editor entry points carry whole tool output.
+    public static let maximumFrameBytes = 512 * 1_024 * 1_024
 
     public static func encode<T: Encodable>(_ value: T) throws -> Data {
         let payload = try JSONEncoder().encode(value)

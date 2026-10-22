@@ -30,15 +30,18 @@ struct DocumentsPanel: View {
     var body: some View {
         let snapshot = observed.wrappedValue
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            if let document = snapshot.selected {
+            if snapshot.showsComparison, let app {
+                tabs(snapshot, selected: nil)
+                DocumentComparisonSurface(app: app).flex()
+            } else if let document = snapshot.selected {
                 if let app {
                     // Script edits live in the script workspace; observing it
                     // keeps the tab dots in step with typing.
                     ScriptWorkspaceReader(app.workstation.scripts) { _ in
-                        tabs(snapshot.documents, selected: document.path)
+                        tabs(snapshot, selected: document.path)
                     }
                 } else {
-                    tabs(snapshot.documents, selected: document.path)
+                    tabs(snapshot, selected: document.path)
                 }
                 if let app, let swift, let scriptID = app.workstation.scriptID(forDocument: document.path) {
                     ScriptDocumentBar(app: app, sessions: swift, path: document.path)
@@ -53,6 +56,7 @@ struct DocumentsPanel: View {
                     DocumentWritingStatus(session: writing)
                 }
             } else {
+                if snapshot.hasComparison { tabs(snapshot, selected: nil) }
                 emptyState
             }
         }
@@ -86,11 +90,14 @@ struct DocumentsPanel: View {
         if let app { app.workstation.closeDocument(path, discard: discard) } else { model.close(path, discard: discard) }
     }
 
-    private func tabs(_ documents: [TextDocument], selected: String) -> some View {
+    private func tabs(_ snapshot: EditorDocumentSnapshot, selected: String?) -> some View {
         Box(direction: .row, alignItems: .center, spacing: 0) {
             Box(direction: .row, alignItems: .center, spacing: 2) {
-                for document in documents {
+                for document in snapshot.documents {
                     AnyView(tab(document, isSelected: document.path == selected))
+                }
+                if snapshot.hasComparison, let app {
+                    ComparisonTab(app: app, isSelected: snapshot.showsComparison)
                 }
             }.flex(1, shrink: 1).frame(minWidth: 0).clipped()
         }

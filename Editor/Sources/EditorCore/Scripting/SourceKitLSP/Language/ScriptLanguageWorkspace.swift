@@ -17,8 +17,14 @@ struct ScriptLanguageWorkspace {
     var sdkURL: URL? = nil
     var resourceDirectoryURL: URL? = nil
 
+    /// The project folder, which the language server serves as a second root so
+    /// Swift files anywhere in it, and its Swift package if it has one, are analyzed.
+    var projectRootURL: URL { scriptsDirectoryURL.deletingLastPathComponent() }
+
+    /// The generated package that mirrors `Scripts/`, in the project's machine-local
+    /// state so a project without scripts never grows a `Scripts` folder.
     var rootURL: URL {
-        scriptsDirectoryURL
+        projectRootURL
             .appendingPathComponent(".guava", isDirectory: true)
             .appendingPathComponent("sourcekit-lsp", isDirectory: true)
     }
@@ -27,7 +33,13 @@ struct ScriptLanguageWorkspace {
         rootURL.appendingPathComponent("Package.swift")
     }
 
-    func synchronize(_ scripts: [(DynamicScriptManager.ScriptFile, String)]) throws -> [String: Document] {
+    /// A project file is analyzed where it is; nothing is written for it.
+    static func projectDocument(for file: DynamicScriptManager.ScriptFile) -> Document {
+        Document(scriptID: file.identifier, sourceURL: file.url, analysisURL: file.url, targetName: "")
+    }
+
+    func synchronize(_ scripts: [(DynamicScriptManager.ScriptFile, String)],
+                     projectSources: [DynamicScriptManager.ScriptFile] = []) throws -> [String: Document] {
         let fileManager = FileManager.default
         let sourcesURL = rootURL.appendingPathComponent("Sources", isDirectory: true)
         try validateGeneratedLocation(sourcesURL)
@@ -60,7 +72,7 @@ struct ScriptLanguageWorkspace {
         }
 
         try writeIfChanged(manifest(for: documents), to: packageManifestURL)
-        return Dictionary(uniqueKeysWithValues: documents.map { ($0.scriptID, $0) })
+        return Dictionary(uniqueKeysWithValues: (documents + projectSources.map(Self.projectDocument)).map { ($0.scriptID, $0) })
     }
 
     func writeAnalysisSource(_ source: String, to document: Document) throws {
@@ -68,11 +80,12 @@ struct ScriptLanguageWorkspace {
     }
 
     func validateGeneratedLocation(_ url: URL) throws {
-        let scripts = scriptsDirectoryURL.resolvingSymlinksInPath().standardizedFileURL.path
+        let state = projectRootURL.appendingPathComponent(".guava", isDirectory: true)
+            .resolvingSymlinksInPath().standardizedFileURL.path
         let root = rootURL.resolvingSymlinksInPath().standardizedFileURL.path
         let target = url.resolvingSymlinksInPath().standardizedFileURL.path
-        guard root.hasPrefix(scripts + "/"), target.hasPrefix(root + "/") else {
-            throw ScriptLanguageSupportError.unavailable("The generated Swift analysis workspace must remain inside the scripts directory.")
+        guard root.hasPrefix(state + "/"), target.hasPrefix(root + "/") else {
+            throw ScriptLanguageSupportError.unavailable("The generated Swift analysis workspace must remain inside the project's .guava folder.")
         }
     }
 

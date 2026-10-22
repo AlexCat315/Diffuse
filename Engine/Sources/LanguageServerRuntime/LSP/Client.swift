@@ -124,14 +124,19 @@ public actor LSPClient {
 
     // MARK: - Client capabilities
 
+    private var workspaceFolders: [[String: String]] {
+        ([configuration.workspace] + configuration.additionalWorkspaces).map {
+            ["uri": $0.standardizedFileURL.absoluteString, "name": $0.lastPathComponent]
+        }
+    }
+
     private func initializeParams() throws -> [String: Any] {
-        let workspaceURL = configuration.workspace
         let rootURI = configuration.workspace.standardizedFileURL.absoluteString
         var params: [String: Any] = [
             "processId": ProcessInfo.processInfo.processIdentifier,
             "clientInfo": ["name": "GuavaStudioEditor", "version": "0.0.9"],
             "rootUri": rootURI,
-            "workspaceFolders": [["uri": rootURI, "name": workspaceURL.lastPathComponent]],
+            "workspaceFolders": workspaceFolders,
             "capabilities": Self.clientCapabilities,
             "trace": "off",
         ]
@@ -245,8 +250,7 @@ public actor LSPClient {
             let items = (params as? [String: Any])?["items"] as? [Any] ?? []
             result = items.map { _ in NSNull() }
         case "workspace/workspaceFolders":
-            result = [["uri": configuration.workspace.standardizedFileURL.absoluteString,
-                       "name": configuration.workspace.lastPathComponent]]
+            result = workspaceFolders
         case "client/registerCapability", "client/unregisterCapability",
              "window/workDoneProgress/create", "workspace/semanticTokens/refresh",
              "workspace/inlayHint/refresh", "workspace/diagnostic/refresh",

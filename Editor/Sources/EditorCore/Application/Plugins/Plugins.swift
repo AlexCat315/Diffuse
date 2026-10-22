@@ -93,7 +93,7 @@ extension EditorApplication {
                 invoker: client
             )
             try pluginSession.authorizationStore.record(authorization)
-            if binding.pluginID == PluginLanguageService.pluginID {
+            if BundledPlugins.plugin(id: binding.pluginID) != nil {
                 try BundledPlugins.setEnabled(true, id: binding.pluginID, in: projectDirectory)
             }
         } catch {
@@ -153,7 +153,7 @@ extension EditorApplication {
         guard dependents.isEmpty else {
             throw RequiredPluginStillNeeded(pluginID: pluginID, dependents: dependents)
         }
-        if pluginID == PluginLanguageService.pluginID {
+        if BundledPlugins.plugin(id: pluginID) != nil {
             try BundledPlugins.setEnabled(false, id: pluginID, in: projectDirectory)
         }
         var unloadError: Error?

@@ -1,0 +1,13 @@
+package studio:lore;
+
+interface capabilities {
+  /// One step of a version control operation: the request as JSON and the
+  /// window of the previous command's standard output.
+  record provider-input { request: string, stdout: string }
+  provider: func(input: provider-input) -> string;
+}
+
+world plugin {
+  import guava:process/host;
+  export capabilities;
+}

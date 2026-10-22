@@ -205,6 +205,14 @@ public final class DynamicScriptManager: @unchecked Sendable {
         try await languageSupport.update(scriptID: scriptID, text: text, revision: revision)
     }
 
+    public func openProjectSource(_ source: ScriptLanguageSource) async throws {
+        try await languageSupport?.openProjectSource(source)
+    }
+
+    public func closeProjectSource(scriptID: String) async {
+        await languageSupport?.closeProjectSource(scriptID: scriptID)
+    }
+
     public func refreshLanguageWorkspace(sources: [ScriptLanguageSource]) async throws {
         guard let languageSupport else {
             throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")

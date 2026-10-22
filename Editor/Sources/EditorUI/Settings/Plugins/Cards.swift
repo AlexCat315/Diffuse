@@ -12,26 +12,30 @@ struct PluginListing {
     var access: String?
     var capabilityCount = 0
     var isBundled = false
+    var glyph = PluginGlyph.Kind.package
+    /// A short warning under the description, e.g. a missing command-line tool.
+    var note: String?
 
     init(_ plugin: EditorPluginInspectionSummary) {
         id = plugin.id; name = plugin.name; description = plugin.description
         version = plugin.version; access = plugin.access; capabilityCount = plugin.capabilities.count
-        isBundled = plugin.id == PluginRow.swiftSupportID
     }
 
-    private init(id: String, name: String, description: String) {
-        self.id = id; self.name = name; self.description = description; isBundled = true
+    /// A plugin that ships with the editor; `loaded` adds what its host reported.
+    init(bundled plugin: BundledPlugin, loaded: EditorPluginInspectionSummary?, missingCommand: String?) {
+        id = plugin.id; name = plugin.name; description = plugin.description
+        version = plugin.version; access = plugin.access; isBundled = true
+        capabilityCount = loaded?.capabilities.count ?? 0
+        switch plugin.host {
+        case .versionControl: glyph = .versionControl
+        case .application: glyph = plugin.commands.contains("sourcekit-lsp") ? .swift : .package
+        }
+        note = missingCommand.map { String(format: L("The %@ command-line tool is not installed."), $0) }
     }
-
-    /// Shown while the bundled plugin is off, before its package is inspected.
-    static let swiftSupport = PluginListing(id: PluginRow.swiftSupportID, name: "Swift Support",
-        description: "Swift diagnostics, completion, hover and navigation through a host-managed SourceKit-LSP session.")
 }
 
 /// One installed plugin: identity on the left, its switch and actions on the right.
 struct PluginRow: View {
-    static let swiftSupportID = "studio.swift-support"
-
     let listing: PluginListing
     let isEnabled: Bool
     let isBusy: Bool
@@ -41,7 +45,7 @@ struct PluginRow: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 12) {
-            PluginGlyph(id: listing.id)
+            PluginGlyph(kind: listing.glyph)
             Column(alignment: .leading, spacing: 4) {
                 Row(alignment: .center, spacing: 6) {
                     Text(listing.name, lineLimit: 1).font(.bodyStrong)
@@ -52,6 +56,12 @@ struct PluginRow: View {
                     if listing.isBundled { Badge(L("Built-in")) { $0.variant = .outline } }
                 }
                 Text(L(listing.description), lineLimit: 2).font(.caption).foregroundColor(.onSurfaceMuted)
+                if let note = listing.note {
+                    Row(alignment: .center, spacing: 5) {
+                        Icon(UIIcons.Status.alertTriangle, size: 11, color: .warning)
+                        Text(note, lineLimit: 2).font(.caption).foregroundColor(.warning)
+                    }
+                }
                 if isEnabled, let access = listing.access {
                     Row(alignment: .center, spacing: 6) {
                         Badge(pluginAccessLabel(access), tone: pluginAccessTone(access)) { $0.icon = UIIcons.Status.shield }
@@ -81,16 +91,17 @@ struct PluginRow: View {
     }
 }
 
-/// Built-in plugins wear their language's mark; packages get a neutral tile.
-private struct PluginGlyph: View {
-    let id: String
+/// Built-in plugins wear the mark of what they serve; packages get a neutral tile.
+struct PluginGlyph: View {
+    enum Kind { case swift, versionControl, package }
+    let kind: Kind
 
     var body: some View {
         Box(direction: .row, alignItems: .center, justifyContent: .center) {
-            if id == PluginRow.swiftSupportID {
-                FileIcon(path: "Plugin.swift", size: 20)
-            } else {
-                Icon(UIIcons.File.package, size: 18, color: .onSurfaceVariant)
+            switch kind {
+            case .swift: FileIcon(path: "Plugin.swift", size: 20)
+            case .versionControl: Icon(UIIcons.Editor.gitBranch, size: 18, color: .onSurfaceVariant)
+            case .package: Icon(UIIcons.File.package, size: 18, color: .onSurfaceVariant)
             }
         }.frame(width: 36, height: 36).background(.surfaceVariant).cornerRadius(9)
     }
@@ -109,7 +120,7 @@ struct PluginReviewCard: View {
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 14) {
             Row(alignment: .center, spacing: 12) {
-                PluginGlyph(id: summary.id)
+                PluginGlyph(kind: .package)
                 Column(alignment: .leading, spacing: 3) {
                     Row(alignment: .center, spacing: 6) {
                         Text(String(format: L("Review %@"), summary.name), lineLimit: 1).font(.bodyStrong)

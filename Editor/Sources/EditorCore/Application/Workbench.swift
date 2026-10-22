@@ -11,6 +11,18 @@ extension EditorApplication {
         activatePanelHandler?("documents")
     }
 
+    /// Shows a change's diff in the editor's diff tab.
+    public func compareChange(_ change: VersionControlChange) {
+        workstation.documents.showComparison()
+        activatePanelHandler?("documents")
+        Task { @MainActor in await workstation.versionControl.compare(change) }
+    }
+
+    public func closeComparison() {
+        workstation.documents.closeComparison()
+        workstation.versionControl.endComparison()
+    }
+
     public func navigateToIssue(_ target: EditorIssueTarget) {
         switch target {
         case let .script(id, line, column):

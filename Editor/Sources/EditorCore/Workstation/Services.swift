@@ -8,15 +8,19 @@ public final class EditorWorkstation: @unchecked Sendable {
     public let media: EditorMediaWorkspace
     public let versionControl: EditorVersionControl
     private let root: URL
-    init(root: URL, scripts: ScriptWorkspaceModel) throws {
+    init(root: URL, scripts: ScriptWorkspaceModel, pluginHost: URL?) throws {
         self.root = root.standardizedFileURL
         self.scripts = scripts
         documents = EditorDocumentWorkspace(root: root)
         media = try EditorMediaWorkspace(root: root)
-        versionControl = EditorVersionControl(projectRoot: root)
+        versionControl = EditorVersionControl(projectRoot: root, pluginHost: pluginHost)
+        // Every Swift tab gets the language service: scripts as part of the game,
+        // other project files analyzed in place.
         documents.didSelect = { [weak self] path in
-            guard let self, let path, let id = self.scriptID(forDocument: path) else { return }
-            self.scripts.select(scriptID: id)
+            guard let self, let path else { return }
+            let id = self.scriptID(forDocument: path) ?? (path.hasSuffix(".swift")
+                ? self.scripts.openProjectSource(self.root.appendingPathComponent(path)) : nil)
+            if let id { self.scripts.select(scriptID: id) }
         }
         // A pull, discard or branch switch rewrote files: show what is on disk
         // wherever no unsaved edit would be lost.
@@ -102,5 +106,8 @@ extension EditorWorkstation {
             scripts.revert(scriptID: id)
         }
         documents.close(path, discard: discard)
+        if let id = scriptID(forDocument: path), !documents.documents.contains(where: { $0.path == path }) {
+            scripts.closeProjectSource(scriptID: id)
+        }
     }
 }

@@ -1,25 +1,13 @@
 import Foundation
 
-/// The version control systems the editor can drive. Git suits code and text;
-/// Lore (Epic Games) adds a server-backed store and file locks for large
-/// binary assets.
+/// The version control systems the editor can drive, each through a bundled
+/// plugin. Git suits code and text; Lore (Epic Games) adds a server-backed
+/// store and file locks for large binary assets.
 public enum VersionControlSystem: String, Codable, Sendable, CaseIterable, Hashable {
     case git, lore
 
-    public var title: String {
-        switch self {
-        case .git: "Git"
-        case .lore: "Lore"
-        }
-    }
-
-    /// The directory that marks a working tree's root.
-    var markerName: String {
-        switch self {
-        case .git: ".git"
-        case .lore: ".lore"
-        }
-    }
+    /// The display name its plugin contributes.
+    public var title: String { VersionControlProvider.provider(for: self)?.contribution.title ?? rawValue }
 }
 
 /// What happened to a file relative to the last revision.
@@ -152,6 +140,10 @@ public struct VersionControlSnapshot: Equatable, Sendable {
     public var error: String?
     /// Tools found on this machine, for the empty state's init actions.
     public var installedSystems: Set<VersionControlSystem> = []
+    /// Systems switched off in Settings; detection skips them.
+    public var disabledSystems: Set<VersionControlSystem> = []
+    /// The change in the editor's diff tab.
+    public var comparison: VersionControlComparison?
     public init() {}
 
     public var repository: VersionControlRepository? {
@@ -161,4 +153,14 @@ public struct VersionControlSnapshot: Equatable, Sendable {
 
     public var staged: [VersionControlChange] { status.changes.filter(\.isStaged) }
     public var unstaged: [VersionControlChange] { status.changes.filter { !$0.isStaged } }
+}
+
+/// A change shown in the editor's diff tab. It follows the file between the
+/// staged and unstaged areas, and its diff is re-read after every refresh.
+public struct VersionControlComparison: Equatable, Sendable {
+    public var change: VersionControlChange
+    /// Nil while the diff loads.
+    public var diff: String?
+    /// False once the file has no change left, e.g. after a commit.
+    public var isCurrent = true
 }

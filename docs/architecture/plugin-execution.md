@@ -21,7 +21,7 @@ Guava 插件保持同一套三文件契约：`plugin.json` 声明身份和权限
 
 LSP 传输将大文档按 8 KiB 分块写入并轮询排空输出，保持原始 UTF-8 字节和 Content-Length 帧。停用、重载、宿主失效及项目关闭会停止语言服务并撤销旧句柄。`.guava/disabled_bundled_plugins.json` 只记录用户停用选择，临时进程句柄、LSP 状态和传输任务不持久化；设置页可以重新检查并启用 Swift Support。
 
-Component 源码位于 `Editor/Plugins/SwiftSupport/component.wat`，生成的 `component.wasm` 随资源提交。修改后使用已构建的 `GuavaPluginHost --compile-component <source.wat> <component.wasm>` 重新生成；`BundledSwiftSupportTests` 验证源码与二进制一致、真实 Component 契约、AI 隐藏、偏好往返，以及隔离宿主中的大文档传输与卸载。
+插件源码位于 `Editor/Plugins/SwiftSupport`（`plugin.json`、`capabilities.wit` 与 Swift 源码，用 GuavaPluginKit 编写；guest 只把进程请求原样转给 `guava:process/host`）。修改后运行 `./guava plugin build Editor/Plugins/SwiftSupport --output Editor/Sources/EditorCore/Resources/Plugins/SwiftSupport.guavaplugin`，生成的包随资源提交；Git 与 Lore 插件同理。`BundledSwiftSupportTests` 验证捆绑包与源码的 manifest 和契约一致、真实 Component 契约、AI 隐藏、偏好往返，以及隔离宿主中的大文档传输与卸载。
 
 本机安装 SourceKit-LSP 后，可运行 `GUAVA_TEST_REAL_SOURCEKIT=1 ./guava test Editor --filter BundledSwiftSupportTests`，额外验证通过真实插件和隔离宿主获得 String 成员补全及类型悬浮提示。
 
@@ -93,6 +93,10 @@ let result = try await plugin.prepare(
 宿主每次故障都推进 `hostGeneration` 并通知失效，包括用尽首次立即重启机会后的故障；显式停止也推进代际。Editor 清除旧绑定与组件声明，待确认计划在使用点重查 authority。
 
 原生保留 fuel、Store memory/table/instance 限制、epoch interruption 和 wall-clock deadline。iOS 使用的 Pulley 保留这些 API，但执行性能不能按原生机器码估算。移动进程内隔离无法提供桌面独立进程对运行库崩溃的隔离；组件编译也不具备可抢占的 epoch 中断。
+
+`host.processes[].entryPoints` 声明的入口只由编辑器调用、不暴露给 AI，用来传递整段工具输出：宿主对它们不施加 WIT 派生的长度上限（字符串 64 Ki、列表 4096），输入输出上限 256 MiB、内存 256 MiB、燃料实际不限，只保留每次调用的 wall-clock deadline。AI 能力保持 1 MiB 输入输出与原有燃料。RPC 帧上限为 512 MiB，只是传输边界。版本控制插件按窗口分页读取命令输出，每次调用都很短。
+
+运行库按路径与完整字节缓存编译后的 Component：每次调用仍重新读取文件并逐字节比较，内容一变就重新编译；未变时直接复用，避免每次调用都用 Cranelift 编译。
 
 Web 构建阶段复用 Swift 宿主的真实 Component 类型检查和权限校验，运行时消费其导出的 WIT 类型、inspection 和 host contracts。应用可信目录固定转换产物的哈希；用户授权再绑定精确版本。Worker 只链接获准的三个 Guava 查询接口，使用本次 revision-bound JSON 快照。浏览器无法提供 Wasmtime fuel/epoch，采用 Worker wall-clock deadline 并在 core Wasm 中编码 memory/table 上限。完整步骤、API 和边界见 [Web 插件目标](../../Platforms/Web/Plugins/README.md)。
 

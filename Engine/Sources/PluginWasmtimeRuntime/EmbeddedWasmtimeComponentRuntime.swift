@@ -94,7 +94,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
         guard input.count <= limits.maximumOutputBytes else {
             throw EmbeddedWasmtimeError.bridge(
                 status: Int32(GUAVA_WASMTIME_INVALID_ARGUMENT.rawValue),
-                message: "Component input exceeds 1 MiB"
+                message: "Component input exceeds its limit"
             )
         }
         guard let capability = package.witContract.capabilityInputs.first(where: {
@@ -103,7 +103,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
             throw PluginCapabilityValidationError.unknownCapability(capabilityID)
         }
         try JSONSchemaValidator.validate(data: input,
-                                         against: capability.inputSchema)
+                                         against: package.inputSchema(for: capability))
         let typedInput = try PluginTypedInputEncoder.encode(
             input,
             as: capability.inputType,

@@ -129,7 +129,9 @@ struct EditorStatusBar: View {
     }
 
     /// Background work in priority order: long operations, script builds, then
-    /// the most recent warning or error. Idle shows nothing.
+    /// the most recent warning or error the editor raised. Subsystem log records
+    /// stay in the console: they are diagnostics, not something to act on.
+    /// Idle shows nothing.
     @ViewBuilder
     private func activity(_ snapshot: ScriptWorkspaceSnapshot) -> some View {
         let store = app.store
@@ -150,12 +152,13 @@ struct EditorStatusBar: View {
                 Spinner(size: 10)
                 Text("\(L("Compiling scripts…")) \(building)").font(.caption).foregroundColor(.onSurfaceVariant)
             }.debugName("editor-status-activity")
-        } else if let latest = store.latestConsoleEntry, latest.severity != .info {
-            Button(tooltip: L("Problems")) { onCommand(.showProblems) } label: {
+        } else if let latest = store.latestConsoleEntry, latest.severity != .info, latest.record == nil {
+            Button(tooltip: L(latest.message)) { onCommand(.showProblems) } label: {
                 Text(L(latest.message), lineLimit: 1).font(.caption)
                     .foregroundColor(latest.severity == .error ? .error : .warning)
+                    .frame(maxWidth: 260)
             }
-            .buttonStyle(.plain).frame(maxWidth: 260).flex(0, shrink: 1).clipped()
+            .buttonStyle(.plain).flex(0, shrink: 1).frame(minWidth: 0)
             .debugName("editor-status-activity")
         }
     }

@@ -15,10 +15,42 @@
 #include <wasmtime/component.h>
 
 #define GUAVA_MAX_COMPONENT_BYTES (128ULL * 1024ULL * 1024ULL)
+#define GUAVA_COMPONENT_CACHE_SIZE 16
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+typedef SRWLOCK guava_mutex_t;
+static void guava_mutex_init(guava_mutex_t *mutex) { InitializeSRWLock(mutex); }
+static void guava_mutex_lock(guava_mutex_t *mutex) { AcquireSRWLockExclusive(mutex); }
+static void guava_mutex_unlock(guava_mutex_t *mutex) { ReleaseSRWLockExclusive(mutex); }
+static void guava_mutex_destroy(guava_mutex_t *mutex) { (void)mutex; }
+#else
+#include <pthread.h>
+typedef pthread_mutex_t guava_mutex_t;
+static void guava_mutex_init(guava_mutex_t *mutex) { pthread_mutex_init(mutex, NULL); }
+static void guava_mutex_lock(guava_mutex_t *mutex) { pthread_mutex_lock(mutex); }
+static void guava_mutex_unlock(guava_mutex_t *mutex) { pthread_mutex_unlock(mutex); }
+static void guava_mutex_destroy(guava_mutex_t *mutex) { pthread_mutex_destroy(mutex); }
+#endif
+
+// A compiled Component keyed by its path and exact bytes. Compiling is the
+// dominant cost of a call, and every call reads the file again, so a changed
+// package never runs stale code.
+typedef struct guava_cached_component {
+  char *path;
+  uint8_t *bytes;
+  size_t size;
+  wasmtime_component_t *component;
+  uint64_t last_use;
+} guava_cached_component_t;
 
 struct guava_wasmtime_runtime {
   wasm_engine_t *engine;
   bool interpreter;
+  guava_mutex_t cache_lock;
+  guava_cached_component_t cache[GUAVA_COMPONENT_CACHE_SIZE];
+  uint64_t cache_clock;
 };
 
 typedef struct guava_host_binding {
@@ -163,6 +195,7 @@ guava_wasmtime_runtime_new(guava_wasmtime_execution_t execution,
   }
   runtime->engine = engine;
   runtime->interpreter = interpreter;
+  guava_mutex_init(&runtime->cache_lock);
   return runtime;
 }
 
@@ -174,6 +207,15 @@ void guava_wasmtime_runtime_delete(guava_wasmtime_runtime_t *runtime) {
   if (runtime == NULL) {
     return;
   }
+  for (size_t index = 0; index < GUAVA_COMPONENT_CACHE_SIZE; index++) {
+    guava_cached_component_t *entry = &runtime->cache[index];
+    if (entry->component != NULL) {
+      wasmtime_component_delete(entry->component);
+    }
+    free(entry->path);
+    free(entry->bytes);
+  }
+  guava_mutex_destroy(&runtime->cache_lock);
   wasm_engine_delete(runtime->engine);
   free(runtime);
 }
@@ -242,13 +284,60 @@ compile_component(guava_wasmtime_runtime_t *runtime, const char *path,
   if (status != GUAVA_WASMTIME_OK) {
     return status;
   }
+  guava_mutex_lock(&runtime->cache_lock);
+  for (size_t index = 0; index < GUAVA_COMPONENT_CACHE_SIZE; index++) {
+    guava_cached_component_t *entry = &runtime->cache[index];
+    if (entry->component != NULL && entry->size == size &&
+        strcmp(entry->path, path) == 0 &&
+        (size == 0 || memcmp(entry->bytes, bytes, size) == 0)) {
+      entry->last_use = ++runtime->cache_clock;
+      *component_out = wasmtime_component_clone(entry->component);
+      guava_mutex_unlock(&runtime->cache_lock);
+      free(bytes);
+      return GUAVA_WASMTIME_OK;
+    }
+  }
+  guava_mutex_unlock(&runtime->cache_lock);
+
+  wasmtime_component_t *component = NULL;
   wasmtime_error_t *wasmtime_error = wasmtime_component_new(
-      runtime->engine, bytes, size, component_out);
-  free(bytes);
+      runtime->engine, bytes, size, &component);
   if (wasmtime_error != NULL) {
+    free(bytes);
     return take_wasmtime_error(wasmtime_error, GUAVA_WASMTIME_COMPILE_ERROR,
                                error);
   }
+  char *path_copy = (char *)malloc(strlen(path) + 1);
+  if (path_copy == NULL) {
+    free(bytes);
+    *component_out = component;
+    return GUAVA_WASMTIME_OK;
+  }
+  strcpy(path_copy, path);
+  guava_mutex_lock(&runtime->cache_lock);
+  guava_cached_component_t *slot = &runtime->cache[0];
+  for (size_t index = 0; index < GUAVA_COMPONENT_CACHE_SIZE; index++) {
+    guava_cached_component_t *entry = &runtime->cache[index];
+    if (entry->component == NULL) {
+      slot = entry;
+      break;
+    }
+    if (entry->last_use < slot->last_use) {
+      slot = entry;
+    }
+  }
+  if (slot->component != NULL) {
+    wasmtime_component_delete(slot->component);
+  }
+  free(slot->path);
+  free(slot->bytes);
+  slot->path = path_copy;
+  slot->bytes = bytes;
+  slot->size = size;
+  slot->component = component;
+  slot->last_use = ++runtime->cache_clock;
+  *component_out = wasmtime_component_clone(component);
+  guava_mutex_unlock(&runtime->cache_lock);
   return GUAVA_WASMTIME_OK;
 }
 
@@ -987,10 +1076,10 @@ static guava_wasmtime_status_t instantiate_component(
 
 static bool valid_limits(const guava_wasmtime_limits_t *limits) {
   return limits != NULL && limits->maximum_memory_bytes > 0 &&
-         limits->maximum_memory_bytes <= 64ULL * 1024ULL * 1024ULL &&
+         limits->maximum_memory_bytes <= 256ULL * 1024ULL * 1024ULL &&
          limits->fuel_per_invocation > 0 &&
          limits->maximum_output_bytes > 0 &&
-         limits->maximum_output_bytes <= 1024ULL * 1024ULL &&
+         limits->maximum_output_bytes <= 256ULL * 1024ULL * 1024ULL &&
          limits->maximum_query_request_bytes > 0 &&
          limits->maximum_query_request_bytes <= 16ULL * 1024ULL &&
          limits->maximum_instances > 0 && limits->maximum_instances <= 64 &&
@@ -1202,7 +1291,7 @@ static bool decode_typed_value(guava_typed_cursor_t *cursor,
   }
   case WASMTIME_COMPONENT_VALTYPE_LIST: {
     uint32_t count = 0;
-    if (!cursor_u32(cursor, &count) || count > 4096) {
+    if (!cursor_u32(cursor, &count) || count > (1u << 24)) {
       break;
     }
     output->kind = WASMTIME_COMPONENT_LIST;
@@ -1469,7 +1558,7 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
                        "Component export returned a non-string value");
   } else if (result.of.string.size > limits->maximum_output_bytes) {
     status = set_error(error, GUAVA_WASMTIME_OUTPUT_TOO_LARGE,
-                       "Component output exceeds 1 MiB");
+                       "Component output exceeds its limit");
   } else if (guava_wasmtime_buffer_copy(
                  output, (const uint8_t *)result.of.string.data,
                  result.of.string.size) != 0) {

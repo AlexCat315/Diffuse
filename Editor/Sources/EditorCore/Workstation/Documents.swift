@@ -10,6 +10,12 @@ public final class EditorDocumentWorkspace: _ObservableObject, @unchecked Sendab
     public private(set) var error: String?
     /// The latest request to put the caret somewhere, e.g. from the outline.
     public private(set) var reveal: EditorDocumentReveal?
+    /// Whether the diff tab is open. It sits after the document tabs and is
+    /// reused, so stepping through changes never piles up tabs; what it
+    /// compares is `EditorVersionControl.snapshot.comparison`.
+    public private(set) var hasComparison = false
+    /// Whether the diff tab is in front of `selectedPath`.
+    public private(set) var showsComparison = false
     /// Tells the workstation which tab is in front; script tabs bring their
     /// language session along.
     var didSelect: ((String?) -> Void)?
@@ -18,10 +24,12 @@ public final class EditorDocumentWorkspace: _ObservableObject, @unchecked Sendab
     /// Everything a view shows about the workspace, compared as one value so a
     /// selection change re-renders views even when the document list is unchanged.
     public var snapshot: EditorDocumentSnapshot {
-        EditorDocumentSnapshot(documents: documents, selectedPath: selectedPath, error: error, reveal: reveal)
+        EditorDocumentSnapshot(documents: documents, selectedPath: selectedPath, error: error, reveal: reveal,
+                               hasComparison: hasComparison, showsComparison: showsComparison)
     }
     public func files() -> [String] { workspace.files() }
     public func open(_ path: String) {
+        showsComparison = false
         perform { _ = try workspace.open(path); selectedPath = path }
         // Re-announce even when unchanged: another view may have moved the
         // script selection while this tab stayed in front.
@@ -119,8 +127,11 @@ public struct EditorDocumentSnapshot: Equatable, Sendable {
     public let selectedPath: String?
     public let error: String?
     public var reveal: EditorDocumentReveal? = nil
+    public var hasComparison = false
+    public var showsComparison = false
 
-    public var selected: TextDocument? { documents.first { $0.path == selectedPath } }
+    /// The document in front; nil while the diff tab is.
+    public var selected: TextDocument? { showsComparison ? nil : documents.first { $0.path == selectedPath } }
 }
 
 /// Moves the caret of an open document; `id` makes repeated requests distinct.
@@ -136,6 +147,21 @@ extension EditorDocumentWorkspace {
         open(path)
         guard error == nil else { return }
         reveal = EditorDocumentReveal(path: path, characterIndex: characterIndex, id: (reveal?.id ?? 0) + 1)
+        refreshSnapshot()
+    }
+}
+
+extension EditorDocumentWorkspace {
+    /// Opens the diff tab, or brings it back, in front of the documents.
+    public func showComparison() {
+        hasComparison = true
+        showsComparison = true
+        refreshSnapshot()
+    }
+
+    public func closeComparison() {
+        hasComparison = false
+        showsComparison = false
         refreshSnapshot()
     }
 }

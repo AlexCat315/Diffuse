@@ -1,7 +1,7 @@
 import Foundation
 
 enum Operation: Equatable {
-    case setup, sdkInstall, sdkUse, sdkList, create, build, run, clean, test, doctor, devices, exportGame, showcase, androidCompile, androidPrepare, devtools
+    case setup, sdkInstall, sdkUse, sdkList, create, build, run, clean, test, doctor, devices, exportGame, showcase, androidCompile, androidPrepare, devtools, pluginBuild
 }
 
 enum Option: String, CaseIterable {
@@ -50,6 +50,9 @@ struct Arguments {
             default: throw ToolError.invalid("Use guava sdk install/use/list")
             }
         case "devices": operation = .devices
+        case "plugin":
+            guard tokens.popFirst() == "build" else { throw ToolError.invalid("Use guava plugin build <directory>") }
+            operation = .pluginBuild
         case "showcase": operation = .showcase
         case "devtools": operation = .devtools
         case "export":
@@ -94,13 +97,13 @@ struct Arguments {
                 subject = token
             } else { throw ToolError.invalid("Unexpected argument: \(token)") }
         }
-        if [.create, .exportGame, .sdkInstall, .sdkUse].contains(operation) {
+        if [.create, .exportGame, .sdkInstall, .sdkUse, .pluginBuild].contains(operation) {
             guard subject != nil else { throw ToolError.invalid("Supply a project directory") }
         }
         if [.doctor, .setup, .sdkList, .devices, .androidCompile].contains(operation), subject != nil {
             throw ToolError.invalid("This command does not take a project directory")
         }
-        if [.create, .clean, .test].contains(operation), platform != nil {
+        if [.create, .clean, .test, .pluginBuild].contains(operation), platform != nil {
             throw ToolError.invalid("\(verb) is project-wide and does not take a platform flag")
         }
         if configuration != nil, ![.build, .run, .test, .showcase, .exportGame, .androidCompile, .androidPrepare].contains(operation) {
@@ -184,6 +187,7 @@ struct Arguments {
         case .devtools: return common.union([.session])
         case .androidPrepare: return common.union([.ndk])
         case .androidCompile: return common.union([.ndk, .product, .contentPackage, .gameplayPackage, .scratchPath, .resultFile])
+        case .pluginBuild: return common.union([.output])
         }
     }
 }

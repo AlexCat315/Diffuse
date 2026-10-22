@@ -60,6 +60,8 @@ enum GuavaCLI {
             guard arguments.platform == .android else { throw ToolError.invalid("Use swift run --package-path GuavaUI/Examples GuavaUIDemo for the desktop gallery; showcase currently targets --android") }
             try BuildAndroidApplication.run(arguments, root: GuavaSDK.locate(arguments))
         case .androidCompile: try compile(arguments, root: GuavaSDK.locate(arguments))
+        case .pluginBuild:
+            try PluginBuild(directory: arguments.directory, root: GuavaSDK.locate(arguments), output: arguments.url(.output)).run()
         }
     }
 
@@ -86,6 +88,7 @@ enum GuavaCLI {
           guava setup [--mac|--win|--linux|--android|--ios]
           guava doctor [--mac|--win|--linux|--android|--ios]
           guava devices [--android|--ios]
+          guava plugin build <directory> [--output PATH.guavaplugin]
           guava devtools [directory] [--session ID] [--no-open]
           guava devtools [directory] [--session ID] list | query [TOOL] [JSON|@FILE]
                                  | click NODE_ID [--capture OUT.jpg] | activate NODE_ID [increment|decrement] | reveal NODE_ID
@@ -107,6 +110,7 @@ enum GuavaCLI {
         iOS: --simulator UDID (default: booted); physical device: --device ID --team TEAM_ID
         Android signing: --keystore FILE --key-alias ALIAS --store-password-env NAME --key-password-env NAME
         Release APKs use a development key unless custom signing is provided.
+        Plugin: compiles Sources/ with GuavaPluginKit into an Embedded Swift WebAssembly Component.
 
         Framework development:
           guava showcase [gallery|counter] --android [--component NAME] [--release]

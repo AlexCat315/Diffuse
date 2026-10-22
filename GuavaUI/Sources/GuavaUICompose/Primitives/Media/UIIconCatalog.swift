@@ -149,6 +149,7 @@ public enum UIIcons {
         public static let gamepad = asset("gamepad")
         public static let gitBranch = asset("git-branch")
         public static let gitCommit = asset("git-commit")
+        public static let gitCompare = asset("git-compare")
         public static let gitMerge = asset("git-merge")
         public static let hammer = asset("hammer")
         public static let layers = asset("layers")

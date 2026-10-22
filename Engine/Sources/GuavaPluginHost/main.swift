@@ -38,6 +38,25 @@ if CommandLine.arguments.count > 1 {
             .write(to: URL(fileURLWithPath: CommandLine.arguments[3]), options: .atomic)
         exit(0)
     }
+    // `guava plugin build`: the shell and guest bindings for a WIT contract,
+    // then the shell compiled around the guest's core module.
+    if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--component-shell" {
+        let contract = try WITContractParser.parse(Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[2])),
+                                                   grantedImports: Set(PluginImportPermission.allCases))
+        let shell = try PluginComponentBuild.shell(for: contract)
+        let directory = URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true)
+        try Data(shell.wat.utf8).write(to: directory.appendingPathComponent("shell.wat"), options: .atomic)
+        try Data(shell.bindings.utf8).write(to: directory.appendingPathComponent("Exports.swift"), options: .atomic)
+        exit(0)
+    }
+    if CommandLine.arguments.count == 5, CommandLine.arguments[1] == "--link-component" {
+        let shell = try EmbeddedWasmtimeComponentRuntime.compileComponentWAT(
+            String(contentsOfFile: CommandLine.arguments[2], encoding: .utf8))
+        let core = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[3]))
+        try PluginComponentBuild.link(shell: shell, core: core)
+            .write(to: URL(fileURLWithPath: CommandLine.arguments[4]), options: .atomic)
+        exit(0)
+    }
     guard CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--export-web" else {
         throw WebPackageExportError.usage
     }
@@ -239,14 +258,19 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
             }) else {
                 throw PluginCapabilityValidationError.unknownCapability(capabilityID)
             }
-            try JSONSchemaValidator.validate(data: input,
-                                             against: contract.inputSchema)
+            // Editor entry points take whole tool output; the runtime checks their
+            // shape without length bounds.
+            let entryPoint = String(capabilityID.dropFirst(package.manifest.id.count + 1))
+            let invocationLimits = package.limits(for: entryPoint, default: limits)
+            if !package.isHostEntryPoint(entryPoint) {
+                try JSONSchemaValidator.validate(data: input, against: contract.inputSchema)
+            }
             let rawPayload = try runtime.prepare(loaded.executionCopy,
                                                  capabilityID: capabilityID,
                                                  input: input,
                                                  querySnapshot: request.querySnapshot,
-                                                 limits: limits)
-            guard rawPayload.count <= limits.maximumOutputBytes else {
+                                                 limits: invocationLimits)
+            guard rawPayload.count <= invocationLimits.maximumOutputBytes else {
                 throw PluginHostFrameError.frameTooLarge
             }
             if package.manifest.access == .read {

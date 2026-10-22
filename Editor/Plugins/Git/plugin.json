@@ -1,0 +1,25 @@
+{
+  "id": "studio.git",
+  "version": 1,
+  "name": "Git",
+  "description": "Git working trees for the Source Control panel, file tree, status bar and agent tools.",
+  "access": "read",
+  "imports": ["guava:process/host"],
+  "composable_host_capabilities": [],
+  "host": {
+    "processes": [{
+      "id": "git",
+      "command": "git",
+      "argumentPrefix": ["-c", "core.quotepath=off", "-c", "color.ui=false"],
+      "allowsAdditionalArguments": true,
+      "environmentKeys": ["PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TMPDIR", "SSH_AUTH_SOCK", "XDG_CONFIG_HOME",
+        "GIT_CONFIG_GLOBAL", "SystemRoot", "USERPROFILE", "GIT_TERMINAL_PROMPT", "GIT_OPTIONAL_LOCKS", "GIT_EDITOR",
+        "GIT_LITERAL_PATHSPECS", "GCM_INTERACTIVE", "NO_COLOR"],
+      "entryPoints": ["provider"],
+      "lifetimeMilliseconds": 600000
+    }]
+  },
+  "contributes": {
+    "versionControl": { "id": "git", "title": "Git", "marker": ".git", "ignoreFile": ".gitignore" }
+  }
+}

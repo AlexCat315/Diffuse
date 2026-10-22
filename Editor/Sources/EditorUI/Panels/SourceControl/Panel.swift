@@ -3,16 +3,14 @@ internal import GuavaUI
 internal import GuavaUIRuntime
 
 /// Git or Lore for the project: branch and sync in the toolbar, a commit
-/// composer with an AI-drafted message, staged and unstaged changes with inline
-/// diffs, then recent history. Every command runs through the shared model,
+/// composer with an AI-drafted message, staged and unstaged changes (a click
+/// opens the diff in the editor), then recent history. Every command runs through the shared model,
 /// which re-reads the working tree afterwards.
 struct SourceControlPanel: View, @unchecked Sendable {
     let app: EditorApplication
     private let observed: Observed<EditorVersionControl, VersionControlSnapshot>
     @State private var message: TextBuffer = ""
     @State private var isDrafting = false
-    @State private var expandedDiff: String?
-    @State private var diffText = ""
     @State private var showsHistory = true
 
     init(app: EditorApplication) {
@@ -158,22 +156,11 @@ struct SourceControlPanel: View, @unchecked Sendable {
             for change in changes {
                 AnyView(SourceControlChangeRow(app: app, change: change, isLocked: snapshot.locks.contains(change.path),
                                                supportsLocks: snapshot.repository?.system == .lore,
-                                               isExpanded: expandedDiff == change.id, onToggle: { toggleDiff(change) }))
-                if expandedDiff == change.id {
-                    AnyView(DiffView(text: diffText).padding(EdgeInsets(leading: 12, bottom: 6, trailing: 8)))
-                }
+                                               isCompared: snapshot.comparison?.change.id == change.id) {
+                    app.compareChange(change)
+                })
             }
         }.padding(EdgeInsets(bottom: 6))
-    }
-
-    private func toggleDiff(_ change: VersionControlChange) {
-        guard expandedDiff != change.id else { expandedDiff = nil; return }
-        expandedDiff = change.id
-        diffText = ""
-        Task { @MainActor in
-            let text = await model.diff(change)
-            if expandedDiff == change.id { diffText = text }
-        }
     }
 
     // MARK: History

@@ -59,9 +59,9 @@ struct AnalysisCacheTests {
         try Data("old workspace paths".utf8).write(to: scratch.appendingPathComponent("old.swiftmodule"))
         let copied = ScriptLanguageWorkspace(scriptsDirectoryURL: root.appendingPathComponent("Second/Scripts"), engineModulePaths: [],
             clangModuleMapPaths: [], clangIncludePaths: [])
-        try FileManager.default.createDirectory(at: copied.scriptsDirectoryURL, withIntermediateDirectories: true)
-        try FileManager.default.copyItem(at: original.scriptsDirectoryURL.appendingPathComponent(".guava"),
-            to: copied.scriptsDirectoryURL.appendingPathComponent(".guava"))
+        try FileManager.default.createDirectory(at: copied.projectRootURL, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: original.projectRootURL.appendingPathComponent(".guava"),
+            to: copied.projectRootURL.appendingPathComponent(".guava"))
         let next = try copied.prepareScratch(executableURL: executable, environment: [:])
         #expect(!FileManager.default.fileExists(atPath: next.appendingPathComponent("old.swiftmodule").path))
         #expect(FileManager.default.fileExists(atPath: scratch.appendingPathComponent("old.swiftmodule").path))

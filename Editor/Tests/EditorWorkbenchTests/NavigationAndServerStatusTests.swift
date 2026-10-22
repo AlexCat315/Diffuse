@@ -83,14 +83,7 @@ struct NavigationAndServerStatusTests {
             dispatcher.dispatch(.keyDown(KeyEvent(scancode: ComposeScancode.escape, keycode: 0, modifiers: [], isRepeat: false)))
             settle()
             try activate("editor-status-language-server")
-            let item = try #require(WorkbenchUITestSupport.firstNode(graph.tree.root) {
-                $0.attachments["__menu_item_id"] as? AnyHashable == AnyHashable("language-server-settings")
-            })
-            let frame = item.absoluteFrame
-            let click = MouseButtonEvent(button: .left, x: Float(frame.midX), y: Float(frame.midY), clicks: 1)
-            dispatcher.dispatch(.mouseButtonDown(click))
-            dispatcher.dispatch(.mouseButtonUp(click))
-            settle()
+            try activate("language-server-settings")
             #expect(settingsOpened)
             #expect(portals.entries.isEmpty)
         }

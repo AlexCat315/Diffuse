@@ -86,15 +86,15 @@ struct SourceControlToolbar: View, @unchecked Sendable {
     }
 }
 
-/// One changed file: badge, name and folder; hover actions to open, stage or
-/// unstage, discard and (Lore) lock. Clicking the row shows its diff.
+/// One changed file: name, folder and state letter; hover actions to open, stage
+/// or unstage, discard and (Lore) lock. Clicking the row opens its diff tab.
 struct SourceControlChangeRow: View, @unchecked Sendable {
     let app: EditorApplication
     let change: VersionControlChange
     let isLocked: Bool
     let supportsLocks: Bool
-    let isExpanded: Bool
-    let onToggle: () -> Void
+    let isCompared: Bool
+    let onOpen: () -> Void
     @State private var isHovered = false
 
     private var model: EditorVersionControl { app.workstation.versionControl }
@@ -103,32 +103,34 @@ struct SourceControlChangeRow: View, @unchecked Sendable {
         let parts = change.path.split(separator: "/").map(String.init)
         let name = parts.last ?? change.path
         let folder = parts.dropLast().joined(separator: "/")
-        Row(alignment: .center, spacing: 0) {
-            Button(tooltip: change.originalPath.map { "\($0) → \(change.path)" } ?? change.path, action: onToggle) {
-                Row(alignment: .center, spacing: 6) {
-                    Icon(isExpanded ? UIIcons.Navigation.chevronDown : UIIcons.Navigation.chevronRight, size: 8, color: .onSurfaceMuted)
-                    FileIcon(path: change.path, size: 13)
-                    Text(name, lineLimit: 1).font(.body)
-                        .foregroundColor(change.state == .deleted ? .onSurfaceMuted : .onSurface)
-                        .flex(0, shrink: 1).frame(minWidth: 0)
-                    if !folder.isEmpty {
-                        Text(folder, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted).flex(0, shrink: 2).frame(minWidth: 0)
-                    }
-                }.frame(minWidth: 0)
-            }.buttonStyle(.plain).flex(0, shrink: 1).frame(minWidth: 0)
-            Spacer(minLength: 0)
-            if isHovered {
-                actions
-            } else if isLocked {
-                Icon(UIIcons.Status.lock, size: 11, color: .onSurfaceMuted).padding(horizontal: 4)
+        // Padding and background share a node, so the row's margin needs a wrapper.
+        Box {
+            Row(alignment: .center, spacing: 6) {
+                Button(tooltip: change.originalPath.map { "\($0) → \(change.path)" } ?? change.path, action: onOpen) {
+                    Row(alignment: .center, spacing: 6) {
+                        FileIcon(path: change.path, size: 13)
+                        Text(name, lineLimit: 1).font(.body)
+                            .foregroundColor(change.state == .deleted ? .onSurfaceMuted : .onSurface)
+                            .flex(0, shrink: 1).frame(minWidth: 0)
+                        if !folder.isEmpty {
+                            Text(folder, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted).flex(0, shrink: 2).frame(minWidth: 0)
+                        }
+                    }.frame(minWidth: 0)
+                }.buttonStyle(.plain).flex(0, shrink: 1).frame(minWidth: 0)
+                Spacer(minLength: 0)
+                if isHovered {
+                    actions
+                } else if isLocked {
+                    Icon(UIIcons.Status.lock, size: 11, color: .onSurfaceMuted).padding(horizontal: 4)
+                }
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    Text(change.state.badge, lineLimit: 1).font(.label).foregroundColor(change.state.color)
+                }.frame(width: 16).accessibility { $0.label = L(change.state.title) }
             }
-            Text(change.state.badge).font(.mono).foregroundColor(change.state.color)
-                .frame(width: 16).accessibility { $0.label = L(change.state.title) }
-        }
-        .padding(horizontal: 6).frame(height: 26)
-        .background(isExpanded ? .surfaceVariant : isHovered ? .stateLayerHover : .clear).cornerRadius(6)
-        .padding(horizontal: 6)
-        .onHover { isHovered = $0 }
+            .padding(EdgeInsets(leading: 10, trailing: 6)).frame(height: 26)
+            .background(isCompared ? .surfaceVariant : isHovered ? .stateLayerHover : .clear).cornerRadius(6)
+            .onHover { isHovered = $0 }
+        }.padding(horizontal: 6)
         .debugName("source-control-change-" + change.id)
     }
 
@@ -185,41 +187,3 @@ struct SourceControlRevisionRow: View {
     }
 }
 
-/// A unified diff, line by line: additions and removals tinted, hunk headers
-/// muted. Long diffs are cut so a generated file cannot stall the panel.
-struct DiffView: View {
-    let text: String
-
-    var body: some View {
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).filter {
-            !($0.hasPrefix("diff --git") || $0.hasPrefix("index ") || $0.hasPrefix("--- ") || $0.hasPrefix("+++ ")
-              || $0.hasPrefix("new file mode") || $0.hasPrefix("deleted file mode"))
-        }
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            if text.isEmpty {
-                Row(alignment: .center, spacing: 6) { Spinner(size: 10) }.padding(8)
-            } else if lines.allSatisfy({ $0.isEmpty }) {
-                Text(L("No textual changes")).font(.caption).foregroundColor(.onSurfaceMuted).padding(8)
-            }
-            for line in lines.prefix(400) {
-                AnyView(row(String(line)))
-            }
-            if lines.count > 400 {
-                Text(String(format: L("%d more lines"), lines.count - 400)).font(.caption).foregroundColor(.onSurfaceMuted).padding(6)
-            }
-        }.padding(vertical: 4).frame(width: .percent(100), minWidth: 0)
-            .background(.surfaceSunken).cornerRadius(6).clipped()
-            .debugName("source-control-diff")
-    }
-
-    private func row(_ line: String) -> some View {
-        let (color, background): (SemanticColorRef, SemanticColorRef) = switch line.first {
-        case "+": (.success, SemanticColorRef.success.opacity(0.10))
-        case "-": (.error, SemanticColorRef.error.opacity(0.10))
-        case "@": (.onSurfaceMuted, SemanticColorRef.surfaceVariant)
-        default: (.onSurfaceVariant, SemanticColorRef.clear)
-        }
-        return Text(line.isEmpty ? " " : line, lineLimit: 1).font(.mono).foregroundColor(color)
-            .padding(horizontal: 8).frame(width: .percent(100), minWidth: 0).background(background)
-    }
-}

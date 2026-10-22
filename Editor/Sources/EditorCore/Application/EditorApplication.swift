@@ -185,7 +185,8 @@ public final class EditorApplication: @unchecked Sendable {
                     nextStep: "Open the script, fix the reported errors, then Save and Compile."))
             }
         )
-        self.workstation = try EditorWorkstation(root: URL(fileURLWithPath: projectDirectory), scripts: scripts)
+        self.workstation = try EditorWorkstation(root: URL(fileURLWithPath: projectDirectory), scripts: scripts,
+            pluginHost: EditorPluginHostLocator.resolve(injectedURL: trustedPluginHostExecutableURL))
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
         self.toolAccess = toolAccess

@@ -7,6 +7,7 @@ import GuavaUICompose
 public final class EditorVersionControl: _ObservableObject, @unchecked Sendable {
     private let publisher = _ObservablePublisher<EditorVersionControl>()
     private let projectRoot: URL
+    private let plugins: VersionControlPlugins
     private var backend: (any VersionControlBackend)?
     private var queue: Task<Void, Never>?
     private var monitor: Task<Void, Never>?
@@ -14,8 +15,10 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
     /// Called after an operation changed files on disk, so open documents reload.
     var didChangeFiles: (() -> Void)?
 
-    public init(projectRoot: URL) {
+    /// `pluginHost` runs the bundled Git and Lore plugins that drive every command.
+    public init(projectRoot: URL, pluginHost: URL?) {
         self.projectRoot = projectRoot.resolvingSymlinksInPath().standardizedFileURL
+        plugins = VersionControlPlugins(hostExecutable: pluginHost)
     }
 
     // MARK: Lifecycle
@@ -87,6 +90,37 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
         await perform(.locking) { try await $0.setLocked(locked, paths: paths) }
     }
 
+    /// Shows `change` in the editor's diff tab and reads its diff.
+    @MainActor
+    public func compare(_ change: VersionControlChange) async {
+        publish { $0.comparison = VersionControlComparison(change: change) }
+        await loadComparison()
+    }
+
+    public func endComparison() {
+        publish { $0.comparison = nil }
+    }
+
+    @MainActor
+    private func loadComparison() async {
+        guard let comparison = snapshot.comparison, comparison.isCurrent, let backend else { return }
+        let text: String
+        do { text = try await backend.diff(comparison.change) } catch { text = error.localizedDescription }
+        guard snapshot.comparison?.change == comparison.change else { return }
+        publish { $0.comparison?.diff = text }
+    }
+
+    /// Turns a bundled system on or off for this project; a working tree of a
+    /// system that is off is not detected.
+    @MainActor
+    public func setEnabled(_ enabled: Bool, system: VersionControlSystem) async {
+        guard let provider = VersionControlProvider.provider(for: system) else { return }
+        do { try BundledPlugins.setEnabled(enabled, id: provider.pluginID, in: projectRoot.path) }
+        catch { publish { $0.error = error.localizedDescription } }
+        backend = nil
+        await refresh()
+    }
+
     /// The unified diff of one change; failures read as an explanation.
     @MainActor
     public func diff(_ change: VersionControlChange) async -> String {
@@ -99,20 +133,18 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
     public func initialize(_ system: VersionControlSystem, loreRemote: String? = nil) async {
         let root = projectRoot
         await serialize(.initializing) { [weak self] in
-            guard let tool = VersionControlTool.locate(system) else { throw VersionControlError.toolMissing(system) }
-            switch system {
-            case .git: try await GitBackend.initialize(at: root, tool: tool)
-            case .lore: try await LoreBackend.create(at: root, remote: loreRemote ?? "", tool: tool)
-            }
-            try Self.ignoreMachineState(in: root, file: system == .git ? ".gitignore" : ".loreignore")
-            self?.backend = nil
+            guard let self else { return }
+            let plugin = try self.plugins.plugin(for: system, workspace: root)
+            _ = try await plugin.perform(["op": "init", "remote": loreRemote ?? ""])
+            try Self.ignoreMachineState(in: root, file: plugin.provider.contribution.ignoreFile)
+            self.backend = nil
         }
     }
 
     /// The editor's per-machine state under `.guava` (observation logs, plugin
     /// approvals and preferences) is not project content. Existing rules are kept.
     static let machineStatePatterns = [
-        ".guava/observation/", ".guava/plugin_authorizations.json", ".guava/disabled_bundled_plugins.json",
+        ".guava/observation/", ".guava/plugin_authorizations.json", ".guava/disabled_bundled_plugins.json", ".guava/sourcekit-lsp/",
     ]
 
     static func ignoreMachineState(in root: URL, file name: String) throws {
@@ -189,18 +221,36 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
 
     @MainActor
     private func reload() async {
-        let installed = Set(VersionControlSystem.allCases.filter { VersionControlTool.locate($0) != nil })
+        let installed = plugins.installedSystems
         let root = projectRoot
-        let repository = await Task.detached { VersionControlDetector.repository(containing: root) }.value
+        let disabled = Set(((try? BundledPlugins.disabled(in: root.path)) ?? []).compactMap { id in
+            VersionControlProvider.bundled.first { $0.pluginID == id }?.system
+        })
+        publish { $0.disabledSystems = disabled }
+        let repository = await Task.detached { VersionControlProvider.repository(containing: root, excluding: disabled) }.value
         guard let repository else {
             backend = nil
-            publish { $0 = VersionControlSnapshot(availability: .noRepository, installedSystems: installed, error: $0.error) }
+            publish { $0 = VersionControlSnapshot(availability: .noRepository, installedSystems: installed, disabledSystems: disabled, error: $0.error) }
             return
         }
-        if backend?.repository != repository { backend = try? VersionControlDetector.backend(for: repository) }
+        if backend?.repository != repository {
+            do {
+                backend = try plugins.backend(for: repository)
+            } catch VersionControlError.toolMissing {
+                backend = nil
+            } catch {
+                backend = nil
+                publish {
+                    $0 = VersionControlSnapshot(availability: .ready(repository), installedSystems: installed,
+                                                disabledSystems: disabled, error: error.localizedDescription)
+                }
+                return
+            }
+        }
         guard let backend else {
             publish {
-                $0 = VersionControlSnapshot(availability: .toolMissing(repository.system), installedSystems: installed, error: $0.error)
+                $0 = VersionControlSnapshot(availability: .toolMissing(repository.system), installedSystems: installed,
+                                            disabledSystems: disabled, error: $0.error)
             }
             return
         }
@@ -217,13 +267,28 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
                 $0.history = result.1
                 $0.branches = result.2
                 $0.locks = result.3
+                $0.comparison = $0.comparison.map { Self.follow($0, in: result.0.changes) }
             }
+            await loadComparison()
         } catch {
             publish {
                 $0.availability = .ready(repository)
                 $0.error = error.localizedDescription
             }
         }
+    }
+
+    /// The compared file in the latest status: its own area first, then the other,
+    /// so staging or unstaging it keeps the tab on the same file.
+    static func follow(_ comparison: VersionControlComparison, in changes: [VersionControlChange]) -> VersionControlComparison {
+        let path = comparison.change.path
+        guard let change = changes.first(where: { $0.path == path && $0.isStaged == comparison.change.isStaged })
+                ?? changes.first(where: { $0.path == path }) else {
+            var gone = comparison
+            gone.isCurrent = false
+            return gone
+        }
+        return VersionControlComparison(change: change, diff: change == comparison.change ? comparison.diff : nil)
     }
 
     private func publish(_ change: (inout VersionControlSnapshot) -> Void) {
@@ -239,10 +304,12 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
 }
 
 private extension VersionControlSnapshot {
-    init(availability: Availability, installedSystems: Set<VersionControlSystem>, error: String?) {
+    init(availability: Availability, installedSystems: Set<VersionControlSystem>,
+         disabledSystems: Set<VersionControlSystem>, error: String?) {
         self.init()
         self.availability = availability
         self.installedSystems = installedSystems
+        self.disabledSystems = disabledSystems
         self.error = error
     }
 }

@@ -43,7 +43,7 @@ public enum PluginTypedInputEncoder {
         }
         var output = magic
         try append(value, as: type, path: "$", to: &output,
-                   maximumBytes: min(maximumBytes, Self.maximumBytes))
+                   maximumBytes: maximumBytes)
         guard output.count <= maximumBytes else {
             throw PluginTypedInputError.valueTooLarge
         }

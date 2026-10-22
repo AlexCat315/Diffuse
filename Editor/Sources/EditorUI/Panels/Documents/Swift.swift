@@ -59,7 +59,7 @@ struct ScriptDocumentBar: View {
                                     canPerform: semantic.canPerform, perform: semantic.perform)
             outline(insights.symbols, semantic: semantic)
             ScriptWorkspaceReader(app.workstation.scripts) { snapshot in
-                if let document = snapshot.selectedDocument {
+                if let document = snapshot.selectedDocument, !document.isProjectSource {
                     ScriptBuildControl(app: app, document: document, allowsExecution: snapshot.trustState.allowsExecution)
                         .padding(EdgeInsets(leading: 6))
                 }
@@ -115,7 +115,9 @@ struct ScriptDocumentSurface: View {
         ScriptWorkspaceReader(app.workstation.scripts) { snapshot in
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 if snapshot.selectedScriptID == scriptID || sessions.semantic.externalDocument != nil {
-                    ScriptTrustBanner(app: app, snapshot: snapshot)
+                    if snapshot.selectedDocument?.isProjectSource != true {
+                        ScriptTrustBanner(app: app, snapshot: snapshot)
+                    }
                     if sessions.semantic.externalDocument == nil, let document = snapshot.selectedDocument {
                         ScriptExternalChangeBanner(app: app, document: document)
                     }

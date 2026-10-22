@@ -24,13 +24,6 @@ protocol VersionControlBackend: Sendable {
     func setLocked(_ locked: Bool, paths: [String]) async throws
 }
 
-extension VersionControlBackend {
-    func locks() async throws -> Set<String> { [] }
-    func setLocked(_ locked: Bool, paths: [String]) async throws {
-        throw VersionControlError.unsupported("\(repository.system.title) does not lock files.")
-    }
-}
-
 public enum VersionControlError: Error, LocalizedError, Equatable, Sendable {
     case toolMissing(VersionControlSystem)
     case commandFailed(command: String, message: String)
@@ -49,33 +42,20 @@ public enum VersionControlError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Finds working trees and the tools that drive them.
-enum VersionControlDetector {
-    /// The nearest working tree containing `directory`. When one directory
-    /// holds both markers, Lore wins: it is the deliberate choice for assets.
-    static func repository(containing directory: URL) -> VersionControlRepository? {
-        let fileManager = FileManager.default
-        var components = directory.resolvingSymlinksInPath().standardizedFileURL.pathComponents
-        while !components.isEmpty {
-            let current = URL(fileURLWithPath: NSString.path(withComponents: components), isDirectory: true)
-            for system in [VersionControlSystem.lore, .git] {
-                // `.git` is a file inside worktrees and submodules.
-                if fileManager.fileExists(atPath: current.appendingPathComponent(system.markerName).path) {
-                    return VersionControlRepository(system: system, root: current.standardizedFileURL)
-                }
+/// Removing created files goes through the Trash so a discard can be undone.
+enum VersionControlFiles {
+    static func trash(_ paths: [String], in root: URL) throws {
+        for path in paths {
+            guard !path.isEmpty, !path.hasPrefix("/"), !path.split(separator: "/").contains("..") else {
+                throw VersionControlError.invalidInput("Refusing to remove a path outside the repository: \(path)")
             }
-            components.removeLast()
-        }
-        return nil
-    }
-
-    static func backend(for repository: VersionControlRepository) throws -> any VersionControlBackend {
-        guard let tool = VersionControlTool.locate(repository.system) else {
-            throw VersionControlError.toolMissing(repository.system)
-        }
-        switch repository.system {
-        case .git: return GitBackend(repository: repository, tool: tool)
-        case .lore: return LoreBackend(repository: repository, tool: tool)
+            let url = root.appendingPathComponent(path)
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            #if os(macOS) || os(Windows)
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            #else
+            try FileManager.default.removeItem(at: url)
+            #endif
         }
     }
 }

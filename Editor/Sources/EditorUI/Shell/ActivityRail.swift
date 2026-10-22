@@ -114,14 +114,21 @@ private struct SourceControlRailButton: View {
     var body: some View {
         let count = Set(observed.wrappedValue.status.changes.map(\.path)).count
         let title = L("Source Control")
-        ZStack(alignment: .topTrailing) {
+        // The count sits on the tile's lower corner, ringed in the rail's
+        // colour so it reads apart from the glyph rather than covering it.
+        ZStack(alignment: .bottomTrailing) {
             Button(icon: .resource(UIIcons.Editor.gitBranch), size: 17, isSelected: isSelected, tooltip: title, action: action)
                 .buttonStyle(ActivityButtonStyle())
             if count > 0 {
-                Text(count > 99 ? "99+" : "\(count)").font(.caption).foregroundColor(.onAccent)
-                    .padding(horizontal: 4).frame(height: 14).background(.accent).cornerRadius(7)
-                    .padding(EdgeInsets(top: 2, trailing: 4))
-                    .accessibilityHidden()
+                Box {
+                    Box {
+                        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                            Text(count > 99 ? "99+" : "\(count)", lineLimit: 1)
+                                .font(.system(size: 9, weight: .semibold)).foregroundColor(.onAccent)
+                        }.padding(horizontal: 3).frame(height: 14, minWidth: 14).background(.accent).cornerRadius(7)
+                    }.padding(2).background(.background).cornerRadius(9)
+                }.padding(EdgeInsets(bottom: 0, trailing: 2))
+                .accessibilityHidden()
             }
         }
         .accessibility { $0.label = count > 0 ? "\(title), \(count)" : title; $0.state.isSelected = isSelected }

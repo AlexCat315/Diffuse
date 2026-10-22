@@ -9,6 +9,8 @@ public struct ScriptLanguageSource: Sendable {
     public let file: DynamicScriptManager.ScriptFile
     public let text: TextBuffer
     public var revision: UInt64 = 0
+    /// A project file analyzed in place rather than mirrored into the script package.
+    public var isProjectSource = false
 
     public init(file: DynamicScriptManager.ScriptFile, text: TextBuffer) {
         self.file = file
