@@ -1,12 +1,10 @@
-private let layoutVisibilityKey = "GuavaUI.layout.visible"
-
 public extension Node {
-    /// Current layout presentation, independent of authored opacity and input.
-    var isLayoutVisible: Bool { attachments[layoutVisibilityKey] as? Bool ?? true }
-
+    /// Hiding drops the pointer capture and focus this subtree holds; showing
+    /// does not restore them. `isLayoutVisible` itself is stored on the node —
+    /// see the note there for why this is not an attachment lookup.
     @_spi(CustomLayout) func setLayoutVisibility(_ visible: Bool) {
         guard visible != isLayoutVisible else { return }
-        attachments[layoutVisibilityKey] = visible ? nil : false
+        isLayoutVisible = visible
         markRenderDirty(reason: .layoutChange)
         guard !visible else { return }
         func contains(_ target: Node?) -> Bool {

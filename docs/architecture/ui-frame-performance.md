@@ -79,3 +79,83 @@ Editor 的 Debug 构建通过。使用 `GUAVAUI_FORCE_CONTINUOUS_FRAMES=1 ./guav
 最终组合实现的动态样本为 600 帧、预热 60 帧，1581 节点、600 帧全部提交：UI 路径 P95 5.84 ms，布局阶段中位 3.96 ms、P95 4.12 ms，绘制峰值 151.21 ms，UI 路径最大 163.28 ms，提交事件流 48.83 FPS。此前同为 1581 节点、尚未优化圆角裁剪的 300 帧样本，绘制峰值为 219.57 ms、UI 路径最大 231.67 ms。不同长度采样不能用于严格的峰值下降倍率；当前仍能复现长帧，且提交率未稳定达到 60 Hz，不能宣称问题已完全解决。
 
 运行时核对：最终播放开始时有 60 个实体、56 个可见网格，`remaining_seconds=3599.95`；后续仍为 `phase=playing`，倒计时减少、渲染帧索引持续增加。暂停检查中倒计时停止；视口允许少量收敛帧及已有的心跳刷新。所有结果均为提交事件与 CPU 路径测量，没有 GPU 完成或系统合成器时间戳。
+
+## 辅助功能树遍历合并（2026-10-22）
+
+Debug Gallery / Progress 页面，Apple M1 / Metal / 60 Hz / 1280 × 720 逻辑（2560 × 1440 drawable），2667 节点、97 批次，`--benchmark` 连续帧，关闭镜像回读，120 帧采样、预热 20 帧，两次采样均 120/120 提交。
+
+采样定位到布局阶段的全部耗时都在 `NativeAccessibility.synchronize`：`handleFrame` 的 221 个样本中有 220 个落在其中，且几乎平分为两次全树遍历——`inputAvailability(in:)`（103）与 `AccessibilityTree.snapshot`（109）。前者为每个带语义的节点写入一份 `[ElementID: Bool]` 字典，但只有真正生成元素的那部分节点会读取它。
+
+现在输入可达性在同一次遍历里沿祖先链下传（`AccessibilityElement.acceptsInput`），桥接层不再单独遍历树、也不再建立该字典；`collect` 对语义的读取从两次降为一次。
+
+| 指标 | 优化前 P95 | 优化后 P95 |
+| --- | ---: | ---: |
+| 布局阶段 | 4.82 ms | 2.67 ms |
+| 绘制阶段 | 3.83 ms | 3.99 ms |
+| UI 路径（布局 + 绘制） | 8.65 ms | 6.66 ms |
+| 节点数 / 批次数 | 2667 / 97 | 2667 / 97 |
+
+布局阶段下降 44.6%，UI 路径下降 23.0%，节点树与批次不变。样本计数同步下降：辅助功能同步在 `runFrame` 中的占比由 220/603 降至 134/521，`inputAvailability` 不再出现。
+
+`presentMs` 与 `totalMs` 在同一二进制、同一参数下跨次采样波动可达数毫秒（本次 7.01–7.34 ms 与 2.77–3.12 ms 之间），受窗口遮挡与合成器状态影响，因此不作为本次对照指标；`totalMs` 的下降不可归因于本次改动。
+
+复现与验证：
+
+```sh
+GUAVA_SWIFT_EXECUTABLE=/tmp/swift-nosandbox ./guava run GuavaUI/Examples --mac --devtools --no-open -- --component progress --benchmark
+./guava devtools GuavaUI/Examples timings /tmp/before.json 120 20
+swift test --package-path GuavaUI --disable-sandbox --filter 'Accessibility'
+swift test --package-path GuavaUI --disable-sandbox --filter 'CompactLabel|ToolbarOverflow|GridColumns|ViewThatFits|SplitPresentation|ProductComponent|SectionedList|NavigationStack|CustomLayoutVisibility|Accessible'
+```
+
+结果：6 + 3 个辅助功能测试、52 个组件契约测试全部通过。
+
+未解决：布局阶段剩余 2.67 ms 仍是同一次快照遍历（每节点一次 `CGRect` 运算、一次附件字典读取）。另外 `NodeTree.nodeCount` 在带 DevTools 计时时每帧被调用两次，各做一次全树遍历（采样约 43/521），只影响挂载 DevTools 的会话。
+
+## 布局可见性改为节点存储属性（2026-10-22）
+
+同一场景：Debug Gallery / Progress 页面，Apple M1 / Metal / 60 Hz / 1280 × 720 逻辑（2560 × 1440 drawable），2667 节点、97 批次，关闭镜像回读。本轮只改一个变量——`Node.isLayoutVisible` 由附件字典读取改为节点存储属性。
+
+采样依据：辅助功能遍历栈中出现 `Node.isLayoutVisible.getter` → `Dictionary._Variant.lookup` → `__RawDictionaryStorage.find` → `String.hash(into:)`。该判断在快照遍历里每节点两次（可见性一次、`acceptsInput` 一次），绘制遍历里每节点一次，每次都要对 24 字节的字符串键做一次哈希。键 `GuavaUI.layout.visible` 只有 `Node+LayoutVisibility.swift` 一处读写，`attachments` 不存在整体拷贝，因此可以安全改为存储属性。
+
+改动：`Node` 新增 `public internal(set) var isLayoutVisible: Bool = true`；`setLayoutVisibility(_:)` 写入该属性，仍然负责 `markRenderDirty` 与指针捕获/焦点释放；附件键删除。
+
+静态（`--benchmark` 连续帧，每种实现各采样 2 次，取中位）：
+
+| 指标 | 优化前 P50 / P95 | 优化后 P50 / P95 |
+| --- | ---: | ---: |
+| 布局阶段 | 2.73 / 2.80 ms | 2.57 / 2.64 ms |
+| 绘制阶段 | 3.99 / 4.08 ms | 3.99 / 4.13 ms |
+| 节点数 / 批次数 | 2667 / 97 | 2667 / 97 |
+
+动态（事件驱动帧 + 240 个滚轮输入事件，120 帧 / 1.98 s）：
+
+| 指标 | 优化前 | 优化后 |
+| --- | ---: | ---: |
+| 布局阶段 P50 / P95 | 2.70 / 2.84 ms | 2.51 / 2.66 ms |
+| 绘制阶段 P50 / P95 | 3.97 / 4.40 ms | 3.96 / 4.40 ms |
+| 整帧 P50 / P95 | 15.32 / 15.66 ms | 15.26 / 15.61 ms |
+| 提交帧 / 帧率 | 120 / 59.99 FPS | 120 / 60.14 FPS |
+
+布局阶段静态降 5.7%（P95）、动态降 6.3%（P95）；绘制阶段、节点数与批次数不变。动态样本里绘制 P95 的 4.40 ms 来自滚动重绘，两种实现相同，说明本次改动不影响绘制路径的峰值。
+
+一次误判需要记录：改动后首次连续帧采样读到 96 批次（改动前 97），曾怀疑可见性语义改变导致少合并一个批次。同一二进制改用事件驱动模式采样得到 97；回退代码重建复测 97，恢复代码重建复测也是 97。96 来自那个已运行数分钟、日志出现 `native display refresh unavailable` 的进程实例。批次数是环境敏感指标，A/B 必须同模式、同进程生命周期。
+
+复现与验证：
+
+```sh
+# 静态
+GUAVA_SWIFT_EXECUTABLE=/tmp/swift-nosandbox ./guava run GuavaUI/Examples --mac --devtools --no-open -- --component progress --benchmark
+./guava devtools GuavaUI/Examples timings /tmp/static.json 120 20
+
+# 动态：去掉 --benchmark，另开终端灌输入，与录制并行
+./guava devtools GuavaUI/Examples timings /tmp/dynamic.json 120 20 &
+./guava devtools GuavaUI/Examples input @/tmp/scroll.json
+
+swift test --package-path GuavaUI --disable-sandbox --filter 'CustomLayoutVisibility|Accessible|Accessibility'
+swift test --package-path GuavaUI --disable-sandbox --filter 'LayerAwareNodeRendererTests|ContainerOpacity|Hidden|Reveal|Animation|CompactLabel|SectionedList|GridColumns'
+```
+
+结果：4 个辅助功能/布局可见性测试、80 个渲染与组件契约测试全部通过。
+
+未解决：布局阶段剩余约 2.5 ms 仍主要来自每次一整套全树辅助功能快照；`Node.accessibility` 每次读取仍是一次字符串键字典查询加一次结构体动态转换；`NodeTree.nodeCount` 在带 DevTools 计时时每帧做一次全树遍历。下一步应先判断"树未变化时跳过快照"能否成立，再决定是否值得继续拆快照本身。

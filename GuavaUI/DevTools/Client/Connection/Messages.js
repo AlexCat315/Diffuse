@@ -4,11 +4,16 @@ function handleEnvelope(env) {
   switch (env.type) {
     case "hello":
       context.session.connection.capabilities = new Set(env.payload?.capabilities ?? []);
+      context.session.connection.host = env.payload?.host ?? null;
       context.connection.send("hello.ack");
       if (context.controls.hasCapability("tree")) context.connection.send("tree.subscribe");
       if (context.controls.hasCapability("log")) context.connection.send("log.subscribe");
       if (context.controls.hasCapability("timing")) context.connection.send("timing.subscribe");
       if (context.controls.hasCapability("state.observe")) context.connection.send("state.list");
+      if (context.controls.hasCapability("timeline") && context.performance?.isAutoTraceEnabled()) {
+        context.connection.send("timeline.subscribe");
+      }
+      context.performance?.setConnected(true);
       context.controls.setControls(true);
       context.logs.appendLog({
         level: "info",
@@ -38,6 +43,7 @@ function handleEnvelope(env) {
       break;
     case "timing.frame":
       context.timing.renderTiming(env.payload);
+      context.performance?.recordFrame(env.payload);
       break;
     case "state.checkpoint.ok":
       context.elements.checkpoint.stateSnapshot.value = JSON.stringify(env.payload ?? {}, null, 2);

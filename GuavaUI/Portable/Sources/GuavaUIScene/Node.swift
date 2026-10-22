@@ -43,10 +43,42 @@ public final class Node: @unchecked Sendable {
     public private(set) weak var parent: Node?
 
     /// Disables input for this entire subtree while retaining it for an exit transition.
-    public var isInteractionEnabled: Bool = true
+    public var isInteractionEnabled: Bool = true {
+        didSet {
+            if oldValue != isInteractionEnabled { AccessibilityRevision.bump() }
+        }
+    }
+    /// Current layout presentation, independent of authored opacity and input.
+    ///
+    /// Stored rather than kept in `attachments`: the renderer and the
+    /// accessibility walk read it once or more per node per frame, and a
+    /// string-keyed dictionary lookup costs several times the check itself.
+    /// Written through `setLayoutVisibility(_:)`, the single owner of the
+    /// pointer-capture and focus release that follows a hide.
+    public internal(set) var isLayoutVisible: Bool = true {
+        didSet {
+            if oldValue != isLayoutVisible { AccessibilityRevision.bump() }
+        }
+    }
+    /// Semantics for this node; nil means "not an accessibility element".
+    ///
+    /// Storage for `Node.accessibility`, which stays the name every primitive
+    /// writes. Kept off `attachments` for the same reason as
+    /// `isLayoutVisible`: the snapshot walk reads it for every node on every
+    /// frame, and a string-keyed lookup plus the dynamic cast into a
+    /// six-string struct costs more than the value itself.
+    public internal(set) var accessibilitySemantics: AccessibilitySemantics? {
+        didSet {
+            if oldValue != accessibilitySemantics { AccessibilityRevision.bump() }
+        }
+    }
     /// Alpha applied to the complete rendered subtree, including cached layers.
     public var subtreeOpacity: Float = 1 {
-        didSet { if oldValue != subtreeOpacity { markRenderDirty(reason: .styleSet(field: "subtreeOpacity")) } }
+        didSet {
+            guard oldValue != subtreeOpacity else { return }
+            AccessibilityRevision.bump()
+            markRenderDirty(reason: .styleSet(field: "subtreeOpacity"))
+        }
     }
 
     // MARK: - State
@@ -103,14 +135,22 @@ public final class Node: @unchecked Sendable {
         }
     }
     /// Disable interaction for an entire subtree during a removal transition.
-    public var allowsHitTesting: Bool = true
+    public var allowsHitTesting: Bool = true {
+        didSet {
+            if oldValue != allowsHitTesting { AccessibilityRevision.bump() }
+        }
+    }
 
     public var acceptsSubtreeInput: Bool {
         isLayoutVisible && allowsHitTesting && isInteractionEnabled && (parent?.acceptsSubtreeInput ?? true)
     }
 
     /// When true, this node may receive keyboard focus (FocusChain consideration).
-    public var isFocusable: Bool = false
+    public var isFocusable: Bool = false {
+        didSet {
+            if oldValue != isFocusable { AccessibilityRevision.bump() }
+        }
+    }
 
     /// Controls that choose focus from their own pointer geometry can disable
     /// the dispatcher's fallback focus (for example, a letterboxed viewport).
@@ -605,6 +645,9 @@ public final class Node: @unchecked Sendable {
     /// bug class (坏味 #1) is structurally impossible. The funnel remains the one
     /// place that maps a geometry change to render invalidation.
     private func invalidateGeometry(reason: InvalidationSource) {
+        // Frame, transform, scroll offset and clip all move or reshape the
+        // rectangles the accessibility snapshot publishes.
+        AccessibilityRevision.bump()
         markRenderDirty(reason: reason)
     }
 

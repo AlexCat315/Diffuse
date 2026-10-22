@@ -43,6 +43,9 @@ function clearSessionViews() {
   context.runtime.renderRuntime(null);
   context.elements.timing.timing.className = "details empty";
   context.elements.timing.timing.textContent = "No timing sample.";
+  context.session.connection.host = null;
+  context.performance?.setConnected(false);
+  context.performance?.reset();
 }
 
 

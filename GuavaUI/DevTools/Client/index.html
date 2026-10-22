@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GuavaUI DevTools</title>
-  <link rel="stylesheet" href="./Styles.css?v=0.5">
+  <link rel="stylesheet" href="./Styles.css?v=0.6">
 </head>
 <body>
   <main class="shell">
@@ -22,146 +22,212 @@
       <button id="disconnect" disabled>Disconnect</button>
     </header>
 
-    <section class="workspace">
-      <aside class="treePane">
-        <div class="paneHeader">
-          <span>Tree <span id="treeCount" class="panelStatus"></span></span>
-          <button id="refreshTree" disabled>Refresh</button>
-        </div>
-        <div class="filterBar">
-          <input id="treeSearch" type="search" placeholder="Filter nodes…" autocomplete="off">
-        </div>
-        <div id="tree" class="tree empty">Connect to a GuavaUI app to inspect the live node tree.</div>
-      </aside>
-
-      <section class="mainPane">
-        <div class="mirrorHeader">
-          <span>Mirror <span id="mirrorStatus" class="panelStatus">Idle</span></span>
-          <div class="mirrorControls">
-            <label>FPS <input id="mirrorFPS" type="number" min="1" max="60" value="15"></label>
-            <label>Quality <input id="mirrorQuality" type="number" min="0.1" max="1" step="0.05" value="0.75"></label>
-            <button id="startMirror" disabled>Start</button>
-            <button id="stopMirror" disabled>Stop</button>
-          </div>
-        </div>
-        <div id="mirror" class="mirror" tabindex="0">
-          <div id="mirrorState" class="empty">No mirror frame. Click Start after connecting.</div>
-          <img id="mirrorImage" alt="GuavaUI mirror frame">
-        </div>
-      </section>
-
-      <aside class="detailsPane">
-        <div class="paneHeader">
-          <span>Selection</span>
-        </div>
-        <div id="selectionPath" class="selectionPath"></div>
-        <section class="analysisPanel">
-          <strong>Source &amp; recomposition</strong>
-          <div id="sourceLocation" class="sourceLocation">Select a component to locate its source.</div>
-          <div class="sourceActions"><select id="sourceEditor" aria-label="Editor"><option value="vscode">VS Code</option><option value="cursor">Cursor</option></select><a id="openSource" aria-disabled="true">Open source</a><a id="addSourceBreakpoint" aria-disabled="true">Add breakpoint</a></div>
-          <details><summary>Editor path mapping</summary>
-            <label>Build path prefix<input id="sourceBuildRoot" placeholder="/build/GuavaStudio" spellcheck="false"></label>
-            <label>Local path prefix<input id="sourceLocalRoot" placeholder="/Users/me/GuavaStudio" spellcheck="false"></label>
-            <p class="panelStatus">Map paths when the app was built on another machine. Preferences stay in this browser.</p>
-          </details>
-          <button id="recompositionOwner" hidden></button>
-          <pre id="recompositionStats" class="analysisStats">No component selected.</pre>
-          <div id="recompositionReasons" class="analysisReasons"></div>
-          <details><summary>All components · <span id="recompositionCount">0</span></summary>
-            <div class="editActions"><select id="recompositionSort" aria-label="Sort components"><option value="totalMs">Total time</option><option value="count">Recomposition count</option><option value="lastMs">Last time</option></select><button id="resetRecomposition" disabled>Reset statistics</button></div>
-            <div id="recompositionTable" class="recompositionTable"></div>
-            <p class="panelStatus">Body + reconciliation, excluding layout and paint. Parent time includes children; rows overlap. Initial mount is separate.</p>
-          </details>
-        </section>
-        <section id="inspectionPanel" class="inspectionPanel">
-          <div class="editActions">
-            <button id="undoStyle" disabled>Undo</button><button id="redoStyle" disabled>Redo</button>
-            <button id="clearStyle" disabled>Clear selected</button><button id="clearAllStyles" disabled>Clear all</button>
-          </div>
-          <div id="overrideStatus" class="panelStatus">Temporary styles · disconnected</div>
-          <div id="boxModel" class="boxModel empty">Select a layout box to inspect its dimensions.</div>
-          <div id="layoutFacts" class="layoutFacts"></div>
-          <fieldset id="styleFields" disabled>
-            <legend>Temporary styles</legend>
-            <div class="paddingFields">
-              <label>Top <input id="paddingTop" type="number" min="0" max="4096" step="1"></label>
-              <label>Right <input id="paddingRight" type="number" min="0" max="4096" step="1"></label>
-              <label>Bottom <input id="paddingBottom" type="number" min="0" max="4096" step="1"></label>
-              <label>Left <input id="paddingLeft" type="number" min="0" max="4096" step="1"></label>
-            </div>
-            <div class="colorField"><label for="backgroundColor">Background</label><input id="backgroundSwatch" type="color" aria-label="Background color"><input id="backgroundColor" placeholder="#RRGGBB[AA]" spellcheck="false"><button id="resetBackground" title="Remove background override">Reset</button></div>
-            <div class="colorField"><label for="foregroundColor">Foreground</label><input id="foregroundSwatch" type="color" aria-label="Foreground color"><input id="foregroundColor" placeholder="#RRGGBB[AA]" spellcheck="false"><button id="resetForeground" title="Remove foreground override">Reset</button></div>
-            <button id="resetPadding">Reset padding override</button>
-          </fieldset>
-          <div id="styleMessage" class="styleMessage" role="status" aria-live="polite"></div>
-        </section>
-        <details><summary>Node data</summary><pre id="details" class="details empty">Select a node in the tree.</pre></details>
-        <div class="paneHeader">
-          <span>Runtime</span>
-        </div>
-        <pre id="runtime" class="details empty">No tree snapshot.</pre>
-        <div class="paneHeader">
-          <span>Timing</span>
-        </div>
-        <pre id="timing" class="details empty">No timing sample.</pre>
-        <section class="analysisPanel">
-          <strong>Performance timeline</strong>
-          <div class="editActions"><button id="startTimeline" disabled>Record timeline</button><button id="stopTimeline" disabled>Stop</button><button id="exportTimeline" disabled>Export trace</button></div>
-          <select id="timelinePhase" aria-label="Timeline phase"><option value="">All stages</option><option value="recomposition">Recomposition commits</option><option value="component">Component bodies</option><option value="layout">Layout</option><option value="draw">Draw</option></select>
-          <div id="timelineStatus" class="panelStatus">Stopped</div><div id="timelineEvents" class="timelineEvents"></div>
-          <p class="panelStatus">CPU spans use one monotonic clock. Component and commit spans overlap. Draw measures command generation; GPU execution is excluded. Keeps the latest 2048 events.</p>
-        </section>
-        <section class="analysisPanel">
-          <strong>Observed state</strong><div id="stateWatchCount" class="panelStatus"></div>
-          <div class="editActions"><button id="refreshStates" disabled>Refresh exposed fields</button><button id="stopWatching" disabled>Stop watching</button></div>
-          <label><input id="stateSelectedOnly" type="checkbox"> Selected component only</label>
-          <div id="registeredStates" class="registeredStates"></div>
-          <p class="panelStatus">Only explicitly exposed fields are listed. Check a field to read its summary. This view is read-only.</p>
-        </section>
-        <div class="paneHeader">
-          <span>State checkpoint</span>
-          <div>
-            <button id="captureState" disabled>Capture</button>
-            <button id="restoreState" disabled>Restore</button>
-            <button id="diffState" disabled>Diff</button>
-          </div>
-        </div>
-        <textarea id="stateSnapshot" class="stateSnapshot" spellcheck="false" placeholder="Captured host state appears here."></textarea>
-        <pre id="stateDiff" class="details empty">Capture a checkpoint, change state, then Diff.</pre>
-        <div class="paneHeader">
-          <span>Input recording</span>
-          <div>
-            <button id="recordInput" disabled>Record</button>
-            <button id="stopRecording" disabled>Stop</button>
-            <button id="replayInput" disabled>Replay</button>
-          </div>
-        </div>
-        <textarea id="inputRecording" class="stateSnapshot" spellcheck="false" placeholder="Recorded inputs appear here. Replay restores the initial checkpoint."></textarea>
-      </aside>
-    </section>
-
-    <section class="bottomPane">
-      <div class="paneHeader">
-        <span>Log <span id="logCount" class="panelStatus"></span></span>
-        <div class="logControls">
-          <select id="logLevel">
-            <option value="trace">Trace+</option>
-            <option value="debug">Debug+</option>
-            <option value="info" selected>Info+</option>
-            <option value="notice">Notice+</option>
-            <option value="warning">Warning+</option>
-            <option value="error">Error+</option>
-            <option value="critical">Critical</option>
-          </select>
-          <input id="logModule" placeholder="Module prefix…" aria-label="Log module prefix">
-          <input id="logSearch" type="search" placeholder="Filter logs…" autocomplete="off">
-          <button id="pauseLog">Pause display</button>
-          <button id="exportLog">Export JSONL</button>
-          <button id="clearLog">Clear</button>
+    <section class="mirrorPane">
+      <div class="mirrorHeader">
+        <span>Mirror <span id="mirrorStatus" class="panelStatus">Idle</span></span>
+        <div class="mirrorControls">
+          <label>FPS <input id="mirrorFPS" type="number" min="1" max="60" value="15"></label>
+          <label>Quality <input id="mirrorQuality" type="number" min="0.1" max="1" step="0.05" value="0.75"></label>
+          <button id="startMirror" disabled>Start</button>
+          <button id="stopMirror" disabled>Stop</button>
         </div>
       </div>
-      <div id="logStatus" class="panelStatus"></div>
-      <div id="log" class="log empty">No log entries.</div>
+      <div id="mirror" class="mirror" tabindex="0">
+        <div id="mirrorState" class="empty">No mirror frame. Click Start after connecting.</div>
+        <img id="mirrorImage" alt="GuavaUI mirror frame">
+      </div>
+    </section>
+
+    <section class="dock">
+      <div id="dockSplitter" class="dockSplitter" title="Drag to resize"></div>
+      <nav class="dockTabs" aria-label="DevTools panels">
+        <button class="dockTab active" data-tab="tree">Tree</button>
+        <button class="dockTab" data-tab="selection">Selection</button>
+        <button class="dockTab" data-tab="performance">Performance</button>
+        <button class="dockTab" data-tab="log">Log</button>
+        <span class="dockSpacer"></span>
+        <button id="dockCollapse" class="dockIcon" title="Collapse or expand the bottom panel">▾</button>
+      </nav>
+      <div class="dockBody">
+        <aside class="dockPanel treePane active" data-tab="tree">
+          <div class="paneHeader">
+            <span>Tree <span id="treeCount" class="panelStatus"></span></span>
+            <button id="refreshTree" disabled>Refresh</button>
+          </div>
+          <div class="filterBar">
+            <input id="treeSearch" type="search" placeholder="Filter nodes…" autocomplete="off">
+          </div>
+          <div id="tree" class="tree empty">Connect to a GuavaUI app to inspect the live node tree.</div>
+        </aside>
+
+        <aside class="dockPanel detailsPane" data-tab="selection">
+          <div class="paneHeader">
+            <span>Selection</span>
+          </div>
+          <div id="selectionPath" class="selectionPath"></div>
+          <section class="analysisPanel">
+            <strong>Source &amp; recomposition</strong>
+            <div id="sourceLocation" class="sourceLocation">Select a component to locate its source.</div>
+            <div class="sourceActions"><select id="sourceEditor" aria-label="Editor"><option value="vscode">VS Code</option><option value="cursor">Cursor</option></select><a id="openSource" aria-disabled="true">Open source</a><a id="addSourceBreakpoint" aria-disabled="true">Add breakpoint</a></div>
+            <details><summary>Editor path mapping</summary>
+              <label>Build path prefix<input id="sourceBuildRoot" placeholder="/build/GuavaStudio" spellcheck="false"></label>
+              <label>Local path prefix<input id="sourceLocalRoot" placeholder="/Users/me/GuavaStudio" spellcheck="false"></label>
+              <p class="panelStatus">Map paths when the app was built on another machine. Preferences stay in this browser.</p>
+            </details>
+            <button id="recompositionOwner" hidden></button>
+            <pre id="recompositionStats" class="analysisStats">No component selected.</pre>
+            <div id="recompositionReasons" class="analysisReasons"></div>
+            <details><summary>All components · <span id="recompositionCount">0</span></summary>
+              <div class="editActions"><select id="recompositionSort" aria-label="Sort components"><option value="totalMs">Total time</option><option value="count">Recomposition count</option><option value="lastMs">Last time</option></select><button id="resetRecomposition" disabled>Reset statistics</button></div>
+              <div id="recompositionTable" class="recompositionTable"></div>
+              <p class="panelStatus">Body + reconciliation, excluding layout and paint. Parent time includes children; rows overlap. Initial mount is separate.</p>
+            </details>
+          </section>
+          <section id="inspectionPanel" class="inspectionPanel">
+            <div class="editActions">
+              <button id="undoStyle" disabled>Undo</button><button id="redoStyle" disabled>Redo</button>
+              <button id="clearStyle" disabled>Clear selected</button><button id="clearAllStyles" disabled>Clear all</button>
+            </div>
+            <div id="overrideStatus" class="panelStatus">Temporary styles · disconnected</div>
+            <div id="boxModel" class="boxModel empty">Select a layout box to inspect its dimensions.</div>
+            <div id="layoutFacts" class="layoutFacts"></div>
+            <fieldset id="styleFields" disabled>
+              <legend>Temporary styles</legend>
+              <div class="paddingFields">
+                <label>Top <input id="paddingTop" type="number" min="0" max="4096" step="1"></label>
+                <label>Right <input id="paddingRight" type="number" min="0" max="4096" step="1"></label>
+                <label>Bottom <input id="paddingBottom" type="number" min="0" max="4096" step="1"></label>
+                <label>Left <input id="paddingLeft" type="number" min="0" max="4096" step="1"></label>
+              </div>
+              <div class="colorField"><label for="backgroundColor">Background</label><input id="backgroundSwatch" type="color" aria-label="Background color"><input id="backgroundColor" placeholder="#RRGGBB[AA]" spellcheck="false"><button id="resetBackground" title="Remove background override">Reset</button></div>
+              <div class="colorField"><label for="foregroundColor">Foreground</label><input id="foregroundSwatch" type="color" aria-label="Foreground color"><input id="foregroundColor" placeholder="#RRGGBB[AA]" spellcheck="false"><button id="resetForeground" title="Remove foreground override">Reset</button></div>
+              <button id="resetPadding">Reset padding override</button>
+            </fieldset>
+            <div id="styleMessage" class="styleMessage" role="status" aria-live="polite"></div>
+          </section>
+          <details><summary>Node data</summary><pre id="details" class="details empty">Select a node in the tree.</pre></details>
+          <div class="paneHeader">
+            <span>Runtime</span>
+          </div>
+          <pre id="runtime" class="details empty">No tree snapshot.</pre>
+          <section class="analysisPanel">
+            <strong>Observed state</strong><div id="stateWatchCount" class="panelStatus"></div>
+            <div class="editActions"><button id="refreshStates" disabled>Refresh exposed fields</button><button id="stopWatching" disabled>Stop watching</button></div>
+            <label><input id="stateSelectedOnly" type="checkbox"> Selected component only</label>
+            <div id="registeredStates" class="registeredStates"></div>
+            <p class="panelStatus">Only explicitly exposed fields are listed. Check a field to read its summary. This view is read-only.</p>
+          </section>
+          <div class="paneHeader">
+            <span>State checkpoint</span>
+            <div>
+              <button id="captureState" disabled>Capture</button>
+              <button id="restoreState" disabled>Restore</button>
+              <button id="diffState" disabled>Diff</button>
+            </div>
+          </div>
+          <textarea id="stateSnapshot" class="stateSnapshot" spellcheck="false" placeholder="Captured host state appears here."></textarea>
+          <pre id="stateDiff" class="details empty">Capture a checkpoint, change state, then Diff.</pre>
+          <div class="paneHeader">
+            <span>Input recording</span>
+            <div>
+              <button id="recordInput" disabled>Record</button>
+              <button id="stopRecording" disabled>Stop</button>
+              <button id="replayInput" disabled>Replay</button>
+            </div>
+          </div>
+          <textarea id="inputRecording" class="stateSnapshot" spellcheck="false" placeholder="Recorded inputs appear here. Replay restores the initial checkpoint."></textarea>
+        </aside>
+
+        <section class="dockPanel performancePane" data-tab="performance">
+          <div class="perfToolbar">
+            <div class="perfControls">
+              <label class="perfField">Window <select id="perfWindow">
+                <option value="30">30 s</option>
+                <option value="60" selected>60 s</option>
+                <option value="120">120 s</option>
+                <option value="300">5 min</option>
+                <option value="all">All</option>
+              </select></label>
+              <label class="perfField"><input type="checkbox" id="perfAutoTrace"> Auto trace</label>
+              <input id="markerLabel" class="markerInput" placeholder="Marker note…" autocomplete="off">
+              <button id="addMarker" disabled>Mark</button>
+              <button id="clearPerf" disabled>Clear</button>
+              <span class="dockSpacer"></span>
+              <button id="copyReport" disabled>Copy report</button>
+              <button id="exportReportMD" disabled>Export MD</button>
+              <button id="exportReportJSON" disabled>Export JSON</button>
+            </div>
+            <div id="perfStatus" class="panelStatus">No timing data. Timing is collected automatically once connected.</div>
+          </div>
+
+          <div id="perfSummary" class="perfCards"></div>
+
+          <div class="perfSection">
+            <strong>Stage heatmap</strong>
+            <p class="panelStatus">Each cell is the worst frame in that time bucket; color is cost vs the stage budget at 60 fps. Newest buckets on the right.</p>
+            <div id="perfHeatmap" class="heatmap empty">No timing data.</div>
+            <div class="heatLegend">
+              <span class="heatLegendItem"><i class="swatch good"></i>under budget</span>
+              <span class="heatLegendItem"><i class="swatch warn"></i>near budget</span>
+              <span class="heatLegendItem"><i class="swatch bad"></i>over budget</span>
+            </div>
+          </div>
+
+          <div class="perfSection">
+            <strong>Stage statistics</strong>
+            <div id="perfStages" class="perfTable"></div>
+          </div>
+
+          <div class="perfSection">
+            <strong>Worst frames</strong>
+            <div id="perfWorst" class="perfTable"></div>
+          </div>
+
+          <div class="perfSection">
+            <strong>Hot components · CPU timeline</strong>
+            <div id="perfHot" class="perfTable"></div>
+          </div>
+
+          <div class="perfSection">
+            <strong>Markers</strong>
+            <div id="perfMarkers" class="markerList">No markers. Use Mark to tag a point for before/after comparisons.</div>
+          </div>
+
+          <section class="analysisPanel">
+            <strong>CPU timeline</strong>
+            <div class="editActions"><button id="startTimeline" disabled>Record timeline</button><button id="stopTimeline" disabled>Stop</button><button id="exportTimeline" disabled>Export trace</button></div>
+            <select id="timelinePhase" aria-label="Timeline phase"><option value="">All stages</option><option value="recomposition">Recomposition commits</option><option value="component">Component bodies</option><option value="layout">Layout</option><option value="draw">Draw</option></select>
+            <div id="timelineStatus" class="panelStatus">Stopped</div><div id="timelineEvents" class="timelineEvents"></div>
+            <p class="panelStatus">CPU spans use one monotonic clock. Component and commit spans overlap. Draw measures command generation; GPU execution is excluded. Keeps the latest 2048 events.</p>
+          </section>
+
+          <details class="perfRaw"><summary>Raw timing sample</summary><pre id="timing" class="details empty">No timing sample.</pre></details>
+        </section>
+
+        <section class="dockPanel logPane" data-tab="log">
+          <div class="paneHeader">
+            <span>Log <span id="logCount" class="panelStatus"></span></span>
+            <div class="logControls">
+              <select id="logLevel">
+                <option value="trace">Trace+</option>
+                <option value="debug">Debug+</option>
+                <option value="info" selected>Info+</option>
+                <option value="notice">Notice+</option>
+                <option value="warning">Warning+</option>
+                <option value="error">Error+</option>
+                <option value="critical">Critical</option>
+              </select>
+              <input id="logModule" placeholder="Module prefix…" aria-label="Log module prefix">
+              <input id="logSearch" type="search" placeholder="Filter logs…" autocomplete="off">
+              <button id="pauseLog">Pause display</button>
+              <button id="exportLog">Export JSONL</button>
+              <button id="clearLog">Clear</button>
+            </div>
+          </div>
+          <div id="logStatus" class="panelStatus"></div>
+          <div id="log" class="log empty">No log entries.</div>
+        </section>
+      </div>
     </section>
   </main>
 
@@ -182,7 +248,9 @@
   <script src="./State/Checkpoint.js"></script>
   <script src="./Inspector/Layout.js"></script>
   <script src="./Analysis/Components.js"></script>
+  <script src="./Performance/Performance.js"></script>
   <script src="./State/Observation.js"></script>
+  <script src="./Shell/Dock.js"></script>
   <script src="./Application.js"></script>
 </body>
 </html>

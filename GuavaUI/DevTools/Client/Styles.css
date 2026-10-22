@@ -11,6 +11,8 @@
   --accent-soft: rgba(53, 116, 240, 0.18);
   --error: #f56e6e;
   --ok: #6ecd7e;
+  --warn: #e5bd68;
+  --dock-height: 340px;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -55,7 +57,7 @@ button:not(:disabled):hover {
 
 .shell {
   display: grid;
-  grid-template-rows: 48px minmax(0, 1fr) 180px;
+  grid-template-rows: 48px minmax(0, 1fr) auto;
   height: 100vh;
   overflow: hidden;
 }
@@ -127,28 +129,111 @@ textarea {
   background: #1a1b1f;
 }
 
-.workspace {
+/* Two-zone layout: full-width mirror on top, tabbed dock below. */
+
+.mirrorPane {
   display: grid;
-  grid-template-columns: minmax(260px, 28%) 1fr minmax(260px, 28%);
+  grid-template-rows: 38px minmax(0, 1fr);
   min-height: 0;
+  background: #17181b;
 }
 
-.treePane,
-.detailsPane,
-.mainPane {
-  min-height: 0;
-  border-right: 1px solid var(--line);
+.dock {
+  height: var(--dock-height);
+  display: grid;
+  grid-template-rows: 5px 36px minmax(0, 1fr);
+  border-top: 1px solid var(--line);
   background: var(--surface);
 }
 
-.detailsPane {
-  border-right: 0;
+.dock.collapsed {
+  height: 41px;
+  grid-template-rows: 5px 36px;
 }
 
-.mainPane {
+.dock.collapsed .dockBody {
+  display: none;
+}
+
+.dockSplitter {
+  cursor: row-resize;
+  background: var(--line);
+}
+
+.dockSplitter:hover {
+  background: var(--accent);
+}
+
+.dockTabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.dockTab {
+  height: auto;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dockTab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.dockTab:not(.active):hover {
+  color: var(--text);
+  border-color: transparent;
+}
+
+.dockSpacer {
+  flex: 1;
+}
+
+.dockIcon {
+  align-self: center;
+  height: 24px;
+  min-width: 28px;
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+.dock.collapsed .dockIcon {
+  transform: rotate(180deg);
+}
+
+.dockBody {
+  min-height: 0;
+}
+
+.dockPanel {
+  display: none;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.dockPanel.active {
+  display: block;
+}
+
+.dockPanel.treePane.active {
   display: grid;
-  grid-template-rows: 38px 1fr;
-  background: #17181b;
+  grid-template-rows: 38px 38px minmax(0, 1fr);
+}
+
+.dockPanel.logPane.active {
+  display: grid;
+  grid-template-rows: 38px auto minmax(0, 1fr);
 }
 
 .paneHeader,
@@ -206,7 +291,7 @@ textarea {
 }
 
 .tree {
-  height: calc(100vh - 48px - 180px - 76px);
+  min-height: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
 }
@@ -287,8 +372,7 @@ textarea {
 }
 
 .detailsPane {
-  display: grid;
-  grid-template-rows: 38px minmax(0, 1.1fr) 38px minmax(0, 0.8fr) 38px minmax(0, 0.65fr) 38px minmax(80px, 0.7fr);
+  overflow-y: auto;
 }
 
 .details {
@@ -297,13 +381,8 @@ textarea {
   font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.bottomPane {
-  display: grid;
-  grid-template-rows: 38px minmax(0, 1fr);
-  min-height: 0;
-  border-top: 1px solid var(--line);
-  background: var(--surface);
-}
+.detailsPane .details { min-height:48px; max-height:180px; overflow:auto; margin:0; padding:10px; }
+.detailsPane .stateSnapshot { display:block; width:calc(100% - 16px); min-height:100px; height:120px; }
 
 .stateSnapshot {
   min-height: 0;
@@ -361,14 +440,12 @@ textarea {
   color: var(--muted);
 }
 
-/* Browser hosts show the live canvas above their embedded Inspector. */
-.browserHost .mainPane { display: none; }
-.browserHost .workspace { grid-template-columns: minmax(240px, 1fr) minmax(300px, 1fr); }
-
-/* Diagnostic sections retain readable heights as new tools are added. */
-.detailsPane { display:block; overflow-y:auto; }
-.detailsPane .details { min-height:48px; max-height:180px; overflow:auto; margin:0; padding:10px; }
-.detailsPane .stateSnapshot { display:block; width:calc(100% - 16px); min-height:100px; height:120px; }
+/* Browser hosts render their own canvas above the embedded inspector. */
+.browserHost .shell { grid-template-rows: 48px minmax(0, 1fr); }
+.browserHost .mirrorPane { display: none; }
+.browserHost .dock { height: auto; min-height: 0; border-top: 0; grid-template-rows: 36px minmax(0, 1fr); }
+.browserHost .dockSplitter,
+.browserHost .dockIcon { display: none; }
 
 .inspectionPanel { padding:10px; font-size:12px; }
 .selectionPath { display:flex; flex-wrap:wrap; gap:4px; padding:8px; }
@@ -428,3 +505,205 @@ textarea {
 .logRecord.error, .logRecord.critical { color: #ff8b8b; }
 .logRecord.warning { color: #edcd7d; }
 .logControls { flex-wrap: wrap; }
+
+/* Performance panel */
+.performancePane {
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+
+.perfToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.perfControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.perfField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.markerInput {
+  width: 180px;
+  height: 30px;
+  padding: 0 8px;
+}
+
+.perfToolbar .panelStatus {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.perfCards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px 2px;
+}
+
+.perfCard {
+  min-width: 118px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.perfCard .value {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.perfCard .value.warn { color: var(--warn); }
+.perfCard .value.bad { color: var(--error); }
+.perfCard .value.good { color: var(--ok); }
+
+.perfCard .label {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.perfSection {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.perfSection > strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.perfSection .panelStatus {
+  margin: 0 0 8px;
+  font-size: 11px;
+}
+
+.heatmap {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 2px 6px;
+  font-size: 10px;
+}
+
+.heatmap .heatRowLabel {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  height: 20px;
+}
+
+.heatCells {
+  display: grid;
+  grid-template-columns: repeat(120, minmax(0, 1fr));
+  gap: 1px;
+}
+
+.heatCell {
+  height: 20px;
+}
+
+.heatCell {
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.heatLegend {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.heatLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.swatch.good { background: var(--ok); }
+.swatch.warn { background: var(--warn); }
+.swatch.bad { background: var(--error); }
+
+.perfTable {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.perfTableRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) repeat(6, minmax(56px, 1fr));
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.perfTableRow.head {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.perfTableRow:nth-child(2n) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.perfTableRow .cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perfTableRow .cell.bad { color: var(--error); font-weight: 600; }
+.perfTableRow .cell.warn { color: var(--warn); }
+.perfTableRow .cell.good { color: var(--ok); }
+.perfTableRow .cell.name { color: var(--text); }
+
+.markerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.markerChip {
+  padding: 3px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+}
+
+.perfRaw {
+  margin: 12px;
+}
+
+.perfRaw summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}

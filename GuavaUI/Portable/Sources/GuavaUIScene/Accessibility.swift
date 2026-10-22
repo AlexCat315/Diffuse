@@ -54,18 +54,37 @@ public struct AccessibilityValueProvider {
     }
 }
 
+/// Monotonic counter for mutations that can change the accessibility tree.
+///
+/// The snapshot visits every node and the native bridge rebuilds the element
+/// tree from it. A frame that only repaints — a spinner, a cursor blink, a
+/// hover fade — changes nothing the walk reads, so the counter stays put and
+/// the bridge keeps the tree it already published. It is deliberately *not*
+/// bumped by `markRenderDirty` alone: that fires on every animated frame and
+/// would bring the cost straight back.
+///
+/// Over-invalidating costs one rebuild; under-invalidating leaves a stale
+/// native tree, which an assistive client reads as wrong content. Every hook
+/// therefore sits on a mutation the walk reads, and "does this change what
+/// VoiceOver sees?" is the test for adding another.
+public enum AccessibilityRevision {
+    /// Main-thread only, like every other scene mutation.
+    nonisolated(unsafe) public private(set) static var current: UInt64 = 0
+    static func bump() { current &+= 1 }
+}
+
 public extension Node {
     var accessibility: AccessibilitySemantics? {
-        get { attachments["__accessibility.semantics"] as? AccessibilitySemantics }
-        set { attachments["__accessibility.semantics"] = newValue }
+        get { accessibilitySemantics }
+        set { accessibilitySemantics = newValue }
     }
     var accessibilityActions: AccessibilityActions {
         get { attachments["__accessibility.actions"] as? AccessibilityActions ?? AccessibilityActions() }
-        set { attachments["__accessibility.actions"] = newValue }
+        set { attachments["__accessibility.actions"] = newValue; AccessibilityRevision.bump() }
     }
     var accessibilityValueProvider: AccessibilityValueProvider? {
         get { attachments["__accessibility.valueProvider"] as? AccessibilityValueProvider }
-        set { attachments["__accessibility.valueProvider"] = newValue }
+        set { attachments["__accessibility.valueProvider"] = newValue; AccessibilityRevision.bump() }
     }
     var resolvedAccessibilityValue: String {
         let value = accessibilityValueProvider?.read() ?? accessibility?.value ?? ""
@@ -78,13 +97,20 @@ public struct AccessibilityElement {
     public let semantics: AccessibilitySemantics
     public let frame: CGRect
     public let children: [AccessibilityElement]
+    /// Whether pointer and keyboard input reach this element: every ancestor
+    /// accepts subtree input and this node hit-tests. Resolved during the same
+    /// walk as the snapshot, so a platform bridge does not need a second pass
+    /// over the tree to answer "is this control usable".
+    public let acceptsInput: Bool
     public var id: ElementID { node.id }
 }
 
 public enum AccessibilityTree {
     public static func snapshot(root: Node, viewport: CGRect? = nil, resolveValues: Bool = true) -> [AccessibilityElement] {
         var elements: [AccessibilityElement] = []
-        collect(root, transform: root.absoluteTransform, clip: viewport ?? root.absoluteFrame, combinesText: false, resolveValues: resolveValues, into: &elements)
+        collect(root, transform: root.absoluteTransform, clip: viewport ?? root.absoluteFrame, combinesText: false,
+                parentAcceptsInput: root.parent?.acceptsSubtreeInput ?? true,
+                resolveValues: resolveValues, into: &elements)
         var byIdentifier: [String: AccessibilityElement] = [:]
         var hasDescriptions = false
         func index(_ list: [AccessibilityElement]) {
@@ -112,14 +138,19 @@ public enum AccessibilityTree {
                 }
                 return AccessibilityElement(node: element.node, semantics: semantics,
                                             frame: element.frame,
-                                            children: resolve(element.children))
+                                            children: resolve(element.children),
+                                            acceptsInput: element.acceptsInput)
             }
         }
         return resolve(elements)
     }
-    private static func collect(_ node: Node, transform: Affine2D, clip: CGRect, combinesText: Bool, resolveValues: Bool, into output: inout [AccessibilityElement]) {
+    private static func collect(_ node: Node, transform: Affine2D, clip: CGRect, combinesText: Bool,
+                                parentAcceptsInput: Bool, resolveValues: Bool, into output: inout [AccessibilityElement]) {
+        let semantics = node.accessibility
         guard node.isLayoutVisible, node.isInteractionEnabled, node.opacity > 0, node.subtreeOpacity > 0,
-              node.accessibility?.isHidden != true else { return }
+              semantics?.isHidden != true else { return }
+        let acceptsInput = parentAcceptsInput && node.isLayoutVisible
+            && node.allowsHitTesting && node.isInteractionEnabled
         // Carry window placement down the traversal instead of walking every
         // node's ancestor chain again. Scroll offsets affect children only.
         let bounds = CGRect(x: CGFloat(transform.e), y: CGFloat(transform.f),
@@ -127,19 +158,19 @@ public enum AccessibilityTree {
                             height: node.frame.height * CGFloat(abs(transform.d)))
         let childClip = node.clipsToBounds ? clip.intersection(bounds) : clip
         guard !childClip.isNull else { return }
-        let semantic = node.accessibility
         var content = transform
         content.e -= Float(node.contentOffset.x) * transform.a
         content.f -= Float(node.contentOffset.y) * transform.d
         func appendChildren(into destination: inout [AccessibilityElement]) {
             for child in node.children {
                 collect(child, transform: child.placementStep(scrolling: .zero).followed(by: content),
-                        clip: childClip, combinesText: combinesText || semantic?.combinesChildren == true,
+                        clip: childClip, combinesText: combinesText || semantics?.combinesChildren == true,
+                        parentAcceptsInput: acceptsInput,
                         resolveValues: resolveValues, into: &destination)
             }
         }
         let frame = bounds.intersection(clip)
-        guard var semantic,
+        guard var semantic = semantics,
               !(combinesText && semantic.role == .staticText),
               !frame.isNull, frame.width > 0, frame.height > 0 else {
             appendChildren(into: &output)
@@ -156,7 +187,8 @@ public enum AccessibilityTree {
         }
         if resolveValues, node.accessibilityValueProvider != nil { semantic.value = node.resolvedAccessibilityValue }
         else if semantic.state.isSecure { semantic.value = String(repeating: "•", count: semantic.value.count) }
-        output.append(AccessibilityElement(node: node, semantics: semantic, frame: frame, children: children))
+        output.append(AccessibilityElement(node: node, semantics: semantic, frame: frame, children: children,
+                                           acceptsInput: acceptsInput))
     }
     /// Resolves `describedBy` links for clients that read semantics directly
     /// instead of walking `snapshot` (for example DevTools node queries).

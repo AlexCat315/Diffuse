@@ -45,7 +45,6 @@ final class MacAccessibilityBridge: NodeResource {
     func update(root: Node, focus: FocusChain, perform: @escaping (() -> Void) -> Void) {
         guard let view, let window = view.window else { return }
         let roots = focus.modalRoot.map { [$0] + focus.accessoryRoots } ?? [root]
-        let inputAvailability = inputAvailability(in: roots)
         let snapshot = roots.flatMap { AccessibilityTree.snapshot(root: $0, viewport: root.absoluteFrame, resolveValues: false) }
         var next: [ElementID: MacSceneAccessibilityElement] = [:]
         updatedElementCount = 0
@@ -56,7 +55,7 @@ final class MacAccessibilityBridge: NodeResource {
             let local = NSRect(x: bounds.minX, y: view.isFlipped ? bounds.minY : view.bounds.height - bounds.maxY,
                                width: bounds.width, height: bounds.height)
             let screen = window.convertToScreen(view.convert(local, to: nil))
-            if element.update(item: item, parent: parent, frame: screen, focused: focus.focused === item.node, acceptsInput: inputAvailability[item.id] == true, perform: perform, permitted: { focus.permitsInput(item.node) },
+            if element.update(item: item, parent: parent, frame: screen, focused: focus.focused === item.node, acceptsInput: item.acceptsInput, perform: perform, permitted: { focus.permitsInput(item.node) },
                            focus: { [weak node = item.node] in if let node { focus.focus(node, visible: true) } }) { updatedElementCount += 1 }
             element.synchronizeChildren(item.children.map { materialize($0, parent: element) }, ids: item.children.map(\.id))
             return element
@@ -70,19 +69,6 @@ final class MacAccessibilityBridge: NodeResource {
         for (id, element) in elements where next[id] == nil { element.invalidate() }
         elements = next; rootIDs = snapshot.map(\.id)
         if changed { NSAccessibility.post(element: view, notification: .layoutChanged) }
-    }
-    /// Semantic snapshots omit layout-only ancestors. Resolve their input
-    /// gates in one walk rather than walking the ancestor chain per control.
-    private func inputAvailability(in roots: [Node]) -> [ElementID: Bool] {
-        var result: [ElementID: Bool] = [:]
-        var pending = roots.map { ($0, $0.parent?.acceptsSubtreeInput ?? true) }
-        while let (node, parentAcceptsInput) = pending.popLast() {
-            let acceptsInput = parentAcceptsInput && node.isLayoutVisible
-                && node.allowsHitTesting && node.isInteractionEnabled
-            if node.accessibility != nil { result[node.id] = acceptsInput }
-            for child in node.children { pending.append((child, acceptsInput)) }
-        }
-        return result
     }
 
 }

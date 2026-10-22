@@ -27,14 +27,50 @@ GuavaUI/Examples GuavaUIDemo` still enables the loopback service at the default
 port 9229. Open Client/index.html and connect manually in that workflow. Ordinary apps
 use the same runtime diagnostics service; no demo-specific API is required.
 
+The client uses a two-zone layout: the mirror fills the full width of the upper
+area, and a resizable bottom dock holds tabbed panels (Tree, Selection,
+Performance, Log). The dock splitter drags its height and the active tab,
+height and collapsed state persist in the browser; clicking a tab restores a
+collapsed dock and clicking the active tab collapses it.
+
 The client can inspect and filter the live node tree, select a node, request
-configurable mirror frames, display timing/log/runtime inventory data, capture
+configurable mirror frames, collect timing/log/runtime inventory data, capture
 and restore host checkpoints, and forward pointer, wheel, text, and common
 keyboard input through the mirror. Selecting a node sends `select.node` with the
 stable `elementID`, which the host uses to draw a runtime overlay.
 
 Tree, log, timing, and mirror streams are opt-in per connection. Disconnecting
 also releases pressed input and clears the runtime selection overlay.
+
+## Performance capture and reports
+
+The Performance tab is populated automatically; no manual start is required.
+
+- Timing frames are collected continuously from the `timing` stream into a
+  bounded in-browser history (latest 3600 frames). Windows of 30/60/120/300
+  seconds or all history can be compared.
+- The summary cards show reciprocal CPU throughput, frame-total avg/p50/p99/max,
+  hitch counts against the 60 fps budget, presented-frame percentage and
+  average node/batch counts.
+- The stage heatmap renders one row per measured stage (frame total,
+  recomposition, layout, draw, present) and 120 time buckets per window; a cell
+  is the worst frame in that bucket, colored against the stage budget. Hover a
+  cell for the frame number, timestamp and stage values.
+- Stage tables list avg/p50/p95/p99/max and the over-budget rate; worst frames
+  and the hottest CPU-timeline components (count/total/avg/max) are listed
+  separately. **Mark** adds a named marker for before/after comparisons.
+- **Auto trace** (on by default) subscribes to the CPU timeline on connect;
+  disable it when the CPU instrumentation overhead is unwanted. The host
+  recorder still only runs while at least one client subscribes.
+- **Export MD** writes an AI-friendly Markdown report (summary, stage tables,
+  worst frames, hot components, heatmap series, markers, warning/error logs);
+  **Copy report** copies the same text; **Export JSON** writes structured data
+  including the Chrome/Perfetto trace and recent log entries. **Clear** resets
+  the frame history and restarts the host timeline capture.
+  Report downloads are named `guava-performance-<timestamp>.{md,json}`.
+
+Layout and dock preferences (active tab, height, collapsed state, auto trace)
+are kept in browser localStorage and never sent to the host.
 
 Desktop tree snapshots are captured on the scene thread and encoded once on a
 dedicated background worker. Full-tree updates are limited to at most 10 Hz;
@@ -162,8 +198,10 @@ or filter to the selected component. Custom hosts can register providers on
 
 **Record timeline** captures actual component/commit, Yoga layout and draw-list
 CPU spans. Filter stages, click a component span to inspect it, then stop and
-**Export trace** for a Chrome/Perfetto-compatible JSON capture. Recording is opt-in
-and bounded; parent and child durations overlap. GPU execution is excluded.
+**Export trace** for a Chrome/Perfetto-compatible JSON capture. The web client
+subscribes automatically via **Auto trace** while connected; the recorder
+itself is subscriber-driven and bounded, so unsubscribed hosts capture nothing.
+Parent and child durations overlap. GPU execution is excluded.
 
 **Add breakpoint** forwards the mapped source coordinates to the companion
 GuavaUI-vscode extension's existing VS Code/Cursor debugger API. Build and reload
