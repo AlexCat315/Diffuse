@@ -85,10 +85,12 @@ private func makeBenchmarkScene(configuration: Configuration) -> SceneRuntime {
             collisionSteps: 1,
             capacity: PhysicsCapacitySettings(
                 maxBodies: max(16_384, configuration.bodyCount + 16),
+                workerThreadCount: configuration.workerThreadCount
+            ),
+            jolt: JoltPhysicsTuning(
                 maxBodyPairs: configuration.scenario == .denseContact ? 131_072 : 65_536,
                 maxContactConstraints: configuration.scenario == .denseContact ? 32_768 : 16_384,
-                tempAllocatorBytes: 64 * 1_024 * 1_024,
-                workerThreadCount: configuration.workerThreadCount
+                tempAllocatorBytes: 64 * 1_024 * 1_024
             )
         )
     )

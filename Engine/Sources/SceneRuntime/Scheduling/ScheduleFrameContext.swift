@@ -37,6 +37,7 @@ struct PhysicsFrameMetrics {
     var synchronizedSoftBodyCount = 0
     var synchronizedConstraintCount = 0
     var error: PhysicsBackendError?
+    var unsupportedFeatures: PhysicsBackendCapabilities = []
 }
 
 /// Commands captured for physics determinism recording and replay.

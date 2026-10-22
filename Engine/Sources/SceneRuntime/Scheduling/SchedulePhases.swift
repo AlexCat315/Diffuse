@@ -93,6 +93,16 @@ extension RuntimeWorldSchedule {
         frame.metrics.bodyCount = frame.descriptors.bodies.count
         frame.metrics.softBodyCount = frame.descriptors.softBodies.count
         frame.metrics.constraintCount = frame.descriptors.constraints.count
+        let supportedFeatures = physicsBackend.capabilities
+        if supportedFeatures != .all {
+            frame.metrics.unsupportedFeatures = PhysicsBackendCapabilities(
+                requiredByBodies: frame.descriptors.bodies,
+                constraints: frame.descriptors.constraints,
+                characters: frame.descriptors.characters,
+                vehicles: frame.descriptors.vehicles,
+                softBodies: frame.descriptors.softBodies
+            ).subtracting(supportedFeatures)
+        }
 
         let syncEventDiff = diffPhysicsSyncEvents(
             bodies: frame.descriptors.bodies,
@@ -323,7 +333,8 @@ extension RuntimeWorldSchedule {
             droppedStepCount: physicsClock.lastDroppedStepCount,
             synchronizationNanoseconds: frame.metrics.synchronizationNanoseconds,
             stepNanoseconds: frame.metrics.stepNanoseconds,
-            lastError: frame.metrics.error
+            lastError: frame.metrics.error,
+            unsupportedFeatures: frame.metrics.unsupportedFeatures
         )
         physicsContactFrame = PhysicsContactFrameResource(events: frame.results.contactEvents)
         characterStateFrame = CharacterStateFrameResource(states: frame.results.characterStates)
@@ -389,7 +400,7 @@ extension RuntimeWorldSchedule {
         into frame: inout RuntimeFrameContext
     ) {
         if frame.physicsSettings.simulationMode == .off {
-            // Edit/query-only worlds do not step Jolt and therefore cannot
+            // Edit/query-only worlds do not step the backend and therefore cannot
             // receive contact callbacks. Preserve trigger previews through
             // the query scene; play mode exclusively uses the listener path.
             let triggerBackend = physicsQueryScene.synchronize(in: world)

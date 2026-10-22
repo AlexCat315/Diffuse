@@ -145,12 +145,11 @@ struct AdvancedRigidBodyTests {
     @Test("capacity settings create and safely rebuild the native context")
     func capacitySettingsRebuildContext() {
         var runtime = SceneRuntime()
-        let initialCapacity = PhysicsCapacitySettings(
-            maxBodies: 64,
+        let initialCapacity = PhysicsCapacitySettings(maxBodies: 64, workerThreadCount: 1)
+        let initialTuning = JoltPhysicsTuning(
             maxBodyPairs: 128,
             maxContactConstraints: 64,
-            tempAllocatorBytes: 1_024 * 1_024,
-            workerThreadCount: 1
+            tempAllocatorBytes: 1_024 * 1_024
         )
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
@@ -158,7 +157,8 @@ struct AdvancedRigidBodyTests {
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
             allowSleep: false,
-            capacity: initialCapacity
+            capacity: initialCapacity,
+            jolt: initialTuning
         ))
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 3, 0)), for: entity)
@@ -172,6 +172,7 @@ struct AdvancedRigidBodyTests {
 
         var settings = runtime.physicsSettings
         settings.capacity.maxBodies = 128
+        settings.jolt.maxBodyPairs = 256
         runtime.setPhysicsSettings(settings)
         let second = runtime.tick(deltaTime: 1.0 / 60.0)
         let secondY = runtime.worldTransform(for: entity)?.translation.y ?? 3

@@ -8,6 +8,10 @@ public final class NullPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         "none"
     }
 
+    /// Accepts every descriptor kind and simulates none of them, so no authored
+    /// feature is reported as unsupported.
+    public var capabilities: PhysicsBackendCapabilities { .all }
+
     public func prepare(context: PhysicsPrepareContext) -> PhysicsPrepareResult {
         var upsertedBodies = 0
         var removedBodies = 0

@@ -68,3 +68,14 @@ extension PhysicsJointMotorMode: EditorInspectorEnumOption {
         }
     }
 }
+
+extension PhysicsBackendKind: EditorInspectorEnumOption {
+    public var inspectorOptionID: String { String(describing: self) }
+
+    public var inspectorOptionLabel: String {
+        switch self {
+        case .none: return L("None")
+        case .jolt: return "Jolt"
+        }
+    }
+}

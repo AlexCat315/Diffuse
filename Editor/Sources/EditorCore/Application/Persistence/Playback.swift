@@ -20,7 +20,7 @@ import SIMDCompat
 
 extension EditorApplication {
     /// Transitions to a new playback state.
-    /// - On `.playing`: snapshots the current scene, enables Jolt physics simulation.
+    /// - On `.playing`: snapshots the current scene, enables physics simulation on the scene's backend.
     /// - On `.paused`: freezes physics (mode → off) without restoring the scene.
     /// - On `.stopped`: restores the pre-play scene snapshot and disables physics.
     public func applyPlaybackState(_ next: PlaybackState) {
@@ -44,7 +44,6 @@ extension EditorApplication {
             scene.scriptRuntime.isGameplayExecutionEnabled = true
             var settings = scene.scene.physicsSettings
             settings.simulationMode = .play
-            settings.backendKind = .jolt
             scene.scene.setPhysicsSettings(settings)
             store.dispatch(.setPlaybackState(.playing))
             logConsole("Physics simulation started")

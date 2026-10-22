@@ -73,13 +73,18 @@ public struct RuntimeWorldSchedule {
     var physicsSyncCache = PhysicsSyncCache()
     var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
     var jobSystem = JobSystem.shared
-    let joltPhysicsBackend: JoltPhysicsBackend
+    /// The engine instance shared by simulation and the query scene. It is
+    /// replaced only when settings select a different engine kind.
+    var sharedPhysicsBackend: any PhysicsBackend
+    var sharedPhysicsBackendKind: PhysicsBackendKind
     let physicsQueryScene: PhysicsQueryScene
 
     public init() {
-        let joltPhysicsBackend = JoltPhysicsBackend()
-        self.joltPhysicsBackend = joltPhysicsBackend
-        physicsQueryScene = PhysicsQueryScene(backend: joltPhysicsBackend)
+        let kind = PhysicsBackendKind.preferred
+        let backend = kind.makeBackend()
+        sharedPhysicsBackend = backend
+        sharedPhysicsBackendKind = kind
+        physicsQueryScene = PhysicsQueryScene(backend: backend)
     }
 
     public mutating func setPhysicsBackend(_ backend: any PhysicsBackend) {

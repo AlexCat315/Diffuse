@@ -24,6 +24,8 @@ private final class RecordingPhysicsBackend: PhysicsBackend, @unchecked Sendable
         "recording"
     }
 
+    var capabilities: PhysicsBackendCapabilities { .all }
+
     func prepare(context: PhysicsPrepareContext) -> PhysicsPrepareResult {
         prepareContexts.append(context)
         return PhysicsPrepareResult(

@@ -1,7 +1,7 @@
 import Foundation
 import SIMDCompat
 
-/// A Jolt vehicle attached to the same entity's dynamic `RigidBody`.
+/// A backend-simulated vehicle attached to the same entity's dynamic `RigidBody`.
 public struct Vehicle: RuntimeComponent, Sendable, Equatable {
     public var controller: VehicleControllerConfiguration
     public var wheels: [VehicleWheelConfiguration]

@@ -7,7 +7,7 @@ public enum ClothBendType: UInt8, Sendable, Equatable, Codable, CaseIterable {
     case dihedral
 }
 
-/// Grid topology authored for a Jolt soft-body cloth.
+/// Grid topology authored for a soft-body cloth.
 public struct Cloth: RuntimeComponent, Sendable, Equatable {
     public var gridSizeX: Int
     public var gridSizeZ: Int

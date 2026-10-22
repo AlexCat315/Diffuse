@@ -270,8 +270,8 @@ struct EditorSceneAdapterTests {
         #expect(body.continuousCollisionDetection)
     }
 
-    @Test("Scene manifest preserves collision steps and restores Jolt backend")
-    func sceneManifestPreservesCompleteJoltSettings() throws {
+    @Test("Scene manifest preserves backend kind, collision steps, and backend tuning")
+    func sceneManifestPreservesCompletePhysicsSettings() throws {
         let source = EditorSceneAdapter()
         source.scene.setResource(
             PhysicsSettingsResource(
@@ -282,13 +282,12 @@ struct EditorSceneAdapterTests {
                 maxSubstepsPerFrame: 8,
                 allowSleep: false,
                 collisionSteps: 4,
-                capacity: PhysicsCapacitySettings(
-                    maxBodies: 20_000,
+                capacity: PhysicsCapacitySettings(maxBodies: 20_000, workerThreadCount: 3),
+                jolt: JoltPhysicsTuning(
                     bodyMutexCount: 128,
                     maxBodyPairs: 40_000,
                     maxContactConstraints: 12_000,
-                    tempAllocatorBytes: 32 * 1_024 * 1_024,
-                    workerThreadCount: 3
+                    tempAllocatorBytes: 32 * 1_024 * 1_024
                 )
             )
         )
@@ -299,20 +298,19 @@ struct EditorSceneAdapterTests {
         _ = restored.load(manifest: decoded)
 
         let settings = try #require(restored.scene.resource(PhysicsSettingsResource.self))
-        #expect(settings.backendKind == .jolt)
+        #expect(settings.backendKind == .none)
         #expect(settings.simulationMode == .bake)
         #expect(settings.gravity == SIMD3<Float>(1, -15, 2))
         #expect(abs(settings.fixedTimeStepSeconds - (1.0 / 120.0)) < 0.000_001)
         #expect(settings.maxSubstepsPerFrame == 8)
         #expect(settings.collisionSteps == 4)
         #expect(!settings.allowSleep)
-        #expect(settings.capacity == PhysicsCapacitySettings(
-            maxBodies: 20_000,
+        #expect(settings.capacity == PhysicsCapacitySettings(maxBodies: 20_000, workerThreadCount: 3))
+        #expect(settings.jolt == JoltPhysicsTuning(
             bodyMutexCount: 128,
             maxBodyPairs: 40_000,
             maxContactConstraints: 12_000,
-            tempAllocatorBytes: 32 * 1_024 * 1_024,
-            workerThreadCount: 3
+            tempAllocatorBytes: 32 * 1_024 * 1_024
         ))
     }
 

@@ -172,6 +172,23 @@ struct EditorInspectorSectionsTests {
         #expect(!settings.allowSleep)
     }
 
+    @Test("physics settings inspector selects the backend and shows only its tuning")
+    func physicsBackendSelection() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        #expect(field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") != nil)
+
+        guard case let .stringOptions(backend, _) =
+                field(adapter, id, section: "physics-settings", field: "physics-backend") else {
+            Issue.record("expected physics backend options"); return
+        }
+        backend.wrappedValue = PhysicsBackendKind.none.inspectorOptionID
+
+        let settings = try #require(adapter.scene.resource(PhysicsSettingsResource.self))
+        #expect(settings.backendKind == .none)
+        #expect(field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") == nil)
+    }
+
     @Test("rigid body inspector edits Jolt velocity damping and CCD settings")
     func rigidBodyJoltSettingsBindings() throws {
         let adapter = EditorSceneAdapter()

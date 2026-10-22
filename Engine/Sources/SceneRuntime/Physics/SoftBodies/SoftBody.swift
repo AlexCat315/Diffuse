@@ -1,7 +1,7 @@
 import Foundation
 import SIMDCompat
 
-/// An arbitrary triangle surface used as Jolt soft-body topology.
+/// An arbitrary triangle surface used as soft-body topology.
 ///
 /// Geometry remains in `MeshColliderGeometryResource`, keyed by `resourceID`,
 /// so scenes and prefabs serialize only a stable asset reference and constraint

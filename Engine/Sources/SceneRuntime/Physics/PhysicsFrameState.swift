@@ -45,6 +45,8 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
     public var synchronizationNanoseconds: UInt64
     public var stepNanoseconds: UInt64
     public var lastError: PhysicsBackendError?
+    /// Authored features the active backend cannot simulate.
+    public var unsupportedFeatures: PhysicsBackendCapabilities
 
     public init(
         backendIdentifier: String = "none",
@@ -64,7 +66,8 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
         droppedStepCount: Int = 0,
         synchronizationNanoseconds: UInt64 = 0,
         stepNanoseconds: UInt64 = 0,
-        lastError: PhysicsBackendError? = nil
+        lastError: PhysicsBackendError? = nil,
+        unsupportedFeatures: PhysicsBackendCapabilities = []
     ) {
         self.backendIdentifier = backendIdentifier
         self.bodyCount = bodyCount
@@ -84,6 +87,7 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
         self.synchronizationNanoseconds = synchronizationNanoseconds
         self.stepNanoseconds = stepNanoseconds
         self.lastError = lastError
+        self.unsupportedFeatures = unsupportedFeatures
     }
 }
 

@@ -6,7 +6,7 @@ public enum CharacterStance: UInt8, Sendable, Equatable, Codable {
     case crouching
 }
 
-/// Authored configuration for a native Jolt virtual character.
+/// Authored configuration for a backend-simulated virtual character.
 /// Character entities do not require a `RigidBody` or `Collider`; this component owns
 /// the capsule used by the character solver.
 public struct CharacterController: RuntimeComponent, Sendable, Equatable {

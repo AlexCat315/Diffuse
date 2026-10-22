@@ -9,6 +9,8 @@ private final class SelectionRecordingPhysicsBackend: PhysicsBackend, @unchecked
         "recording"
     }
 
+    var capabilities: PhysicsBackendCapabilities = .all
+
     func prepare(context: PhysicsPrepareContext) -> PhysicsPrepareResult {
         prepareContexts.append(context)
         return PhysicsPrepareResult(
@@ -176,6 +178,40 @@ struct PhysicsBackendSelectionTests {
 
         #expect(report.physics.backendIdentifier == "recording")
         #expect(backend.prepareContexts.count == 1)
+    }
+
+    @Test("frame state reports authored features the backend cannot simulate")
+    func frameStateReportsUnsupportedFeatures() {
+        func makeRuntime(backend: (any PhysicsBackend)?) -> SceneRuntime {
+            var runtime = SceneRuntime()
+            if let backend { runtime.setPhysicsBackend(backend) }
+            runtime.setPhysicsSettings(
+                PhysicsSettingsResource(
+                    simulationMode: .play,
+                    backendKind: .jolt,
+                    fixedTimeStepSeconds: 1.0 / 60.0,
+                    maxSubstepsPerFrame: 1
+                )
+            )
+            let entity = runtime.createEntity()
+            _ = runtime.setLocalTransform(LocalTransform.identity, for: entity)
+            _ = runtime.setComponent(RigidBody(), for: entity)
+            _ = runtime.setComponent(
+                Collider(shape: .cylinder(radius: 0.5, halfHeight: 0.5, center: .zero)),
+                for: entity
+            )
+            return runtime
+        }
+
+        let limited = SelectionRecordingPhysicsBackend()
+        limited.capabilities = .all.subtracting(.cylinderColliders)
+        var limitedRuntime = makeRuntime(backend: limited)
+        _ = limitedRuntime.tick(deltaTime: 1.0 / 60.0)
+        #expect(limitedRuntime.physicsFrameState.unsupportedFeatures == .cylinderColliders)
+
+        var joltRuntime = makeRuntime(backend: nil)
+        _ = joltRuntime.tick(deltaTime: 1.0 / 60.0)
+        #expect(joltRuntime.physicsFrameState.unsupportedFeatures.isEmpty)
     }
 
     @Test("configured Jolt backend writes stepped body state back into SceneRuntime")

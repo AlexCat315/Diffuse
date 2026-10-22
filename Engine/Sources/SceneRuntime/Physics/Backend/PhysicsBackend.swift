@@ -3,6 +3,7 @@ import SIMDCompat
 
 public protocol PhysicsBackend: AnyObject, Sendable {
     var identifier: String { get }
+    var capabilities: PhysicsBackendCapabilities { get }
     func prepare(context: PhysicsPrepareContext) -> PhysicsPrepareResult
     func step(context: PhysicsStepContext) -> PhysicsStepResult
     func raycast(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter) -> PhysicsRaycastHit?

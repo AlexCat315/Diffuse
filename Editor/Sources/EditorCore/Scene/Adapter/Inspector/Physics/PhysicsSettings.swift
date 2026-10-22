@@ -9,14 +9,15 @@ import SIMDCompat
 
 extension EditorSceneAdapter {
     func physicsSettingsSection() -> EditorInspectorSection {
-        EditorInspectorSection(
+        let backendKind = (scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()).backendKind
+        return EditorInspectorSection(
             id: "physics-settings",
             title: L("Physics Settings"),
             fields: [
                 EditorInspectorField(
                     id: "physics-backend",
                     label: L("Backend"),
-                    value: .readOnly("Jolt")
+                    value: .options(physicsBackendKindBinding())
                 ),
                 EditorInspectorField(
                     id: "physics-simulation-mode",
@@ -69,31 +70,36 @@ extension EditorSceneAdapter {
                                               min: 1, max: 1_000_000, step: 1_024, showsStepper: true)
                 ),
                 EditorInspectorField(
-                    id: "physics-max-body-pairs",
-                    label: L("Max Body Pairs"),
-                    value: .constrainedNumber(physicsCapacityBinding(\.maxBodyPairs, min: 1, max: 4_000_000),
-                                              min: 1, max: 4_000_000, step: 1_024, showsStepper: true)
-                ),
-                EditorInspectorField(
-                    id: "physics-max-contacts",
-                    label: L("Max Contacts"),
-                    value: .constrainedNumber(physicsCapacityBinding(\.maxContactConstraints, min: 1, max: 1_000_000),
-                                              min: 1, max: 1_000_000, step: 1_024, showsStepper: true)
-                ),
-                EditorInspectorField(
-                    id: "physics-temp-memory",
-                    label: L("Temp Memory (MiB)"),
-                    value: .constrainedNumber(physicsTempAllocatorMiBBinding(),
-                                              min: 1, max: 4_095, step: 1, showsStepper: true)
-                ),
-                EditorInspectorField(
                     id: "physics-workers",
                     label: L("Worker Threads (0 = Auto)"),
                     value: .constrainedNumber(physicsCapacityBinding(\.workerThreadCount, min: 0, max: 1_024),
                                               min: 0, max: 1_024, step: 1, showsStepper: true)
                 ),
-            ]
+            ] + (backendKind == .jolt ? joltTuningFields() : [])
         )
+    }
+
+    private func joltTuningFields() -> [EditorInspectorField] {
+        [
+            EditorInspectorField(
+                id: "physics-max-body-pairs",
+                label: L("Max Body Pairs"),
+                value: .constrainedNumber(joltTuningBinding(\.maxBodyPairs, min: 1, max: 4_000_000),
+                                          min: 1, max: 4_000_000, step: 1_024, showsStepper: true)
+            ),
+            EditorInspectorField(
+                id: "physics-max-contacts",
+                label: L("Max Contacts"),
+                value: .constrainedNumber(joltTuningBinding(\.maxContactConstraints, min: 1, max: 1_000_000),
+                                          min: 1, max: 1_000_000, step: 1_024, showsStepper: true)
+            ),
+            EditorInspectorField(
+                id: "physics-temp-memory",
+                label: L("Temp Memory (MiB)"),
+                value: .constrainedNumber(joltTempAllocatorMiBBinding(),
+                                          min: 1, max: 4_095, step: 1, showsStepper: true)
+            ),
+        ]
     }
 
     private func updatePhysicsSettings(_ mutate: (inout PhysicsSettingsResource) -> Void) {
@@ -101,13 +107,14 @@ extension EditorSceneAdapter {
         mutate(&next)
         let sanitized = PhysicsSettingsResource(
             simulationMode: next.simulationMode,
-            backendKind: .jolt,
+            backendKind: next.backendKind,
             gravity: next.gravity,
             fixedTimeStepSeconds: next.fixedTimeStepSeconds,
             maxSubstepsPerFrame: next.maxSubstepsPerFrame,
             allowSleep: next.allowSleep,
             collisionSteps: next.collisionSteps,
-            capacity: next.capacity
+            capacity: next.capacity,
+            jolt: next.jolt
         )
         guard scene.resource(PhysicsSettingsResource.self) != sanitized else { return }
         scene.setResource(sanitized)
@@ -205,18 +212,50 @@ extension EditorSceneAdapter {
         )
     }
 
-    private func physicsTempAllocatorMiBBinding() -> Binding<Float> {
+    private func joltTempAllocatorMiBBinding() -> Binding<Float> {
         Binding(
             get: { [self] in
                 let settings = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
-                return Float(settings.capacity.tempAllocatorBytes) / Float(1_024 * 1_024)
+                return Float(settings.jolt.tempAllocatorBytes) / Float(1_024 * 1_024)
             },
             set: { [self] next in
                 let mebibytes = max(1, min(Int(next.rounded()), 4_095))
                 let bytes = mebibytes * 1_024 * 1_024
                 let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
-                guard current.capacity.tempAllocatorBytes != bytes else { return }
-                updatePhysicsSettings { $0.capacity.tempAllocatorBytes = bytes }
+                guard current.jolt.tempAllocatorBytes != bytes else { return }
+                updatePhysicsSettings { $0.jolt.tempAllocatorBytes = bytes }
+            }
+        )
+    }
+
+    private func physicsBackendKindBinding() -> Binding<PhysicsBackendKind> {
+        Binding(
+            get: { [self] in
+                (scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()).backendKind
+            },
+            set: { [self] next in
+                let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                guard current.backendKind != next else { return }
+                updatePhysicsSettings { $0.backendKind = next }
+            }
+        )
+    }
+
+    private func joltTuningBinding(
+        _ keyPath: WritableKeyPath<JoltPhysicsTuning, Int>,
+        min minimum: Int,
+        max maximum: Int
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float((scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource())
+                    .jolt[keyPath: keyPath])
+            },
+            set: { [self] next in
+                let clamped = max(minimum, min(Int(next.rounded()), maximum))
+                let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                guard current.jolt[keyPath: keyPath] != clamped else { return }
+                updatePhysicsSettings { $0.jolt[keyPath: keyPath] = clamped }
             }
         )
     }

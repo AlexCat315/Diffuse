@@ -8,11 +8,6 @@ public enum PhysicsSimulationMode: String, CaseIterable, Sendable, Equatable {
     case bake
 }
 
-public enum PhysicsBackendKind: String, Sendable, Equatable {
-    case none
-    case jolt
-}
-
 public enum PhysicsBackendErrorCode: String, Sendable, Equatable {
     case abiMismatch
     case invalidArgument

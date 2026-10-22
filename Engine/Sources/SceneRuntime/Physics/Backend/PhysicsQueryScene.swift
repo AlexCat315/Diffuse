@@ -29,7 +29,7 @@ public struct PhysicsQueryCacheStats: Sendable, Equatable {
 /// outside the simulation phase. Holds the protocol rather than a concrete engine
 /// so any `PhysicsBackend` implementation can be queried this way.
 final class PhysicsQueryScene: @unchecked Sendable {
-    private let backend: any PhysicsBackend
+    private var backend: any PhysicsBackend
     private var sourceRevision: UInt64?
     private var bodyCount = 0
     private var constraintCount = 0
@@ -81,6 +81,11 @@ final class PhysicsQueryScene: @unchecked Sendable {
         sourceRevision = world.physicsRevision
         self.bodyCount = bodyCount
         self.constraintCount = constraintCount
+    }
+
+    func replaceBackend(_ next: any PhysicsBackend) {
+        backend = next
+        invalidate()
     }
 
     func invalidate() {

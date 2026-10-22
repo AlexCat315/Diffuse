@@ -98,7 +98,7 @@ extension RuntimeWorldSchedule {
                     mesh: RenderMeshHandle(meshIndex: renderMesh.meshIndex,
                                            assetID: renderMesh.assetID ?? view.assetReferences[entity]?.assetID,
                                            levelsOfDetail: renderMesh.levelsOfDetail),
-                    // Jolt streams soft-body vertices in world space. Drawing
+                    // Backends stream soft-body vertices in world space. Drawing
                     // them with the authored ECS transform would apply it twice.
                     transform: deformableEntities.contains(entity)
                         ? matrix_identity_float4x4
