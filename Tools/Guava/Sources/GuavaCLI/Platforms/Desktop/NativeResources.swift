@@ -41,13 +41,6 @@ struct NativeDesktopResources {
         try write(entitlements, to: file)
     }
 
-    /// An ad-hoc signature's designated requirement is its code hash, so every
-    /// rebuild reads as a new app and Keychain forgets "Always Allow". Development
-    /// builds name the bundle identifier instead; release builds keep the hash.
-    static func designatedRequirement(identifier: String, configuration: BuildConfiguration) -> [String] {
-        configuration == .release ? [] : ["--requirements", "=designated => identifier \"\(identifier)\""]
-    }
-
     func sign(_ artifact: DesktopPackage.Artifact, configuration: BuildConfiguration) throws {
         #if os(macOS)
         if platform == .mac {
@@ -56,9 +49,7 @@ struct NativeDesktopResources {
                 let executable = artifact.directory.appendingPathComponent("Contents/Helpers/\(helper)")
                 try Shell.run(["codesign", "--force", "--sign", "-", executable.path])
             }
-            try Shell.run(["codesign", "--force", "--sign", "-", "--entitlements", file.path]
-                + Self.designatedRequirement(identifier: project.configuration.application.id, configuration: configuration)
-                + [artifact.directory.path])
+            try Shell.run(["codesign", "--force", "--sign", "-", "--entitlements", file.path, artifact.directory.path])
         }
         #endif
     }

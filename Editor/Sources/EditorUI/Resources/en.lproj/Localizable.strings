@@ -171,7 +171,7 @@
 "API key (leave blank to use the available credential)" = "API key (leave blank to use the available credential)";
 "Apply AI Settings" = "Apply AI Settings";
 "Remove Stored Key" = "Remove Stored Key";
-"A credential is stored securely." = "A credential is stored securely.";
+"A credential is saved for this user." = "A credential is saved for this user.";
 "Using credential from environment variable %@." = "Using credential from environment variable %@.";
 "No credential is available for this provider." = "No credential is available for this provider.";
 "Enter a model name." = "Enter a model name.";

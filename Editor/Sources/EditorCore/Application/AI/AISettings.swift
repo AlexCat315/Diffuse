@@ -21,22 +21,20 @@ import SIMDCompat
 extension EditorApplication {
     // MARK: - AI settings
 
-    /// Applies new AI settings: persists provider/model, writes the key to Keychain,
+    /// Applies new AI settings: persists provider/model, writes the key to the credential file,
     /// and hot-swaps the Session without restart.
     @discardableResult
     public func applyAISettings(_ settings: EditorAISettings, apiKey: String) -> Bool {
         do {
             if settings.provider != .none, !apiKey.isEmpty {
-                try AIKeychain.save(key: apiKey, provider: settings.provider)
+                try AICredentialStore.save(key: apiKey, provider: settings.provider)
             }
             // Read the secret once here, on the user's Apply, so a key the
             // session cannot use fails now instead of leaving AI silently off.
-            guard settings.provider == .none || AIKeychain.load(provider: settings.provider) != nil else {
+            guard settings.provider == .none || AICredentialStore.load(provider: settings.provider) != nil else {
                 logConsole("AI settings were not applied",
                            severity: .error,
-                           detail: AIKeychain.hasKey(for: settings.provider)
-                               ? "The stored key for \(settings.provider.displayName) could not be read. Allow access in the Keychain prompt, or enter the key again."
-                               : "Enter an API key for \(settings.provider.displayName).")
+                           detail: "Enter an API key for \(settings.provider.displayName).")
                 return false
             }
         } catch {
@@ -94,7 +92,7 @@ extension EditorApplication {
     @discardableResult
     public func clearAIKey() -> Bool {
         do {
-            try AIKeychain.delete(provider: store.state.assistant.aiSettings.provider)
+            try AICredentialStore.delete(provider: store.state.assistant.aiSettings.provider)
         } catch {
             logConsole("AI credentials could not be removed",
                        severity: .error,
@@ -131,13 +129,13 @@ extension EditorApplication {
 
     /// Returns `true` if a non-empty API key is stored for the current provider.
     public func hasStoredAIKey(for provider: EditorAIProvider? = nil) -> Bool {
-        AIKeychain.hasKey(for: provider ?? store.state.assistant.aiSettings.provider)
+        AICredentialStore.hasKey(for: provider ?? store.state.assistant.aiSettings.provider)
     }
 
     public func aiCredentialSource(
         for provider: EditorAIProvider? = nil
     ) -> AICredentialSource? {
-        AIKeychain.credentialSource(for: provider ?? store.state.assistant.aiSettings.provider)
+        AICredentialStore.credentialSource(for: provider ?? store.state.assistant.aiSettings.provider)
     }
 
     static func workflowContext(
@@ -197,7 +195,7 @@ extension EditorApplication {
         case .none:
             return nil
         case .anthropic:
-            guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
+            guard let key = AICredentialStore.load(provider: .anthropic) else { return nil }
             return Session(config: .anthropic(apiKey: key, model: settings.model, maxTokens: 8192,
                                               autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
@@ -205,7 +203,7 @@ extension EditorApplication {
                            pluginQuerySnapshotProvider: pluginQuerySnapshotProvider,
                            toolPolicy: toolPolicy)
         case .openai:
-            guard let key = AIKeychain.load(provider: .openai) else { return nil }
+            guard let key = AICredentialStore.load(provider: .openai) else { return nil }
             return Session(config: .openAIResponses(apiKey: key, model: settings.model, maxTokens: 8192,
                                                     autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
@@ -213,7 +211,7 @@ extension EditorApplication {
                            pluginQuerySnapshotProvider: pluginQuerySnapshotProvider,
                            toolPolicy: toolPolicy)
         case .deepseek:
-            guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
+            guard let key = AICredentialStore.load(provider: .deepseek) else { return nil }
             return Session(config: .deepSeek(apiKey: key, model: settings.model, maxTokens: 8192,
                                              autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,

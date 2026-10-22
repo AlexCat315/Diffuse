@@ -53,7 +53,7 @@ struct AgentSettingsEditor {
 
     func credentialStatus(_ source: AICredentialSource?) -> String {
         switch source {
-        case .operatingSystemStore: L("A credential is stored securely.")
+        case .credentialFile: L("A credential is saved for this user.")
         case .environment(let variable): String(format: L("Using credential from environment variable %@."), variable)
         case nil: L("No credential is available for this provider.")
         }

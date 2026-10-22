@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- 代码编辑器新增小地图（`TextFieldCodeEditing.showsMinimap`）：右侧按语法着色的缩略全文，标出可见区域，点击或拖动即可滚动，长文件随正文按比例滚动。
+- 代码编辑器新增小地图（`TextFieldCodeEditing.showsMinimap`）：右侧按语法着色的缩略全文，标出可见区域，点击或拖动即可滚动，长文件随正文按比例滚动；显示小地图时不再绘制纵向滚动条。
 
 - Swift 支持补齐：补全列表显示选中项的文档，缺失时通过 `completionItem/resolve` 按需获取；悬停按 Markdown 渲染（代码块、列表、链接）；光标所在符号的其他出现处高亮（`documentHighlight`，`TextFieldCodeEditing.occurrences`）；命令面板搜索整个工作区的符号（`workspace/symbol`），可直接打开项目中的任意 Swift 文件；有选区时“格式化”只格式化选区（`rangeFormatting`），设置 › 编辑器 › Swift 可开启保存时格式化；诊断保留 `tags` 与 `relatedInformation`，未使用的代码变淡、已弃用的名称加删除线，问题面板列出关联位置并可跳转；代码操作按快速修复、重构、源代码操作分组。语言服务在保存时发送 `didSave`，每 2 秒检查项目内 Swift 文件与 `Package.resolved` 的外部改动并发送 `workspace/didChangeWatchedFiles`，`workspace/configuration` 按 section 返回真实设置。参数提示只显示文档首段，不再遮住代码。`AssistanceReplyTests` 覆盖。
 
@@ -12,7 +12,7 @@
 
 - 源代码管理：差异改为在编辑器中以单独标签打开（双侧行号、增删着色、虚拟化滚动，可暂存、取消暂存、放弃），随文件在暂存区与工作区之间移动；活动栏更改数徽标移到图标右下角；状态栏只显示编辑器自身的警告。语言服务状态改为卡片：状态、原因、分析范围与日志、工具链分页。
 
-- macOS 开发构建以包标识作为签名的指定要求，重新构建后钥匙串“始终允许”仍然有效。
+- AI 服务商密钥不再存入钥匙串，改存 `~/Library/Application Support/GuavaStudio/Credentials/ai-providers.json`（文件 0600、目录 0700，仅当前用户可读，原子替换写入），开发构建重新编译后不再弹出钥匙串授权；未保存密钥的服务商仍读取 `ANTHROPIC_API_KEY` 等环境变量。`AIKeychain` 更名为 `AICredentialStore`，凭据来源 `.operatingSystemStore` 改为 `.credentialFile`；开发构建恢复普通 ad-hoc 签名。旧钥匙串条目不会读取，需要重新输入一次密钥。
 
 - 版本控制（捆绑插件）：新增 EditorCore `VersionControl` 模块，`EditorVersionControl` 统一驱动 Git 与 [Lore](https://github.com/EpicGames/lore)。两者都是用 Swift 编写的捆绑插件（`Editor/Plugins/Git`、`Editor/Plugins/Lore`，产物在 `Resources/Plugins/*.guavaplugin`）：插件决定运行哪条命令、怎样解析输出，编辑器按 manifest 的进程权限执行命令、异步等待，再把输出交回插件，直到插件返回结果，插件宿主不会被长命令卡住；放弃新文件时插件返回 `trash`，编辑器检查路径在仓库内后移到废纸篓。`plugin.json` 新增 `contributes.versionControl`（系统 id、显示名、标记 `.git` / `.lore` 与忽略文件），WIT 只导出 `provider: func(input: { request: string, stdout: string }) -> string`，进程请求沿用 `guava:process/host`，插件不解析、原样转发；版本控制插件运行在单独的插件宿主进程里，轮询不会排在 AI 插件或语言服务之后。从项目目录向上查找标记（同一目录两者都有时 Lore 优先），无 shell、不提示凭据、限时限量地调用命令行工具；GUI 进程 PATH 之外还会查找 Homebrew 与 `~/.local/bin`（Lore 安装位置）。Git 使用 `status --porcelain=v2 -z`，路径列表经标准输入传递（`--pathspec-from-file`）并按字面匹配；Lore 使用隐藏的 `--json` 事件流读取状态、分支与文件锁，`history --oneline` 读取历史，长路径列表分批执行。命令输出按 1 MiB 窗口分页交给插件：插件每页返回结果片段和已读字节数，编辑器拼接片段，需要整段输出的解析（如 Lore 分支去重）读不到内容时编辑器自动加宽窗口，输出大小不再受限（测试覆盖 5 万条变更）。命令串行执行，执行后重新读取工作区；拉取、放弃更改与切换分支后，未修改的已打开文档会自动重新载入。新增“源代码管理”面板（分支菜单与新建分支、拉取/同步与推送及领先/落后计数、提交框 ⌘↩、AI 生成提交信息、暂存/未暂存分组、行内差异、Lore 文件锁、历史），未初始化时可一键初始化 Git 或在 Lore 服务器上创建仓库。活动栏显示更改数，状态栏显示分支与同步状态，“文件”树按工作区状态为文件着色并标记含更改的文件夹。Agent 新增 `vcs_status`、`vcs_diff`、`vcs_log`、`vcs_commit` 工具。`VersionControlTests` 用真实组件解析 Git porcelain 与 Lore 事件流的录制输出，并在真实 git 仓库上端到端覆盖初始化、暂存、取消暂存、提交、差异、放弃与建分支。
 

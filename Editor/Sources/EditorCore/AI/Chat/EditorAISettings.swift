@@ -1,9 +1,6 @@
 import AIRuntime
 import CapabilityRuntime
 import Foundation
-#if canImport(Security)
-import Security
-#endif
 
 // MARK: - Provider
 
@@ -115,134 +112,84 @@ public struct EditorCapabilitySettings: Codable, Sendable, Equatable {
 
 // MARK: - Key store
 
-public enum AIKeychainError: Error, Sendable, Equatable, LocalizedError {
-    case unavailable
-    case operationFailed(Int32)
+public enum AICredentialStoreError: Error, Sendable, Equatable, LocalizedError {
+    case writeFailed(String)
 
     public var errorDescription: String? {
         switch self {
-        case .unavailable:
-            return "The operating-system credential store is unavailable."
-        case let .operationFailed(status):
-            switch status {
-            case -25293, -25308:
-                return "The credential store refused access. Allow GuavaStudio in the Keychain prompt, or remove the old \"com.guava.editor.ai-provider\" item in Keychain Access and enter the key again."
-            case -128:
-                return "Access to the credential store was cancelled."
-            case -25291, -25307:
-                return "The login keychain is locked or unavailable."
-            default:
-                return "The credential store operation failed with status \(status)."
-            }
+        case let .writeFailed(reason): "The API key could not be saved: \(reason)"
         }
     }
 }
 
 public enum AICredentialSource: Sendable, Equatable {
-    case operatingSystemStore
+    case credentialFile
     case environment(variable: String)
 }
 
-/// Stores provider API keys in the operating-system credential store. Keys are
-/// never written to project files, settings JSON, prompts, logs, or plugins.
-public enum AIKeychain {
-    private static let service = "com.guava.editor.ai-provider"
-
-    private static var legacyKeysFileURL: URL? {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first?
-            .appendingPathComponent("Guava", isDirectory: true)
-            .appendingPathComponent("ai_keys.json")
-    }
-
-    /// Runs the legacy migration at most once per process.
-    private static let legacyMigration: Void = migrateLegacyPlaintextStoreIfNeeded()
-
-    /// One-time migration from older development builds. The plaintext file is
-    /// removed only after every non-empty value is present in Keychain; a
-    /// Keychain failure must not silently destroy the user's credentials.
-    private static func migrateLegacyPlaintextStoreIfNeeded() {
-#if canImport(Security)
-        guard let url = legacyKeysFileURL,
-              let data = try? Data(contentsOf: url),
-              let keys = try? JSONDecoder().decode([String: String].self, from: data)
-        else { return }
-
-        var migrationSucceeded = true
-        for (account, key) in keys where !key.isEmpty {
-            let itemIdentity: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service,
-                kSecAttrAccount as String: account,
-            ]
-            var lookup = itemIdentity
-            lookup[kSecMatchLimit as String] = kSecMatchLimitOne
-            if SecItemCopyMatching(lookup as CFDictionary, nil) == errSecSuccess {
-                continue
-            }
-            var insert = itemIdentity
-            insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            insert[kSecValueData as String] = Data(key.utf8)
-            let status = SecItemAdd(insert as CFDictionary, nil)
-            migrationSucceeded = migrationSucceeded && status == errSecSuccess
-        }
-        if migrationSucceeded {
-            try? FileManager.default.removeItem(at: url)
-        }
-#endif
+/// Provider API keys in one file only the user can read
+/// (`~/Library/Application Support/GuavaStudio/Credentials/ai-providers.json`,
+/// mode 0600 inside a 0700 folder). Keys are never written to project files,
+/// settings JSON, prompts, logs, or plugins; environment variables fill in
+/// providers without a stored key.
+public enum AICredentialStore {
+    static var fileURL: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share")
+        return base.appendingPathComponent("GuavaStudio/Credentials/ai-providers.json")
     }
 
     public static func save(key: String, provider: EditorAIProvider) throws {
-        _ = legacyMigration
-        guard !key.isEmpty else {
-            try delete(provider: provider)
-            return
+        try save(key: key, provider: provider, at: fileURL)
+    }
+
+    static func save(key: String, provider: EditorAIProvider, at url: URL) throws {
+        var keys = stored(at: url)
+        keys[provider.rawValue] = key.isEmpty ? nil : key
+        do {
+            let directory = url.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                                    attributes: [.posixPermissions: 0o700])
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            let data = try JSONEncoder().encode(keys)
+            // Created owner-only before the key is written, then swapped in whole.
+            let staging = directory.appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString)")
+            guard FileManager.default.createFile(atPath: staging.path, contents: nil,
+                                                 attributes: [.posixPermissions: 0o600]) else {
+                throw CocoaError(.fileWriteNoPermission)
+            }
+            let handle = try FileHandle(forWritingTo: staging)
+            try handle.write(contentsOf: data)
+            try handle.close()
+            _ = try FileManager.default.replaceItemAt(url, withItemAt: staging)
+        } catch {
+            throw AICredentialStoreError.writeFailed(error.localizedDescription)
         }
-#if canImport(Security)
-        let identity: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: provider.rawValue,
-        ]
-        // Replace rather than update. An item only trusts the build that wrote
-        // it, so on development-signed builds an in-place update fails (or
-        // prompts) after every rebuild; a fresh item trusts the running app.
-        try delete(provider: provider)
-        var insertion = identity
-        insertion[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        insertion[kSecValueData as String] = Data(key.utf8)
-        let addStatus = SecItemAdd(insertion as CFDictionary, nil)
-        guard addStatus == errSecSuccess else {
-            throw AIKeychainError.operationFailed(addStatus)
-        }
-#else
-        throw AIKeychainError.unavailable
-#endif
     }
 
     public static func load(provider: EditorAIProvider) -> String? {
-        _ = legacyMigration
-        if let stored = loadFromOperatingSystemStore(provider: provider) {
-            return stored
-        }
-        return environmentCredential(
-            provider: provider,
-            environment: ProcessInfo.processInfo.environment
-        )?.key
+        stored(at: fileURL)[provider.rawValue]
+            ?? environmentCredential(provider: provider, environment: ProcessInfo.processInfo.environment)?.key
     }
 
-    /// Answers from item attributes alone, so status checks never read the
-    /// secret and never trigger a Keychain access prompt.
     public static func credentialSource(for provider: EditorAIProvider) -> AICredentialSource? {
-        _ = legacyMigration
-        if storedItemExists(provider: provider) {
-            return .operatingSystemStore
-        }
-        guard let environment = environmentCredential(
-            provider: provider,
-            environment: ProcessInfo.processInfo.environment
-        ) else { return nil }
-        return .environment(variable: environment.variable)
+        if stored(at: fileURL)[provider.rawValue] != nil { return .credentialFile }
+        return environmentCredential(provider: provider, environment: ProcessInfo.processInfo.environment)
+            .map { .environment(variable: $0.variable) }
+    }
+
+    public static func delete(provider: EditorAIProvider) throws {
+        try save(key: "", provider: provider)
+    }
+
+    public static func hasKey(for provider: EditorAIProvider) -> Bool {
+        credentialSource(for: provider) != nil
+    }
+
+    static func stored(at url: URL) -> [String: String] {
+        guard let data = try? Data(contentsOf: url),
+              let keys = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return keys.filter { !$0.value.isEmpty }
     }
 
     static func environmentCredential(
@@ -267,61 +214,5 @@ public enum AIKeychain {
             return (variable, value)
         }
         return nil
-    }
-
-    private static func storedItemExists(provider: EditorAIProvider) -> Bool {
-#if canImport(Security)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: provider.rawValue,
-            kSecReturnAttributes as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
-#else
-        return false
-#endif
-    }
-
-    private static func loadFromOperatingSystemStore(provider: EditorAIProvider) -> String? {
-#if canImport(Security)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: provider.rawValue,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data,
-              let key = String(data: data, encoding: .utf8),
-              !key.isEmpty else { return nil }
-        return key
-#else
-        return nil
-#endif
-    }
-
-    public static func delete(provider: EditorAIProvider) throws {
-        _ = legacyMigration
-#if canImport(Security)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: provider.rawValue,
-        ]
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw AIKeychainError.operationFailed(status)
-        }
-#else
-        throw AIKeychainError.unavailable
-#endif
-    }
-
-    public static func hasKey(for provider: EditorAIProvider) -> Bool {
-        credentialSource(for: provider) != nil
     }
 }

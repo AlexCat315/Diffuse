@@ -321,7 +321,8 @@ public struct TextField: View {
             let opacity = node.attachments[Self.scrollbarChromeOpacityKey] as? Float ?? 0
             guard opacity > 0.001 else { return }
             let engine = snapshot.layoutEngine(for: node)
-            let bars = [engine.scrollbarMetrics(state: state, node: node, origin: origin),
+            // The minimap already shows and drives the vertical position.
+            let bars = [snapshot.minimapReservation > 0 ? nil : engine.scrollbarMetrics(state: state, node: node, origin: origin),
                         engine.horizontalScrollbarMetrics(state: state, node: node, origin: origin)].compactMap { $0 }
             let colors = node.theme.colors
             for metrics in bars { list.addRoundedRect(metrics.trackRect,

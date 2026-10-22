@@ -6,7 +6,7 @@ struct AgentProviderSettings: View {
     let editor: AgentSettingsEditor
 
     var body: some View {
-        // One credential lookup per render; each is a Keychain round trip.
+        // One credential lookup per render; each reads the credential file.
         let draftSource = editor.app.aiCredentialSource(for: editor.draft.provider)
         let active = editor.app.store.aiSettings.provider
         let activeSource = editor.draft.provider == active ? draftSource : editor.app.aiCredentialSource(for: active)
@@ -44,7 +44,7 @@ struct AgentProviderSettings: View {
                 Text(L("Agent is disabled. Choose a provider to configure your assistant."))
                     .font(.body).foregroundColor(.onSurfaceMuted)
             }
-            if editor.draft.provider == active, active != .none, activeSource == .operatingSystemStore {
+            if editor.draft.provider == active, active != .none, activeSource == .credentialFile {
                 if editor.state.wrappedValue.confirmsKeyRemoval {
                     Alert(L("Remove Stored Key"), message: L("Removing the stored key disables this provider until you add a credential again."), tone: .warning) { _ in } actions: {
                         Button(L("Confirm Remove Key"), role: .destructive, action: editor.removeKey).buttonStyle(.destructive)

@@ -127,7 +127,7 @@ public final class EditorApplication: @unchecked Sendable {
             capabilityPlanner: Self.makeCapabilityInvocationPlanner(for: initialCapabilitySettings)
         )
         // Restore the AI backend from the settings passed in at launch (loaded from
-        // EditorShellState by the caller) and the matching key in Keychain.
+        // EditorShellState by the caller) and the matching stored key.
         store.dispatch(.setAISettings(initialAISettings))
         store.dispatch(.setCapabilitySettings(initialCapabilitySettings))
         let initialSelectedEntityID = scene.defaultSelectionID
@@ -429,7 +429,7 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     /// Whether the configured provider currently has a usable runtime session.
-    /// A provider name can be restored from shell state while its Keychain
+    /// A provider name can be restored from shell state while its stored
     /// credential is missing, so UI should not treat `provider != .none` as
     /// sufficient proof that requests can be submitted.
     public var isAIAvailable: Bool {

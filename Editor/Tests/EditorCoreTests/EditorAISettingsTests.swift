@@ -3,7 +3,7 @@ import XCTest
 
 final class EditorAISettingsTests: XCTestCase {
     func testEnvironmentCredentialsUseGuavaOverrideBeforeStandardVariable() {
-        let credential = AIKeychain.environmentCredential(
+        let credential = AICredentialStore.environmentCredential(
             provider: .openai,
             environment: [
                 "OPENAI_API_KEY": "standard",
@@ -17,35 +17,41 @@ final class EditorAISettingsTests: XCTestCase {
 
     func testEnvironmentCredentialsSupportEveryRemoteProviderAndRejectBlanks() {
         XCTAssertEqual(
-            AIKeychain.environmentCredential(
+            AICredentialStore.environmentCredential(
                 provider: .anthropic,
                 environment: ["ANTHROPIC_API_KEY": " anthropic-key "]
             )?.key,
             "anthropic-key"
         )
         XCTAssertEqual(
-            AIKeychain.environmentCredential(
+            AICredentialStore.environmentCredential(
                 provider: .deepseek,
                 environment: ["DEEPSEEK_API_KEY": "deepseek-key"]
             )?.variable,
             "DEEPSEEK_API_KEY"
         )
-        XCTAssertNil(AIKeychain.environmentCredential(
+        XCTAssertNil(AICredentialStore.environmentCredential(
             provider: .openai,
             environment: ["OPENAI_API_KEY": "  "]
         ))
-        XCTAssertNil(AIKeychain.environmentCredential(
+        XCTAssertNil(AICredentialStore.environmentCredential(
             provider: .none,
             environment: ["OPENAI_API_KEY": "ignored"]
         ))
     }
 
-    func testKeychainFailuresExplainTheNextStep() {
-        let denied = AIKeychainError.operationFailed(-25293).errorDescription ?? ""
-        XCTAssertTrue(denied.contains("refused access"))
-        XCTAssertTrue(denied.contains("com.guava.editor.ai-provider"))
-        XCTAssertEqual(AIKeychainError.operationFailed(-25308).errorDescription, denied)
-        XCTAssertTrue((AIKeychainError.operationFailed(-128).errorDescription ?? "").contains("cancelled"))
-        XCTAssertTrue((AIKeychainError.operationFailed(-1).errorDescription ?? "").contains("-1"))
+    func testCredentialFileIsOwnerOnlyAndRoundTrips() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString).appendingPathComponent("Credentials/ai-providers.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent().deletingLastPathComponent()) }
+        try AICredentialStore.save(key: "sk-one", provider: .anthropic, at: url)
+        try AICredentialStore.save(key: "sk-two", provider: .openai, at: url)
+        XCTAssertEqual(AICredentialStore.stored(at: url), ["anthropic": "sk-one", "openai": "sk-two"])
+        let file = try FileManager.default.attributesOfItem(atPath: url.path)
+        let folder = try FileManager.default.attributesOfItem(atPath: url.deletingLastPathComponent().path)
+        XCTAssertEqual((file[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+        XCTAssertEqual((folder[.posixPermissions] as? NSNumber)?.intValue, 0o700)
+        try AICredentialStore.save(key: "", provider: .anthropic, at: url)
+        XCTAssertEqual(AICredentialStore.stored(at: url), ["openai": "sk-two"])
     }
 }
