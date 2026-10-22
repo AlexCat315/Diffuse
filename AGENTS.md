@@ -129,4 +129,6 @@ Restricting import scope: You can use `private import SomeModule`, which limits 
 
 I will not allow Python to pollute my project!
 
+Avoid unnecessary supporting text, descriptive copy, and redundant UI microcopy.
+
 Please use the `guava cli` command to run the program; do not use the `swift` command.
