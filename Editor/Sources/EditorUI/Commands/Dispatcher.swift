@@ -91,7 +91,8 @@ enum EditorCommandDispatcher {
             let documents = app.workstation.documents
             if let path = documents.selectedPath {
                 // A failure stays in the editor's error banner, next to the text.
-                if app.workstation.saveDocument(path) {
+                Task { @MainActor in
+                    guard await app.saveDocumentFormatting(path) else { return }
                     let name = path.split(separator: "/").last.map(String.init) ?? path
                     EditorNotifications.of(app).post(L("Saved") + " " + name, id: "save", tone: .success)
                 }

@@ -17,6 +17,7 @@ struct ScriptSourceEditor: View {
     @State private var hoverPresentation: ScriptEditorHoverPresentation = .hidden
     @State private var hoverSequence = ScriptEditorHoverSequence()
     @State private var histories: [String: TextEditHistory] = [:]
+    @State private var completions = ScriptCompletionItems()
 
     init(app: EditorApplication, semantic: ScriptSemanticSession, insights: ScriptInsightSession) {
         self.app = app
@@ -81,6 +82,7 @@ struct ScriptSourceEditor: View {
                              },
                              diagnostics: document.diagnostics,
                              completionProvider: completionProvider(for: id),
+                             completionResolver: completions.resolver(app.dynamicScriptManager),
                              editHistory: history(for: id),
                              navigation: app.store.scriptNavigation.flatMap { $0.scriptID == id ? $0 : nil },
                              onHover: requestHover,
@@ -88,6 +90,7 @@ struct ScriptSourceEditor: View {
                              onCaret: { semantic.updateCaret($0); insights.caretMoved($0) },
                              onKey: semantic.handleKey,
                              languageEntries: languageEntries,
+                             occurrences: insights.occurrences,
                              markers: markers(document, colors: theme.colors))
                 .id(id)
                 .flex(1, shrink: 1)
@@ -139,13 +142,13 @@ struct ScriptSourceEditor: View {
     }
 
     private func completionProvider(for scriptID: String) -> TextCompletionProvider {
-        let manager = app.dynamicScriptManager, model = app.workstation.scripts
+        let manager = app.dynamicScriptManager, model = app.workstation.scripts, completions = completions
         return { request, reply in
             Task { @MainActor in
                 let position = ScriptSourceCoordinates.position(in: request.buffer, atCharacterIndex: request.caretIndex)
                 let result = (try? await manager.completion(scriptID: scriptID, at: position)) ?? .empty
                 guard model.snapshot.selectedScriptID == scriptID, model.snapshot.selectedDocument?.source == request.buffer else { return }
-                reply(ScriptCompletionConversion.items(result, for: request))
+                reply(completions.convert(result, for: request))
             }
         }
     }

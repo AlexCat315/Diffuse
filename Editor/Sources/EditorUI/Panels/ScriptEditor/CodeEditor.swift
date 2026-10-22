@@ -20,6 +20,7 @@ struct ScriptCodeEditor: View {
     @State private var gutterNavigation = ScriptGutterNavigation()
     var diagnostics: [ScriptLanguageDiagnostic] = []
     var completionProvider: TextCompletionProvider?
+    var completionResolver: TextCompletionResolver?
     var editHistory: TextEditHistory? = nil
     var navigation: EditorScriptNavigationRequest? = nil
     /// Pointer rests on a character worth documenting.
@@ -29,6 +30,7 @@ struct ScriptCodeEditor: View {
     var onCaret: ((TextFieldCaretState) -> Void)?
     var onKey: ((KeyEvent) -> Bool)?
     var languageEntries: [MenuEntry] = []
+    var occurrences: [Range<Int>] = []
     var isReadOnly = false
     /// Language markers (hierarchy arrows, the bulb). Each takes its line
     /// from a diagnostic marker, whose message stays on the underline.
@@ -48,6 +50,7 @@ struct ScriptCodeEditor: View {
                     input.layout.wrapsLines = false
                     input.layout.maxVisibleLines = 48
                     input.codeEditing.showsLineNumbers = true
+                    input.codeEditing.showsMinimap = true
                     input.codeEditing.gutter.labels = scriptGutterLabels()
                     input.codeEditing.folding.labels = scriptFoldingLabels()
                     input.codeEditing.gutter.breakpoints = Binding(get: { annotations.wrappedValue.breakpoints },
@@ -75,7 +78,9 @@ struct ScriptCodeEditor: View {
                     input.codeEditing.folding.regions = syntaxSession.foldRegions
                     input.codeEditing.folding.isReady = syntaxSession.parsedBuffer == text
                     input.codeEditing.diagnostics = mappedDiagnostics
+                    input.codeEditing.occurrences = occurrences
                     input.codeEditing.onRequestCompletion = completionProvider
+                    input.codeEditing.onResolveCompletion = completionResolver
                     input.codeEditing.onRequestHover = { anchor in handleHover(anchor) }
                     input.codeEditing.indentationWidth = 4
                     input.codeEditing.editHistory = editHistory

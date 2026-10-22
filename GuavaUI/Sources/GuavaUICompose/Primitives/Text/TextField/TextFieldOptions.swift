@@ -76,10 +76,17 @@ public struct TextFieldCodeEditing {
     public var folding = TextEditorFolding()
     public var diagnostics = TextDiagnostics.empty
     public var onRequestCompletion: TextCompletionProvider?
+    /// Asked once per highlighted item that arrived without documentation.
+    public var onResolveCompletion: TextCompletionResolver?
     public var onAcceptCompletion: ((TextCompletionItem) -> Void)?
     /// F1 requests documentation at the visible caret, also in read-only code.
     public var onRequestHover: ((TextFieldHoverAnchor) -> Void)?
     public var showsLineNumbers = false
+    /// A scaled overview of the whole document on the trailing edge, with the
+    /// visible region marked; clicking or dragging it scrolls. Vertical fields only.
+    public var showsMinimap = false
+    /// UTF-8 ranges marked as the same symbol as the one at the caret.
+    public var occurrences: [Range<Int>] = []
     public var indentationWidth: Int?
     public var editHistory: TextEditHistory?
     public var lineNumberColor: Color?

@@ -40,3 +40,18 @@ enum ScriptAssistanceReplies {
                                     children: (object["children"] as? [[String: Any]] ?? []).compactMap(symbol))
     }
 }
+
+extension ScriptAssistanceReplies {
+    /// Accepts `SymbolInformation` and `WorkspaceSymbol`; the latter may name
+    /// only a file, which then opens at its top.
+    static func workspaceSymbols(_ data: Data?, limit: Int) -> [(name: String, kind: Int, container: String?, uri: String, span: ScriptLanguageSpan)] {
+        guard let data, let values = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return values.prefix(limit).compactMap { object in
+            guard let name = object["name"] as? String, let kind = object["kind"] as? Int,
+                  let location = object["location"] as? [String: Any], let uri = location["uri"] as? String else { return nil }
+            let span = ScriptLanguageReplies.parseSpan(location["range"])
+                ?? ScriptLanguageSpan(startLine: 0, startCharacter: 0, endLine: 0, endCharacter: 0)
+            return (name, kind, object["containerName"] as? String, uri, span)
+        }
+    }
+}

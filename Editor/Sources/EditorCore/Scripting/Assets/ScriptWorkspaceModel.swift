@@ -681,6 +681,8 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             snapshot.documents[index].savedSource = document.source
             snapshot.documents[index].savedRevision = document.editRevision
             publish()
+            let id = document.file.identifier
+            Task { [manager] in await manager.didSaveLanguageSource(scriptID: id) }
             return true
         } catch {
             recordFailure(error.localizedDescription, at: index)

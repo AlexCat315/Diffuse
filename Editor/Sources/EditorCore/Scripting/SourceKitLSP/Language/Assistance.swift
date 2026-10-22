@@ -23,3 +23,11 @@ public struct ScriptDocumentSymbol: Sendable, Equatable {
     public let selectionRange: ScriptLanguageSpan
     public let children: [ScriptDocumentSymbol]
 }
+
+/// A declaration anywhere in the indexed workspace.
+public struct ScriptWorkspaceSymbol: Sendable, Equatable {
+    public let name: String
+    public let kind: Int
+    public let containerName: String?
+    public let location: ScriptDefinitionLocation
+}

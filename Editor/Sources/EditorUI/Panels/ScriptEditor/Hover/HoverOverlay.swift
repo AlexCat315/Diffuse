@@ -12,7 +12,11 @@ struct ScriptHoverOverlay: View {
             Tooltip(anchor: .point(CGPoint(x: CGFloat(anchor.windowX), y: CGFloat(anchor.windowY))),
                     configure: { $0.maxWidth = 460; $0.gap = 18 }) {
                 Column(alignment: .leading, spacing: 6) {
-                    for block in presentation.textBlocks { textBlock(block) }
+                    if let markdown = presentation.content?.markdown {
+                        MarkdownView(markdown).frame(maxWidth: 440, maxHeight: 360)
+                    } else {
+                        for block in presentation.textBlocks { textBlock(block) }
+                    }
                 }.padding(horizontal: 10, vertical: 8)
                     .floatingSurface(6)
             }

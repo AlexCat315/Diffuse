@@ -48,16 +48,26 @@ extension TextField {
                         notifyEditingChange(on: node)
                         return .handled
                     }
+                    if textField.scrollMinimap(to: CGPoint(x: CGFloat(event.x), y: CGFloat(event.y)), state: state, node: node) {
+                        state.pointer.isDraggingMinimap = true
+                        PointerCaptureHolder.current?.acquire(node)
+                        return .handled
+                    }
                     textField.handlePointerDown(event: event, state: state, node: node)
                     return .handled
                 case .up:
                     state.pointer.isDragging = false
+                    state.pointer.isDraggingMinimap = false
                     if PointerCaptureHolder.current?.target === node { PointerCaptureHolder.current?.release() }
                     return .handled
                 }
             }
             registry.setMotion(node, route: .textInput) { event, _ in
                 let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
+                if state.pointer.isDraggingMinimap {
+                    textField.scrollMinimap(to: point, state: state, node: node, clampingX: false)
+                    return .handled
+                }
                 if state.pointer.isDragging {
                     let target = textField.characterIndex(atWindowPoint: point,
                                                           state: state,

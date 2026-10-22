@@ -119,6 +119,7 @@ struct SettingsPanel: View {
         case .language: LanguageSettings(app: app, onChange: persist)
         case .selection: SelectionSettings(app: app, onChange: persist)
         case .display: DisplaySettings(app: app, onChange: persist)
+        case .swift: SwiftSettings()
         case .provider: AgentProviderSettings(editor: editor)
         case .execution: AgentExecutionSettings(editor: editor)
         case .capabilities: CapabilitySettings(app: app, onChange: persist)

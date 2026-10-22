@@ -90,3 +90,21 @@ struct ScriptDiagnosticRow: View {
         .padding(horizontal: 5, vertical: 3)
     }
 }
+
+struct ScriptDiagnosticRelationRow: View {
+    let relation: ScriptDiagnosticRelation
+
+    var body: some View {
+        let name = URL(string: relation.location.documentURI)?.lastPathComponent ?? ""
+        Row(alignment: .center, spacing: 8) {
+            Text("\(name):\(relation.location.span.start.line + 1)", lineLimit: 1)
+                .font(.mono)
+                .foregroundColor(.onSurfaceMuted)
+            Text(relation.message, lineLimit: 2)
+                .font(.caption)
+                .foregroundColor(.onSurfaceVariant)
+            Spacer(minLength: 0)
+        }
+        .padding(horizontal: 5, vertical: 2)
+    }
+}

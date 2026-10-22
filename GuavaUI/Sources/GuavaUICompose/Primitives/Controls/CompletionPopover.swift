@@ -20,6 +20,8 @@ public struct TextCompletionItem: Sendable, Equatable, Identifiable {
     public let id: String
     public let label: String
     public var detail: String?
+    /// Shown under the list while the item is highlighted.
+    public var documentation: String?
     public var insertText: String
     public var filterText: String?
     public var replacement: Range<Int>?
@@ -36,6 +38,8 @@ public struct TextCompletionEdit: Sendable, Equatable {
     public init(range: Range<Int>, text: String) { self.range = range; self.text = text }
 }
 public typealias TextCompletionProvider = (TextCompletionRequest, @escaping @MainActor @Sendable ([TextCompletionItem]) -> Void) -> Void
+/// Answers with the item, its documentation filled in when there is any.
+public typealias TextCompletionResolver = (TextCompletionItem, @escaping @MainActor @Sendable (TextCompletionItem) -> Void) -> Void
 
 /// Nonmodal completion list. Keyboard focus stays in the editor, while its
 /// highlighted row and scroll window follow Up/Down, Return, Tab and Escape.
@@ -56,6 +60,11 @@ public struct CompletionPopover: View {
             if items.count > 10 {
                 Text("\(selectedIndex + 1) / \(items.count)").font(.caption).foregroundColor(.onSurfaceMuted)
                     .padding(horizontal: 10, vertical: 4)
+            }
+            if let documentation = items.indices.contains(selectedIndex) ? items[selectedIndex].documentation : nil,
+               !documentation.isEmpty {
+                Text(documentation, lineLimit: 8).font(.caption).foregroundColor(.onSurfaceMuted)
+                    .padding(horizontal: 9, vertical: 6)
             }
         }.padding(3).floatingSurface(.controlRadius)
             .accessibility { $0.role = .list; $0.label = "Completions" }
@@ -101,6 +110,8 @@ final class TextCompletionSession: NodeResource, AnyAnimationController, @unchec
     private var generation: UInt64 = 0
     private var elapsed = 0.0
     private var candidates: [TextCompletionItem] = []
+    /// Items already sent to the resolver in this session.
+    private var resolving: Set<String> = []
     private(set) var items: [TextCompletionItem] = []
     private(set) var selectedIndex = 0
     private var anchor = CGRect.zero
@@ -142,7 +153,13 @@ final class TextCompletionSession: NodeResource, AnyAnimationController, @unchec
             guard let self, self.generation == token, let state = self.state,
                   self.field?.text.wrappedValue == request.buffer, state.selection.cursorIndex == request.caretIndex,
                   self.node != nil else { return }
-            self.candidates = candidates; self.filter()
+            // Keep documentation already resolved for items the new list repeats.
+            let known = Dictionary(self.candidates.compactMap { item in item.documentation.map { (item.id, $0) } },
+                                   uniquingKeysWith: { first, _ in first })
+            self.candidates = candidates.map { item in
+                var item = item; if item.documentation == nil { item.documentation = known[item.id] }; return item
+            }
+            self.filter()
         }
     }
     private func filter() {
@@ -153,10 +170,23 @@ final class TextCompletionSession: NodeResource, AnyAnimationController, @unchec
     }
     private func present() {
         guard let node, !items.isEmpty else { if let node { portal.unmount(node: node) }; return }
+        defer { resolveSelected() }
         let store = owningStore ?? node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current
         portal.present(in: store, position: CGPoint(x: anchor.minX, y: anchor.maxY + 3), width: 380,
             content: AnyView(CompletionPopover(items: items, selectedIndex: selectedIndex) { [weak self] item in self?.accept(item) }))
         portal.setDismissal(anchor: { [weak self] in self?.node?.absoluteFrame ?? .zero }, dismiss: { [weak self] in self?.dismiss() })
+    }
+    private func resolveSelected() {
+        guard items.indices.contains(selectedIndex), let resolver = field?.codeEditing.onResolveCompletion else { return }
+        let item = items[selectedIndex]
+        guard item.documentation == nil, resolving.insert(item.id).inserted else { return }
+        resolver(item) { [weak self] resolved in
+            // Dismissal clears `resolving`, so a late answer finds nothing to update.
+            guard let self, self.resolving.contains(item.id), resolved.id == item.id else { return }
+            self.candidates = self.candidates.map { $0.id == item.id ? resolved : $0 }
+            self.items = self.items.map { $0.id == item.id ? resolved : $0 }
+            if resolved.documentation != nil { self.present() }
+        }
     }
     func updateAnchor(_ rect: CGRect) {
         anchor = rect
@@ -212,7 +242,7 @@ final class TextCompletionSession: NodeResource, AnyAnimationController, @unchec
         field.codeEditing.onAcceptCompletion?(item)
     }
     func dismiss() {
-        generation &+= 1; isFinished = true; request = nil; candidates = []; items = []; selectedIndex = 0
+        generation &+= 1; isFinished = true; request = nil; candidates = []; items = []; selectedIndex = 0; resolving = []
         if let node { portal.unmount(node: node) }
     }
     func cancel() { dismiss() }

@@ -60,6 +60,7 @@ extension TextField {
     struct PointerState {
         var lastDrawOrigin: CGPoint = .zero
         var isDragging = false
+        var isDraggingMinimap = false
         var clearHitX: Float?
     }
 

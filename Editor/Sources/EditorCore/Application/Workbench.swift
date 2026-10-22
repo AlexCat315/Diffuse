@@ -18,6 +18,32 @@ extension EditorApplication {
         Task { @MainActor in await workstation.versionControl.compare(change) }
     }
 
+    /// Saves a tab. A Swift file is formatted first when the Swift settings ask
+    /// for it; a formatting failure still saves the text as typed.
+    @MainActor
+    public func saveDocumentFormatting(_ path: String) async -> Bool {
+        if SwiftEditingPreferences.load().formatsOnSave, let id = workstation.scriptID(forDocument: path),
+           workstation.scripts.snapshot.languageServiceState == .ready,
+           let edit = try? await dynamicScriptManager.formatting(scriptID: id), !edit.documents.isEmpty {
+            try? workstation.scripts.applyLanguageEdit(edit)
+        }
+        return workstation.saveDocument(path)
+    }
+
+    /// Opens a language-service location: a script, or any Swift file in the project.
+    @discardableResult
+    public func openSwiftLocation(_ location: ScriptDefinitionLocation) -> Bool {
+        var id = location.scriptID
+        if id == nil, let url = URL(string: location.documentURI), url.isFileURL,
+           let path = workstation.documentPath(for: url) {
+            workstation.documents.open(path)
+            id = workstation.scriptID(forDocument: path)
+        }
+        guard let id else { return false }
+        navigateToIssue(.script(id: id, line: location.span.start.line, column: location.span.start.character))
+        return true
+    }
+
     public func closeComparison() {
         workstation.documents.closeComparison()
         workstation.versionControl.endComparison()

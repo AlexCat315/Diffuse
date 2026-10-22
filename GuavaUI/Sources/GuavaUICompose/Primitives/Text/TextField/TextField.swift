@@ -84,6 +84,8 @@ public struct TextField: View {
     private struct CodePaintIdentity: Equatable {
         let diagnostics: TextDiagnostics
         let showsLineNumbers: Bool
+        let showsMinimap: Bool
+        let occurrences: [Range<Int>]
         let lineNumberColor: Color?
         let lineNumberGutterColor: Color?
         let syntaxColoringEnabled: Bool
@@ -98,6 +100,8 @@ public struct TextField: View {
         init(_ code: TextFieldCodeEditing, hiddenLines: [Range<Int>]) {
             diagnostics = code.diagnostics
             showsLineNumbers = code.showsLineNumbers
+            showsMinimap = code.showsMinimap
+            occurrences = code.occurrences
             lineNumberColor = code.lineNumberColor
             lineNumberGutterColor = code.lineNumberGutterColor
             syntaxColoringEnabled = code.syntaxColorAtUTF8Offset != nil
@@ -803,6 +807,8 @@ public struct TextField: View {
                              textOriginY: textOriginY, lineHeight: resolvedLineHeight,
                              visibleX: state.scroll.horizontal.offset..<(state.scroll.horizontal.offset + viewport.availableTextWidth),
                              node: node, env: env, font: resolvedFont, list: list)
+            drawOccurrences(visibleLayout, textOriginX: fixedTextOriginX, textOriginY: textOriginY,
+                            lineHeight: resolvedLineHeight, node: node, list: list)
             drawBracketMatches(visibleLayout, source: current,
                                caretIndex: state.selection.cursorIndex,
                                textOriginX: fixedTextOriginX, textOriginY: textOriginY,
@@ -831,12 +837,14 @@ public struct TextField: View {
                      textureID: env.atlasTextureID,
                      atlas: env.atlas,
                      colorForGlyph: { glyph in
-            guard !renderState.showsPlaceholder,
-                  !renderState.isComposing,
-                  let syntaxColor = codeEditing.syntaxColorAtUTF8Offset?(current, Int(glyph.cluster)) else {
-                return nil
+            guard !renderState.showsPlaceholder, !renderState.isComposing else { return nil }
+            let cluster = Int(glyph.cluster)
+            let syntaxColor = codeEditing.syntaxColorAtUTF8Offset?(current, cluster)?.multipliedAlpha(node.opacity)
+            if codeEditing.diagnostics.fadesText,
+               codeEditing.diagnostics.overlapping(cluster..<(cluster + 1)).contains(where: { $0.style == .faded }) {
+                return (syntaxColor ?? renderColor).multipliedAlpha(0.5)
             }
-            return syntaxColor.multipliedAlpha(node.opacity)
+            return syntaxColor
         })
 
         if !renderState.showsPlaceholder, !renderState.isComposing {
@@ -845,6 +853,8 @@ public struct TextField: View {
                 origin: (textOriginX, textOriginY), opacity: node.opacity, theme: theme, list: list)
         }
         list.popClip()
+        drawMinimap(document: renderCache.document, buffer: current, state: state, node: node, origin: origin,
+                    lineHeight: resolvedLineHeight, textColor: renderColor, list: list)
 
         // Draw counter and clear icon at the trailing edge.
         // Push the clear/counter affordances inside the append slab so they
@@ -1249,7 +1259,7 @@ public struct TextField: View {
                             font: Font,
                             lineHeight: Float,
                             theme: Theme) -> Float {
-        var width: Float = 0
+        var width: Float = minimapReservation
         if let suffix = decoration.suffix, !suffix.isEmpty {
             let layout = env.cachedLayout(text: suffix, font: font, lineHeight: lineHeight,
                                           maxWidth: .infinity, alignment: .leading)

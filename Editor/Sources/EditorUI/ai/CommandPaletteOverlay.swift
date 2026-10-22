@@ -36,6 +36,8 @@ struct CommandPaletteOverlay: View {
     var availableHeight: Float = 720
     @State private var selectedIndex = 0
     @State private var resultsOffset = CGPoint.zero
+    /// Workspace symbols answered for `query`; they arrive after the synchronous results.
+    @State private var symbols: (query: String, items: [ScriptWorkspaceSymbol]) = ("", [])
     static let rowHeight: Float = 44
     private var resultsHeight: Float { max(80, min(320, availableHeight - 168)) }
 
@@ -61,6 +63,7 @@ struct CommandPaletteOverlay: View {
                             selectedIndex = 0
                             resultsOffset = .zero
                             app.store.dispatch(.setCommandPaletteQuery($0))
+                            searchSymbols($0.stringValue)
                         })) { input in
                         input.navigation.focusRequestID = "editor-command-search"
                         // Focus selects the field; a scope prefix (> @ #) must survive the
@@ -175,6 +178,14 @@ struct CommandPaletteOverlay: View {
                     perform: { app.navigateToIssue(.asset(id: asset.id)) })
             }
         }
+        if !commandsOnly && !entitiesOnly, symbols.query == query {
+            entries += symbols.items.enumerated().map { index, symbol in
+                let path = URL(string: symbol.location.documentURI).flatMap { app.workstation.documentPath(for: $0) }
+                return ResultItem(id: "symbol/\(index)/" + symbol.name, title: symbol.name,
+                    detail: [symbol.containerName, path].compactMap { $0 }.joined(separator: " · "), shortcut: "", enabled: true,
+                    searchText: symbol.name, perform: { app.openSwiftLocation(symbol.location) })
+            }
+        }
         if entitiesOnly && app.store.workspaceMode.profile.features.contains(.scene) {
             entries += HierarchyPanelModel.allEntityIDs(in: app.scene.roots).compactMap { id in
                 guard let entity = app.scene.entitySummary(id: id) else { return nil }
@@ -208,6 +219,21 @@ struct CommandPaletteOverlay: View {
             matches.insert(intent, at: 0)
         }
         return matches
+    }
+
+    private func searchSymbols(_ raw: String) {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = text.hasPrefix("@") ? String(text.dropFirst()).trimmingCharacters(in: .whitespaces) : text
+        guard !text.hasPrefix(">"), !text.hasPrefix("#"), query.count >= 2,
+              app.workstation.scripts.snapshot.languageServiceState == .ready else { symbols = ("", []); return }
+        let binding = $symbols, manager = app.dynamicScriptManager, store = app.store
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard store.commandPaletteQuery.stringValue == raw else { return }
+            let items = (try? await manager.workspaceSymbols(matching: query)) ?? []
+            guard store.commandPaletteQuery.stringValue == raw else { return }
+            binding.wrappedValue = (query, items)
+        }
     }
 
     private func execute(_ item: ResultItem) {

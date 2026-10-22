@@ -37,13 +37,20 @@ struct ScriptSemanticResults: View {
                         }.frame(height: min(160, Float(presentation.locations.count) * 28)).debugName("script-language-locations")
                     }
                     if !presentation.actions.isEmpty {
-                        VirtualStack(Array(presentation.actions.enumerated()), id: \.offset, rowHeight: 30) { entry in
-                            Button(isEnabled: entry.element.disabledReason == nil && !presentation.isBusy,
-                                   tooltip: entry.element.disabledReason, action: { session.apply(entry.element) }) {
-                                Text((entry.element.isPreferred ? "★ " : "") + entry.element.title, lineLimit: 1)
-                                    .font(.caption).foregroundColor(.onSurface)
-                            }.buttonStyle(.ghost)
-                        }.frame(height: min(160, Float(presentation.actions.count) * 30)).debugName("script-language-code-actions")
+                        let rows = ScriptCodeActionRow.rows(presentation.actions)
+                        VirtualStack(Array(rows.enumerated()), id: \.offset, rowHeight: 30) { entry in
+                            switch entry.element {
+                            case let .group(title):
+                                AnyView(Text(L(title), lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted)
+                                    .padding(horizontal: 8, vertical: 8))
+                            case let .action(action):
+                                AnyView(Button(isEnabled: action.disabledReason == nil && !presentation.isBusy,
+                                               tooltip: action.disabledReason, action: { session.apply(action) }) {
+                                    Text((action.isPreferred ? "★ " : "") + action.title, lineLimit: 1)
+                                        .font(.caption).foregroundColor(.onSurface)
+                                }.buttonStyle(.ghost))
+                            }
+                        }.frame(height: min(220, Float(rows.count) * 30)).debugName("script-language-code-actions")
                     }
                     if !presentation.symbols.isEmpty {
                         let rows = symbolRows(presentation.symbols)
@@ -65,10 +72,11 @@ struct ScriptSemanticResults: View {
                     Text(signature.label, lineLimit: 3).font(.mono).foregroundColor(.onSurface)
                     if let parameter = help.activeParameter, parameter >= 0, parameter < signature.parameters.count {
                         let active = signature.parameters[parameter]
-                        Text(active.label + (active.documentation.map { " — " + $0 } ?? ""), lineLimit: 2)
+                        Text(active.label + (active.documentation?.components(separatedBy: "\n\n").first.map { " — " + $0 } ?? ""), lineLimit: 2)
                             .font(.caption).foregroundColor(.accent)
                     }
-                    if let documentation = signature.documentation {
+                    // The summary paragraph only; the rest belongs in hover, not over the code.
+                    if let documentation = signature.documentation?.components(separatedBy: "\n\n").first {
                         Text(documentation, lineLimit: 2).font(.caption).foregroundColor(.onSurfaceMuted)
                     }
                 }
@@ -89,5 +97,24 @@ struct ScriptSemanticResults: View {
 
     private func symbolRows(_ symbols: [ScriptDocumentSymbol], depth: Int = 0) -> [SymbolRow] {
         symbols.flatMap { [SymbolRow(symbol: $0, depth: depth)] + symbolRows($0.children, depth: depth + 1) }
+    }
+}
+
+/// Code actions under their kind, quick fixes first; a single kind needs no heading.
+enum ScriptCodeActionRow {
+    case group(String)
+    case action(ScriptCodeAction)
+
+    static func rows(_ actions: [ScriptCodeAction]) -> [Self] {
+        let groups = ["quickfix": "Quick Fix", "refactor": "Refactor", "source": "Source Action"]
+        let order = ["Quick Fix", "Refactor", "Source Action", "Other"]
+        let grouped = Dictionary(grouping: actions) { action in
+            groups[String((action.kind ?? "").split(separator: ".").first ?? "")] ?? "Other"
+        }
+        let present = order.filter { grouped[$0] != nil }
+        return present.flatMap { title -> [Self] in
+            let members = grouped[title, default: []].sorted { $0.isPreferred && !$1.isPreferred }.map(Self.action)
+            return present.count > 1 ? [.group(title)] + members : members
+        }
     }
 }

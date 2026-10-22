@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- 代码编辑器新增小地图（`TextFieldCodeEditing.showsMinimap`）：右侧按语法着色的缩略全文，标出可见区域，点击或拖动即可滚动，长文件随正文按比例滚动。
+
+- Swift 支持补齐：补全列表显示选中项的文档，缺失时通过 `completionItem/resolve` 按需获取；悬停按 Markdown 渲染（代码块、列表、链接）；光标所在符号的其他出现处高亮（`documentHighlight`，`TextFieldCodeEditing.occurrences`）；命令面板搜索整个工作区的符号（`workspace/symbol`），可直接打开项目中的任意 Swift 文件；有选区时“格式化”只格式化选区（`rangeFormatting`），设置 › 编辑器 › Swift 可开启保存时格式化；诊断保留 `tags` 与 `relatedInformation`，未使用的代码变淡、已弃用的名称加删除线，问题面板列出关联位置并可跳转；代码操作按快速修复、重构、源代码操作分组。语言服务在保存时发送 `didSave`，每 2 秒检查项目内 Swift 文件与 `Package.resolved` 的外部改动并发送 `workspace/didChangeWatchedFiles`，`workspace/configuration` 按 section 返回真实设置。参数提示只显示文档首段，不再遮住代码。`AssistanceReplyTests` 覆盖。
+
 - Swift 语言服务覆盖项目里的所有 Swift 文件：打开任意 `.swift` 标签即获得补全、悬停、跳转、大纲与诊断，不再只限于 `Scripts/`；这些文件原地分析、原地保存，不会编译进游戏。SourceKit-LSP 以项目目录为第二个工作区根，Swift 包使用自身的模块与后台索引（`.build/index-build`，跨会话保留）。脚本分析用的影子包移到项目 `.guava/sourcekit-lsp`（自带 `.gitignore`，不再在没有脚本的项目里生成 `Scripts/`），其 scratch 路径写入该包自己的 `.sourcekit-lsp/config.json`。`ScriptLanguageWorkspaceTests` 覆盖。
 
 - 内置插件改为目录驱动：编辑器列出 `Resources/Plugins` 中的全部包，由 manifest 决定运行位置（共享插件宿主或版本控制宿主），设置 › 扩展统一列出并开关 Git、Lore、Swift Support；版本控制标记冲突时按 `contributes.versionControl.priority` 决定。

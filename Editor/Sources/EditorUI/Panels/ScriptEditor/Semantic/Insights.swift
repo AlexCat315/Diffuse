@@ -27,10 +27,13 @@ final class ScriptInsightSession: _ObservableObject, @unchecked Sendable {
     /// The caret line, once it is known to have code actions.
     private(set) var fixLine: Int?
     private(set) var caretLine = 0
+    /// UTF-8 ranges of the symbol at the caret, for the analyzed revision.
+    private(set) var occurrences: [Range<Int>] = []
     private var observation: AnyHashable?
     private var analyzed: Key?
     private var analysisTask: Task<Void, Never>?
     private var fixTask: Task<Void, Never>?
+    private var occurrenceTask: Task<Void, Never>?
 
     private struct Key: Equatable {
         let scriptID: String
@@ -50,7 +53,7 @@ final class ScriptInsightSession: _ObservableObject, @unchecked Sendable {
 
     deinit {
         if let observation { app.workstation.scripts._unregisterObserver(observation) }
-        analysisTask?.cancel(); fixTask?.cancel()
+        analysisTask?.cancel(); fixTask?.cancel(); occurrenceTask?.cancel()
     }
 
     func _registerObserver(_ handler: @escaping () -> Void) -> AnyHashable { publisher.register(on: self, handler: handler) }
@@ -70,6 +73,7 @@ final class ScriptInsightSession: _ObservableObject, @unchecked Sendable {
     func caretMoved(_ state: TextFieldCaretState) {
         guard let document = app.workstation.scripts.snapshot.selectedDocument else { return }
         let line = ScriptSourceCoordinates.position(in: document.source, atCharacterIndex: state.caretIndex).line
+        requestOccurrences(document: document, caretIndex: state.caretIndex)
         guard line != caretLine || fixLine == nil else { return }
         let changed = line != caretLine
         caretLine = line
@@ -94,7 +98,7 @@ final class ScriptInsightSession: _ObservableObject, @unchecked Sendable {
         analyzed = key
         analysisTask?.cancel(); fixTask?.cancel()
         // Lines shift under an edit; stale arrows would point at the wrong code.
-        relations = []; fixLine = nil
+        relations = []; fixLine = nil; occurrences = []; occurrenceTask?.cancel()
         if !sameScript { symbols = []; caretLine = 0 }
         publish()
         analysisTask = Task { @MainActor [weak self] in
@@ -149,6 +153,27 @@ final class ScriptInsightSession: _ObservableObject, @unchecked Sendable {
                   !Task.isCancelled, self.analyzed == key, self.caretLine == line else { return }
             let next = actions.contains { $0.disabledReason == nil } ? line : nil
             if next != self.fixLine { self.fixLine = next; self.publish() }
+        }
+    }
+
+    private func requestOccurrences(document: ScriptWorkspaceDocument, caretIndex: Int) {
+        occurrenceTask?.cancel()
+        guard app.workstation.scripts.snapshot.languageServiceState == .ready else { return }
+        let source = document.source
+        let position = ScriptSourceCoordinates.position(in: source, atCharacterIndex: caretIndex)
+        let key = Key(scriptID: document.file.identifier, revision: document.editRevision)
+        occurrenceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self, !Task.isCancelled else { return }
+            let spans = (try? await self.app.dynamicScriptManager.documentHighlights(scriptID: key.scriptID, at: position)) ?? []
+            guard !Task.isCancelled, self.analyzed == key else { return }
+            let next = spans.map { span in
+                source.utf8Offset(forCharacterIndex: ScriptSourceCoordinates.characterIndex(in: source, at: span.start))
+                    ..< source.utf8Offset(forCharacterIndex: ScriptSourceCoordinates.characterIndex(in: source, at: span.end))
+            }.filter { !$0.isEmpty }
+            // A lone match is the symbol itself; marking it adds nothing.
+            let shown = next.count > 1 ? next : []
+            if shown != self.occurrences { self.occurrences = shown; self.publish() }
         }
     }
 

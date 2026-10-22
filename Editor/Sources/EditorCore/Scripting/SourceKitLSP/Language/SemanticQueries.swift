@@ -104,6 +104,16 @@ extension ScriptLanguageSupport {
         return ScriptAssistanceReplies.signatures(response.payload)
     }
 
+    /// Every place in the document that names the symbol at `position`.
+    public func documentHighlights(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptLanguageSpan] {
+        let response = try await semanticRequest("textDocument/documentHighlight", scriptID: scriptID) { uri in
+            try Self.locationParameters(uri: uri, position: position)
+        }
+        guard let data = response.payload,
+              let values = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [[String: Any]] else { return [] }
+        return values.prefix(1_000).compactMap { ScriptLanguageReplies.parseSpan($0["range"]) }
+    }
+
     public func documentSymbols(scriptID: String) async throws -> [ScriptDocumentSymbol] {
         let response = try await semanticRequest("textDocument/documentSymbol", scriptID: scriptID) { uri in
             try LSPJSON.data(["textDocument": ["uri": uri]])
@@ -111,9 +121,15 @@ extension ScriptLanguageSupport {
         return ScriptAssistanceReplies.symbols(response.payload)
     }
 
-    public func formatting(scriptID: String, tabSize: Int = 4, insertSpaces: Bool = true) async throws -> ScriptWorkspaceEdit {
-        let response = try await semanticRequest("textDocument/formatting", scriptID: scriptID) { uri in
-            try LSPJSON.data(["textDocument": ["uri": uri], "options": ["tabSize": max(1, min(tabSize, 16)), "insertSpaces": insertSpaces]])
+    /// Formats the document, or only `range` when one is given.
+    public func formatting(scriptID: String, range: ScriptLanguageSpan? = nil,
+                           tabSize: Int = 4, insertSpaces: Bool = true) async throws -> ScriptWorkspaceEdit {
+        let method = range == nil ? "textDocument/formatting" : "textDocument/rangeFormatting"
+        let response = try await semanticRequest(method, scriptID: scriptID) { uri in
+            var parameters: [String: Any] = ["textDocument": ["uri": uri],
+                                             "options": ["tabSize": max(1, min(tabSize, 16)), "insertSpaces": insertSpaces]]
+            if let range { parameters["range"] = Self.rangeParameters(range) }
+            return try LSPJSON.data(parameters)
         }
         guard let document = response.context.documents.values.first(where: { $0.scriptID == scriptID }) else {
             throw ScriptLanguageEditError.staleDocument(scriptID)

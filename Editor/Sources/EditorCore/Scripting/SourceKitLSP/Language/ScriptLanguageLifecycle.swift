@@ -10,6 +10,8 @@ struct ScriptLanguageLifecycle {
     var recoveryTask: Task<Void, Never>?
     var readySince: ContinuousClock.Instant?
     var metricsTask: Task<Void, Never>?
+    /// Polls the project for edits made outside the editor.
+    var watchTask: Task<Void, Never>?
 }
 
 /// Revision orders UI deliveries across stop, restart and recovery callbacks.

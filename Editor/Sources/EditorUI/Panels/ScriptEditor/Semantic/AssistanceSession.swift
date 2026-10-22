@@ -239,7 +239,7 @@ final class ScriptSemanticSession: _ObservableObject, @unchecked Sendable {
                     self.presentation.symbols = symbols
                     if symbols.isEmpty { self.presentation.message = L("No symbols found") }
                 case .format:
-                    let edit = try await manager.formatting(scriptID: document.file.identifier)
+                    let edit = try await manager.formatting(scriptID: document.file.identifier, range: selection.isEmpty ? nil : span)
                     guard self.isCurrent(token, document: document) else { return }
                     try self.app.workstation.scripts.applyLanguageEdit(edit)
                     self.presentation.message = L("Document formatted")

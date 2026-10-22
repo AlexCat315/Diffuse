@@ -1153,3 +1153,9 @@
 "No open Swift files" = "No open Swift files";
 "%d open Swift file(s), %d game script(s)" = "%d open Swift file(s), %d game script(s)";
 "Open a Swift file to start the language service." = "Open a Swift file to start the language service.";
+"Format on Save" = "Format on Save";
+"Format Swift files through the language service when they are saved." = "Format Swift files through the language service when they are saved.";
+"Quick Fix" = "Quick Fix";
+"Refactor" = "Refactor";
+"Source Action" = "Source Action";
+"Other" = "Other";

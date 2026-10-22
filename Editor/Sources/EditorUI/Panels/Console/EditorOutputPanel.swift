@@ -67,12 +67,19 @@ struct EditorOutputPanel: View {
                 .font(.label).foregroundColor(.onSurfaceVariant)
                 .padding(horizontal: 8, vertical: 4)
             document.diagnostics.map { diagnostic in
-                AnyView(Button(action: {
-                    app.navigateToIssue(.script(id: document.file.identifier,
-                        line: diagnostic.startLine, column: diagnostic.startCharacter))
-                }) {
-                    ScriptDiagnosticRow(diagnostic: diagnostic)
-                }.buttonStyle(.plain))
+                AnyView(Column(alignment: .leading, spacing: 0) {
+                    Button(action: {
+                        app.navigateToIssue(.script(id: document.file.identifier,
+                            line: diagnostic.startLine, column: diagnostic.startCharacter))
+                    }) {
+                        ScriptDiagnosticRow(diagnostic: diagnostic)
+                    }.buttonStyle(.plain)
+                    diagnostic.related.map { relation in
+                        AnyView(Button(action: { app.openSwiftLocation(relation.location) }) {
+                            ScriptDiagnosticRelationRow(relation: relation)
+                        }.buttonStyle(.plain).padding(EdgeInsets(leading: 24)))
+                    }
+                })
             }
         })
     }

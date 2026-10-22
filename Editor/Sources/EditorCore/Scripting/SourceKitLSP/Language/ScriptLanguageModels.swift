@@ -35,6 +35,9 @@ public struct ScriptLanguageDiagnostic: Sendable, Equatable, Identifiable {
     public let endCharacter: Int
     public let message: String
     public let code: String?
+    public var tags: [ScriptDiagnosticTag] = []
+    /// Other places the diagnostic points at, such as a clashing declaration.
+    public var related: [ScriptDiagnosticRelation] = []
 
     public var id: String {
         "\(startLine):\(startCharacter):\(endLine):\(endCharacter):\(message)"
@@ -62,6 +65,16 @@ public struct ScriptLanguageDiagnostic: Sendable, Equatable, Identifiable {
         self.message = message
         self.code = code
     }
+}
+
+public enum ScriptDiagnosticTag: Int, Sendable, Equatable {
+    case unnecessary = 1
+    case deprecated = 2
+}
+
+public struct ScriptDiagnosticRelation: Sendable, Equatable {
+    public let message: String
+    public internal(set) var location: ScriptDefinitionLocation
 }
 
 public struct ScriptLanguageDiagnosticUpdate: Sendable {
@@ -208,8 +221,8 @@ public enum ScriptCompletionItemKind: Sendable, Equatable {
 public struct ScriptCompletionItem: Sendable, Equatable, Identifiable {
     public let label: String
     public let kind: ScriptCompletionItemKind
-    public let detail: String?
-    public let documentation: String?
+    public internal(set) var detail: String?
+    public internal(set) var documentation: String?
     /// Replacement text once snippet placeholders are expanded.
     public let insertText: String
     /// Characters that must be replaced ahead of the caret — SourceKit emits
@@ -217,6 +230,8 @@ public struct ScriptCompletionItem: Sendable, Equatable, Identifiable {
     public let replacement: ScriptLanguageSpan?
     public var additionalEdits: [ScriptCompletionTextEdit] = []
     public var usesSnippet = false
+    /// The server's item, kept when it can fill in documentation on request.
+    var resolution: Data?
     public let filterText: String?
     public let sortText: String?
 
@@ -270,7 +285,7 @@ public struct ScriptDefinitionLocation: Sendable, Equatable {
     public let documentURI: String
     /// Identifier of the owning script when the target is one of the project's
     /// scripts; `nil` for engine sources opened from outside the mapping.
-    public let scriptID: String?
+    public internal(set) var scriptID: String?
     public let span: ScriptLanguageSpan
 
     public init(documentURI: String, scriptID: String?, span: ScriptLanguageSpan) {

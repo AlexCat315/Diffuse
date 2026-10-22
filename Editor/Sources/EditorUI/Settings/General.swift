@@ -107,3 +107,18 @@ struct DisplaySettings: View {
         }
     }
 }
+
+struct SwiftSettings: View {
+    @State private var preferences = SwiftEditingPreferences.load()
+
+    var body: some View {
+        SettingsCard(L("Swift")) {
+            SettingsField(L("Format on Save"), help: L("Format Swift files through the language service when they are saved.")) {
+                Toggle(isOn: Binding(get: { preferences.formatsOnSave }, set: { enabled in
+                    preferences.formatsOnSave = enabled
+                    try? preferences.save()
+                })).accessibility { $0.label = L("Format on Save") }.debugName("settings-swift-format-on-save")
+            }
+        }
+    }
+}

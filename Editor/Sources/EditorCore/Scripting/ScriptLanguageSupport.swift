@@ -126,6 +126,21 @@ public actor ScriptLanguageSupport {
         if isReady { try await open(source.text.stringValue, document: document, version: 1) }
     }
 
+    /// The editor wrote the script to disk.
+    public func didSave(scriptID: String) async {
+        guard let session = sessions[scriptID] else { return }
+        await sendChange(scriptID: scriptID, revision: session.revision)
+        guard isReady, let client else { return }
+        let uri = session.document.analysisURL.standardizedFileURL.absoluteString
+        try? await client.notify("textDocument/didSave", params: LSPJSON.data(["textDocument": ["uri": uri]]))
+    }
+
+    private func notifyWatchedFiles(_ changes: [ScriptWatchedFiles.Change], connectionID: UUID) async {
+        guard isReady, lifecycle.connectionID == connectionID, let client else { return }
+        let entries = changes.prefix(1_000).map { ["uri": $0.url.absoluteString, "type": $0.type.rawValue] as [String: Any] }
+        try? await client.notify("workspace/didChangeWatchedFiles", params: LSPJSON.data(["changes": entries]))
+    }
+
     public func closeProjectSource(scriptID: String) async {
         guard let session = sessions.removeValue(forKey: scriptID) else { return }
         session.changeTask?.cancel()
@@ -138,6 +153,8 @@ public actor ScriptLanguageSupport {
     public func stop() async {
         lifecycle.metricsTask?.cancel()
         lifecycle.metricsTask = nil
+        lifecycle.watchTask?.cancel()
+        lifecycle.watchTask = nil
         details.residentMemoryBytes = nil
         let wasReady = isReady
         lifecycle.generation = UUID()
@@ -182,7 +199,9 @@ public actor ScriptLanguageSupport {
         configuration.connect = connectTransport
         var fallback: [String: Any] = ["swiftCompilerFlags": workspace.includeFlags]
         if let sdk = workspace.sdkURL { fallback["sdk"] = sdk.path }
-        configuration.initializationOptions = try LSPJSON.data(["fallbackBuildSystem": fallback, "backgroundIndexing": true])
+        let options: [String: Any] = ["fallbackBuildSystem": fallback, "backgroundIndexing": true]
+        configuration.initializationOptions = try LSPJSON.data(options)
+        configuration.settings = try LSPJSON.data(["sourcekit-lsp": options])
         let client = LSPClient(configuration: configuration)
         let connectionID = UUID()
         self.client = client
@@ -214,6 +233,19 @@ public actor ScriptLanguageSupport {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 guard let self else { return }
                 await self.refreshMemoryUsage()
+            }
+        }
+        lifecycle.watchTask?.cancel()
+        let root = workspace.projectRootURL
+        lifecycle.watchTask = Task { [weak self] in
+            var previous = await Task.detached(priority: .utility) { ScriptWatchedFiles.scan(root) }.value
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                let next = await Task.detached(priority: .utility) { ScriptWatchedFiles.scan(root) }.value
+                let changes = previous.changes(to: next)
+                previous = next
+                guard !changes.isEmpty, let self else { continue }
+                await self.notifyWatchedFiles(changes, connectionID: connectionID)
             }
         }
         for (id, session) in sessions where session.current != session.sent {
@@ -319,6 +351,21 @@ public actor ScriptLanguageSupport {
         return ScriptLanguageReplies.parseCompletion(payload)
     }
 
+    /// Fills in documentation the list left out to stay small.
+    public func resolveCompletion(_ item: ScriptCompletionItem) async throws -> ScriptCompletionItem {
+        guard let resolution = item.resolution, isReady, let client else { return item }
+        let connectionID = lifecycle.connectionID
+        let payload = try await client.request("completionItem/resolve", params: resolution, timeout: Self.queryTimeout)
+        guard connectionID == lifecycle.connectionID, let payload,
+              let object = try JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let resolved = ScriptLanguageReplies.parseCompletionItem(object) else { return item }
+        var next = item
+        next.documentation = resolved.documentation
+        next.detail = resolved.detail ?? item.detail
+        next.resolution = nil
+        return next
+    }
+
     /// Resolves `goto definition`, re-mapping the shadow workspace URIs back
     /// onto project script identifiers so the editor can decide whether the
     /// target is something it can show.
@@ -348,6 +395,21 @@ public actor ScriptLanguageSupport {
             throw ScriptLanguageSupportError.unavailable("The generated reference document is too large to open.")
         }
         return content
+    }
+
+    /// Declarations across the indexed workspace whose names match `query`.
+    /// Shadow copies the editor does not show are left out.
+    public func workspaceSymbols(matching query: String) async throws -> [ScriptWorkspaceSymbol] {
+        guard isReady, let client else { throw LSPClientError.notRunning }
+        let connectionID = lifecycle.connectionID
+        let payload = try await client.request("workspace/symbol", params: LSPJSON.data(["query": query]), timeout: Self.queryTimeout)
+        guard connectionID == lifecycle.connectionID else { throw LSPClientError.notRunning }
+        return ScriptAssistanceReplies.workspaceSymbols(payload, limit: 200).compactMap { symbol in
+            let scriptID = scriptIdentifier(forDocumentURI: symbol.uri)
+            if scriptID == nil, symbol.uri.contains("/.guava/") { return nil }
+            return ScriptWorkspaceSymbol(name: symbol.name, kind: symbol.kind, containerName: symbol.container,
+                                         location: ScriptDefinitionLocation(documentURI: symbol.uri, scriptID: scriptID, span: symbol.span))
+        }
     }
 
     func diagnosticPayloads(scriptID: String) -> [Data] { sessions[scriptID]?.diagnostics ?? [] }
@@ -498,10 +560,17 @@ public actor ScriptLanguageSupport {
             if case .degraded = details.health { details.health = .checking }
             publishDetails()
         }
+        let diagnostics = published.diagnostics.map { diagnostic in
+            var diagnostic = diagnostic
+            for index in diagnostic.related.indices {
+                diagnostic.related[index].location.scriptID = scriptIdentifier(forDocumentURI: diagnostic.related[index].location.documentURI)
+            }
+            return diagnostic
+        }
         diagnosticsHandler?(ScriptLanguageDiagnosticUpdate(scriptID: entry.key,
                                                            sourceRevision: entry.value.revision,
                                                            version: published.version,
-                                                           diagnostics: published.diagnostics))
+                                                           diagnostics: diagnostics))
     }
 
     private func scriptIdentifier(forDocumentURI uri: String) -> String? {

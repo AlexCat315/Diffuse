@@ -153,6 +153,7 @@ public actor LSPClient {
                 "workspaceEdit": ["documentChanges": true, "resourceOperations": [String](), "failureHandling": "abort"],
                 "workspaceFolders": true,
                 "configuration": true,
+                "symbol": ["dynamicRegistration": false],
                 "didChangeWatchedFiles": ["dynamicRegistration": false],
             ],
             "textDocument": [
@@ -161,6 +162,7 @@ public actor LSPClient {
                     "completionItem": [
                         "snippetSupport": true,
                         "documentationFormat": ["markdown", "plaintext"],
+                        "resolveSupport": ["properties": ["documentation", "detail"]],
                     ],
                 ],
                 "hover": ["contentFormat": ["markdown", "plaintext"]],
@@ -176,6 +178,8 @@ public actor LSPClient {
                                                             "activeParameterSupport": true]],
                 "documentSymbol": ["hierarchicalDocumentSymbolSupport": true],
                 "formatting": ["dynamicRegistration": false],
+                "rangeFormatting": ["dynamicRegistration": false],
+                "documentHighlight": ["dynamicRegistration": false],
                 "publishDiagnostics": ["relatedInformation": true],
             ],
             "window": ["workDoneProgress": true],
@@ -247,8 +251,14 @@ public actor LSPClient {
         let result: Any
         switch method {
         case "workspace/configuration":
-            let items = (params as? [String: Any])?["items"] as? [Any] ?? []
-            result = items.map { _ in NSNull() }
+            let items = (params as? [String: Any])?["items"] as? [[String: Any]] ?? []
+            let settings = configuration.settings.flatMap { try? JSONSerialization.jsonObject(with: $0) }
+            result = items.map { item -> Any in
+                guard let section = item["section"] as? String else { return settings ?? NSNull() }
+                var value: Any? = settings
+                for key in section.split(separator: ".") { value = (value as? [String: Any])?[String(key)] }
+                return value ?? NSNull()
+            }
         case "workspace/workspaceFolders":
             result = workspaceFolders
         case "client/registerCapability", "client/unregisterCapability",

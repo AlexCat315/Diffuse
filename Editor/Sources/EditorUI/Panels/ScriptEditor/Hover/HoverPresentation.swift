@@ -16,6 +16,8 @@ struct ScriptEditorHoverAnchor: Equatable {
 struct ScriptEditorHoverContent: Equatable {
     var declaration: String
     var detail: String?
+    /// The server's Markdown, rendered as is when it sent any.
+    var markdown: String?
 
     init(declaration: String, detail: String? = nil) {
         self.declaration = declaration
@@ -31,6 +33,8 @@ struct ScriptEditorHoverContent: Equatable {
             .filter { !$0.isEmpty }
         declaration = blocks.first ?? ""
         detail = blocks.count > 1 ? blocks.dropFirst().joined(separator: "\n") : nil
+        let contents = result.contents.trimmingCharacters(in: .whitespacesAndNewlines)
+        markdown = result.kind == .markdown && !contents.isEmpty ? contents : nil
     }
 }
 

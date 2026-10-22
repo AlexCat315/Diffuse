@@ -42,12 +42,12 @@ enum SettingsCategory: String, CaseIterable, Sendable {
 }
 
 enum SettingsSectionID: String, CaseIterable, Sendable {
-    case appearance, language, selection, display, provider, execution, capabilities, plugins, shortcuts, about
+    case appearance, language, selection, display, swift, provider, execution, capabilities, plugins, shortcuts, about
 
     var category: SettingsCategory {
         switch self {
         case .appearance, .language: .general
-        case .selection, .display: .editor
+        case .selection, .display, .swift: .editor
         case .provider, .execution, .capabilities: .agent
         case .plugins: .plugins
         case .shortcuts: .shortcuts
@@ -61,6 +61,7 @@ enum SettingsSectionID: String, CaseIterable, Sendable {
         case .language: "Language"
         case .selection: "Selection"
         case .display: "Display & Performance"
+        case .swift: "Swift"
         case .provider: "Provider & Credentials"
         case .execution: "Execution & Review"
         case .capabilities: "Capability Gate"
@@ -77,6 +78,7 @@ enum SettingsSectionID: String, CaseIterable, Sendable {
         case .language: "language locale english chinese system 语言 中文 英文 系统"
         case .selection: "selection subtract toggle command control modifier 选择 减选 切换 修饰键"
         case .display: "display performance vertical sync vsync fps refresh 显示 性能 垂直 同步 刷新"
+        case .swift: "swift format save formatting language service 格式化 保存 语言服务"
         case .provider: "agent assistant ai provider model api key credential anthropic openai deepseek 模型 密钥 凭据 服务商 智能体"
         case .execution: "agent approval auto approve safe review 自动 确认 审阅 执行"
         case .capabilities: "capability gate stable beta experimental permissions 能力 稳定 测试 实验 权限"

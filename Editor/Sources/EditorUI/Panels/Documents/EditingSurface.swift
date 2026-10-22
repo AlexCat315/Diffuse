@@ -100,6 +100,7 @@ struct DocumentEditingSurface: View {
             input.layout.wrapsLines = wraps
             input.layout.maxVisibleLines = 80
             input.codeEditing.showsLineNumbers = true
+            input.codeEditing.showsMinimap = true
             input.codeEditing.indentationWidth = 4
             configure(&input)
             extra(&input)

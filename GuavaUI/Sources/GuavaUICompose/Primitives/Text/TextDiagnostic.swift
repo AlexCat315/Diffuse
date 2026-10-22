@@ -3,9 +3,13 @@ import GuavaUIRuntime
 
 public struct TextDiagnostic: Equatable, Sendable {
     public enum Severity: Sendable { case error, warning, information, hint }
+    /// How the range is marked: a squiggle, faded glyphs for unused code, or a
+    /// line through deprecated names.
+    public enum Style: Sendable { case underline, faded, struckThrough }
     public let utf8Range: Range<Int>
     public let severity: Severity
     public let message: String
+    public var style = Style.underline
     public init(utf8Range: Range<Int>, severity: Severity, message: String) {
         self.utf8Range = utf8Range; self.severity = severity; self.message = message
     }
@@ -17,7 +21,10 @@ public struct TextDiagnostics: Sendable, Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool { lhs.root === rhs.root }
     public static let empty = TextDiagnostics([])
     private let root: DiagnosticInterval?
+    /// Whether any range fades its glyphs, so painting can skip the lookup.
+    let fadesText: Bool
     public init(_ diagnostics: [TextDiagnostic]) {
+        fadesText = diagnostics.contains { $0.style == .faded }
         root = DiagnosticInterval.build(diagnostics.sorted { $0.utf8Range.lowerBound < $1.utf8Range.lowerBound })
     }
     public func overlapping(_ range: Range<Int>) -> [TextDiagnostic] {
@@ -57,6 +64,7 @@ struct TextDiagnosticSegment {
     let x: Float
     let width: Float
     let baselineY: Float
+    let middleY: Float
 }
 enum TextDiagnosticGeometry {
     static func segments(in layout: TextLayoutResult, diagnostics: TextDiagnostics, lineHeight: Float) -> [TextDiagnosticSegment] {
@@ -75,7 +83,7 @@ enum TextDiagnosticGeometry {
                 let upper = upperByte >= last ? line.width
                     : (line.glyphs.first { Int($0.cluster) >= upperByte }?.x ?? line.width)
                 return TextDiagnosticSegment(diagnostic: diagnostic, x: lower, width: max(6, upper - lower),
-                                             baselineY: line.topY + lineHeight - 2)
+                                             baselineY: line.topY + lineHeight - 2, middleY: line.topY + lineHeight / 2)
             }
         }
     }
@@ -88,6 +96,14 @@ enum TextDiagnosticGeometry {
             case .hint: theme.colors.onSurfaceMuted
             }
             let start = origin.0 + segment.x, y = origin.1 + segment.baselineY
+            if segment.diagnostic.style == .struckThrough {
+                list.addLine(fromX: start, fromY: origin.1 + segment.middleY, toX: start + segment.width, toY: origin.1 + segment.middleY,
+                             thickness: 1, color: theme.colors.onSurfaceMuted.multipliedAlpha(opacity))
+            }
+            // Unused or deprecated code that is merely noted needs no squiggle.
+            if segment.diagnostic.style != .underline, segment.diagnostic.severity == .hint || segment.diagnostic.severity == .information {
+                continue
+            }
             var x = start, up = false
             while x < start + segment.width {
                 let end = min(start + segment.width, x + 2)

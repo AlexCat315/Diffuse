@@ -209,6 +209,10 @@ public final class DynamicScriptManager: @unchecked Sendable {
         try await languageSupport?.openProjectSource(source)
     }
 
+    public func didSaveLanguageSource(scriptID: String) async {
+        await languageSupport?.didSave(scriptID: scriptID)
+    }
+
     public func closeProjectSource(scriptID: String) async {
         await languageSupport?.closeProjectSource(scriptID: scriptID)
     }
@@ -302,6 +306,14 @@ public final class DynamicScriptManager: @unchecked Sendable {
         }
     }
 
+    public func workspaceSymbols(matching query: String) async throws -> [ScriptWorkspaceSymbol] {
+        try await performOnLanguageService { try await $0.workspaceSymbols(matching: query) }
+    }
+
+    public func resolveCompletion(_ item: ScriptCompletionItem) async throws -> ScriptCompletionItem {
+        try await performOnLanguageService { try await $0.resolveCompletion(item) }
+    }
+
     public func definition(scriptID: String,
                            at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
         try await performOnLanguageService { try await $0.definition(scriptID: scriptID, at: position) }
@@ -347,8 +359,15 @@ public final class DynamicScriptManager: @unchecked Sendable {
         try await performOnLanguageService { try await $0.documentSymbols(scriptID: scriptID) }
     }
 
-    public func formatting(scriptID: String, tabSize: Int = 4, insertSpaces: Bool = true) async throws -> ScriptWorkspaceEdit {
-        try await performOnLanguageService { try await $0.formatting(scriptID: scriptID, tabSize: tabSize, insertSpaces: insertSpaces) }
+    public func formatting(scriptID: String, range: ScriptLanguageSpan? = nil,
+                           tabSize: Int = 4, insertSpaces: Bool = true) async throws -> ScriptWorkspaceEdit {
+        try await performOnLanguageService {
+            try await $0.formatting(scriptID: scriptID, range: range, tabSize: tabSize, insertSpaces: insertSpaces)
+        }
+    }
+
+    public func documentHighlights(scriptID: String, at position: ScriptLanguagePosition) async throws -> [ScriptLanguageSpan] {
+        try await performOnLanguageService { try await $0.documentHighlights(scriptID: scriptID, at: position) }
     }
 
     public func languageServiceDetails() async -> ScriptLanguageServiceDetails? {

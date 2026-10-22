@@ -1234,3 +1234,9 @@
 "No open Swift files" = "没有打开的 Swift 文件";
 "%d open Swift file(s), %d game script(s)" = "%d 个打开的 Swift 文件，%d 个游戏脚本";
 "Open a Swift file to start the language service." = "打开一个 Swift 文件即可启动语言服务。";
+"Format on Save" = "保存时格式化";
+"Format Swift files through the language service when they are saved." = "保存 Swift 文件时通过语言服务格式化。";
+"Quick Fix" = "快速修复";
+"Refactor" = "重构";
+"Source Action" = "源代码操作";
+"Other" = "其他";

@@ -105,13 +105,21 @@ public enum ScriptLanguageReplies {
         } else {
             code = nil
         }
-        return ScriptLanguageDiagnostic(severity: severity,
-                                        startLine: span.start.line,
-                                        startCharacter: span.start.character,
-                                        endLine: span.end.line,
-                                        endCharacter: span.end.character,
-                                        message: message,
-                                        code: code)
+        var diagnostic = ScriptLanguageDiagnostic(severity: severity,
+                                                  startLine: span.start.line,
+                                                  startCharacter: span.start.character,
+                                                  endLine: span.end.line,
+                                                  endCharacter: span.end.character,
+                                                  message: message,
+                                                  code: code)
+        diagnostic.tags = (object["tags"] as? [Int] ?? []).compactMap(ScriptDiagnosticTag.init(rawValue:))
+        diagnostic.related = (object["relatedInformation"] as? [[String: Any]] ?? []).prefix(32).compactMap { information in
+            guard let message = information["message"] as? String, let location = information["location"] as? [String: Any],
+                  let uri = location["uri"] as? String, let span = parseSpan(location["range"]) else { return nil }
+            return ScriptDiagnosticRelation(message: message,
+                                            location: ScriptDefinitionLocation(documentURI: uri, scriptID: nil, span: span))
+        }
+        return diagnostic
     }
 
     // MARK: Hover
@@ -202,6 +210,9 @@ public enum ScriptLanguageReplies {
         item.additionalEdits = (object["additionalTextEdits"] as? [[String: Any]] ?? []).compactMap { edit in
             guard let range = parseSpan(edit["range"]), let text = edit["newText"] as? String else { return nil }
             return ScriptCompletionTextEdit(range: range, text: text)
+        }
+        if object["data"] != nil, object["documentation"] == nil {
+            item.resolution = try? JSONSerialization.data(withJSONObject: object)
         }
         return item
     }

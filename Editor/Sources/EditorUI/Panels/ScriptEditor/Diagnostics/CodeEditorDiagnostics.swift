@@ -20,7 +20,10 @@ final class ScriptCodeEditorDiagnostics {
             case .information: .information
             case .hint: .hint
             }
-            return TextDiagnostic(utf8Range: start..<max(start, end), severity: severity, message: diagnostic.message)
+            var mapped = TextDiagnostic(utf8Range: start..<max(start, end), severity: severity, message: diagnostic.message)
+            if diagnostic.tags.contains(.deprecated) { mapped.style = .struckThrough }
+            else if diagnostic.tags.contains(.unnecessary) { mapped.style = .faded }
+            return mapped
         })
         return mapped
     }
