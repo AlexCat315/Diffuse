@@ -10,7 +10,14 @@ struct EditorProblemSummary: Equatable {
 
     var total: Int { errors + warnings + notes }
 
-    init(documents: [ScriptWorkspaceDocument], consoleEntries: [EditorConsoleEntry]) {
+    init(documents: [ScriptWorkspaceDocument], consoleEntries: [EditorConsoleEntry], taskProblems: [TaskProblem] = []) {
+        for problem in taskProblems {
+            switch problem.severity {
+            case .error: errors += 1
+            case .warning: warnings += 1
+            case .note: notes += 1
+            }
+        }
         for diagnostic in documents.lazy.flatMap(\.diagnostics) {
             switch diagnostic.severity {
             case .error: errors += 1

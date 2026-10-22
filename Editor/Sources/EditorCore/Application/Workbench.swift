@@ -5,6 +5,11 @@ extension EditorApplication {
         activatePanelHandler = handler
     }
 
+    /// Brings a panel forward, wherever the layout keeps it.
+    public func showPanel(_ id: String) {
+        activatePanelHandler?(id)
+    }
+
     /// Opens a project-relative file in a tab and brings the editor forward.
     public func openDocument(_ path: String) {
         workstation.documents.open(path)

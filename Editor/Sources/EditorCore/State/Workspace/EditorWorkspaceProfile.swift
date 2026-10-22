@@ -27,7 +27,7 @@ public struct EditorWorkspaceProfile: Sendable {
     public static let builtInPanelIDs: Set<String> = [
         "viewport", "hierarchy", "inspector", "assets", "console", "intent-input",
         "journal", "files", "documents", "media", "developer-tools", "animation", "render-pipeline", "terminal",
-        "source-control", "outline",
+        "source-control", "outline", "tasks",
     ]
 
     public static func profile(for mode: EditorWorkspaceMode) -> Self {
@@ -35,13 +35,13 @@ public struct EditorWorkspaceProfile: Sendable {
                                    "intent-input", "journal", "render-pipeline", "source-control"]
         switch mode {
         case .documents:
-            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "terminal", "intent-input", "journal", "source-control", "outline"])
+            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "terminal", "intent-input", "journal", "source-control", "outline", "tasks"])
         case .video:
             return Self(domain: .media, features: [.media, .documents], panelIDs: ["files", "media", "documents", "console", "terminal", "intent-input", "journal", "source-control", "outline"])
         case .level, .scripting:
             return Self(domain: .game,
                         features: [.scene, .rendering, .animation, .simulation, .gameplay, .scripting, .gameBuild],
-                        panelIDs: shared.union(["files", "documents", "developer-tools", "animation"]))
+                        panelIDs: shared.union(["files", "documents", "developer-tools", "animation", "tasks"]))
         case .modeling:
             return Self(domain: .creation, features: [.scene, .rendering], panelIDs: shared)
         case .animation:

@@ -1,6 +1,7 @@
 import Foundation
 
-/// The project's Swift sources and package files by modification date, so
+/// The project's files in the served language, and the file names its plugin
+/// watches (such as a package manifest), by modification date, so
 /// edits made outside the editor (a checkout, a generator, another editor)
 /// reach the language server as `workspace/didChangeWatchedFiles`.
 struct ScriptWatchedFiles: Sendable, Equatable {
@@ -16,7 +17,7 @@ struct ScriptWatchedFiles: Sendable, Equatable {
     private static let limit = 20_000
     private static let skipped: Set<String> = ["node_modules", "DerivedData", "Pods", "Carthage"]
 
-    static func scan(_ root: URL) -> Self {
+    static func scan(_ root: URL, extensions: Set<String>, names: Set<String>) -> Self {
         var result = Self()
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isDirectoryKey]
         guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys,
@@ -30,10 +31,25 @@ struct ScriptWatchedFiles: Sendable, Equatable {
                 if skipped.contains(url.lastPathComponent) { enumerator.skipDescendants() }
                 continue
             }
-            guard url.pathExtension == "swift" || url.lastPathComponent == "Package.resolved" else { continue }
+            guard extensions.contains(url.pathExtension) || names.contains(url.lastPathComponent) else { continue }
             result.entries[url.standardizedFileURL] = values?.contentModificationDate ?? .distantPast
         }
         return result
+    }
+
+    /// Whether `root` holds any file with one of `extensions`, stopping at the first.
+    static func contains(_ root: URL, extensions: Set<String>) -> Bool {
+        guard !extensions.isEmpty, let enumerator = FileManager.default.enumerator(
+            at: root, includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return false }
+        var visited = 0
+        for case let url as URL in enumerator {
+            visited += 1
+            if visited > limit { return false }
+            if skipped.contains(url.lastPathComponent) { enumerator.skipDescendants(); continue }
+            if extensions.contains(url.pathExtension) { return true }
+        }
+        return false
     }
 
     func changes(to next: Self) -> [Change] {

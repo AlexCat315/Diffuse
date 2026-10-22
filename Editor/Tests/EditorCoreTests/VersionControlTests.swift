@@ -7,13 +7,13 @@ import Testing
 /// carry recorded output, so parsing and paging run in the real Component
 /// without the command-line tool.
 private struct ProviderHarness {
-    let plugin: VersionControlPlugin
+    let plugin: StepPlugin
 
     init(_ system: VersionControlSystem) throws {
         let provider = try #require(VersionControlProvider.provider(for: system))
         let client = PluginHostProcessClient(executableURL: try #require(EditorPluginHostLocator.resolve()))
-        plugin = VersionControlPlugin(provider: provider,
-                                      tool: VersionControlTool(executable: URL(fileURLWithPath: "/usr/bin/false"), environment: [:]),
+        plugin = StepPlugin(provider: provider.step,
+                                      tool: ContributionTool(executable: URL(fileURLWithPath: "/usr/bin/false"), environment: [:]),
                                       workspace: FileManager.default.temporaryDirectory, client: client)
     }
 
@@ -24,7 +24,7 @@ private struct ProviderHarness {
     }
 
     /// An operation's result given its command's output, paged in `window`-byte windows.
-    func parse<T: Decodable>(_ operation: String, _ stdout: String, window: Int = VersionControlPlugin.window,
+    func parse<T: Decodable>(_ operation: String, _ stdout: String, window: Int = StepPlugin.window,
                              as type: T.Type) async throws -> T {
         guard case let .result(data) = try await plugin.perform(["op": operation], resuming: ("parse", Data(stdout.utf8)),
                                                                 baseWindow: window) else {
@@ -67,7 +67,7 @@ struct VersionControlTests {
         #expect(VersionControlProvider.provider(for: .lore)?.contribution.ignoreFile == ".loreignore")
     }
 
-    @Test(arguments: [VersionControlPlugin.window, 64, 7])
+    @Test(arguments: [StepPlugin.window, 64, 7])
     func gitPorcelainStatusParsesBranchAndEveryEntryKind(window: Int) async throws {
         let status = try await ProviderHarness(.git).parse("status", porcelain, window: window, as: StatusWire.self).model
         #expect(status.tracking == VersionControlTracking(branch: "main", upstream: "origin/main", ahead: 2, behind: 1))
@@ -118,7 +118,7 @@ struct VersionControlTests {
         #expect(status.changes.last?.path == "Assets/Generated/File 49999.txt")
     }
 
-    @Test(arguments: [VersionControlPlugin.window, 32])
+    @Test(arguments: [StepPlugin.window, 32])
     func loreJSONEventsParseStatusBranchesAndLocks(window: Int) async throws {
         let lore = try ProviderHarness(.lore)
         let status = try await lore.parse("status", loreStatus, window: window, as: StatusWire.self).model
@@ -173,11 +173,11 @@ struct VersionControlTests {
     }
 
     @Test @MainActor func gitWorkingTreeRoundTripsThroughThePlugin() async throws {
-        guard let git = VersionControlTool.locate("git") else { return }
+        guard let git = ContributionTool.locate("git") else { return }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("vcs-git-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let model = EditorVersionControl(projectRoot: root, pluginHost: EditorPluginHostLocator.resolve())
+        let model = EditorVersionControl(projectRoot: root, plugins: StepPlugins(hostExecutable: EditorPluginHostLocator.resolve()))
         await model.refresh()
         #expect(model.snapshot.availability == .noRepository)
         #expect(model.snapshot.installedSystems.contains(.git))
@@ -261,7 +261,7 @@ extension VersionControlTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("vcs-off-\(UUID())")
         try FileManager.default.createDirectory(at: root.appendingPathComponent(".git"), withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let model = EditorVersionControl(projectRoot: root, pluginHost: EditorPluginHostLocator.resolve())
+        let model = EditorVersionControl(projectRoot: root, plugins: StepPlugins(hostExecutable: EditorPluginHostLocator.resolve()))
         await model.setEnabled(false, system: .git)
         #expect(model.snapshot.disabledSystems == [.git])
         #expect(model.snapshot.availability == .noRepository)

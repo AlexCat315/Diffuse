@@ -336,6 +336,10 @@ private struct Builder {
                   command: .buildProject, enabled: isGame),
             entry("project.run", "Build and Run", "export run 构建运行", .init(.letter("r")),
                   command: .buildAndRun, enabled: isGame),
+            .separator,
+            entry("task.build", "Run Build Task", "task build compile swift package 任务 构建 编译", command: .runTask(.build)),
+            entry("task.test", "Run Tests", "task test xctest testing 任务 测试", .init(.letter("u")),
+                  command: .runTask(.test)),
         ])
     }
 

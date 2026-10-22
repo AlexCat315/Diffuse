@@ -3,7 +3,7 @@ import GuavaPluginKit
 /// Git through its machine-readable porcelain formats. Path lists travel on
 /// standard input, so no command line outgrows a process request.
 func provider(request: String, stdout: String) -> String {
-    VersionControl.serve(request: request, stdout: stdout) { request in
+    Steps.serve(request: request, stdout: stdout) { request in
         switch request.operation {
         case "status": status(request)
         case "history": history(request)
@@ -40,7 +40,7 @@ func pathspecs(_ arguments: [String], _ paths: [String], timeout: Int? = nil) ->
 }
 
 /// Ends an operation whose last command has run.
-func finish(_ request: VersionControlRequest) -> VersionControlStep {
+func finish(_ request: StepRequest) -> Step {
     guard let output = request.output else { return .failure("Git returned no output.") }
     return output.succeeded ? .result(.null) : .failure(output.message)
 }

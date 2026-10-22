@@ -47,6 +47,8 @@ enum EditorCommand {
     case toggleTheme
     case buildProject
     case buildAndRun
+    /// The project's build or test task, from the plugin that contributes tasks for it.
+    case runTask(TaskKind)
     case openDocumentation
     case about
 }

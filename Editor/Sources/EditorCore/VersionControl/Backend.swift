@@ -41,21 +41,3 @@ public enum VersionControlError: Error, LocalizedError, Equatable, Sendable {
         }
     }
 }
-
-/// Removing created files goes through the Trash so a discard can be undone.
-enum VersionControlFiles {
-    static func trash(_ paths: [String], in root: URL) throws {
-        for path in paths {
-            guard !path.isEmpty, !path.hasPrefix("/"), !path.split(separator: "/").contains("..") else {
-                throw VersionControlError.invalidInput("Refusing to remove a path outside the repository: \(path)")
-            }
-            let url = root.appendingPathComponent(path)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            #if os(macOS) || os(Windows)
-            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-            #else
-            try FileManager.default.removeItem(at: url)
-            #endif
-        }
-    }
-}

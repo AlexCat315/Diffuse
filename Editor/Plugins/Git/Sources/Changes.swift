@@ -1,12 +1,12 @@
 import GuavaPluginKit
 
-func stage(_ request: VersionControlRequest) -> VersionControlStep {
+func stage(_ request: StepRequest) -> Step {
     if request.output != nil { return finish(request) }
     let paths = strings(request["paths"])
     return paths.isEmpty ? .result(.null) : .run(pathspecs(["add", "-A"], paths), next: "done")
 }
 
-func unstage(_ request: VersionControlRequest) -> VersionControlStep {
+func unstage(_ request: StepRequest) -> Step {
     let paths = strings(request["paths"])
     switch request.state {
     case nil:
@@ -22,7 +22,7 @@ func unstage(_ request: VersionControlRequest) -> VersionControlStep {
 
 /// Restores tracked files to the last revision. Created files leave the
 /// index, then go to the Trash so the discard can be undone.
-func discard(_ request: VersionControlRequest) -> VersionControlStep {
+func discard(_ request: StepRequest) -> Step {
     var created: [Change] = [], tracked: [Change] = []
     for value in request["changes"]?.array ?? [] {
         guard let change = Change(value) else { continue }
@@ -54,7 +54,7 @@ func discard(_ request: VersionControlRequest) -> VersionControlStep {
 }
 
 /// Commits the staged changes, staging everything first when asked.
-func commit(_ request: VersionControlRequest) -> VersionControlStep {
+func commit(_ request: StepRequest) -> Step {
     if let output = request.output, !output.succeeded { return .failure(output.message) }
     switch request.state {
     case nil where request["stageAll"]?.bool == true:

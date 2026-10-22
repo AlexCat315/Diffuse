@@ -3,7 +3,7 @@ import Foundation
 /// A version control backend whose every command comes from its plugin.
 struct PluginBackend: VersionControlBackend {
     let repository: VersionControlRepository
-    let plugin: VersionControlPlugin
+    let plugin: StepPlugin
 
     func status() async throws -> VersionControlStatus {
         try await result(["op": "status"], as: StatusWire.self).model
@@ -54,7 +54,7 @@ struct PluginBackend: VersionControlBackend {
 
     private func result<T: Decodable>(_ operation: [String: Any], as type: T.Type) async throws -> T {
         guard case let .result(data) = try await plugin.perform(operation) else {
-            throw VersionControlError.unsupported("The \(plugin.provider.contribution.title) plugin returned text for \(operation["op"] ?? "").")
+            throw VersionControlError.unsupported("The \(plugin.provider.title) plugin returned text for \(operation["op"] ?? "").")
         }
         return try JSONDecoder().decode(T.self, from: data)
     }

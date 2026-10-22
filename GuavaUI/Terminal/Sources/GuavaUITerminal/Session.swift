@@ -29,7 +29,8 @@ public final class TerminalSession {
         case exited(code: Int32)
     }
 
-    public let command: TerminalCommand
+    /// The program it runs; nil for a session that shows output it is handed.
+    public let command: TerminalCommand?
     public private(set) var status: Status = .idle
     /// Window title set by the program (OSC 0/2); empty until one is set.
     public private(set) var title = ""
@@ -43,6 +44,8 @@ public final class TerminalSession {
     private var cachedFrame: TerminalFrame?
     private var cellSize = (width: 0, height: 0)
     private var observers: [ObjectIdentifier: () -> Void] = [:]
+    /// The last byte a display session showed, to translate bare newlines.
+    private var lastShown: UInt8 = 0
 
     public convenience init(command: TerminalCommand = .loginShell, scrollbackLines: Int = 10_000) {
         self.init(command: command, scrollbackLines: scrollbackLines, schedule: nil)
@@ -50,7 +53,7 @@ public final class TerminalSession {
 
     /// `schedule` runs work on the thread that owns the session; `nil` uses
     /// the host's UI scheduler as installed when `start()` runs.
-    init(command: TerminalCommand, scrollbackLines: Int, schedule: ((@escaping () -> Void) -> Void)?) {
+    init(command: TerminalCommand?, scrollbackLines: Int, schedule: ((@escaping () -> Void) -> Void)?) {
         self.command = command
         self.schedule = schedule
         engine = TerminalEngine(columns: 80, rows: 24, scrollbackLines: scrollbackLines)
@@ -68,11 +71,40 @@ public final class TerminalSession {
         process?.terminate()
     }
 
+    /// A session that shows output it is handed instead of running a program,
+    /// such as a build another process runs. Text a pipe produced, where a line
+    /// ends in a bare newline, starts each line at the left margin as a
+    /// terminal would.
+    public static func display(scrollbackLines: Int = 10_000) -> TerminalSession {
+        TerminalSession(command: nil, scrollbackLines: scrollbackLines, schedule: nil)
+    }
+
+    /// Shows program output in a display session.
+    public func show(_ bytes: [UInt8]) {
+        guard command == nil, !bytes.isEmpty else { return }
+        var translated: [UInt8] = []
+        translated.reserveCapacity(bytes.count + bytes.count / 16)
+        for byte in bytes {
+            if byte == 0x0A, lastShown != 0x0D { translated.append(0x0D) }
+            translated.append(byte)
+            lastShown = byte
+        }
+        if status == .idle { status = .running }
+        feed(translated)
+    }
+
+    /// Ends a display session with the program's exit status.
+    public func showExit(code: Int32) {
+        guard command == nil, status != .exited(code: code) else { return }
+        finish(code: code)
+    }
+
     /// Launches the program. `TerminalView` calls this when it first shows an
     /// idle session. A session runs one program once; create a new session to
     /// run again. Failures are also shown in the terminal itself.
     public func start() throws {
         guard status == .idle else { throw TerminalError.alreadyStarted }
+        guard let command else { status = .running; return }
         inbox.schedule = schedule ?? UIWorkSchedulerHolder.enqueue ?? { DispatchQueue.main.async(execute: $0) }
         let inbox = inbox
         do {

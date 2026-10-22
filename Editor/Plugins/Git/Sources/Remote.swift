@@ -1,7 +1,7 @@
 import GuavaPluginKit
 
 /// Pushes the current branch, publishing it to `origin` when it has no upstream yet.
-func push(_ request: VersionControlRequest) -> VersionControlStep {
+func push(_ request: StepRequest) -> Step {
     switch request.state {
     case nil:
         return .run(git(["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=no"]), next: "push")
@@ -17,7 +17,7 @@ func push(_ request: VersionControlRequest) -> VersionControlStep {
     }
 }
 
-func switchBranch(_ request: VersionControlRequest, create: Bool) -> VersionControlStep {
+func switchBranch(_ request: StepRequest, create: Bool) -> Step {
     if request.output != nil { return finish(request) }
     let name = request["name"]?.string ?? ""
     guard VersionControl.isValidBranchName(name) else { return .failure("“\(name)” is not a valid branch name.") }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 一切皆插件：Swift 的语言服务、构建、测试与运行都由 Swift Support 插件声明和决定，编辑器只提供通用引擎。`plugin.json` 新增 `contributes.languages`（语言 id、扩展名、语言服务器的进程权限、`initializationOptions`、`settings` 与 `watchedFiles`）与 `contributes.tasks`（项目标记文件，如 `Package.swift`）；`PluginJSON` 承载任意 JSON。哪些文件走语言服务、`didOpen` 的语言 id、初始化参数（宿主只补充引擎模块搜索路径）、`workspace/configuration` 与外部改动监听都来自插件声明。Swift Support 新增 `package` 进程权限（`swift`）与 `tasks` 入口：插件决定 `describe`、`build`、`test`、`run`、`clean`、`resolve` 的命令，并自己读取编译器问题（去掉终端颜色码）与 XCTest / Swift Testing 结果；编辑器不再直接调用 `swift`。GuavaPluginKit 的步骤协议从 `VersionControl` 拆为通用的 `Steps`（新增 `stream`：编辑器实时显示输出、不限时，交给插件的输出包含按顺序合并的标准错误），编辑器侧对应的挂载与执行移到 `EditorCore/Contributions`（`StepPlugins`、`StepPlugin`），Git、Lore 与任务共用一个插件宿主。`SwiftPackageTaskTests` 用真实 Component 与录制的 SwiftPM 输出覆盖命令选择、`describe`、问题与测试结果，`ComponentBuildTests` 覆盖新贡献点的校验。
+
+- “任务”面板（项目带有某个插件声明的标记文件时出现在活动栏）：工具栏只有构建、运行测试、运行、停止、清理五个图标；下方是测试树与插件描述的项目内容（产品、目标、依赖）。测试由语言服务从索引中发现（`workspace/tests`），无需构建，语言服务就绪、索引完成、保存文件与每次任务结束后自动刷新；每个测试可单独运行，失败显示第一条问题。任务输出在终端面板的任务标签中显示（`TerminalSession.display()` 只显示交给它的输出，保留颜色），编译器问题并入“问题”列表与状态栏计数，任务状态只在状态栏显示。命令面板与“运行”菜单新增“运行构建任务”“运行测试”（⌘U），仅在写作与游戏 Space 中出现。
+
+- 语言服务在打开项目时即启动：项目中有插件声明的语言的文件时，不必先打开某个文件，后台索引立即开始；关闭最后一个文件也不再停止服务。
+
 - 代码编辑器新增小地图（`TextFieldCodeEditing.showsMinimap`）：右侧按语法着色的缩略全文，标出可见区域，点击或拖动即可滚动，长文件随正文按比例滚动；显示小地图时不再绘制纵向滚动条。
 
 - Swift 支持补齐：补全列表显示选中项的文档，缺失时通过 `completionItem/resolve` 按需获取；悬停按 Markdown 渲染（代码块、列表、链接）；光标所在符号的其他出现处高亮（`documentHighlight`，`TextFieldCodeEditing.occurrences`）；命令面板搜索整个工作区的符号（`workspace/symbol`），可直接打开项目中的任意 Swift 文件；有选区时“格式化”只格式化选区（`rangeFormatting`），设置 › 编辑器 › Swift 可开启保存时格式化；诊断保留 `tags` 与 `relatedInformation`，未使用的代码变淡、已弃用的名称加删除线，问题面板列出关联位置并可跳转；代码操作按快速修复、重构、源代码操作分组。语言服务在保存时发送 `didSave`，每 2 秒检查项目内 Swift 文件与 `Package.resolved` 的外部改动并发送 `workspace/didChangeWatchedFiles`，`workspace/configuration` 按 section 返回真实设置。参数提示只显示文档首段，不再遮住代码。`AssistanceReplyTests` 覆盖。

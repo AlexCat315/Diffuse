@@ -26,6 +26,10 @@ struct VersionControlProvider: Sendable {
         bundled.first { $0.system == system }
     }
 
+    var step: StepProvider {
+        StepProvider(title: contribution.title, package: package, entryPoint: VersionControlContribution.entryPoint, process: process)
+    }
+
     /// The nearest working tree containing `directory` of a system not `excluding`.
     static func repository(containing directory: URL,
                            excluding disabled: Set<VersionControlSystem> = []) -> VersionControlRepository? {
@@ -45,3 +49,26 @@ struct VersionControlProvider: Sendable {
     }
 }
 
+
+extension StepPlugins {
+    /// Systems whose command-line tool is installed.
+    var installedSystems: Set<VersionControlSystem> {
+        Set(VersionControlProvider.bundled.filter { ContributionTool.locate($0.process.command) != nil }.map(\.system))
+    }
+
+    func backend(for repository: VersionControlRepository) throws -> any VersionControlBackend {
+        PluginBackend(repository: repository, plugin: try plugin(for: repository.system, workspace: repository.root))
+    }
+
+    /// The plugin for `system`, running its commands in `workspace`.
+    func plugin(for system: VersionControlSystem, workspace: URL) throws -> StepPlugin {
+        guard let provider = VersionControlProvider.provider(for: system) else {
+            throw VersionControlError.unsupported("The \(system.rawValue) plugin is missing from this build.")
+        }
+        do {
+            return try plugin(for: provider.step, workspace: workspace)
+        } catch StepError.toolMissing {
+            throw VersionControlError.toolMissing(system)
+        }
+    }
+}

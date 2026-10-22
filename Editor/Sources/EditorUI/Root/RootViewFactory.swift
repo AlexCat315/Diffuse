@@ -146,6 +146,7 @@ enum EditorRootViewFactory {
         registerPanelIcons()
         let agentDraft = AgentDraft()
         let terminal = EditorTerminal(projectDirectory: app.projectDirectory)
+        terminal.follow(app.workstation.tasks) { app.showPanel("terminal") }
         return WorkspacePanelRegistry([
             WorkspacePanelDescriptor(id: "hierarchy", title: localizedPanelTitle(for: "hierarchy"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.hierarchy" }) {
                 HierarchyPanel(store: app.store, scene: app.scene)
@@ -193,6 +194,9 @@ enum EditorRootViewFactory {
             WorkspacePanelDescriptor(id: "source-control", title: localizedPanelTitle(for: "source-control"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.source-control" }) {
                 SourceControlPanel(app: app)
             },
+            WorkspacePanelDescriptor(id: "tasks", title: localizedPanelTitle(for: "tasks"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.tasks" }) {
+                TasksPanel(app: app)
+            },
             WorkspacePanelDescriptor(id: "outline", title: localizedPanelTitle(for: "outline"), defaultSlot: .trailing, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.outline" }) {
                 DocumentOutlinePanel(app: app)
             },
@@ -230,6 +234,7 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.documents", UIIcons.File.fileCode)
         WorkspacePanelIconCatalog.register("panel.source-control", UIIcons.Editor.gitBranch)
         WorkspacePanelIconCatalog.register("panel.outline", UIIcons.Text.heading)
+        WorkspacePanelIconCatalog.register("panel.tasks", UIIcons.Editor.box)
     }
 
     static func saveWorkspaceLayout(_ controller: WorkspaceController,
@@ -331,6 +336,8 @@ enum EditorRootViewFactory {
             return L("Source Control")
         case "outline":
             return L("Document Outline")
+        case "tasks":
+            return L("Tasks")
         default:
             return id
         }

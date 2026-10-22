@@ -1,6 +1,7 @@
 import Swift
 
-/// The version control step protocol behind `contributes.versionControl`.
+/// The step protocol behind contributions whose plugin decides each command
+/// (`contributes.versionControl`, `contributes.tasks`).
 ///
 /// The editor sends an operation such as `{"op":"status"}`. The plugin
 /// answers with one step: a command to run, paths to move to the Trash, or
@@ -11,24 +12,24 @@ import Swift
 /// Output arrives a window at a time. A plugin that parses it page by page
 /// answers each window with `page`, and the editor joins the fragments into
 /// the result, so output of any size stays within one call's deadline.
-public enum VersionControl {
-    /// Serves one `provider` call. `stdout` is a window of the previous
+public enum Steps {
+    /// Serves one call of the contribution's entry point. `stdout` is a window of the previous
     /// command's standard output. Process requests the editor routes through
     /// the plugin go to `guava:process/host` without being parsed.
     public static func serve(request: String, stdout: String,
-                             _ respond: (VersionControlRequest) -> VersionControlStep) -> String {
+                             _ respond: (StepRequest) -> Step) -> String {
         if let process = processRequest(request) { return GuavaHost.process(process) }
         guard let object = JSON.parse(request)?.object else {
-            return VersionControlStep.failure("The editor sent a malformed request.").json.serialized
+            return Step.failure("The editor sent a malformed request.").json.serialized
         }
         guard let operation = object["op"]?.string else {
-            return VersionControlStep.failure("The request names no operation.").json.serialized
+            return Step.failure("The request names no operation.").json.serialized
         }
         let output = object["output"].map {
             CommandOutput(status: $0["exit"]?.int ?? -1, stdout: stdout, stderr: $0["stderr"]?.string ?? "",
                           offset: $0["offset"]?.int ?? 0, isComplete: $0["complete"]?.bool ?? true)
         }
-        let step = respond(VersionControlRequest(operation: operation, state: object["next"]?.string,
+        let step = respond(StepRequest(operation: operation, state: object["next"]?.string,
                                                  output: output, arguments: object))
         return step.json.serialized
     }
@@ -48,8 +49,8 @@ public enum VersionControl {
     /// Pages a JSON array whose elements come from records separated by
     /// `separator`. Use it from the operation's parse state; it keeps its own
     /// states while the editor pages.
-    public static func pagedArray(_ request: VersionControlRequest, separator: UInt8,
-                                  element: (String) -> JSON?) -> VersionControlStep {
+    public static func pagedArray(_ request: StepRequest, separator: UInt8,
+                                  element: (String) -> JSON?) -> Step {
         guard let output = request.output else { return .failure("No output to read.") }
         let continuing = request.state == "page" || request.state == "page,"
         var writer = JSONWriter(continuingArray: request.state == "page,")
@@ -65,27 +66,9 @@ public enum VersionControl {
         return .lastPage(writer.finish())
     }
 
-    /// Branch names the editor accepts for every system: Git's ref rules,
-    /// which also keep a name from reading as an option.
-    public static func isValidBranchName(_ name: String) -> Bool {
-        guard !name.isEmpty, name.utf8.first != UInt8(ascii: "-") else { return false }
-        var previous: UInt8 = 0
-        for byte in name.utf8 {
-            if byte < 0x21 || byte == 0x7F { return false }
-            switch byte {
-            case UInt8(ascii: "~"), UInt8(ascii: "^"), UInt8(ascii: ":"), UInt8(ascii: "?"),
-                 UInt8(ascii: "*"), UInt8(ascii: "["), UInt8(ascii: "\\"):
-                return false
-            case UInt8(ascii: ".") where previous == UInt8(ascii: "."):
-                return false
-            default: previous = byte
-            }
-        }
-        return true
-    }
 }
 
-public struct VersionControlRequest {
+public struct StepRequest {
     public let operation: String
     /// The `next` state of the previous step; nil on an operation's first call.
     public let state: String?
@@ -110,7 +93,7 @@ public struct CommandOutput {
     public var byteCount: Int { stdout.utf8.count }
 
     /// The whole output, or nil while the editor still has more to send: answer
-    /// `VersionControlStep.wholeOutput(next:)` and it widens the window.
+    /// `Step.wholeOutput(next:)` and it widens the window.
     public var whole: String? { offset == 0 && isComplete ? stdout : nil }
 
     /// The non-empty records ending in `separator`, and how many bytes of the
@@ -164,6 +147,10 @@ public struct Command {
     public var input: String?
     public var environment: [(name: String, value: String)] = []
     public var timeoutSeconds: Int?
+    /// Shows the output in the editor as it arrives and runs until the command
+    /// exits or the user stops it, with no timeout: builds, test runs, programs.
+    /// Its output reaches the plugin with standard error interleaved, as shown.
+    public var streams = false
 
     public init(_ arguments: [String], input: String? = nil, timeoutSeconds: Int? = nil) {
         self.arguments = arguments
@@ -172,7 +159,7 @@ public struct Command {
     }
 }
 
-public enum VersionControlStep {
+public enum Step {
     /// Runs the command, then calls back with `next` and its output.
     case run(Command, next: String)
     /// Runs the command; its standard output is the operation's result.
@@ -190,7 +177,7 @@ public enum VersionControlStep {
 
     /// Asks for the whole output in one window, which the editor widens until
     /// it reaches the end.
-    public static func wholeOutput(next: String) -> VersionControlStep { .page("", consumed: 0, next: next) }
+    public static func wholeOutput(next: String) -> Step { .page("", consumed: 0, next: next) }
 
     var json: JSON {
         switch self {
@@ -219,6 +206,7 @@ extension Command {
             object["env"] = .object(variables)
         }
         if let timeoutSeconds { object["timeout"] = JSON(timeoutSeconds) }
+        if streams { object["stream"] = true }
         return object
     }
 }

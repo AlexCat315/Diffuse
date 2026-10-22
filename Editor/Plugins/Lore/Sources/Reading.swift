@@ -1,34 +1,34 @@
 import GuavaPluginKit
 
-func status(_ request: VersionControlRequest) -> VersionControlStep {
+func status(_ request: StepRequest) -> Step {
     guard let output = request.output else { return .run(lore(["--json", "status", "--scan"], timeout: 120), next: "parse") }
     return output.succeeded ? statusPage(output, state: request.state) : .failure(output.message)
 }
 
-func history(_ request: VersionControlRequest) -> VersionControlStep {
+func history(_ request: StepRequest) -> Step {
     guard let output = request.output else {
         return .run(lore(["history", "\(request["limit"]?.int ?? 50)", "--oneline"]), next: "parse")
     }
     guard output.succeeded else { return .result([]) }
-    return VersionControl.pagedArray(request, separator: 0x0A, element: revision)
+    return Steps.pagedArray(request, separator: 0x0A, element: revision)
 }
 
 /// Branches and locks are deduplicated, so they are read whole.
-func branches(_ request: VersionControlRequest) -> VersionControlStep {
+func branches(_ request: StepRequest) -> Step {
     guard let output = request.output else { return .run(lore(["--json", "branch", "list"]), next: "parse") }
     guard let text = output.whole else { return .wholeOutput(next: "parse") }
     return .result(parseBranches(text))
 }
 
 /// Locks live on the server; offline, the list is simply empty.
-func locks(_ request: VersionControlRequest) -> VersionControlStep {
+func locks(_ request: StepRequest) -> Step {
     guard let output = request.output else { return .run(lore(["--json", "lock", "status"]), next: "parse") }
     guard output.succeeded else { return .result([]) }
     guard let text = output.whole else { return .wholeOutput(next: "parse") }
     return .result(parseLocks(text))
 }
 
-func diff(_ request: VersionControlRequest) -> VersionControlStep {
+func diff(_ request: StepRequest) -> Step {
     guard let path = request["change"]?["path"]?.string else { return .failure("No change to compare.") }
     return .output(lore(["diff", path]))
 }
@@ -61,7 +61,7 @@ private func nonEmpty(_ value: JSON?) -> String? {
 /// One window of the `status --json` event stream. File events are written
 /// as they arrive; the revision event may come anywhere, so its fields ride
 /// in the state and close the object on the last page.
-func statusPage(_ output: CommandOutput, state: String?) -> VersionControlStep {
+func statusPage(_ output: CommandOutput, state: String?) -> Step {
     var tracking: JSONObject = ["branch": .null, "upstream": .null, "ahead": 0, "behind": 0, "more": false]
     if let state, state != "parse", let saved = JSON.parse(state)?.object { tracking = saved }
     var writer = JSONWriter(continuingArray: tracking["more"]?.bool ?? false)

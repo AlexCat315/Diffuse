@@ -251,6 +251,11 @@ enum EditorCommandDispatcher {
         case .buildAndRun:
             guard store.workspaceMode.isGameWorkspace else { return }
             app.requestProjectExport(runAfterExport: true)
+        case let .runTask(kind):
+            let tasks = app.workstation.tasks
+            guard tasks.snapshot.isAvailable else { return }
+            EditorRootViewFactory.activatePanel("tasks", in: controller)
+            if kind == .test { tasks.test() } else { tasks.build() }
         case .openDocumentation:
             openDocumentation(app: app)
         case .about:

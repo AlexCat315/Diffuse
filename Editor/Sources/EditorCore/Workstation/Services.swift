@@ -7,18 +7,22 @@ public final class EditorWorkstation: @unchecked Sendable {
     public let documents: EditorDocumentWorkspace
     public let media: EditorMediaWorkspace
     public let versionControl: EditorVersionControl
+    public let tasks: EditorTasks
     private let root: URL
     init(root: URL, scripts: ScriptWorkspaceModel, pluginHost: URL?) throws {
         self.root = root.standardizedFileURL
         self.scripts = scripts
         documents = EditorDocumentWorkspace(root: root)
         media = try EditorMediaWorkspace(root: root)
-        versionControl = EditorVersionControl(projectRoot: root, pluginHost: pluginHost)
-        // Every Swift tab gets the language service: scripts as part of the game,
-        // other project files analyzed in place.
+        // Step-driven plugins share one plugin host of their own.
+        let stepPlugins = StepPlugins(hostExecutable: pluginHost)
+        versionControl = EditorVersionControl(projectRoot: root, plugins: stepPlugins)
+        tasks = EditorTasks(root: root, plugins: stepPlugins)
+        // Every tab in the served language gets the language service: scripts as
+        // part of the game, other project files analyzed in place.
         documents.didSelect = { [weak self] path in
             guard let self, let path else { return }
-            let id = self.scriptID(forDocument: path) ?? (path.hasSuffix(".swift")
+            let id = self.scriptID(forDocument: path) ?? (LanguageCatalog.served?.matches(path: path) == true
                 ? self.scripts.openProjectSource(self.root.appendingPathComponent(path)) : nil)
             if let id { self.scripts.select(scriptID: id) }
         }

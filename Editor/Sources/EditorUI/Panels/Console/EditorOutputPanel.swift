@@ -7,16 +7,19 @@ import GuavaUIRuntime
 struct EditorOutputPanel: View {
     let app: EditorApplication
     private var workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
+    private var tasks: Observed<EditorTasks, TaskSnapshot>
 
     init(app: EditorApplication) {
         self.app = app
         workspace = Observed(\.snapshot, on: app.workstation.scripts)
+        tasks = Observed(\.snapshot, on: app.workstation.tasks)
     }
 
     var body: some View {
         let snapshot = workspace.wrappedValue
         let failures = app.store.consoleEntries.filter { $0.severity == .error || $0.severity == .warning }
-        let count = EditorProblemSummary(documents: snapshot.documents, consoleEntries: failures).total
+        let taskProblems = tasks.wrappedValue.problems
+        let count = EditorProblemSummary(documents: snapshot.documents, consoleEntries: failures, taskProblems: taskProblems).total
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             switch app.store.outputTab {
             case .logs:
@@ -29,7 +32,7 @@ struct EditorOutputPanel: View {
                     OutputModeSelector(store: app.store, problemCount: count)
                     Spacer(minLength: 0)
                 }
-                problems(snapshot.documents, failures: failures).flex()
+                problems(snapshot.documents, failures: failures, taskProblems: taskProblems).flex()
             case .build:
                 buildOutput(snapshot.selectedDocument, problemCount: count).flex()
             }
@@ -37,14 +40,16 @@ struct EditorOutputPanel: View {
         .frame(minWidth: 0, minHeight: 0)
     }
 
-    private func problems(_ documents: [ScriptWorkspaceDocument], failures: [EditorConsoleEntry]) -> some View {
+    private func problems(_ documents: [ScriptWorkspaceDocument], failures: [EditorConsoleEntry],
+                          taskProblems: [TaskProblem]) -> some View {
         let withProblems = documents.filter { !$0.diagnostics.isEmpty }
         return ScrollView(.vertical, scrollbarGutter: .stable) {
-            if withProblems.isEmpty && failures.isEmpty {
+            if withProblems.isEmpty && failures.isEmpty && taskProblems.isEmpty {
                 EditorPanelEmptyState(L("No problems detected"))
             } else {
                 Box(direction: .column, alignItems: .stretch, spacing: 8) {
                     withProblems.map { documentProblems($0) }
+                    if !taskProblems.isEmpty { buildProblems(taskProblems) }
                     failures.map { entry in
                         AnyView(Column(alignment: .leading, spacing: 4) {
                             Text(L(entry.message)).font(.label).foregroundColor(entry.severity == .error ? .error : .warning)
@@ -59,6 +64,37 @@ struct EditorOutputPanel: View {
                 .padding(8)
             }
         }
+    }
+
+    /// Compiler messages from the latest project task, by file.
+    private func buildProblems(_ problems: [TaskProblem]) -> AnyView {
+        var files: [String] = []
+        for problem in problems where !files.contains(problem.file) { files.append(problem.file) }
+        return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+            files.map { file in
+                AnyView(Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                    Text((file as NSString).lastPathComponent)
+                        .font(.label).foregroundColor(.onSurfaceVariant)
+                        .padding(horizontal: 8, vertical: 4)
+                    problems.filter { $0.file == file }.map { problem in
+                        AnyView(Button(action: { open(problem) }) {
+                            Row(alignment: .center, spacing: 8) {
+                                Text("\(problem.line):\(problem.column)").font(.mono)
+                                    .foregroundColor(problem.severity == .error ? .error : problem.severity == .warning ? .warning : .onSurfaceMuted)
+                                Text(problem.message, lineLimit: 2).font(.caption).foregroundColor(.onSurface)
+                                Spacer(minLength: 0)
+                            }.padding(horizontal: 5, vertical: 3)
+                        }.buttonStyle(.plain))
+                    }
+                })
+            }
+        })
+    }
+
+    private func open(_ problem: TaskProblem) {
+        let position = ScriptLanguagePosition(line: max(0, problem.line - 1), character: max(0, problem.column - 1))
+        app.openSwiftLocation(ScriptDefinitionLocation(documentURI: app.workstation.tasks.url(of: problem).absoluteString,
+                                                       scriptID: nil, span: ScriptLanguageSpan(start: position, end: position)))
     }
 
     private func documentProblems(_ document: ScriptWorkspaceDocument) -> AnyView {

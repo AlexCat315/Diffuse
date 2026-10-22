@@ -1,7 +1,7 @@
 import GuavaPluginKit
 
 /// Resets files to the last revision; like Git, a discarded new file goes to the Trash.
-func discard(_ request: VersionControlRequest) -> VersionControlStep {
+func discard(_ request: StepRequest) -> Step {
     var paths: [String] = [], created: [String] = []
     for change in request["changes"]?.array ?? [] {
         guard let path = change["path"]?.string else { continue }
@@ -12,7 +12,7 @@ func discard(_ request: VersionControlRequest) -> VersionControlStep {
     return batches(request, ["reset"], paths, then: created.isEmpty ? .result(.null) : .trash(created, next: "trashed"))
 }
 
-func commit(_ request: VersionControlRequest) -> VersionControlStep {
+func commit(_ request: StepRequest) -> Step {
     if let output = request.output, !output.succeeded { return .failure(output.message) }
     switch request.state {
     case nil where request["stageAll"]?.bool == true:
@@ -24,7 +24,7 @@ func commit(_ request: VersionControlRequest) -> VersionControlStep {
     }
 }
 
-func switchBranch(_ request: VersionControlRequest, create: Bool) -> VersionControlStep {
+func switchBranch(_ request: StepRequest, create: Bool) -> Step {
     if let output = request.output, !output.succeeded { return .failure(output.message) }
     let name = request["name"]?.string ?? ""
     guard VersionControl.isValidBranchName(name) else { return .failure("“\(name)” is not a valid branch name.") }
@@ -37,7 +37,7 @@ func switchBranch(_ request: VersionControlRequest, create: Bool) -> VersionCont
 
 /// Lore repositories live on a server: creating one registers it there and
 /// turns the project directory into its working tree.
-func initialize(_ request: VersionControlRequest) -> VersionControlStep {
+func initialize(_ request: StepRequest) -> Step {
     if request.output != nil { return finish(request) }
     let remote = request["remote"]?.string ?? ""
     guard remote.hasBytePrefix("lore://") || remote.hasBytePrefix("lores://") else {

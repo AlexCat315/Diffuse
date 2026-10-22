@@ -60,6 +60,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         app.bootstrap()
         app.setUIDiagnostics(diagnostics)
         app.workstation.versionControl.startMonitoring()
+        Task { @MainActor in await app.workstation.tasks.refresh() }
         if EditorAppLaunchOptions.watchPluginPackagesRequested {
             app.startWatchingPluginPackages()
         }

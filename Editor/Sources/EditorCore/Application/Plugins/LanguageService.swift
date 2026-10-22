@@ -4,7 +4,8 @@ import LanguageServerRuntime
 import ProcessRuntime
 
 final class PluginLanguageService: @unchecked Sendable {
-    static let pluginID = "studio.swift-support"
+    /// The plugin whose language server this session drives.
+    static let pluginID = LanguageCatalog.served?.pluginID ?? ""
     private let lock = NSLock()
     private var binding: PluginExecutionBinding?
     private var client: PluginHostProcessClient?
@@ -39,7 +40,7 @@ final class PluginLanguageService: @unchecked Sendable {
             return try JSONDecoder().decode(PluginProcessUpdate.self, from: data)
         }
         var start = PluginProcessRequest(.start)
-        start.permission = "language-server"
+        start.permission = LanguageCatalog.served?.server?.process.id
         start.arguments = command.arguments
         let keys = Set(binding.authorization.host.processes.first { $0.id == start.permission }?.environmentKeys ?? [])
         start.environment = command.environment.filter { keys.contains($0.key) }

@@ -80,10 +80,9 @@ public struct PluginPackageLoader: Sendable {
         guard manifest.host.entryPoints.isSubset(of: Set(wit.capabilityInputs.map(\.name))) else {
             throw PluginManifestValidationError.invalidHostPermissions
         }
-        if manifest.contributes.versionControl != nil,
-           wit.capabilityInputs.first(where: { $0.name == VersionControlContribution.entryPoint })?.inputType
-            != VersionControlContribution.inputType {
-            throw PluginManifestValidationError.invalidContribution("versionControl")
+        for (entryPoint, contribution) in manifest.contributes.stepEntryPoints
+        where wit.capabilityInputs.first(where: { $0.name == entryPoint })?.inputType != stepInputType {
+            throw PluginManifestValidationError.invalidContribution(contribution)
         }
         for input in wit.capabilityInputs {
             let capabilityID = manifest.id + "." + input.name

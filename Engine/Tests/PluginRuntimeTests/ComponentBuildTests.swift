@@ -49,6 +49,38 @@ struct ComponentBuildTests {
         }
     }
 
+    @Test("tasks name one process and a marker; languages name extensions and an existing server process")
+    func taskAndLanguageContributionsAreValidated() throws {
+        func manifest(_ contributes: String) -> Data {
+            Data("""
+            {"id": "test.lang", "version": 1, "name": "Lang", "description": "fixture", "access": "read",
+             "imports": ["guava:process/host"], "composable_host_capabilities": [],
+             "host": {"processes": [
+               {"id": "server", "command": "lsp", "argumentPrefix": [], "allowsAdditionalArguments": true, "environmentKeys": [], "entryPoints": ["language-server"], "lifetimeMilliseconds": null},
+               {"id": "package", "command": "tool", "argumentPrefix": [], "allowsAdditionalArguments": true, "environmentKeys": [], "entryPoints": ["tasks"], "lifetimeMilliseconds": null}]},
+             "contributes": \(contributes)}
+            """.utf8)
+        }
+        let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
+            {"tasks": {"id": "pkg", "title": "Package", "marker": "Package.swift"},
+             "languages": [{"id": "swift", "title": "Swift", "extensions": ["swift"],
+                            "server": {"process": "server", "initializationOptions": {"backgroundIndexing": true},
+                                       "watchedFiles": ["Package.resolved"]}}]}
+            """))
+        #expect(valid.contributes.tasks == TaskContribution(id: "pkg", title: "Package", marker: "Package.swift"))
+        #expect(valid.contributes.languages.first?.server?.initializationOptions == .object(["backgroundIndexing": .bool(true)]))
+        #expect(throws: PluginManifestValidationError.invalidContribution("tasks")) {
+            try PluginManifestValidator.decodeAndValidate(manifest(#"{"tasks": {"id": "pkg", "title": "Package", "marker": "a/b"}}"#))
+        }
+        for invalid in [#"{"languages": [{"id": "swift", "title": "Swift", "extensions": []}]}"#,
+                        #"{"languages": [{"id": "swift", "title": "Swift", "extensions": [".swift"]}]}"#,
+                        #"{"languages": [{"id": "swift", "title": "Swift", "extensions": ["swift"], "server": {"process": "missing"}}]}"#] {
+            #expect(throws: PluginManifestValidationError.invalidContribution("languages")) {
+                try PluginManifestValidator.decodeAndValidate(manifest(invalid))
+            }
+        }
+    }
+
     @Test("the shell names every import and export the WIT contract implies")
     func shellAndBindings() throws {
         let contract = try WITContractParser.parse(Data(Self.wit.utf8), grantedImports: [.process])

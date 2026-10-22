@@ -4,7 +4,7 @@ import GuavaPluginKit
 /// `--json` event stream (one `{"tagName", "data"}` object per line); history
 /// uses `--oneline`, whose JSON form carries no messages.
 func provider(request: String, stdout: String) -> String {
-    VersionControl.serve(request: request, stdout: stdout) { request in
+    Steps.serve(request: request, stdout: stdout) { request in
         switch request.operation {
         case "status": status(request)
         case "history": history(request)
@@ -33,7 +33,7 @@ func lore(_ arguments: [String], timeout: Int? = nil) -> Command {
     return command
 }
 
-func finish(_ request: VersionControlRequest) -> VersionControlStep {
+func finish(_ request: StepRequest) -> Step {
     guard let output = request.output else { return .failure("Lore returned no output.") }
     return output.succeeded ? .result(.null) : .failure(output.message)
 }
@@ -46,8 +46,8 @@ func strings(_ value: JSON?) -> [String] {
 
 /// Lore takes paths as arguments, so long lists run in several commands,
 /// each small enough for one process request. The state is the next offset.
-func batches(_ request: VersionControlRequest, _ arguments: [String], _ paths: [String],
-             then next: VersionControlStep = .result(.null)) -> VersionControlStep {
+func batches(_ request: StepRequest, _ arguments: [String], _ paths: [String],
+             then next: Step = .result(.null)) -> Step {
     if let output = request.output, !output.succeeded { return .failure(output.message) }
     var start = request.state.flatMap { Int($0) } ?? 0
     guard start < paths.count else { return next }

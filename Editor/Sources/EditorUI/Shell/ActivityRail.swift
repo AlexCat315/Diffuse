@@ -34,6 +34,9 @@ struct EditorActivityRail: View {
                     onCommand(.togglePanel("source-control"))
                 }
             }
+            if controller.document.panels["tasks"] != nil, app.workstation.tasks.snapshot.isAvailable {
+                panel(UIIcons.Editor.box, title: L("Tasks"), id: "tasks")
+            }
             if controller.document.panels["outline"] != nil {
                 panel(UIIcons.Text.heading, title: L("Document Outline"), id: "outline")
             }

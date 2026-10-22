@@ -274,6 +274,8 @@ public final class EditorApplication: @unchecked Sendable {
 
     public func bootstrap() {
         enableBundledPlugins()
+        workstation.tasks.testSource = { [manager = dynamicScriptManager] in try await manager.workspaceTests() }
+        workstation.tasks.follow(workstation.scripts)
         subscriptions.events = events.subscribe { [weak self] event in
             self?.handlePlatformEvent(event)
         }

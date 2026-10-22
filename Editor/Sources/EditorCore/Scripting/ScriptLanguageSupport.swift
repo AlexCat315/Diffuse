@@ -97,7 +97,6 @@ public actor ScriptLanguageSupport {
             sessions = Dictionary(uniqueKeysWithValues: sources.compactMap { source in
                 documents[source.file.identifier].map { (source.file.identifier, DocumentSession(document: $0, current: source.text, sent: source.text, revision: source.revision)) }
             })
-            guard !sources.isEmpty else { setState(.inactive); return }
             try await connect(generation: generation)
         } catch {
             guard lifecycle.generation == generation else { throw CancellationError() }
@@ -199,9 +198,13 @@ public actor ScriptLanguageSupport {
         configuration.connect = connectTransport
         var fallback: [String: Any] = ["swiftCompilerFlags": workspace.includeFlags]
         if let sdk = workspace.sdkURL { fallback["sdk"] = sdk.path }
-        let options: [String: Any] = ["fallbackBuildSystem": fallback, "backgroundIndexing": true]
+        // The plugin's options, plus the host's module search paths for files no
+        // package describes.
+        let server = LanguageCatalog.served?.server?.contribution
+        var options = server?.initializationOptions?.foundationValue as? [String: Any] ?? [:]
+        options["fallbackBuildSystem"] = fallback
         configuration.initializationOptions = try LSPJSON.data(options)
-        configuration.settings = try LSPJSON.data(["sourcekit-lsp": options])
+        configuration.settings = try server?.settings.map { try LSPJSON.data($0.foundationValue) }
         let client = LSPClient(configuration: configuration)
         let connectionID = UUID()
         self.client = client
@@ -238,10 +241,12 @@ public actor ScriptLanguageSupport {
         lifecycle.watchTask?.cancel()
         let root = workspace.projectRootURL
         lifecycle.watchTask = Task { [weak self] in
-            var previous = await Task.detached(priority: .utility) { ScriptWatchedFiles.scan(root) }.value
+            let served = LanguageCatalog.served
+            let extensions = Set(served?.language.extensions ?? []), names = Set(served?.server?.contribution.watchedFiles ?? [])
+            var previous = await Task.detached(priority: .utility) { ScriptWatchedFiles.scan(root, extensions: extensions, names: names) }.value
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
-                let next = await Task.detached(priority: .utility) { ScriptWatchedFiles.scan(root) }.value
+                let next = await Task.detached(priority: .utility) { ScriptWatchedFiles.scan(root, extensions: extensions, names: names) }.value
                 let changes = previous.changes(to: next)
                 previous = next
                 guard !changes.isEmpty, let self else { continue }
@@ -397,6 +402,24 @@ public actor ScriptLanguageSupport {
         return content
     }
 
+    /// Test identifiers the server found in the workspace's index, leaves only:
+    /// `Group/test`, the form test runners filter by.
+    public func workspaceTests() async throws -> [String] {
+        guard isReady, let client else { throw LSPClientError.notRunning }
+        let connectionID = lifecycle.connectionID
+        let payload = try await client.request("workspace/tests", params: LSPJSON.data([String: Any]()), timeout: .seconds(30))
+        guard connectionID == lifecycle.connectionID, let payload,
+              let items = try JSONSerialization.jsonObject(with: payload, options: [.fragmentsAllowed]) as? [[String: Any]] else { return [] }
+        var identifiers: [String] = []
+        func visit(_ item: [String: Any]) {
+            let children = item["children"] as? [[String: Any]] ?? []
+            if children.isEmpty, let id = item["id"] as? String, item["disabled"] as? Bool != true { identifiers.append(id) }
+            children.forEach(visit)
+        }
+        items.forEach(visit)
+        return identifiers
+    }
+
     /// Declarations across the indexed workspace whose names match `query`.
     /// Shadow copies the editor does not show are left out.
     public func workspaceSymbols(matching query: String) async throws -> [ScriptWorkspaceSymbol] {
@@ -507,7 +530,8 @@ public actor ScriptLanguageSupport {
             params: try ScriptLanguageQueries.didOpen(
                 uri: document.analysisURL.standardizedFileURL.absoluteString,
                 text: text,
-                version: version
+                version: version,
+                languageID: LanguageCatalog.served?.language.id ?? "plaintext"
             )
         )
     }

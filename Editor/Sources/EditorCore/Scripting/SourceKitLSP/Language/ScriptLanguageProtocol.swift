@@ -12,11 +12,11 @@ public enum ScriptLanguageQueries {
     public static let methodCompletion = "textDocument/completion"
     public static let methodDefinition = "textDocument/definition"
 
-    public static func didOpen(uri: String, text: String, version: Int) throws -> Data {
+    static func didOpen(uri: String, text: String, version: Int, languageID: String) throws -> Data {
         try LSPJSON.data([
             "textDocument": [
                 "uri": uri,
-                "languageId": "swift",
+                "languageId": languageID,
                 "version": version,
                 "text": text,
             ],

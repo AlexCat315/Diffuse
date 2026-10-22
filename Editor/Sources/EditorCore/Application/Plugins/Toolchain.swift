@@ -27,7 +27,7 @@ extension EditorApplication {
             try await reloadPlugin(id: PluginLanguageService.pluginID)
         } else {
             let client = try resolvedPluginHostClient()
-            let url = BundledPlugins.swiftSupport
+            guard let url = BundledPlugins.languageServer else { return }
             let inspection = try await Task.detached { try client.inspectPlugin(at: url) }.value
             try await enablePlugin(at: url, authorization: PluginAuthorizationRecord(inspection: inspection))
         }

@@ -7,7 +7,7 @@ import GuavaUICompose
 public final class EditorVersionControl: _ObservableObject, @unchecked Sendable {
     private let publisher = _ObservablePublisher<EditorVersionControl>()
     private let projectRoot: URL
-    private let plugins: VersionControlPlugins
+    private let plugins: StepPlugins
     private var backend: (any VersionControlBackend)?
     private var queue: Task<Void, Never>?
     private var monitor: Task<Void, Never>?
@@ -15,10 +15,10 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
     /// Called after an operation changed files on disk, so open documents reload.
     var didChangeFiles: (() -> Void)?
 
-    /// `pluginHost` runs the bundled Git and Lore plugins that drive every command.
-    public init(projectRoot: URL, pluginHost: URL?) {
+    /// `plugins` runs the bundled Git and Lore plugins that drive every command.
+    init(projectRoot: URL, plugins: StepPlugins) {
         self.projectRoot = projectRoot.resolvingSymlinksInPath().standardizedFileURL
-        plugins = VersionControlPlugins(hostExecutable: pluginHost)
+        self.plugins = plugins
     }
 
     // MARK: Lifecycle
@@ -136,7 +136,7 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
             guard let self else { return }
             let plugin = try self.plugins.plugin(for: system, workspace: root)
             _ = try await plugin.perform(["op": "init", "remote": loreRemote ?? ""])
-            try Self.ignoreMachineState(in: root, file: plugin.provider.contribution.ignoreFile)
+            try Self.ignoreMachineState(in: root, file: VersionControlProvider.provider(for: system)?.contribution.ignoreFile ?? ".gitignore")
             self.backend = nil
         }
     }

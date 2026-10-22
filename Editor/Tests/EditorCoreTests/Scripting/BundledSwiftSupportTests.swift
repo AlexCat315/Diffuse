@@ -30,10 +30,10 @@ struct BundledSwiftSupportTests {
         let executable = toolchain.languageServerURL
         let client = PluginHostProcessClient(executableURL: try #require(EditorPluginHostLocator.resolve()))
         defer { client.stop() }
-        let inspection = try client.inspectPlugin(at: BundledPlugins.swiftSupport)
+        let inspection = try client.inspectPlugin(at: try #require(BundledPlugins.languageServer))
         var context = PluginProcessContext(workspace: root)
         context.executables = ["sourcekit-lsp": executable]
-        let binding = try client.loadPlugin(at: BundledPlugins.swiftSupport,
+        let binding = try client.loadPlugin(at: try #require(BundledPlugins.languageServer),
             authorization: PluginAuthorizationRecord(inspection: inspection), processContext: context)
         let adapter = PluginLanguageService()
         adapter.bind(binding, client: client)
@@ -115,7 +115,7 @@ struct BundledSwiftSupportTests {
         let client = PluginHostProcessClient(executableURL: host)
         defer { client.stop() }
         let url = fixture.root.appendingPathComponent("SwiftSupport.guavaplugin")
-        try FileManager.default.copyItem(at: BundledPlugins.swiftSupport, to: url)
+        try FileManager.default.copyItem(at: try #require(BundledPlugins.languageServer), to: url)
         var manifest = try JSONDecoder().decode(GuavaPluginManifest.self, from: Data(contentsOf: url.appendingPathComponent("plugin.json")))
         manifest.host.processes[0].environmentKeys += Array(fixture.environment.keys)
         try JSONEncoder().encode(manifest).write(to: url.appendingPathComponent("plugin.json"))
@@ -171,7 +171,7 @@ struct BundledSwiftSupportTests {
     }
 
     @Test func packageComponentHonorsItsContract() throws {
-        let package = try PluginPackageLoader().load(at: BundledPlugins.swiftSupport)
+        let package = try PluginPackageLoader().load(at: try #require(BundledPlugins.languageServer))
         #expect(package.manifest.id == "studio.swift-support")
         #expect(package.manifest.host.processes.first?.command == "sourcekit-lsp")
         let runtime = try EmbeddedWasmtimeComponentRuntime()

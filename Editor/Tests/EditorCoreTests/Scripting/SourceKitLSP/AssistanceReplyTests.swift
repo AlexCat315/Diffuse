@@ -57,14 +57,14 @@ struct AssistanceReplyTests {
         try "b".write(to: removed, atomically: true, encoding: .utf8)
         try "c".write(to: root.appendingPathComponent("Sources/node_modules/Ignored.swift"), atomically: true, encoding: .utf8)
         try "d".write(to: root.appendingPathComponent("notes.txt"), atomically: true, encoding: .utf8)
-        let before = ScriptWatchedFiles.scan(root)
+        let before = ScriptWatchedFiles.scan(root, extensions: ["swift"], names: ["Package.resolved"])
 
         try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: 60)], ofItemAtPath: kept.path)
         try FileManager.default.removeItem(at: removed)
         let added = root.appendingPathComponent("Package.resolved")
         try "{}".write(to: added, atomically: true, encoding: .utf8)
 
-        let changes = before.changes(to: ScriptWatchedFiles.scan(root))
+        let changes = before.changes(to: ScriptWatchedFiles.scan(root, extensions: ["swift"], names: ["Package.resolved"]))
         #expect(Set(changes.map { "\($0.url.lastPathComponent):\($0.type.rawValue)" })
                 == ["Kept.swift:2", "Removed.swift:3", "Package.resolved:1"])
     }

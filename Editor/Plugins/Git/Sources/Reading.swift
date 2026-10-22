@@ -1,30 +1,30 @@
 import GuavaPluginKit
 
-func status(_ request: VersionControlRequest) -> VersionControlStep {
+func status(_ request: StepRequest) -> Step {
     guard let output = request.output else {
         return .run(git(["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"]), next: "parse")
     }
     return output.succeeded ? statusPage(output, state: request.state) : .failure(output.message)
 }
 
-func history(_ request: VersionControlRequest) -> VersionControlStep {
+func history(_ request: StepRequest) -> Step {
     guard let output = request.output else {
         let limit = request["limit"]?.int ?? 50
         return .run(git(["log", "-n", "\(limit)", "--no-color", "--pretty=format:%H%x1f%an%x1f%at%x1f%s%x1e"]), next: "parse")
     }
     // A repository without commits has no log; that is not an error.
     guard output.succeeded else { return .result([]) }
-    return VersionControl.pagedArray(request, separator: 0x1E, element: revision)
+    return Steps.pagedArray(request, separator: 0x1E, element: revision)
 }
 
-func branches(_ request: VersionControlRequest) -> VersionControlStep {
+func branches(_ request: StepRequest) -> Step {
     guard let output = request.output else {
         return .run(git(["for-each-ref", "--format=%(HEAD)%1f%(refname)", "refs/heads", "refs/remotes"]), next: "parse")
     }
-    return output.succeeded ? VersionControl.pagedArray(request, separator: 0x0A, element: branch) : .failure(output.message)
+    return output.succeeded ? Steps.pagedArray(request, separator: 0x0A, element: branch) : .failure(output.message)
 }
 
-func diff(_ request: VersionControlRequest) -> VersionControlStep {
+func diff(_ request: StepRequest) -> Step {
     guard let change = request["change"], let path = change["path"]?.string else { return .failure("No change to compare.") }
     if change["state"]?.string == "untracked" {
         // `--no-index` exits 1 when the files differ, which they always do.
@@ -96,7 +96,7 @@ func tracking(of output: String) -> Tracking {
 /// One window of `git status --porcelain=v2 --branch -z`, parsed on its
 /// bytes. Changes are written as they are read; the branch headers ride in
 /// the state and close the object on the last page.
-func statusPage(_ output: CommandOutput, state: String?) -> VersionControlStep {
+func statusPage(_ output: CommandOutput, state: String?) -> Step {
     var tracking = Tracking(state: state) ?? Tracking()
     var writer = JSONWriter(continuingArray: tracking.hasChanges)
     if state == "parse" {

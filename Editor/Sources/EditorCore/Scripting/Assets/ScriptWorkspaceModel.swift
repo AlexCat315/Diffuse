@@ -106,6 +106,10 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     private var toolchainActivityGeneration = UUID()
 
     public private(set) var snapshot: ScriptWorkspaceSnapshot
+    /// The project holds files in the served language, so the language service
+    /// runs and indexes from the start, not only while one of them is open.
+    private let projectUsesLanguage: Bool
+    private var wantsLanguageService: Bool { !snapshot.documents.isEmpty || projectUsesLanguage }
 
     public init(manager: DynamicScriptManager,
                 onScriptLoaded: ScriptLoadedHandler? = nil,
@@ -120,10 +124,14 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             let source = TextBuffer(try manager.readSource(at: file.url))
             return ScriptWorkspaceDocument(file: file, source: source)
         }
+        let projectUsesLanguage = LanguageCatalog.served.map {
+            ScriptWatchedFiles.contains(manager.scriptsDirectoryURL.deletingLastPathComponent(), extensions: Set($0.language.extensions))
+        } ?? false
+        self.projectUsesLanguage = projectUsesLanguage
         self.snapshot = ScriptWorkspaceSnapshot(
             documents: documents,
             selectedScriptID: documents.first?.file.identifier,
-            languageServiceState: documents.isEmpty ? .inactive : .starting,
+            languageServiceState: documents.isEmpty && !projectUsesLanguage ? .inactive : .starting,
             trustState: manager.projectTrustState,
             trustWarning: manager.trustStoreWarning
         )
@@ -172,7 +180,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             return
         }
         languageServiceSuspended = false
-        guard !didStartLanguageService, !snapshot.documents.isEmpty else { return }
+        guard !didStartLanguageService, wantsLanguageService else { return }
         didStartLanguageService = true
         let generation = UUID()
         languageServiceGeneration = generation
@@ -286,7 +294,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         snapshot.documents.remove(at: index)
         if snapshot.selectedScriptID == scriptID { snapshot.selectedScriptID = snapshot.documents.first?.file.identifier }
         publish()
-        if snapshot.documents.isEmpty {
+        if !wantsLanguageService {
             synchronizeLanguageService()
         } else {
             Task { [manager] in await manager.closeProjectSource(scriptID: scriptID) }
@@ -800,7 +808,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
 
     private func synchronizeLanguageService() {
         guard !languageServiceSuspended else { return }
-        if snapshot.documents.isEmpty {
+        if !wantsLanguageService {
             languageServiceGeneration = UUID()
             didStartLanguageService = false
             snapshot.languageServiceState = .inactive
@@ -809,7 +817,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             languageServiceTask = Task { [manager] in await manager.stopLanguageService() }
             return
         }
-        if !didStartLanguageService, !snapshot.documents.isEmpty {
+        if !didStartLanguageService, wantsLanguageService {
             startLanguageService()
             return
         }
@@ -829,8 +837,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
                 try await manager.refreshLanguageWorkspace(sources: sources)
                 let current = await MainActor.run {
                     guard model.languageServiceGeneration == generation else { return [] as [ScriptLanguageSource] }
-                    let hasDocuments = !model.snapshot.documents.isEmpty
-                    model.didStartLanguageService = hasDocuments
+                    model.didStartLanguageService = model.wantsLanguageService
                     return model.languageSources
                 }
                 for source in current {
@@ -854,7 +861,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         guard update.revision > languageServiceRevision else { return }
         languageServiceRevision = update.revision
         let state = update.state
-        snapshot.languageServiceState = snapshot.documents.isEmpty ? .inactive : state
+        snapshot.languageServiceState = wantsLanguageService ? state : .inactive
         snapshot.isLanguageServiceMessageDismissed = false
         if state != .ready {
             for index in snapshot.documents.indices { snapshot.documents[index].diagnostics = [] }

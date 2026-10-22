@@ -3,6 +3,10 @@ package studio:swift-support;
 interface capabilities {
   record language-server-input { request: string }
   language-server: func(input: language-server-input) -> string;
+  /// One step of a package task: the request as JSON and the window of the
+  /// previous command's standard output.
+  record tasks-input { request: string, stdout: string }
+  tasks: func(input: tasks-input) -> string;
 }
 
 world plugin {

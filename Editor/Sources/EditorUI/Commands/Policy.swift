@@ -13,6 +13,7 @@ enum EditorWorkspaceCommandPolicy {
         case .saveDocument, .revertDocument, .closeDocument: return profile.features.contains(.documents)
         case .showAssets, .importAssets: return profile.allowsPanel("assets")
         case .buildProject, .buildAndRun: return profile.features.contains(.gameBuild)
+        case .runTask: return profile.allowsPanel("tasks")
         case .setPlaybackState, .togglePlayback: return profile.features.contains(.gameplay)
         default: return true
         }

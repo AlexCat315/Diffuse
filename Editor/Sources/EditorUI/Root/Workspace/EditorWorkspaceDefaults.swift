@@ -62,7 +62,7 @@ enum EditorWorkspaceDefaults {
         let available = Set(registry.ids)
         var groups: [WorkspaceTabGroupID: WorkspaceTabGroup] = [:]
         let definitions: [(WorkspaceTabGroupID, [WorkspacePanelID], WorkspacePanelID)] = [
-            ("leading", ["hierarchy", "assets", "files", "source-control"], preset.mode == .scripting || preset.mode == .modeling ? "assets" : "hierarchy"),
+            ("leading", ["hierarchy", "assets", "files", "source-control", "tasks"], preset.mode == .scripting || preset.mode == .modeling ? "assets" : "hierarchy"),
             ("center", ["viewport", "documents"], "viewport"),
             ("trailing", ["inspector", "intent-input", "outline", "journal"], "inspector"),
             ("bottom", ["console", "terminal", "animation", "render-pipeline", "developer-tools"],

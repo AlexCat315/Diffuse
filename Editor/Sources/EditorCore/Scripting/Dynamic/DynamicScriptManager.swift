@@ -306,6 +306,10 @@ public final class DynamicScriptManager: @unchecked Sendable {
         }
     }
 
+    public func workspaceTests() async throws -> [String] {
+        try await performOnLanguageService { try await $0.workspaceTests() }
+    }
+
     public func workspaceSymbols(matching query: String) async throws -> [ScriptWorkspaceSymbol] {
         try await performOnLanguageService { try await $0.workspaceSymbols(matching: query) }
     }

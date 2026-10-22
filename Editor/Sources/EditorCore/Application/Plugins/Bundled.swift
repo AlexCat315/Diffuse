@@ -48,7 +48,8 @@ enum BundledPlugins {
 
     static func plugin(id: String) -> BundledPlugin? { catalog.first { $0.id == id } }
 
-    static var swiftSupport: URL { plugin(id: PluginLanguageService.pluginID)!.package }
+    /// The package whose language server the editor's language session drives.
+    static var languageServer: URL? { plugin(id: PluginLanguageService.pluginID)?.package }
 
     static func disabled(in project: String) throws -> Set<String> {
         let url = preferences(in: project)

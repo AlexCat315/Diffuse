@@ -1,7 +1,7 @@
 import Foundation
 
-/// A located version control executable and the environment it may run with.
-struct VersionControlTool: Sendable {
+/// A located command-line tool for a contribution and the environment it may run with.
+struct ContributionTool: Sendable {
     let executable: URL
     let environment: [String: String]
 
@@ -9,7 +9,7 @@ struct VersionControlTool: Sendable {
     /// searched too: Homebrew, `~/.local/bin` (Lore's installer) and the system.
     /// `GUAVA_<COMMAND>_EXECUTABLE` names a specific build.
     static func locate(_ command: String,
-                       environment: [String: String] = ProcessInfo.processInfo.environment) -> VersionControlTool? {
+                       environment: [String: String] = ProcessInfo.processInfo.environment) -> ContributionTool? {
         let home = environment["HOME"] ?? NSHomeDirectory()
         let override = environment["GUAVA_\(command.uppercased())_EXECUTABLE"].map { [$0] } ?? []
         let path = (environment["PATH"] ?? "").split(separator: ":").map(String.init)
@@ -20,7 +20,7 @@ struct VersionControlTool: Sendable {
         guard let found = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
         var inherited = environment
         inherited["PATH"] = directories.joined(separator: ":")
-        return VersionControlTool(executable: URL(fileURLWithPath: found), environment: inherited)
+        return ContributionTool(executable: URL(fileURLWithPath: found), environment: inherited)
     }
 
     /// The editor's values for the variables a plugin's process permission

@@ -1,8 +1,8 @@
 {
   "id": "studio.swift-support",
-  "version": 1,
+  "version": 2,
   "name": "Swift Support",
-  "description": "Swift diagnostics, completion, hover and navigation through a host-managed SourceKit-LSP session.",
+  "description": "Swift language service through SourceKit-LSP, and building, testing and running Swift packages.",
   "access": "read",
   "imports": ["guava:process/host"],
   "composable_host_capabilities": [],
@@ -15,6 +15,28 @@
       "environmentKeys": ["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SystemRoot", "USERPROFILE", "DEVELOPER_DIR", "SDKROOT", "TOOLCHAINS", "SOURCEKIT_TOOLCHAIN_PATH", "SWIFT_EXEC", "SWIFTLY_BIN_DIR", "SWIFTLY_HOME_DIR", "SWIFTLY_TOOLCHAINS_DIR", "GUAVA_LOG_RUN_ID"],
       "entryPoints": ["language-server"],
       "lifetimeMilliseconds": null
+    }, {
+      "id": "package",
+      "command": "swift",
+      "argumentPrefix": [],
+      "allowsAdditionalArguments": true,
+      "environmentKeys": ["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SystemRoot", "USERPROFILE", "DEVELOPER_DIR", "SDKROOT", "TOOLCHAINS", "SWIFT_EXEC", "SWIFTLY_BIN_DIR", "SWIFTLY_HOME_DIR", "SWIFTLY_TOOLCHAINS_DIR"],
+      "entryPoints": ["tasks"],
+      "lifetimeMilliseconds": null
     }]
+  },
+  "contributes": {
+    "languages": [{
+      "id": "swift",
+      "title": "Swift",
+      "extensions": ["swift"],
+      "server": {
+        "process": "language-server",
+        "initializationOptions": {"backgroundIndexing": true},
+        "settings": {"sourcekit-lsp": {"backgroundIndexing": true}},
+        "watchedFiles": ["Package.swift", "Package.resolved"]
+      }
+    }],
+    "tasks": {"id": "swiftpm", "title": "Swift Package", "marker": "Package.swift"}
   }
 }

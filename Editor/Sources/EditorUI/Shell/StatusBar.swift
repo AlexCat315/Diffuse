@@ -13,6 +13,7 @@ struct EditorStatusBar: View {
     let onCommand: (EditorCommand) -> Void
     private var workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
     private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
+    private var tasks: Observed<EditorTasks, TaskSnapshot>
     private var layout: Observed<WorkspaceController, UInt64>
     @State private var isSpaceMenuPresented = false
 
@@ -23,6 +24,7 @@ struct EditorStatusBar: View {
         self.onCommand = onCommand
         workspace = Observed(\.snapshot, on: app.workstation.scripts)
         documents = Observed(\.snapshot, on: app.workstation.documents)
+        tasks = Observed(\.snapshot, on: app.workstation.tasks)
     }
 
     var body: some View {
@@ -47,7 +49,8 @@ struct EditorStatusBar: View {
                     .accessibility { $0.label = L("Offline") }
                     .debugName("editor-status-connection")
             }
-            problems(EditorProblemSummary(documents: snapshot.documents, consoleEntries: store.consoleEntries))
+            problems(EditorProblemSummary(documents: snapshot.documents, consoleEntries: store.consoleEntries,
+                                          taskProblems: tasks.wrappedValue.problems))
             Divider(axis: .vertical).frame(height: 12)
             space(EditorSpace(mode: store.workspaceMode))
             SourceControlStatus(app: app) { onCommand(.showPanel("source-control")) }
@@ -72,6 +75,7 @@ struct EditorStatusBar: View {
                     .font(.caption).foregroundColor(.onSurfaceMuted)
                 Divider(axis: .vertical).frame(height: 12)
             }
+            TaskStatus(app: app) { onCommand(.showPanel("tasks")) }
             activity(snapshot)
             LanguageServerStatus(app: app, snapshot: snapshot, onCommand: onCommand)
             agent
