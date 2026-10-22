@@ -10,15 +10,19 @@ struct DocumentFilesPanel: View {
     let model: EditorDocumentWorkspace
     let app: EditorApplication?
     private var observed: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
+    private var versionControl: Observed<EditorVersionControl, VersionControlSnapshot>?
     @State private var filter: TextBuffer = ""
     @State private var index = DocumentFileIndex()
     @State private var expanded: Set<String>?
     @State private var focusedFolder: String?
+    @State private var renaming: String?
+    @State private var renameText: TextBuffer = ""
 
     init(model: EditorDocumentWorkspace, app: EditorApplication? = nil) {
         self.model = model
         self.app = app
         observed = Observed(\.snapshot, on: model)
+        versionControl = app.map { Observed(\.snapshot, on: $0.workstation.versionControl) }
     }
 
     var body: some View {
@@ -31,6 +35,18 @@ struct DocumentFilesPanel: View {
         }
     }
 
+    /// Working-tree states by project path; folders inherit their contents' mark.
+    private var fileStates: (files: [String: VersionControlFileState], folders: Set<String>) {
+        guard let app, versionControl?.wrappedValue.repository != nil else { return ([:], []) }
+        let files = app.workstation.versionControl.projectFileStates
+        var folders = Set<String>()
+        for path in files.keys {
+            var parts = path.split(separator: "/").dropLast()
+            while !parts.isEmpty { folders.insert(parts.joined(separator: "/")); parts = parts.dropLast() }
+        }
+        return (files, folders)
+    }
+
     @ViewBuilder private var content: some View {
         let snapshot = observed.wrappedValue
         let documents = snapshot.documents
@@ -40,10 +56,14 @@ struct DocumentFilesPanel: View {
         let dirty = Set(documents.filter(\.isDirty).map(\.path)).union(dirtyScripts)
         let open = Set(documents.map(\.path))
         let expandedFolders = expanded ?? DocumentFileNode.defaultExpansion(tree, selected: snapshot.selectedPath)
+        let states = fileStates
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             EditorPanelSearchBar(L("Filter files"), text: $filter, summary: "\(index.count)") {
+                EditorPanelIconButton(UIIcons.File.filePlus, tooltip: L("New File")) {
+                    newFile(in: focusedFolder ?? snapshot.selectedPath.map { parent(of: $0) } ?? "")
+                }.debugName("document-files-new-file")
                 if let app, allowsScripts {
-                    EditorPanelIconButton(UIIcons.File.filePlus, tooltip: L("New Script")) {
+                    EditorPanelIconButton(UIIcons.File.fileCode, tooltip: L("New Script")) {
                         ScriptFileActions.newScript(app: app)
                         index.invalidate()
                     }.debugName("document-files-new-script")
@@ -82,7 +102,8 @@ struct DocumentFilesPanel: View {
                     }
                 }) { node, isSelected, isExpanded, _ in
                     row(node, isSelected: isSelected, isExpanded: isExpanded,
-                        isOpen: open.contains(node.path), isDirty: dirty.contains(node.path))
+                        isOpen: open.contains(node.path), isDirty: dirty.contains(node.path),
+                        state: states.files[node.path], folderChanged: node.isFolder && states.folders.contains(node.path))
                         .contextMenu(entries: { entries(node, isOpen: open.contains(node.path),
                                                         isDirty: dirty.contains(node.path)) })
                 }
@@ -102,21 +123,67 @@ struct DocumentFilesPanel: View {
         .debugName("document-files")
     }
 
+    /// Unsaved edits are a filled dot; the working-tree state is a coloured
+    /// letter, and its colour also tints the name, as in mature editors.
     private func row(_ node: DocumentFileNode, isSelected: Bool, isExpanded: Bool,
-                     isOpen: Bool, isDirty: Bool) -> some View {
+                     isOpen: Bool, isDirty: Bool,
+                     state: VersionControlFileState?, folderChanged: Bool) -> some View {
         Row(alignment: .center, spacing: 6) {
             FileIcon(path: node.path, isFolder: node.isFolder, isOpen: isExpanded, size: 14)
-            Text(node.name, lineLimit: 1).font(.body)
-                .foregroundColor(isSelected || isOpen ? .onSurface : .onSurfaceVariant)
-                .flex(1, shrink: 1).frame(minWidth: 0)
+            if renaming == node.path {
+                TextField(L("Name"), text: $renameText) { input in
+                    input.decoration.size = .small
+                    input.navigation.focusRequestID = node.path
+                    input.events.onSubmit = { commitRename(node.path) }
+                    input.events.onCancel = { renaming = nil }
+                    input.events.onBlur = { commitRename(node.path) }
+                }.font(.body).flex(1, shrink: 1).frame(minWidth: 0).debugName("document-files-rename")
+            } else {
+                Text(node.name, lineLimit: 1).font(.body)
+                    .foregroundColor(state?.color ?? (isSelected || isOpen ? .onSurface : .onSurfaceVariant))
+                    .flex(1, shrink: 1).frame(minWidth: 0)
+            }
             if isDirty {
-                Text("M").font(.caption).foregroundColor(.warning)
+                Box {}.frame(width: 7, height: 7).background(.onSurfaceVariant).cornerRadius(4)
                     .accessibility { $0.label = L("Unsaved") }
-            } else if isOpen {
+            } else if isOpen && state == nil {
                 Box {}.frame(width: 5, height: 5).background(.onSurfaceMuted).cornerRadius(3)
                     .accessibility { $0.label = L("Open") }
             }
+            if let state {
+                Text(state.badge).font(.caption).foregroundColor(state.color)
+                    .accessibility { $0.label = L(state.title) }
+            } else if folderChanged {
+                Box {}.frame(width: 5, height: 5).background(.warning).cornerRadius(3)
+                    .accessibility { $0.label = L("Contains changes") }
+            }
         }
+    }
+
+    private func parent(of path: String) -> String {
+        path.split(separator: "/").dropLast().joined(separator: "/")
+    }
+
+    /// Creates `Untitled.md` (numbered when taken) and starts naming it.
+    private func newFile(in folder: String) {
+        let prefix = folder.isEmpty ? "" : folder + "/"
+        let existing = Set(model.files())
+        var name = "Untitled.md", number = 2
+        while existing.contains(prefix + name) { name = "Untitled \(number).md"; number += 1 }
+        guard model.create(prefix + name, text: "") else { return }
+        index.invalidate()
+        if !folder.isEmpty { expanded = (expanded ?? []).union([folder]) }
+        renameText = TextBuffer(name)
+        renaming = prefix + name
+    }
+
+    private func commitRename(_ path: String) {
+        guard renaming == path else { return }
+        renaming = nil
+        let name = renameText.stringValue.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, !name.contains("/"), name != path.split(separator: "/").last.map(String.init) else { return }
+        let folder = parent(of: path)
+        if model.move(path, to: folder.isEmpty ? name : folder + "/" + name) { index.invalidate() }
     }
 
     private var allowsScripts: Bool { app?.store.workspaceMode.profile.features.contains(.scripting) == true }
@@ -129,12 +196,25 @@ struct DocumentFilesPanel: View {
     }
 
     private func entries(_ node: DocumentFileNode, isOpen: Bool, isDirty: Bool) -> [MenuEntry] {
+        let manage: [MenuEntry] = [
+            .separator("manage-separator"),
+            .item(MenuItem(id: "rename", title: L("Rename"), isEnabled: !isDirty) {
+                renameText = TextBuffer(node.name); renaming = node.path
+            }),
+            .item(MenuItem(id: "trash", title: L("Move to Trash"), isEnabled: !isDirty, role: .destructive) {
+                if model.remove(node.path) { index.invalidate() }
+            }),
+        ]
         if node.isFolder {
-            guard let app, allowsScripts,
-                  node.path == app.workstation.documentPath(for: app.dynamicScriptManager.scriptsDirectoryURL) else { return [] }
-            return [.item(MenuItem(id: "new-script", title: L("New Script")) {
-                ScriptFileActions.newScript(app: app); index.invalidate()
-            })]
+            var items: [MenuEntry] = [.item(MenuItem(id: "new-file", title: L("New File")) { newFile(in: node.path) })]
+            if let app, allowsScripts,
+               node.path == app.workstation.documentPath(for: app.dynamicScriptManager.scriptsDirectoryURL) {
+                items.append(.item(MenuItem(id: "new-script", title: L("New Script")) {
+                    ScriptFileActions.newScript(app: app); index.invalidate()
+                }))
+                return items
+            }
+            return items + manage
         }
         let isScript = app?.workstation.scriptID(forDocument: node.path) != nil
         var items: [MenuEntry] = [.item(MenuItem(id: "open", title: L("Open")) { model.open(node.path) })]
@@ -152,7 +232,7 @@ struct DocumentFilesPanel: View {
                 ScriptFileActions.confirmDelete(app: app, path: node.path)
             }))
         }
-        return items
+        return isScript ? items : items + manage
     }
 
     private func save(_ path: String) {

@@ -5,6 +5,12 @@ extension EditorApplication {
         activatePanelHandler = handler
     }
 
+    /// Opens a project-relative file in a tab and brings the editor forward.
+    public func openDocument(_ path: String) {
+        workstation.documents.open(path)
+        activatePanelHandler?("documents")
+    }
+
     public func navigateToIssue(_ target: EditorIssueTarget) {
         switch target {
         case let .script(id, line, column):

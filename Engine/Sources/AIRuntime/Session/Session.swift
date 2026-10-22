@@ -78,7 +78,7 @@ public actor Session {
     public let id: String
     public private(set) var worldView: WorldView
     private var conversationHistory: [ConversationTurn]
-    private let config: SessionConfig
+    let config: SessionConfig
     private let urlSession: URLSession
     private let maxHistoryTurns: Int
     private var workflowScope = SessionWorkflowScope()
@@ -1265,7 +1265,7 @@ public actor Session {
 
     // MARK: - HTTP
 
-    private func post(_ body: [String: Any]) async throws -> Data {
+    func post(_ body: [String: Any]) async throws -> Data {
         let request = try makeInferenceRequest(body: body, stream: false)
         return try await withRetry { _ in
             let (data, response) = try await urlSession.data(for: request)

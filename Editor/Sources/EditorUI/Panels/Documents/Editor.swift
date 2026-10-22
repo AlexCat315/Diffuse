@@ -17,6 +17,7 @@ struct DocumentsPanel: View {
     @State private var confirmingClose: String?
     @State private var hoveredClose: String?
     @State private var hoveredTab: String?
+    @State private var writing = DocumentWritingSession()
 
     init(model: EditorDocumentWorkspace, app: EditorApplication? = nil, onOpenFile: @escaping () -> Void = {}) {
         self.model = model
@@ -45,9 +46,11 @@ struct DocumentsPanel: View {
                     ScriptDocumentSurface(app: app, sessions: swift, scriptID: scriptID, path: document.path)
                         .id(document.path).flex()
                 } else {
-                    pathBar(document)
+                    let _ = writing.show(document.path)
+                    DocumentWritingBar(app: app, path: document.path, session: writing)
                     errorBanner(snapshot.error)
-                    DocumentEditingSurface(model: model, path: document.path).id(document.path).flex()
+                    DocumentEditingSurface(model: model, path: document.path, session: writing).id(document.path).flex()
+                    DocumentWritingStatus(session: writing)
                 }
             } else {
                 emptyState
@@ -168,20 +171,6 @@ struct DocumentsPanel: View {
         } else {
             Box {}.frame(width: 18, height: 18)
         }
-    }
-
-    // MARK: Path bar
-
-    private func pathBar(_ document: TextDocument) -> some View {
-        Row(alignment: .center, spacing: 6) {
-            DocumentPathCrumbs(path: document.path)
-            Spacer(minLength: 0)
-        }
-        // Only where the file lives: unsaved state is the tab's dot, saving is
-        // ⌘S, discard and close live in the File menu and the Files tree.
-        .padding(horizontal: 12)
-        .frame(height: 28)
-        .debugName("document-path-bar")
     }
 
     // MARK: Empty state

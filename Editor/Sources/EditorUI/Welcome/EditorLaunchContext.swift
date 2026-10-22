@@ -59,6 +59,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         }
         app.bootstrap()
         app.setUIDiagnostics(diagnostics)
+        app.workstation.versionControl.startMonitoring()
         if EditorAppLaunchOptions.watchPluginPackagesRequested {
             app.startWatchingPluginPackages()
         }
@@ -87,6 +88,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             registry: registry
         )
 
+        EditorWorkbenchLink.of(app).controller = controller
         app.setActivatePanelHandler { [weak controller] id in
             guard let controller else { return }
             EditorRootViewFactory.activatePanel(WorkspacePanelID(rawValue: id), in: controller)

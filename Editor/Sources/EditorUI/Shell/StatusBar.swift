@@ -50,6 +50,7 @@ struct EditorStatusBar: View {
             problems(EditorProblemSummary(documents: snapshot.documents, consoleEntries: store.consoleEntries))
             Divider(axis: .vertical).frame(height: 12)
             space(EditorSpace(mode: store.workspaceMode))
+            SourceControlStatus(app: app) { onCommand(.showPanel("source-control")) }
             if hasScene {
                 if store.sceneDirty { unsaved }
                 Text("r\(store.sceneRevision)").font(.caption).foregroundColor(.onSurfaceMuted)
@@ -188,5 +189,47 @@ struct EditorStatusBar: View {
         .buttonStyle(EditorChromeButtonStyle(height: 20))
         .accessibility { $0.label = L("Agent") + ": " + title }
         .debugName("editor-status-agent")
+    }
+}
+
+/// Branch, sync counts and pending changes; opens the Source Control panel.
+private struct SourceControlStatus: View {
+    let app: EditorApplication
+    let action: () -> Void
+    private let observed: Observed<EditorVersionControl, VersionControlSnapshot>
+
+    init(app: EditorApplication, action: @escaping () -> Void) {
+        self.app = app
+        self.action = action
+        observed = Observed(\.snapshot, on: app.workstation.versionControl)
+    }
+
+    @ViewBuilder
+    var body: some View {
+        let snapshot = observed.wrappedValue
+        if let repository = snapshot.repository {
+            let tracking = snapshot.status.tracking
+            let changes = Set(snapshot.status.changes.map(\.path)).count
+            Button(tooltip: L("Source Control") + " · " + repository.system.title, action: action) {
+                Row(alignment: .center, spacing: 4) {
+                    if snapshot.operation != nil {
+                        Spinner(size: 10)
+                    } else {
+                        Icon(UIIcons.Editor.gitBranch, size: 11, color: .onSurfaceMuted)
+                    }
+                    Text(tracking.branch ?? L("Detached"), lineLimit: 1).font(.caption).foregroundColor(.onSurfaceVariant)
+                        .frame(maxWidth: 160).clipped()
+                    if tracking.ahead > 0 || tracking.behind > 0 {
+                        Text("↓\(tracking.behind) ↑\(tracking.ahead)").font(.caption).foregroundColor(.onSurfaceMuted)
+                    }
+                    if changes > 0 {
+                        Text("● \(changes)").font(.caption).foregroundColor(.warning)
+                    }
+                }
+            }
+            .buttonStyle(EditorChromeButtonStyle(height: 20))
+            .accessibility { $0.label = L("Branch") + " " + (tracking.branch ?? "") + ", \(changes) " + L("changes") }
+            .debugName("editor-status-source-control")
+        }
     }
 }

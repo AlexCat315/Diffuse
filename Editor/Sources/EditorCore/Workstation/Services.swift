@@ -6,15 +6,23 @@ public final class EditorWorkstation: @unchecked Sendable {
     public let scripts: ScriptWorkspaceModel
     public let documents: EditorDocumentWorkspace
     public let media: EditorMediaWorkspace
+    public let versionControl: EditorVersionControl
     private let root: URL
     init(root: URL, scripts: ScriptWorkspaceModel) throws {
         self.root = root.standardizedFileURL
         self.scripts = scripts
         documents = EditorDocumentWorkspace(root: root)
         media = try EditorMediaWorkspace(root: root)
+        versionControl = EditorVersionControl(projectRoot: root)
         documents.didSelect = { [weak self] path in
             guard let self, let path, let id = self.scriptID(forDocument: path) else { return }
             self.scripts.select(scriptID: id)
+        }
+        // A pull, discard or branch switch rewrote files: show what is on disk
+        // wherever no unsaved edit would be lost.
+        versionControl.didChangeFiles = { [weak self] in
+            self?.documents.reloadUnmodified()
+            self?.scripts.refreshFromDisk()
         }
     }
     public var hasUnsavedChanges: Bool {

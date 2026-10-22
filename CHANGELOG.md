@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 版本控制（内置，非插件）：新增 EditorCore `VersionControl` 模块，`EditorVersionControl` 统一驱动 Git 与 [Lore](https://github.com/EpicGames/lore)。从项目目录向上查找 `.lore` / `.git`（同一目录两者都有时 Lore 优先），无 shell、不提示凭据、限时限量地调用命令行工具；GUI 进程 PATH 之外还会查找 Homebrew 与 `~/.local/bin`（Lore 安装位置）。Git 使用 `status --porcelain=v2 -z`；Lore 使用隐藏的 `--json` 事件流读取状态、分支与文件锁，`history --oneline` 读取历史。命令串行执行，执行后重新读取工作区；拉取、放弃更改与切换分支后，未修改的已打开文档会自动重新载入；放弃新文件改为移到废纸篓。新增“源代码管理”面板（分支菜单与新建分支、拉取/同步与推送及领先/落后计数、提交框 ⌘↩、AI 生成提交信息、暂存/未暂存分组、行内差异、Lore 文件锁、历史），未初始化时可一键初始化 Git 或在 Lore 服务器上创建仓库。活动栏显示更改数，状态栏显示分支与同步状态，“文件”树按工作区状态为文件着色并标记含更改的文件夹。Agent 新增 `vcs_status`、`vcs_diff`、`vcs_log`、`vcs_commit` 工具。选择内置而不是捆绑插件：版本控制需要贯穿文件树、编辑器、状态栏与 Agent 工具，而当前插件 ABI 只代理字符串输入输出的进程调用。`VersionControlTests` 覆盖两种格式的解析、仓库探测，以及真实 git 仓库的初始化、暂存、提交、差异、放弃与建分支。
+
+- 写作模式：Markdown 文档可在“源码 / 分栏 / 预览”之间切换，源码与纯文本使用居中的宽松排版（15/26 比例字体、最大 820pt 行宽）；写作栏提供粗体、斜体、链接、标题、列表等格式（⌘B / ⌘I / ⌘K，再次执行可取消），代码文件可切换自动换行；新增专注模式（编辑器最大化）。编辑区底部显示字数（中日韩字符按字计）、字符数、阅读时间、选中字数和行列位置。新增“文档大纲”面板：标题列表、筛选、统计，点击标题跳转光标（`EditorDocumentWorkspace.reveal`）。“文件”面板支持新建文件、重命名与移到废纸篓（`DocumentWorkspace.create/move/remove`）。`MarkdownEditor` 新增 `configureSource`，宿主可为源码字段配置光标事件与导航。`WritingTests` 覆盖格式化、统计与标题解析。
+
+- AI：`Session.complete(instructions:prompt:)` 提供不带工具和场景上下文的单次文本补全（Anthropic、OpenAI Chat 与 Responses 三种格式）。写作栏新增“AI 写作助手”：对选中内容或整篇文档润色、纠错、精简、扩写、改写语气、中英互译、总结、续写、生成大纲或按自定义指令修改，结果先预览，再选择替换、插入或复制。Agent 回复按 Markdown 渲染并可复制，写作 Space 新增“润色这篇文档”“审查我未提交的更改”等起点。`CompletionTests` 覆盖三种响应格式。
+
 - 布局：工作区面板区域改为 CSS `overflow: auto` 语义：面板按区域高度布局并放入纵向 ScrollView，放不下的刚性内容可以滚动查看，自带滚动的面板（控制台等）仍只滚动自己；开发者工具“概览”不再被截掉底部（概览保持自然高度）。修复控制台与构建输出在输出面板中不收缩的问题：它们原来按完整内容高度布局，日志末尾约 300pt 被区域裁掉、无法滚到。Tree、List 与菜单行的宿主统一用 `LayoutNode.rowSlot`（纵向居中），修复比行矮的内容贴在行顶部、悬停和选中底色与文字不居中的问题；`RowSlotTests` 覆盖。`get_diagnostics.layoutIssues` 分为 `invalidGeometry` 与新增的 `clippedOverflow`（被非滚动裁切截掉的纵向内容，含 `hiddenHeight` 与源码位置），`Node.isScrollViewport` 标记纵向 ScrollView；`AccessibilityModifier` 把 `tabPanel` 与 group、list 等一样视为容器角色，留在容器上而不转给唯一的子控件（面板区域的 ScrollView）；`DiagnosticsTests`、`WorkspaceViewTests` 覆盖。
 
 - 写作 Space 细节对照原型修正：`WorkspacePanel.hidesTabBarWhenAlone` 让自带标签的面板（编辑器的文件标签）在独占分组时不再叠一行“编辑器”面板标签，与其他面板合组时标签条恢复；`WorkspaceViewTests` 覆盖两种情况。`MarkdownEditor` 新增 `sourceFont` / `sourceLineHeight`，编辑器的 Markdown 源码与 Swift 一致使用 13/20 等宽字体。标题栏意图框的上下文芯片改为末尾省略号截断并显示完整提示。GuavaUICore 新增 `LineBreaks`（由富文本的 `RichTextBreaks` 移入），`TextLayout` 也按它在汉字之间换行，并遵守避头尾规则，“。”“，”等不再单独落到行首；`TextLayoutRegressionTests` 覆盖。SourceKit-LSP 生命周期测试的假服务器改用 `read(2)` 读取标准输入：`FileHandle.read(upToCount:)` 会等满整个缓冲区或 EOF，导致 initialize 一直无回复。

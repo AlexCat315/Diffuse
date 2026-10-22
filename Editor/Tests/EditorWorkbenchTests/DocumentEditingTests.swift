@@ -103,7 +103,7 @@ struct DocumentEditingTests {
                 let context = PlatformInputContext()
                 try context.withCurrent {
                     let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-                    graph.install(root: DocumentEditingSurface(model: model, path: path).frame(width: 720, height: 480))
+                    graph.install(root: DocumentEditingSurface(model: model, path: path, session: DocumentWritingSession()).frame(width: 720, height: 480))
                     defer { graph.install(root: EmptyView()) }
                     func settle() {
                         for _ in 0..<8 { graph.recomposer.commitAll(); graph.computeLayout(width: 720, height: 480) }

@@ -83,6 +83,9 @@ extension EditorApplication {
         if let result = try await executeWorkstationTool(name, arguments: args) {
             return try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
         }
+        if let result = try await executeVersionControlTool(name, arguments: args) {
+            return try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+        }
         if let result = try await executeDiagnosticTool(name: name, input: evaluatedInput) { return result }
         var result: [String: Any] = ["ok": true]
         switch name {

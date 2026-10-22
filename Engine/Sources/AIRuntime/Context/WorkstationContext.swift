@@ -12,6 +12,9 @@ public struct WorkstationContext: Sendable, Equatable, Codable {
         ordinary files; opening or saving them does not execute code. Media
         edits are authored clip ranges; export renders a new output file.
         Do not invent scene operations for document or media tasks.
+        The project may be under Git or Lore version control: vcs_status and
+        vcs_diff show what changed, vcs_log shows history. Commit with
+        vcs_commit only when the user asks; never rewrite history.
         """
     }
 }

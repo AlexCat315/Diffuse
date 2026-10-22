@@ -11,20 +11,24 @@ public struct MarkdownEditor: View {
     private let sourceFont: Font
     private let sourceLineHeight: Float
     private let onOpenLink: ((String) -> Void)?
+    private let configureSource: ((inout TextField) -> Void)?
     @State private var fraction: Float = 0.5
     @State private var preview = MarkdownPreviewSource()
 
     /// Titles also name the source field and preview region for accessibility.
-    /// The source font lets a host match its other code editors.
+    /// The source font lets a host match its other code editors; `configureSource`
+    /// adds caret events, navigation or other options to the source field.
     public init(text: Binding<TextBuffer>, sourceTitle: String, previewTitle: String,
                 sourceFont: Font = .monospaced(size: 15), sourceLineHeight: Float = 24,
-                onOpenLink: ((String) -> Void)? = nil) {
+                onOpenLink: ((String) -> Void)? = nil,
+                configureSource: ((inout TextField) -> Void)? = nil) {
         self.text = text
         self.sourceTitle = sourceTitle
         self.previewTitle = previewTitle
         self.sourceFont = sourceFont
         self.sourceLineHeight = sourceLineHeight
         self.onOpenLink = onOpenLink
+        self.configureSource = configureSource
     }
 
     public var body: some View {
@@ -37,6 +41,7 @@ public struct MarkdownEditor: View {
                 $0.layout.axis = .vertical
                 $0.layout.wrapsLines = true
                 $0.codeEditing.indentationWidth = 2
+                configureSource?(&$0)
             }
             .textFieldStyle(.editor)
             .font(sourceFont).lineHeight(sourceLineHeight)

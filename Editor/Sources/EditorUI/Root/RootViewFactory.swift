@@ -190,6 +190,12 @@ enum EditorRootViewFactory {
             WorkspacePanelDescriptor(id: "files", title: localizedPanelTitle(for: "files"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.files" }) {
                 DocumentFilesPanel(model: app.workstation.documents, app: app)
             },
+            WorkspacePanelDescriptor(id: "source-control", title: localizedPanelTitle(for: "source-control"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.source-control" }) {
+                SourceControlPanel(app: app)
+            },
+            WorkspacePanelDescriptor(id: "outline", title: localizedPanelTitle(for: "outline"), defaultSlot: .trailing, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.outline" }) {
+                DocumentOutlinePanel(app: app)
+            },
             WorkspacePanelDescriptor(id: "documents", title: localizedPanelTitle(for: "documents"), defaultSlot: .center, configure: { $0.iconAssetKey = "panel.documents"; $0.hidesTabBarWhenAlone = true }) {
                 DocumentsPanel(model: app.workstation.documents, app: app, onOpenFile: {
                     app.store.dispatch(.setCommandPaletteQuery(TextBuffer(EditorPaletteScope.resources.prefix)))
@@ -222,6 +228,8 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.files", UIIcons.File.folder)
         WorkspacePanelIconCatalog.register("panel.terminal", UIIcons.Editor.terminal)
         WorkspacePanelIconCatalog.register("panel.documents", UIIcons.File.fileCode)
+        WorkspacePanelIconCatalog.register("panel.source-control", UIIcons.Editor.gitBranch)
+        WorkspacePanelIconCatalog.register("panel.outline", UIIcons.Text.heading)
     }
 
     static func saveWorkspaceLayout(_ controller: WorkspaceController,
@@ -319,6 +327,10 @@ enum EditorRootViewFactory {
             return L("Editor")
         case "media":
             return L("Video Editing")
+        case "source-control":
+            return L("Source Control")
+        case "outline":
+            return L("Document Outline")
         default:
             return id
         }

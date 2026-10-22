@@ -41,6 +41,13 @@ public enum ProjectToolset {
         AgentTool(name: "export_project", description: "Export this project with the configured Player, checking scripts and executable compatibility. Returns the runnable artifact path or the actual failure.", schema: object(), readOnly: false),
         AgentTool(name: "set_playback_state", description: "Play, pause or stop the current scene. Stop restores authored scene state.", schema: object(["state": .string(allowedValues: ["playing", "paused", "stopped"])], required: ["state"]), readOnly: false),
         AgentTool(name: "get_console_messages", description: "Read recent editor diagnostics to inspect compile, export and runtime failures.", schema: object(["limit": .integer(minimum: 1, maximum: 50)]), readOnly: true),
+        AgentTool(name: "vcs_status", description: "Read the project's version control state (Git or Lore): branch, ahead/behind counts, and staged and unstaged changes with repository-relative paths.", schema: object(), readOnly: true),
+        AgentTool(name: "vcs_diff", description: "Read unified diffs of working-tree changes against the last revision. Omit path for every change; output is truncated for large change sets.", schema: object(["path": .string(description: "Repository-relative path from vcs_status", minLength: 1, maxLength: 1024)]), readOnly: true),
+        AgentTool(name: "vcs_log", description: "Read recent revisions (id, summary, author, date) on the current branch.", schema: object(["limit": .integer(minimum: 1, maximum: 100)]), readOnly: true),
+        AgentTool(name: "vcs_commit", description: "Commit changes with a message. Given paths, stages exactly those first; otherwise commits what is staged, or everything when nothing is staged. Never pushes. Commit only when the user asked for it.", schema: object([
+            "message": .string(description: "Commit message: imperative subject line, optional body.", minLength: 1, maxLength: 4096),
+            "paths": .array(of: .string(minLength: 1, maxLength: 1024), maximumItems: 200),
+        ], required: ["message"]), readOnly: false),
     ] + UIDiagnosticTools.tools
 
     public static let responseTool = AgentTool(

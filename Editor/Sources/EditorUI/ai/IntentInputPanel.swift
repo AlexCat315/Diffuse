@@ -81,9 +81,13 @@ struct IntentInputPanel: View {
                 suggestion(L("Help me plan the next step"))
             } else {
                 suggestion(L("Summarize this file"))
+                suggestion(L("Polish this document"))
                 suggestion(L("Find problems in this file"))
             }
             suggestion(L("Find issues in this project"))
+            if app.workstation.versionControl.snapshot.repository != nil {
+                suggestion(L("Review my uncommitted changes"))
+            }
         }.padding(vertical: 16).frame(width: .percent(100), minWidth: 0)
     }
 
@@ -223,9 +227,14 @@ private struct ChatBubble: View {
                         .font(.body)
                         .foregroundColor(.onSurfaceMuted)
                 case .replied(let text):
-                    Text(text)
-                        .font(.body)
-                        .foregroundColor(.onSurface)
+                    // Replies are Markdown: lists, code and emphasis read as written.
+                    MarkdownView(text).frame(width: .percent(100), minWidth: 0)
+                    Row(alignment: .center, spacing: 0) {
+                        Spacer(minLength: 0)
+                        Button(icon: .resource(UIIcons.Action.copy), size: 11, isEnabled: ClipboardHolder.write != nil,
+                               tooltip: L("Copy")) { ClipboardHolder.write?(text) }
+                            .buttonStyle(EditorChromeButtonStyle(height: 20))
+                    }
                 case .pendingConfirmation(let summary):
                     Text(String(format: L("Waiting for confirmation: %@"), summary))
                         .font(.caption)

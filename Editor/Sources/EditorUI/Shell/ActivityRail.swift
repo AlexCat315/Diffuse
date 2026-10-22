@@ -28,6 +28,15 @@ struct EditorActivityRail: View {
             action(UIIcons.Action.search, title: L("Search")) {
                 onCommand(.showCommandPalette(.resources))
             }.debugName("editor-rail-search")
+            if controller.document.panels["source-control"] != nil {
+                let group = controller.document.groupContaining(panelID: "source-control")
+                SourceControlRailButton(app: app, isSelected: group?.activePanelID == "source-control" && group?.isCollapsed == false) {
+                    onCommand(.togglePanel("source-control"))
+                }
+            }
+            if controller.document.panels["outline"] != nil {
+                panel(UIIcons.Text.heading, title: L("Document Outline"), id: "outline")
+            }
             // Collapsed areas leave no icon strip, so every collapsible panel has
             // its entry here.
             if controller.document.panels["inspector"] != nil {
@@ -87,3 +96,35 @@ private struct ActivityButtonStyle: ButtonStyle {
     }
 }
 
+
+/// The Source Control entry carries the number of changed files.
+private struct SourceControlRailButton: View {
+    let app: EditorApplication
+    let isSelected: Bool
+    let action: () -> Void
+    private let observed: Observed<EditorVersionControl, VersionControlSnapshot>
+
+    init(app: EditorApplication, isSelected: Bool, action: @escaping () -> Void) {
+        self.app = app
+        self.isSelected = isSelected
+        self.action = action
+        observed = Observed(\.snapshot, on: app.workstation.versionControl)
+    }
+
+    var body: some View {
+        let count = Set(observed.wrappedValue.status.changes.map(\.path)).count
+        let title = L("Source Control")
+        ZStack(alignment: .topTrailing) {
+            Button(icon: .resource(UIIcons.Editor.gitBranch), size: 17, isSelected: isSelected, tooltip: title, action: action)
+                .buttonStyle(ActivityButtonStyle())
+            if count > 0 {
+                Text(count > 99 ? "99+" : "\(count)").font(.caption).foregroundColor(.onAccent)
+                    .padding(horizontal: 4).frame(height: 14).background(.accent).cornerRadius(7)
+                    .padding(EdgeInsets(top: 2, trailing: 4))
+                    .accessibilityHidden()
+            }
+        }
+        .accessibility { $0.label = count > 0 ? "\(title), \(count)" : title; $0.state.isSelected = isSelected }
+        .debugName("editor-rail-source-control")
+    }
+}

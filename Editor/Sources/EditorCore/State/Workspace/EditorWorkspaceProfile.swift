@@ -27,16 +27,17 @@ public struct EditorWorkspaceProfile: Sendable {
     public static let builtInPanelIDs: Set<String> = [
         "viewport", "hierarchy", "inspector", "assets", "console", "intent-input",
         "journal", "files", "documents", "media", "developer-tools", "animation", "render-pipeline", "terminal",
+        "source-control", "outline",
     ]
 
     public static func profile(for mode: EditorWorkspaceMode) -> Self {
         let shared: Set<String> = ["viewport", "hierarchy", "inspector", "assets", "console", "terminal",
-                                   "intent-input", "journal", "render-pipeline"]
+                                   "intent-input", "journal", "render-pipeline", "source-control"]
         switch mode {
         case .documents:
-            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "terminal", "intent-input", "journal"])
+            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "terminal", "intent-input", "journal", "source-control", "outline"])
         case .video:
-            return Self(domain: .media, features: [.media, .documents], panelIDs: ["files", "media", "documents", "console", "terminal", "intent-input", "journal"])
+            return Self(domain: .media, features: [.media, .documents], panelIDs: ["files", "media", "documents", "console", "terminal", "intent-input", "journal", "source-control", "outline"])
         case .level, .scripting:
             return Self(domain: .game,
                         features: [.scene, .rendering, .animation, .simulation, .gameplay, .scripting, .gameBuild],
@@ -78,7 +79,8 @@ public struct EditorWorkspaceProfile: Sendable {
     }
 
     public var projectToolNames: Set<String> {
-        var names: Set<String> = ["respond", "get_project_info", "save_scene", "get_console_messages"]
+        var names: Set<String> = ["respond", "get_project_info", "save_scene", "get_console_messages",
+                                  "vcs_status", "vcs_diff", "vcs_log", "vcs_commit"]
         names.formUnion(UIDiagnosticTools.tools.map(\.name))
         if features.contains(.documents) { names.formUnion(["list_files", "read_file", "write_file"]) }
         if features.contains(.media) { names.formUnion(["get_media_timeline", "add_media_clip", "trim_media_clip", "remove_media_clip", "save_media_timeline", "export_media"]) }

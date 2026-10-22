@@ -381,6 +381,7 @@ public final class EditorApplication: @unchecked Sendable {
         scene.scriptRuntime.isGameplayExecutionEnabled = false
         scene.scriptRuntime.stop(in: &scene.scene)
         workstation.scripts.shutdown()
+        workstation.versionControl.stopMonitoring()
         scene.endInteractiveEditHistoryGroup()
         let activeSession = session
         cancelActiveAIRequest()

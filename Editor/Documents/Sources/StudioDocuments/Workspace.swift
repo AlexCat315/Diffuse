@@ -9,9 +9,10 @@ public struct TextDocument: Equatable, Sendable {
 }
 
 public enum DocumentError: Error, LocalizedError {
-    case invalidPath, unsupportedText, unsavedChanges, changedOnDisk
+    case invalidPath, unsupportedText, unsavedChanges, changedOnDisk, alreadyExists
     public var errorDescription: String? {
         switch self {
+        case .alreadyExists: "A file or folder with that name already exists"
         case .invalidPath: "Use a project-relative file path inside the workspace"
         case .unsupportedText: "Text files must be UTF-8 and at most 4 MiB"
         case .unsavedChanges: "Save or discard the open document before replacing it"
@@ -58,6 +59,44 @@ public final class DocumentWorkspace: @unchecked Sendable {
         }
     }
     public func saveAll() throws { for document in documents where document.isDirty { try save(document.path) } }
+    /// Writes a new file; an existing file is never replaced.
+    public func create(_ path: String, text: String = "") throws {
+        try withLock {
+            let url = try resolve(path)
+            guard !FileManager.default.fileExists(atPath: url.path) else { throw DocumentError.alreadyExists }
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(text.utf8).write(to: url, options: .withoutOverwriting)
+        }
+    }
+    /// Renames a file or folder; open documents beneath it follow the move.
+    public func move(_ path: String, to destination: String) throws {
+        try withLock {
+            let source = try resolve(path), target = try resolve(destination)
+            guard !storage.keys.contains(where: { ($0 == path || $0.hasPrefix(path + "/")) && storage[$0]?.isDirty == true }) else {
+                throw DocumentError.unsavedChanges
+            }
+            guard !FileManager.default.fileExists(atPath: target.path) else { throw DocumentError.alreadyExists }
+            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.moveItem(at: source, to: target)
+            for key in Array(storage.keys) where key == path || key.hasPrefix(path + "/") {
+                guard let document = storage.removeValue(forKey: key) else { continue }
+                let moved = destination + key.dropFirst(path.count)
+                storage[moved] = TextDocument(path: moved, text: document.text, savedText: document.savedText)
+            }
+        }
+    }
+    /// Moves a file or folder to the Trash and closes documents beneath it.
+    public func remove(_ path: String) throws {
+        try withLock {
+            let url = try resolve(path)
+            #if os(macOS) || os(Windows)
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            #else
+            try FileManager.default.removeItem(at: url)
+            #endif
+            for key in Array(storage.keys) where key == path || key.hasPrefix(path + "/") { storage.removeValue(forKey: key) }
+        }
+    }
     public func close(_ path: String, discard: Bool = false) throws {
         try withLock {
             guard discard || storage[path]?.isDirty != true else { throw DocumentError.unsavedChanges }
