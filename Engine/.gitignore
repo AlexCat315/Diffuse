@@ -51,6 +51,8 @@ zig-out/
 
 # CMake build directories
 **/build/
+!Sources/PluginRuntime/Build/
+!Sources/PluginRuntime/Build/**
 **/cmake-build-*/
 **/CMakeUserPresets.json
 
