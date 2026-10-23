@@ -117,7 +117,7 @@ final class CompilationContractTests: XCTestCase {
     defer { try? FileManager.default.removeItem(at: directory) }
     let artifact = try compileShader(
       CompileRequest(
-        source: Fixtures.path("Engine/Tests/NativeRHITests/Fixtures/compute.slang"),
+        source: Fixtures.path("GuavaUI/Runtime/Tests/NativeRHITests/Fixtures/compute.slang"),
         entry: "computeMain", stage: "compute", target: "spirv",
         output: directory.appendingPathComponent("compute.json"),
         compiler: slangc, threadgroupSize: nil, lineDirectives: true,
@@ -187,7 +187,7 @@ final class CompilationContractTests: XCTestCase {
     try Data("previous artifact".utf8).write(to: output)
     try Data("previous reflection".utf8).write(to: reflection)
     let request = CompileRequest(
-      source: Fixtures.path("Engine/Tests/NativeRHITests/Fixtures/\(fixture).slang"),
+      source: Fixtures.path("GuavaUI/Runtime/Tests/NativeRHITests/Fixtures/\(fixture).slang"),
       entry: entry, stage: stage, target: "metal", output: output,
       compiler: slangc, threadgroupSize: dimensions, lineDirectives: true,
       threadgroupConstants: constants, defines: nil, spirvProfile: "spirv_1_5")
@@ -228,7 +228,7 @@ final class CompilationContractTests: XCTestCase {
     for target in ["metal", "spirv"] {
       let artifact = try compileShader(
         CompileRequest(
-          source: Fixtures.path("Engine/Tests/NativeRHITests/Fixtures/specialization.slang"),
+          source: Fixtures.path("GuavaUI/Runtime/Tests/NativeRHITests/Fixtures/specialization.slang"),
           entry: "specializedCompute", stage: "compute", target: target,
           output: directory.appendingPathComponent("\(target).json"),
           compiler: slangc, threadgroupSize: [37, 1, 1], lineDirectives: true,

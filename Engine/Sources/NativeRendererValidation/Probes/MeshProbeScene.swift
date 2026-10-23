@@ -1,3 +1,4 @@
+import GuavaPlatformCore
 import AssetPipeline
 import Foundation
 import EngineKernel

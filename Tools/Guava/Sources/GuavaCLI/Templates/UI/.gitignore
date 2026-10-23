@@ -1,8 +1,0 @@
-.build/
-.swiftpm/
-.guava/build/
-*.apk
-*.apk.idsig
-*.keystore
-Platforms/Android/.gradle/
-Platforms/Android/local.properties

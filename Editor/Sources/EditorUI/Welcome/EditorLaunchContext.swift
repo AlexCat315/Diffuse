@@ -1,3 +1,4 @@
+import RenderBackend
 import EditorCore
 import EngineCore
 import EngineKernel
@@ -25,6 +26,7 @@ final class EditorLaunchContext: @unchecked Sendable {
     private var nativeMenuState: NativeMenuState?
     private var frameCadence = EditorFrameCadence()
 
+    private let inGameUI: InGameUIHost
     let renderDevice: Device
     let events: PlatformEventBridge
     private(set) var shellState: EditorRootViewFactory.EditorShellState?
@@ -33,8 +35,10 @@ final class EditorLaunchContext: @unchecked Sendable {
     private let publisher = _ObservablePublisher<EditorLaunchContext>()
 
     init(renderDevice: Device,
+         inGameUI: InGameUIHost,
          events: PlatformEventBridge,
          shellState: EditorRootViewFactory.EditorShellState?) {
+        self.inGameUI = inGameUI
         self.renderDevice = renderDevice
         self.events = events
         self.shellState = shellState
@@ -50,6 +54,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         let app = try EditorApplication(
             projectDirectory: directory,
             renderDevice: renderDevice,
+            inGameUI: inGameUI,
             events: events,
             initialAISettings: shellState?.aiSettings ?? .default,
             initialCapabilitySettings: shellState?.capabilitySettings ?? .default

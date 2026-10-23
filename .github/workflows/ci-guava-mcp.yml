@@ -6,7 +6,7 @@ on:
     paths:
       - 'GuavaMcp/**'
       - 'Engine/**'
-      - 'GuavaUI/Portable/**'
+      - 'GuavaUI'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
       - 'Tools/Developer/**'
@@ -15,7 +15,7 @@ on:
     paths:
       - 'GuavaMcp/**'
       - 'Engine/**'
-      - 'GuavaUI/Portable/**'
+      - 'GuavaUI'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
       - 'Tools/Developer/**'
@@ -61,7 +61,7 @@ jobs:
 
       - name: Build native dependencies
         shell: bash
-        run: swift run --package-path Tools/Developer guava-dev native-bootstrap --force
+        run: ./guava studio native-bootstrap --force
 
       - name: Swift version
         run: swift --version
@@ -75,4 +75,4 @@ jobs:
         shell: bash
         env:
           GUAVA_MCP_EXECUTABLE: ${{ github.workspace }}/GuavaMcp/.build/release/GuavaMCP
-        run: swift run --package-path Tools/Developer guava-dev validate mcp-protocol
+        run: ./guava studio validate mcp-protocol

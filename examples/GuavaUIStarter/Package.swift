@@ -2,12 +2,12 @@
 import Foundation
 import PackageDescription
 
-// SwiftPM and the Guava CLI read the same SDK location from guava.json.
 let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 let document = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("guava.json"))) as! [String: Any]
 let toolchain = document["toolchain"] as! [String: String]
-let engineRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ROOT"]
-    ?? URL(fileURLWithPath: toolchain["enginePath"]!, relativeTo: directory).standardizedFileURL.path
+let sdkVersion = Version(toolchain["sdkVersion"]!)!
+let sdk: Package.Dependency = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"].map { .package(name: "GuavaUI", path: $0) }
+    ?? .package(url: "https://github.com/AlexCat315/GuavaUI.git", exact: sdkVersion)
 
 #if os(macOS)
 let nativeDirectory = "Platforms/macOS/Sources"
@@ -28,7 +28,7 @@ let package = Package(
         .library(name: "AppContent", targets: ["AppContent"]),
     ],
     dependencies: [
-        .package(path: "\(engineRoot)/GuavaUI"),
+        sdk,
     ],
     targets: [
         .target(name: "AppContent", dependencies: [

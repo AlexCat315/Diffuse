@@ -14,9 +14,7 @@ import GuavaAndroidGameplay
 /// Owns the exported project's simulation and native scene/HUD renderer.
 final class GameSession: GameContentSession {
     let application: GameApplication
-    private let source = InGameDrawListSource()
-    private let hud: InGameViewGraphBridge
-    private let provider: NativeInGameUIRenderer
+    private let hud: InGameUIHost
     private(set) var surface = ViewportSurfaceState()
     private var heldKeys: Set<UInt32> = []
 
@@ -26,15 +24,13 @@ final class GameSession: GameContentSession {
             throw CocoaError(.fileReadInvalidFileName)
         }
         let directory = URL(fileURLWithPath: root).appendingPathComponent(project, isDirectory: true)
+        hud = try InGameUIHost(device: device)
         #if GUAVA_ANDROID_GAME
-        application = try GameApplication(projectDirectory: directory.path, renderDevice: device,
+        application = try GameApplication(projectDirectory: directory.path, renderDevice: device, inGameUI: hud,
                                           registerProjectScripts: ProjectGameplay.register)
         #else
         throw RHIError.unsupportedFeature("build this game's APK with guava export game PROJECT --android")
         #endif
-        hud = InGameViewGraphBridge(source: source)
-        provider = try NativeInGameUIRenderer(device: device, source: source)
-        InGameUIRegistry.shared.provider = provider
         application.bootstrap()
     }
 
@@ -70,7 +66,6 @@ final class GameSession: GameContentSession {
 
     deinit {
         application.shutdown()
-        InGameUIRegistry.shared.provider = nil
     }
 }
 

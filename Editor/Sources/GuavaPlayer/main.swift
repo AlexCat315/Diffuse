@@ -1,3 +1,4 @@
+import EditorCore
 import Foundation
 import GuavaLogging
 private var loggingConfiguration = LoggingConfiguration()
@@ -99,7 +100,8 @@ private func makeRenderDevice() throws -> Device {
 private func runPlayer() throws {
     let projectDirectory = resolveProjectDirectory()
     let renderDevice = try makeRenderDevice()
-    let app = try GameApplication(projectDirectory: projectDirectory, renderDevice: renderDevice)
+    let inGameUIHost = try InGameUIHost(device: renderDevice)
+    let app = try GameApplication(projectDirectory: projectDirectory, renderDevice: renderDevice, inGameUI: inGameUIHost)
     let playerState = GamePlayerState()
 
     app.onViewportSurfaceChanged = { surface in
@@ -109,8 +111,6 @@ private func runPlayer() throws {
     app.bootstrap()
     defer { app.shutdown() }
 
-    let inGameUIHost = try InGameUIHost(device: renderDevice)
-    InGameUIRegistry.shared.provider = inGameUIHost
 
     try Application.run(
         config: ApplicationConfiguration(title: "Guava Player") {

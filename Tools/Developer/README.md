@@ -11,17 +11,16 @@ packages. Vendored third-party source trees retain their upstream files.
 ## Running
 
 ```sh
-swift run --package-path Tools/Developer guava-dev <command> [options]
+./guava studio <command> [options]
 ```
 
 The executable discovers the checkout by walking up from its current directory,
-or from `GUAVA_ROOT` when set. SwiftPM's `--package-path` is still relative to the
-shell's working directory: from `GuavaUI/Browser`, use `../../Tools/Developer`
-or the existing `npm run` commands.
+or from `GUAVA_ROOT` when set. From another directory, invoke the checkout's
+`guava` wrapper with an absolute path.
 
-The shipped `guava` CLI (`Tools/Guava`) shells out to `guava-dev` for the tasks
-it shares with CI; it does not depend on this package as a library, so the
-dependency direction stays one-way.
+The standalone SDK CLI lives in `GuavaUI/Tools/Guava`. Studio's root wrapper
+dispatches `studio` commands here and forwards application commands to the SDK.
+The SDK has no dependency on Studio tooling.
 
 ## Commands
 
@@ -39,6 +38,8 @@ dependency direction stays one-way.
 | `validate <operation>` | CI / Manual | MCP protocol, editor loop, Crystal Rush and agent diagnostics |
 | `devtools <operation>` | Manual / Dev | Drive or inspect a running app's DevTools endpoint |
 | `android <operation>` | Manual | Android device validation harnesses |
+| `export-game PROJECT --id ID` | Build | Export a Studio project through the SDK Android backend |
+| `plugin-build DIRECTORY` | Build | Compile a Studio WASI plugin |
 | `browser <operation>` | CI / Manual / Dev | Headless Chromium checks over CDP |
 | `gpu-regression run\|verify DIR` | CI | Run and verify the GPU regression inventory |
 
@@ -83,9 +84,8 @@ into commands. `devtools session PROJECT mac|android` shares the same resolver.
 Sources/
   GuavaDev/                  command dispatch and help
   Infrastructure/
-    ToolSupport/             processes, files, archives, downloads and digests
     ImageCodec/              Swift screenshot decoding boundary
-    CImageDecoder/           thin adapter to the engine's vendored stb header
+    CImageDecoder/           thin adapter to the SDK's vendored stb header
   Build/
     NativeBootstrap/         native dependency orchestration
     MediaStaging/            FFmpeg recipes and provenance
@@ -113,8 +113,9 @@ resource accessors use `InternalImportsByDefault`.
 Build recipes depend on infrastructure or another recipe they orchestrate.
 Validation harnesses depend on infrastructure; they launch built applications
 at the process boundary. There are no package dependencies on Engine, Editor,
-or GuavaUI, so tooling can build before native artifacts exist. Screenshot
-decoding includes the existing stb header directly, without linking Engine.
+or UI/rendering products, so tooling can build before native artifacts exist.
+Processes, files, archives and digests come from `GuavaUI/Tools/Support`.
+Screenshot decoding includes the SDK's stb header directly, without linking Engine.
 The `boundaries` command guards this separation; `maintainability` also scans
 this package's first-party Swift sources.
 
@@ -141,13 +142,13 @@ download policy, so one scale/backend check cannot carry state into the next.
 ## Tests
 
 ```sh
-swift test --package-path Tools/Developer
+./guava test Tools/Developer
 
 # Include real Chromium protocol and screenshot checks.
-GUAVA_TEST_CHROMIUM=1 swift test --package-path Tools/Developer
+GUAVA_TEST_CHROMIUM=1 ./guava test Tools/Developer
 
 # Include compilation tests against the pinned Slang compiler.
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" swift test --package-path Tools/Developer
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" ./guava test Tools/Developer
 ```
 
 `ci-developer-tools.yml` builds and tests the standalone package on all three

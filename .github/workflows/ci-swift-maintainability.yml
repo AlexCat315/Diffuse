@@ -7,10 +7,10 @@ on:
       - 'Engine/Sources/**'
       - 'Editor/Sources/**'
       - 'GuavaUI/Sources/**'
-      - 'Tools/Guava/Sources/**'
+      - 'GuavaUI'
       - 'Platforms/Android/Sources/**'
-      - 'Platforms/Android/Contract/Sources/**'
-      - 'GuavaUI/Platforms/Android/Sources/**'
+      - 'GuavaUI/Hosts/Android/Contract/Sources/**'
+      - 'GuavaUI/Platforms/Android/**'
       - 'Tools/Developer/**'
       - '.github/workflows/ci-swift-maintainability.yml'
   pull_request:
@@ -18,10 +18,10 @@ on:
       - 'Engine/Sources/**'
       - 'Editor/Sources/**'
       - 'GuavaUI/Sources/**'
-      - 'Tools/Guava/Sources/**'
+      - 'GuavaUI'
       - 'Platforms/Android/Sources/**'
-      - 'Platforms/Android/Contract/Sources/**'
-      - 'GuavaUI/Platforms/Android/Sources/**'
+      - 'GuavaUI/Hosts/Android/Contract/Sources/**'
+      - 'GuavaUI/Platforms/Android/**'
       - 'Tools/Developer/**'
       - '.github/workflows/ci-swift-maintainability.yml'
 
@@ -36,4 +36,4 @@ jobs:
       - name: Check type and initializer size
         run: |
           swift test --package-path Tools/Developer --filter MaintainabilityTests
-          swift run --package-path Tools/Developer guava-dev maintainability
+          ./guava studio maintainability

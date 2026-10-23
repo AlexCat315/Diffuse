@@ -2,9 +2,9 @@ name: iOS application host
 on:
   push:
     branches: [main]
-    paths: ['GuavaUI/**', 'Engine/**', 'cmake/**', 'Tools/Developer/**', 'Tools/Guava/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
+    paths: ['GuavaUI', 'Engine/**', 'cmake/**', 'Tools/Developer/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
   pull_request:
-    paths: ['GuavaUI/**', 'Engine/**', 'cmake/**', 'Tools/Developer/**', 'Tools/Guava/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
+    paths: ['GuavaUI', 'Engine/**', 'cmake/**', 'Tools/Developer/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
   workflow_dispatch:
 jobs:
   simulator:
@@ -18,14 +18,15 @@ jobs:
       - name: Stage iOS dependencies and build the shared application
         shell: bash
         run: |
-          swift run --package-path Tools/Developer guava-dev ios-native
-          GUAVA_ENGINE_ROOT="$PWD" GUAVA_ENGINE_ARTIFACT_ROOT=build/ios-arm64-simulator/vendor \
-            GUAVA_TEXT_ARTIFACT_ROOT=../build/ios-arm64-simulator/vendor \
+          ./guava studio ios-native
+          GUAVA_SDK_ROOT="$PWD/GuavaUI" GUAVA_ENGINE_ARTIFACT_ROOT=build/ios-arm64-simulator/vendor \
+            GUAVA_RUNTIME_ARTIFACT_ROOT=Runtime/build/ios-arm64-simulator/vendor \
+            GUAVA_TEXT_ARTIFACT_ROOT=build/ios-arm64-simulator/vendor \
             xcodebuild -quiet -jobs 4 -project examples/GuavaUIStarter/Platforms/iOS/Application.xcodeproj \
             -scheme Application -configuration Debug -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/guava-ios" \
             CODE_SIGNING_ALLOWED=NO ARCHS=arm64 build
       - name: Verify actual simulator rendering
-        run: swift run --package-path Tools/Developer guava-dev ios-simulator validate "$RUNNER_TEMP/guava-ios/Build/Products/Debug-iphonesimulator/Application.app"
+        run: ./guava studio ios-simulator validate "$RUNNER_TEMP/guava-ios/Build/Products/Debug-iphonesimulator/Application.app"
       - name: Verify the generated iOS CLI project
-        run: swift test --package-path Tools/Guava
+        run: ./guava test GuavaUI/Tools/Guava

@@ -12,6 +12,7 @@ import SIMDCompat
 /// the installed GuavaUI HUD provider after scene post-processing.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
+    private let inGameUI: (any InGameUIProviding)?
     public let device: Device
     private let meshes: NativeMeshStore
     private let meshPass: NativeMeshPass
@@ -35,7 +36,8 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public var colorTexture: Texture? { targets?.color?.texture }
     public var residentMeshCount: Int { meshes.residentCount }
 
-    public init(device: Device, surface: RenderSurfaceDescriptor? = nil, assets: AssetRegistry = .shared) throws {
+    public init(device: Device, surface: RenderSurfaceDescriptor? = nil, assets: AssetRegistry = .shared, inGameUI: (any InGameUIProviding)? = nil) throws {
+        self.inGameUI = inGameUI
         self.device = device; windowTarget = surface.map { NativeWindowTarget(device: device, surface: $0) }
         meshes = try NativeMeshStore(device: device, registry: assets)
         meshPass = try NativeMeshPass(device: device)
@@ -66,7 +68,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     private func renderFrame(packet: RenderPacket) throws {
         let start = DispatchTime.now().uptimeNanoseconds
         let matrices = try NativePacketValidation.validate(packet)
-        let uiProvider = InGameUIRegistry.shared.provider
+        let uiProvider = inGameUI
         if !packet.inGameCanvas.commands.isEmpty && uiProvider == nil {
             throw RHIError.unsupportedFeature("script HUD requires an installed in-game UI provider")
         }

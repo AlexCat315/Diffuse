@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'Engine/**'
-      - 'GuavaUI/Portable/**'
+      - 'GuavaUI'
       - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
@@ -14,7 +14,7 @@ on:
   pull_request:
     paths:
       - 'Engine/**'
-      - 'GuavaUI/Portable/**'
+      - 'GuavaUI'
       - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
@@ -67,23 +67,13 @@ jobs:
             libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
             mesa-common-dev ninja-build
 
-      - name: Build native deps via CMake (SDL3 + Imath + OpenEXR + Jolt)
+      - name: Prepare SDK and Studio native dependencies
         shell: bash
-        run: |
-          # Mirror guava-dev native-bootstrap exactly: a blanket build (ALL) first builds every
-          # bundled lib (all webp variants, plutovg, lunasvg, jolt, ocio/openexr,
-          # SDL3 via stage_sdl3 ALL) so the install step finds them; stage_sdl3 /
-          # stage_image_decode then stage the bundles; --prefix keeps stray
-          # install() rules out of the unwritable system /usr/local.
-          cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
-          cmake --build Engine/build/native --parallel --config Release
-          cmake --build Engine/build/native --parallel --config Release --target stage_sdl3
-          cmake --build Engine/build/native --parallel --config Release --target stage_image_decode
-          cmake --install Engine/build/native --config Release --prefix "$RUNNER_TEMP/guava-native-install"
+        run: ./guava studio native-bootstrap
 
       - name: Build pinned FFmpeg
         shell: bash
-        run: swift run --package-path Tools/Developer guava-dev media
+        run: ./guava studio media
 
       # The Engine package depends on the local Media package, whose FFmpeg
       # binaryTarget needs the bundle that `guava-dev media` just staged into
@@ -139,7 +129,7 @@ jobs:
           cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/macos-arm64"
           cmake --build Engine/build/plugin-probe --parallel 4
           host_bin=$(swift build --package-path Engine --show-bin-path)
-          swift run --package-path Tools/Developer guava-dev browser web-plugins --host "$host_bin/GuavaPluginHost" --probe Engine/build/plugin-probe/GuavaPluginProbe
+          ./guava studio browser web-plugins --host "$host_bin/GuavaPluginHost" --probe Engine/build/plugin-probe/GuavaPluginProbe
 
       - name: Run M7 destruction performance gates
         if: runner.os == 'macOS'

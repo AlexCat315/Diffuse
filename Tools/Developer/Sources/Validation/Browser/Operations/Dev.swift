@@ -117,7 +117,7 @@ enum DevOperation {
       repositoryRoot.appendingPathComponent(
         "Tools/Developer/Sources/Validation/Browser/Operations/BuildFonts.swift"),
       root.deletingLastPathComponent().appendingPathComponent("DevTools"),
-      repositoryRoot.appendingPathComponent("Engine/PlatformCore"),
+      repositoryRoot.appendingPathComponent("GuavaUI/PlatformCore"),
       root.appendingPathComponent("Package.swift"),
       root.deletingLastPathComponent().appendingPathComponent("Portable/Package.swift"),
       root.appendingPathComponent("build.sh"),

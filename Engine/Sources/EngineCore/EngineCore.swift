@@ -103,13 +103,15 @@ public final class EngineHost: @unchecked Sendable {
     private let timings = LockedState(FrameTimingLedger())
 
     /// Shared rendering device; nil runs simulation without a GPU.
+    private let inGameUI: (any InGameUIProviding)?
     public let renderDevice: Device?
 
     private var packetBuffer: LatestValueBuffer<RenderPacket>?
     private var simulationThread: SimulationThread?
     private var renderThread: RenderThread?
 
-    public init(runtime: any EngineRuntime, renderDevice: Device? = nil) {
+    public init(runtime: any EngineRuntime, renderDevice: Device? = nil, inGameUI: (any InGameUIProviding)? = nil) {
+        self.inGameUI = inGameUI
         self.runtime = runtime
         self.renderDevice = renderDevice
     }
@@ -145,7 +147,7 @@ public final class EngineHost: @unchecked Sendable {
             consumer = renderConsumer
         } else if let device = renderDevice, renderSurface != nil || enableViewportSurface {
             do {
-                consumer = try NativeRenderer(device: device, surface: renderSurface)
+                consumer = try NativeRenderer(device: device, surface: renderSurface, inGameUI: inGameUI)
             } catch {
                 LogSystem.logger("com.guava.engine.host").error("Renderer initialization failed", metadata: ["error": "\(error)"])
                 consumer = nil

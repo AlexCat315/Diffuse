@@ -9,7 +9,7 @@ android {
     sourceSets.getByName("main") {
         manifest.srcFile("../App/AndroidManifest.xml")
         java.srcDir("../App/src")
-        java.srcDir("../../../Engine/third-party/sdl3/android-project/app/src/main/java")
+        java.srcDir("../../../GuavaUI/Runtime/third-party/sdl3/android-project/app/src/main/java")
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_1_8; targetCompatibility = JavaVersion.VERSION_1_8 }
 }

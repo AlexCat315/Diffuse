@@ -62,7 +62,7 @@ package enum IOSStaging {
         try MediaStaging.run(["--platform", variant])
       }
       let sysroot = try Shell.output(["xcrun", "--sdk", sdk, "--show-sdk-path"])
-      for package in ["Engine", "GuavaUI"] {
+      for package in ["Engine", "GuavaUI/Runtime", "GuavaUI"] {
         let build = root.appendingPathComponent("\(package)/build/\(variant)")
         var command = [
           "cmake", "-S", root.appendingPathComponent("\(package)/third-party").path,
@@ -80,8 +80,10 @@ package enum IOSStaging {
           // The Engine package resolves ocio_openexr from the staged artifact
           // root, so iOS must build and stage the EXR stack like every other
           // native dependency; a missing bundle breaks package resolution.
-          targets = ["stage_sdl3", "stage_jolt", "stage_image_decode", "stage_ocio_openexr"]
+          targets = ["stage_jolt", "stage_ocio_openexr"]
           if plugins { targets.append("stage_wasmtime") }
+        } else if package == "GuavaUI/Runtime" {
+          targets = ["stage_sdl3", "stage_image_decode"]
         } else {
           targets = ["stage_freetype", "stage_harfbuzz"]
         }

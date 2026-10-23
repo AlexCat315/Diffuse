@@ -35,6 +35,13 @@ enum GuavaDev {
 
   private static func dispatch(_ verb: String, _ arguments: [String]) throws {
     switch verb {
+    case "export-game": try AndroidExport.run(arguments)
+    case "plugin-build":
+      guard let first = arguments.first else { throw ToolError.message("Supply a plugin directory") }
+      let options = Array(arguments.dropFirst())
+      guard options.isEmpty || (options.count == 2 && options[0] == "--output") else { throw ToolError.message("Use ./guava studio plugin-build DIRECTORY [--output PACKAGE.guavaplugin]") }
+      try PluginBuild(directory: URL(fileURLWithPath: first), root: Repository.root,
+          output: options.last.map { URL(fileURLWithPath: $0) }).run()
     case "maintainability": try Maintainability.run(arguments)
     case "boundaries": try Boundaries.run(arguments)
     case "shader": try ShaderToolchain.run(arguments)
@@ -62,6 +69,8 @@ enum GuavaDev {
     """
     guava-dev — repository tooling for the GuavaStudio checkout
 
+      guava-dev export-game PROJECT --id ID     export an Android game
+      guava-dev plugin-build DIRECTORY           build a Studio plugin
       guava-dev maintainability [--report]         reject oversized Swift types
       guava-dev boundaries                         validate package/product boundaries
       guava-dev shader <compile|rebuild|bootstrap-slang> …

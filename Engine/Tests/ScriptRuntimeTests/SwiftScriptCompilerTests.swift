@@ -123,12 +123,18 @@ struct SwiftScriptCompilerTests {
 
         var moduleMapPaths = SwiftScriptCompiler.discoverClangModuleMapPaths(in: productsDirectory)
 
-        let bridgeRoot = engineRoot.appendingPathComponent("Sources/Bridge", isDirectory: true)
-        if let enumerator = fileManager.enumerator(
-            at: bridgeRoot,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) {
+        // Bridges live in both packages now: engine-owned ones under Engine,
+        // and the shared graphics/image ones under the GuavaUI SDK.
+        let bridgeRoots = [
+            engineRoot.appendingPathComponent("Sources/Bridge", isDirectory: true),
+            engineRoot.appendingPathComponent("../GuavaUI/Runtime/Sources/Bridge", isDirectory: true),
+        ]
+        for bridgeRoot in bridgeRoots {
+            guard let enumerator = fileManager.enumerator(
+                at: bridgeRoot,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else { continue }
             for case let url as URL in enumerator where url.lastPathComponent == "module.modulemap" {
                 moduleMapPaths.append(url.path)
             }

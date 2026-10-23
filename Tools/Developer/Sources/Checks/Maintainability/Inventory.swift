@@ -6,13 +6,14 @@ internal import ToolSupport
 enum Inventory {
   /// Package directories whose `Sources` trees are guarded, in scan order.
   static let packageRoots = [
-    "Engine", "Engine/Logging", "Engine/Media",
+    "Engine", "Engine/Media",
     "Editor", "Editor/Documents",
     "GuavaUI",
-    "Tools/Guava",
+    "GuavaUI/Logging",
+    "GuavaUI/Tools/Guava",
+    "GuavaUI/Hosts/Android/Contract",
     "Tools/Developer",
-    "Platforms/Android", "Platforms/Android/Contract",
-    "GuavaUI/Platforms/Android",
+    "Platforms/Android",
   ]
 
   struct Declaration {

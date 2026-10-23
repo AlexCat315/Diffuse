@@ -14,7 +14,9 @@ private final class WelcomeTestBundle: NSObject {}
 struct WelcomeWorkflowTests {
     @Test("blank and sample creation forms remain interactive through open and cancel")
     func creationForms() throws { try WorkbenchUITestSupport.withEnvironment { registry, _ in
-        let context = EditorLaunchContext(renderDevice: try Device.make(),
+        let device = try Device.make()
+        let context = EditorLaunchContext(renderDevice: device,
+                                          inGameUI: try InGameUIHost(device: device),
                                           events: PlatformEventBridge(), shellState: nil)
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: WelcomeView(context: context).theme(EditorVisualTheme.make(dark: false)))
@@ -56,6 +58,7 @@ struct WelcomeWorkflowTests {
                                                                for: stateKey))
         let backend = try Device.make()
         let context = EditorLaunchContext(renderDevice: backend,
+                                          inGameUI: try InGameUIHost(device: backend),
                                           events: PlatformEventBridge(), shellState: nil)
         defer { context.shutdown(); try? backend.waitUntilIdle() }
         try context.createProject(name: "Empty", parent: parent, template: .blank)
@@ -104,6 +107,7 @@ struct WelcomeWorkflowTests {
         }
         let backend = try Device.make()
         let context = EditorLaunchContext(renderDevice: backend,
+                                          inGameUI: try InGameUIHost(device: backend),
                                           events: PlatformEventBridge(), shellState: nil)
         defer { context.shutdown(); try? backend.waitUntilIdle() }
         try context.createProject(name: "Crystal Sample", parent: parent, template: .crystalRush)

@@ -5,10 +5,8 @@ plugins { id("com.android.application") }
 val projectRoot = rootProject.projectDir.resolve("../..").canonicalFile
 val configuration = JsonSlurper().parse(projectRoot.resolve("guava.json")) as Map<*, *>
 val application = configuration["application"] as Map<*, *>
-val toolchain = configuration["toolchain"] as Map<*, *>
 val version = configuration["version"] as Map<*, *>
-val engine = System.getenv("GUAVA_ENGINE_ROOT")?.let(::File)
-    ?: projectRoot.resolve(toolchain["enginePath"] as String).canonicalFile
+val sdk = extensions.extraProperties["guavaSDK"] as File
 val generated = projectRoot.resolve(".guava/build/android/generated")
 layout.buildDirectory.set(projectRoot.resolve(".guava/build/android/gradle/app"))
 rootProject.layout.buildDirectory.set(projectRoot.resolve(".guava/build/android/gradle/root"))
@@ -61,7 +59,7 @@ listOf("debug", "profile", "release").forEach { mode ->
     val prepareGuava = tasks.register<Exec>("prepareGuava$suffix") {
         onlyIf { !providers.gradleProperty("guavaPrepared").isPresent }
         workingDir(projectRoot)
-        commandLine(engine.resolve(if (System.getProperty("os.name").startsWith("Windows")) "guava.cmd" else "guava").path,
+        commandLine(sdk.resolve(if (System.getProperty("os.name").startsWith("Windows")) "guava.cmd" else "guava").path,
             "internal", "android-prepare", projectRoot.path, "--$mode")
     }
     tasks.matching { it.name == "pre${suffix}Build" }.configureEach { dependsOn(prepareGuava) }

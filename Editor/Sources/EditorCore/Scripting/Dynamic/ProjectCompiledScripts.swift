@@ -42,13 +42,20 @@ public struct ProjectScriptBuildConfiguration: Sendable {
         var moduleMaps = configuredPaths("GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS") ??
             SwiftScriptCompiler.discoverClangModuleMapPaths(in: buildDirectory)
         var includePaths = Set(moduleMaps.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path })
-        let regex = try? NSRegularExpression(pattern: #"umbrella\s+"([^"]+)""#)
+        // `umbrella "directory"` and `umbrella header "file.h"` are both valid
+        // Clang forms. SwiftPM-generated maps use the directory form; the
+        // hand-written bridge maps use the header form, whose include directory
+        // is the header's parent.
+        let regex = try? NSRegularExpression(pattern: #"umbrella(?:\s+header)?\s+"([^"]+)""#)
         for path in moduleMaps {
             guard let contents = try? String(contentsOfFile: path, encoding: .utf8),
                   let match = regex?.firstMatch(in: contents, range: NSRange(contents.startIndex..., in: contents)),
                   let range = Range(match.range(at: 1), in: contents) else { continue }
-            let includeDirectory = URL(fileURLWithPath: String(contents[range]),
-                                       relativeTo: URL(fileURLWithPath: path).deletingLastPathComponent()).standardizedFileURL
+            let declared = URL(fileURLWithPath: String(contents[range]),
+                               relativeTo: URL(fileURLWithPath: path).deletingLastPathComponent()).standardizedFileURL
+            var isDirectory: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: declared.path, isDirectory: &isDirectory)
+            let includeDirectory = exists && isDirectory.boolValue ? declared : declared.deletingLastPathComponent()
             includePaths.insert(includeDirectory.path)
             if configuredPaths("GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS") == nil {
                 let bridgeRoot = includeDirectory.deletingLastPathComponent().deletingLastPathComponent()

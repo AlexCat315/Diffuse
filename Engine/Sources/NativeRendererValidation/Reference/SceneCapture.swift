@@ -7,10 +7,10 @@ import RenderBackend
 public final class SceneCapture {
     public let device: Device
     public let renderer: NativeRenderer
-    public init(validation: Bool = false, api: GraphicsAPI? = nil) throws {
+    public init(validation: Bool = false, api: GraphicsAPI? = nil, inGameUI: (any InGameUIProviding)? = nil) throws {
         device = try Device.make(DeviceConfig(preferredBackends: api.map { [$0] } ?? NativeRHI.platformDefaultBackends,
             enableValidation: validation))
-        renderer = try NativeRenderer(device: device)
+        renderer = try NativeRenderer(device: device, inGameUI: inGameUI)
     }
     deinit { try? device.waitUntilIdle() }
     public func render(packet: RenderPacket) throws -> RenderFrameStats {

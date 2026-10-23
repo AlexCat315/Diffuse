@@ -32,15 +32,15 @@ jobs:
       - name: Stage pinned runtime and build portable probe
         shell: bash
         run: |
-          swift run --package-path Tools/Developer guava-dev plugins stage --platform '${{ matrix.platform }}'
+          ./guava studio plugins stage --platform '${{ matrix.platform }}'
           cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/${{ matrix.platform }}"
           cmake --build Engine/build/plugin-probe --config Release --parallel 4
-          swift run --package-path Tools/Developer guava-dev plugins verify --probe '${{ matrix.probe }}'
+          ./guava studio plugins verify --probe '${{ matrix.probe }}'
       - name: Android static-link gate
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          swift run --package-path Tools/Developer guava-dev plugins stage --platform android-arm64
+          ./guava studio plugins stage --platform android-arm64
           cmake -S Engine/Validation/Plugins -B Engine/build/plugin-android -G Ninja \
             -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/android-arm64" \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
@@ -51,15 +51,15 @@ jobs:
         shell: bash
         run: |
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-          swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-arm64
-          swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-arm64-simulator
+          ./guava studio plugins stage --platform ios-arm64
+          ./guava studio plugins stage --platform ios-arm64-simulator
           cmake -S Engine/Validation/Plugins -B Engine/build/plugin-ios -G Ninja \
             -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/ios-arm64-simulator" \
             -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphonesimulator \
             -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0
           cmake --build Engine/build/plugin-ios --parallel 4
-          swift run --package-path Tools/Developer guava-dev plugins prepare --probe '${{ matrix.probe }}' --output "$RUNNER_TEMP/plugin-fixtures"
-          simulator_id=$(swift run --package-path Tools/Developer guava-dev ios-simulator udid --prefix iPhone)
+          ./guava studio plugins prepare --probe '${{ matrix.probe }}' --output "$RUNNER_TEMP/plugin-fixtures"
+          simulator_id=$(./guava studio ios-simulator udid --prefix iPhone)
           xcrun simctl boot "$simulator_id"
           xcrun simctl bootstatus "$simulator_id" -b
           xcrun simctl spawn "$simulator_id" "$PWD/Engine/build/plugin-ios/GuavaPluginProbe.app/GuavaPluginProbe" \

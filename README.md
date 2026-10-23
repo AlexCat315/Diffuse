@@ -25,7 +25,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 The repository ships three top-level SwiftPM packages plus an MCP server:
 
 - **`Engine/`** — rendering, scene, simulation, asset pipeline, AI runtime kernels, observation bus, film pipeline (EXR / color / denoise / render farm).
-- **`GuavaUI/`** — a declarative, SwiftUI-style UI framework with a NativeRHI renderer. Also the foundation of the in-game UI, injected into the engine via a protocol (no circular dependency).
+- **`GuavaUI/`** — a pinned submodule of the independent [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI), owning UI, NativeRHI, platform services and the CLI.
 - **`Editor/`** — the desktop editor application. Hosts the engine, mounts GuavaUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
 - **`GuavaMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
 
@@ -39,11 +39,13 @@ Editor (top-level app)
  │  ├───► Engine (SceneRuntime, AssetPipeline, ObservationBus, CapabilityGraph)
  │  └───► GuavaUI (Compose API + NativeRHI renderer, shared NativeRHI Device with Engine)
  │
- GuavaUI (UI framework)
- └───► Engine.NativeRHI (device & surface only; no hard dependency on 3D rendering)
+ GuavaUI SDK
+ ├── UI framework / platform hosts / CLI
+ └── NativeRHI / PlatformShell / logging / platform values
 
  Engine (core)
- ├── NativeRHI / RenderBackend / SceneRuntime / ScriptRuntime
+ ├── RenderBackend / SceneRuntime / ScriptRuntime
+ ├───► GuavaUI SDK's NativeRHI and platform services
  ├── AIRuntime (Session, WorldView, Signal, Proposal, Edit)
  ├── ObservationBus (event bus, cross-process bridge at M11)
  └── (film) SequenceRuntime, CinematicRenderer, ColorPipeline, ImageIO, RenderFarm
@@ -90,7 +92,7 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
   - **Windows**: Visual Studio 2026 (C++ workload)
 - Node.js 26.10.0 / npm (website)
 - Git
-- Graphics: system Metal on macOS; DX12 by default on Windows, with the Windows SDK and DXC for shader compilation; Vulkan on Linux (`libvulkan-dev`). Configure the Windows Vulkan fallback with `swift run --package-path Tools/Developer guava-dev vulkan bootstrap` and `VULKAN_SDK`.
+- Graphics: system Metal on macOS; DX12 by default on Windows, with the Windows SDK and DXC for shader compilation; Vulkan on Linux and as a Windows alternative. Vulkan headers are pinned in the SDK and the runtime loads the system graphics driver.
 
 ### First build
 
@@ -148,7 +150,7 @@ provides a WebGPU preview, node inspection and state checkpoints.
 | Yoga | SwiftPM source build | SwiftPM `facebook/yoga` 3.2.1 |
 | FreeType | CMake source build → `.artifactbundle` | submodule under `GuavaUI/third-party/freetype` |
 | HarfBuzz | CMake source build → `.artifactbundle` | submodule under `GuavaUI/third-party/harfbuzz` |
-| SDL3 | CMake source build → `.artifactbundle` | submodule under `Engine/third-party/sdl3` |
+| SDL3 | SDK release artifact / CMake source build | submodule under `GuavaUI/Runtime/third-party/sdl3` |
 | Imath | CMake source build | submodule under `Engine/third-party/imath` |
 | OpenEXR | CMake source build | submodule under `Engine/third-party/openexr` |
 | JoltPhysics | CMake source build → `.artifactbundle` | submodule under `Engine/third-party/jolt` |

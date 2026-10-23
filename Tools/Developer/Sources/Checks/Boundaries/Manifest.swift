@@ -79,6 +79,13 @@ struct DumpPackage {
     }
     return target
   }
+
+  var allTargets: [Target] { targets.values.sorted { $0.name < $1.name } }
+
+  /// Products this package's targets pull from other packages by name.
+  var referencedProducts: Set<String> {
+    allTargets.reduce(into: Set<String>()) { $0.formUnion($1.products) }
+  }
 }
 
 /// Runs `swift package dump-package` for a package in the checkout. The Android

@@ -11,9 +11,9 @@ kind: doc
 
 # 创建第一个 GuavaUI 应用
 
-Guava CLI 管理应用创建、构建、运行、测试、缓存和调试会话；Guava SDK 提供 Engine、GuavaUI、平台宿主和模板。应用开发者使用 `import GuavaUI`，业务代码放在 `Sources/AppContent`。
+Guava CLI 管理应用创建、构建、运行、测试、缓存和调试会话；独立的 [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) 提供 UI、NativeRHI、平台宿主和模板。GuavaStudio 提供编辑器、场景、物理和脚本。应用开发者使用 `import GuavaUI`，业务代码放在 `Sources/AppContent`。
 
-当前提供**源码 SDK**安装，尚未发布预编译 CLI / 原生 SDK 下载包。首次安装需要 Git 和 Swift 6.4.1；共享 C/C++ 依赖由 `guava setup` 在 SDK 中构建一次，多个应用共用。CLI 与 SDK 应使用同一仓库版本。
+CLI 和桌面原生依赖通过 GuavaUI GitHub Releases 分发。安装 CLI 不需要 Swift；编译应用需要 Swift 6.4.1 和对应平台工具。项目通过 `toolchain.sdkVersion` 固定 SDK 版本。
 
 ## 1. 安装主机工具
 
@@ -27,9 +27,9 @@ swift --version
 
 macOS 还需要 Apple Command Line Tools（`xcode-select --install`），以及 Git、CMake、Ninja；安装了 Homebrew 时可运行 `brew install git cmake ninja`。Apple 的安装界面需要用户完成。
 
-Windows 需要 Swift 官方页面列出的 Visual Studio C++ 工具和 Windows SDK，再安装 Swift；使用 Developer PowerShell。Linux 需要本机 C/C++ 编译器、CMake、Ninja、pkg-config，以及窗口系统开发包、Vulkan SDK 和可用驱动。不同发行版请按其包管理器安装；`guava doctor --linux` 提供诊断入口。
+Windows 需要 Swift 官方页面列出的 Visual Studio C++ 工具和 Windows SDK；CLI 自动加载其编译环境。Linux 需要本机 C/C++ 编译器、pkg-config 和窗口系统开发包。Vulkan 头文件随 SDK 提供，运行时使用系统图形驱动。`guava doctor` 提供诊断入口。
 
-## 2. 安装 CLI 与源码 SDK
+## 2. 安装 CLI 与 SDK
 
 如果已经有这个仓库，直接从仓库根使用 `./guava` 即可，无需下载或发布 SDK：
 
@@ -39,35 +39,35 @@ Windows 需要 Swift 官方页面列出的 Visual Studio C++ 工具和 Windows S
 ./guava run Editor --mac
 ```
 
-在 `GuavaUI` 目录对应命令是 `../guava run Examples --mac`。`zsh: command not found: guava` 表示独立命令尚未安装或不在 PATH；源码入口与下面的用户目录安装流程都可以使用。
+在 `GuavaUI` 目录对应命令是 `./guava run Examples --mac`。Studio 的原生依赖准备使用 `./guava studio native-bootstrap`。`zsh: command not found: guava` 表示独立命令尚未安装或不在 PATH。
 
 使用 Swiftly 时，如果 `swift --version` 仍显示系统编译器，可设置 `export GUAVA_SWIFT_EXECUTABLE="$HOME/.swiftly/bin/swift"` 后再执行上述命令。
 
 ```sh
-git clone --recurse-submodules https://github.com/AlexCat315/GuavaStudio.git "$HOME/.guava/source"
-cd "$HOME/.guava/source"
-# 可先 git checkout 某个已发布版本；此时还需更新其 submodules。
-Tools/Guava/install.sh
-export PATH="$HOME/.local/bin:$PATH"
-guava sdk list
+curl -fsSL https://github.com/AlexCat315/GuavaUI/releases/latest/download/install.sh -o /tmp/guava-install.sh
+sh /tmp/guava-install.sh
+# 重新打开终端后：
+guava --version
+guava sdk install 0.1.0
 guava setup --mac
 ```
 
-Windows 对应入口是 `Tools/Guava/install.ps1`，默认安装到 `%LOCALAPPDATA%\Guava\bin`，将其加入 PATH。Linux 最后一步使用 `guava setup --linux`。安装脚本登记当前源码 SDK；安装位置可通过脚本参数指定，用户 SDK 状态可通过 `GUAVA_HOME` 指定。
+Windows 使用同一 Release 的 `install.ps1`，入口位于 `%LOCALAPPDATA%\Guava\bin`。macOS / Linux 入口位于 `~/.local/bin`。安装器维护用户 PATH，重新打开终端生效。Linux 最后一步使用 `guava setup --linux`；用户安装状态可通过 `GUAVA_HOME` 指定。
 
 已经安装 CLI 后，可以安装另一个固定版本的源码 SDK：
 
 ```sh
-guava sdk install https://github.com/AlexCat315/GuavaStudio.git --revision COMMIT_OR_TAG
+guava sdk install 0.1.0
 guava setup --mac
 # 或使用已有 checkout：
-guava sdk use /path/to/GuavaStudio
+guava sdk use /path/to/GuavaUI
 guava sdk list
+guava self update
 ```
 
-`install` 按 Git 提交存放在 `~/.guava/sdks/<commit>`，包含该提交的子模块；选择状态保存在 `~/.guava/sdk.json`。选择 SDK 影响随后创建的应用。现有应用继续使用自己的 `guava.json`，不会被全局切换静默升级。
+SDK 存放在安装根目录的 `sdks/VERSION`，选择状态保存在该目录下的 `sdk.json`。项目仍使用自己的固定版本；本地开发覆盖写入忽略的 `.guava/sdk.json` 或通过 `GUAVA_SDK_ROOT` 指定。`self update` 校验下载包并切换 CLI 入口，保留旧版本目录。
 
-`doctor` 汇总检查结果和安装步骤；`setup` 在检查通过后准备源码 SDK 的桌面原生依赖。它们不会替用户接受 Apple / Android 许可证，也不会自动切换全局编译器。
+`doctor` 汇总检查结果和安装步骤；`setup` 准备 SDK 的预编译桌面原生依赖。源码开发可使用 CMake、Ninja 和 Zig 构建依赖。它们不会替用户接受 Apple / Android 许可证，也不会自动切换全局编译器。
 
 ## 3. 创建、运行与测试
 
@@ -114,10 +114,10 @@ guava run --android --device SERIAL --devtools
 | 目标 | 应用开发所需增量工具 |
 | --- | --- |
 | macOS | Swift 6.4.1、Apple SDK、Git、CMake、Ninja |
-| Windows | Swift 6.4.1、Visual Studio C++ / Windows SDK、Git、CMake、Ninja、Vulkan SDK / 驱动 |
-| Linux | Swift 6.4.1、C/C++、Git、CMake、Ninja、窗口系统开发包、Vulkan SDK / 驱动 |
+| Windows | Swift 6.4.1、Visual Studio C++ / Windows SDK、Git、图形驱动 |
+| Linux | Swift 6.4.1、C/C++、Git、窗口系统开发包、图形驱动 |
 | Android | Swift / Git / CMake / Ninja / make + JDK 21、Android SDK / NDK r30、匹配的 Swift Android SDK；不要求 Node |
 | iOS / iPadOS | macOS、完整 Xcode、Swift、make、CMake、Ninja、Rust 与对应 iOS target |
 | 浏览器原型 | 单独的 Swift / Wasm SDK 配对、Node、CMake、Ninja，验证时还需要 Chromium；并非普通桌面 / Android 应用的前置条件 |
 
-源码 SDK 会带来原生编译工具的安装负担。未来发布预编译 SDK 时，应把原生依赖随各主机/目标架构打包；Swift 编译器和目标平台 SDK 仍是编译用户代码的工具，不能被 CLI 的安装名义隐藏。
+桌面发布包覆盖 macOS arm64、Windows x86_64 和 Linux x86_64。Swift 编译器和目标平台 SDK 仍用于编译应用代码。

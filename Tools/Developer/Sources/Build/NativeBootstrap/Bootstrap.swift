@@ -15,7 +15,7 @@ enum Bootstrap {
     var environment = ProcessInfo.processInfo.environment
     environment["MIMALLOC_DISABLE_REDIRECT"] = "1"
     #if os(Windows)
-      try activateVisualStudio(&environment)
+      try WindowsBuildEnvironment.activate(&environment)
     #endif
 
     // Media is an independent dependency graph. Incremental desktop builds
@@ -26,9 +26,16 @@ enum Bootstrap {
       try MediaStaging.run([], environment: environment)
     }
 
+    #if os(Windows)
+    let sdkCommand = root.appendingPathComponent("GuavaUI/guava.cmd")
+    #else
+    let sdkCommand = root.appendingPathComponent("GuavaUI/guava")
+    #endif
+    try Shell.inherit([sdkCommand.path, "setup", "--sdk-root", root.appendingPathComponent("GuavaUI").path], environment: environment)
+
     // ── Sentinels ────────────────────────────────────────────────────────
 
-    let engineDone = root.appendingPathComponent("Engine/vendor/SDL3.artifactbundle")
+    let engineDone = root.appendingPathComponent("Engine/vendor/Jolt.artifactbundle")
     let guavaUIDone = root.appendingPathComponent("GuavaUI/vendor/CFreeType.artifactbundle")
     let terminalDone = root.appendingPathComponent("GuavaUI/vendor/GhosttyVt.artifactbundle")
     var wasmtimeReady = true
@@ -58,7 +65,7 @@ enum Bootstrap {
     // too. Merely rerunning CMake can silently reuse libraries from an older
     // submodule.
     if force {
-      for package in ["Engine", "GuavaUI"] {
+      for package in ["Engine"] {
         try Fs.remove(root.appendingPathComponent(package).appendingPathComponent("build/native"))
       }
     }
@@ -84,49 +91,12 @@ enum Bootstrap {
     try Shell.inherit(
       [cmake.path, "--build", engineBuild.path, "--parallel", "--config", "Release"],
       environment: environment)
-    // stage_image_decode is not in the default ALL target, so the blanket
-    // build above skips it. stage_sdl3 (ALL) already pulled SDL3-static in,
-    // but build it explicitly too so SDL3-static exists before `--install`
-    // copies it into the artifactbundle. Both are top-level custom targets,
-    // so `--target` resolves on every generator (the Visual Studio generator
-    // cannot build the subdirectory `SDL3-static` target directly). Mirrors
-    // .github/workflows/ci-engine.yml.
-    try Shell.inherit(
-      [
-        cmake.path, "--build", engineBuild.path, "--parallel", "--config", "Release",
-        "--target", "stage_sdl3",
-      ], environment: environment)
-    try Shell.inherit(
-      [
-        cmake.path, "--build", engineBuild.path, "--parallel", "--config", "Release",
-        "--target", "stage_image_decode",
-      ], environment: environment)
     try Shell.inherit(
       [
         cmake.path, "--install", engineBuild.path, "--prefix", installPrefix.path,
         "--config", "Release",
       ], environment: environment)
 
-    // ── GuavaUI ──────────────────────────────────────────────────────────
-
-    let guavaSource = root.appendingPathComponent("GuavaUI/third-party")
-    let guavaBuild = root.appendingPathComponent("GuavaUI/build/native")
-
-    print("\n[ GuavaUI ]")
-    try Shell.inherit(
-      [
-        cmake.path, "-S", guavaSource.path, "-B", guavaBuild.path,
-        "-DCMAKE_BUILD_TYPE=Release",
-      ], environment: environment)
-    try Shell.inherit(
-      [cmake.path, "--build", guavaBuild.path, "--parallel", "--config", "Release"],
-      environment: environment)
-    try Shell.inherit(
-      [
-        cmake.path, "--install", guavaBuild.path, "--prefix", installPrefix.path,
-        "--config", "Release",
-      ], environment: environment)
-
-    print("\nDone. Run: swift build --package-path Editor")
+    print("\nDone. Run: ./guava run Editor --mac")
   }
 }

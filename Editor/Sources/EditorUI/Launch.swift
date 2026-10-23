@@ -125,8 +125,10 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     let events = PlatformEventBridge()
     let shellState = EditorRootViewFactory.loadShellState()
 
+    let inGameUIHost = try InGameUIHost(device: renderDevice)
     let context = EditorLaunchContext(
         renderDevice: renderDevice,
+        inGameUI: inGameUIHost,
         events: events,
         shellState: shellState
     )
@@ -136,8 +138,6 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
         try context.loadProject(directory: dir)
     }
 
-    let inGameUIHost = try InGameUIHost(device: renderDevice)
-    InGameUIRegistry.shared.provider = inGameUIHost
     if ProcessInfo.processInfo.environment["GUAVA_EDITOR_SAMPLE_HUD"] == "1" {
         let host = inGameUIHost
 

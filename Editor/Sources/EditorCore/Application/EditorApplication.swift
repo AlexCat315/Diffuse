@@ -103,6 +103,7 @@ public final class EditorApplication: @unchecked Sendable {
     public init(projectDirectory: String,
                 seedPreviewScene: Bool = false,
                 renderDevice: Device? = nil,
+                inGameUI: (any InGameUIProviding)? = nil,
                 events: PlatformEventBridge = PlatformEventBridge(),
                 initialAISettings: EditorAISettings = .default,
                 initialCapabilitySettings: EditorCapabilitySettings = .default,
@@ -161,7 +162,7 @@ public final class EditorApplication: @unchecked Sendable {
         let projectScriptCatalogMonitor = ProjectScriptCatalogMonitor(
             projectDirectory: projectDirectory
         )
-        self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: renderDevice)
+        self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: renderDevice, inGameUI: inGameUI)
         self.projectDirectory = projectDirectory
         self.store = store
         self.inputState = InputState()

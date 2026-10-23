@@ -7,7 +7,7 @@ on:
     paths:
       - 'Engine/**'
       - 'Editor/**'
-      - 'GuavaUI/**'
+      - 'GuavaUI'
       - 'Tools/Developer/**'
       - '.github/workflows/ci-gpu.yml'
       - '.github/actions/setup-toolchains/**'
@@ -47,23 +47,21 @@ jobs:
         run: |
           cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
           cmake --build Engine/build/native --parallel --config Release
-          cmake --build Engine/build/native --parallel --config Release --target stage_sdl3
-          cmake --build Engine/build/native --parallel --config Release --target stage_image_decode
           cmake --install Engine/build/native --config Release --prefix "$RUNNER_TEMP/guava-native-install"
 
       - name: Verify pinned shader toolchain and bundled artifacts
         run: |
-          swift run --package-path Tools/Developer guava-dev shader bootstrap-slang --destination "$RUNNER_TEMP/guava-slang"
+          ./guava studio shader bootstrap-slang --destination "$RUNNER_TEMP/guava-slang"
           export SLANGC="$RUNNER_TEMP/guava-slang/bin/slangc"
           swift test --package-path Tools/Developer --filter ShaderToolchainTests
           swift test --package-path Tools/Developer --filter RegressionReportTests
-          swift run --package-path Tools/Developer guava-dev shader rebuild --check
+          ./guava studio shader rebuild --check
           SLANGC="$SLANGC" swift test --package-path Engine --filter NativeRHITests
 
       - name: Run actual GPU regressions
         env:
           GUAVA_GPU_TEST_OUTPUT_DIR: ${{ runner.temp }}/guava-gpu-regression
-        run: swift run --package-path Tools/Developer guava-dev gpu-regression run
+        run: ./guava studio gpu-regression run
 
       - name: Save pixel captures, test report and device log
         if: always()

@@ -4,6 +4,8 @@
 
 > 基于 Swift 构建、以 AI Agent 驱动的综合创作工作站：文本与代码编辑、游戏开发、动画制作和视频剪辑。
 
+`GuavaUI/` 是独立 [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) 的固定版本子模块，拥有 UI、NativeRHI、平台服务和 CLI。Studio 拥有场景、三维渲染、物理、脚本及其 UI 适配器。
+
 ---
 
 -   🇬🇧 **英文版**: [README.md](README.md)
@@ -20,7 +22,7 @@
   - Windows: Visual Studio 2026 (C++ workload)
 - Node.js 26.10.0 / npm （官网）
 - Git
-- 图形后端：macOS 使用系统 Metal；Windows 默认 DX12，需要 Windows SDK，shader 编译需要 DXC；Linux 使用 Vulkan，可安装 `libvulkan-dev`。Windows 的 Vulkan 候选后端可通过 `swift run --package-path Tools/Developer guava-dev vulkan bootstrap` 和 `VULKAN_SDK` 配置。
+- 图形后端：macOS 使用系统 Metal；Windows 默认 DX12，需要 Windows SDK，shader 编译需要 DXC；Linux 与 Windows 的 Vulkan 后端使用 SDK 固定的头文件，运行时加载系统图形驱动。
 
 ### 第一次构建
 
@@ -28,8 +30,8 @@
 git clone https://github.com/AlexCat315/GuavaStudio.git
 cd GuavaStudio
 git submodule update --init --recursive
-swift run --package-path Tools/Developer guava-dev native-bootstrap
-swift build --package-path Editor
+./guava studio native-bootstrap
+./guava build Editor --mac
 ```
 
 `guava-dev native-bootstrap` 跨平台统一：编译 Engine + GuavaUI 的 C/C++ 原生依赖（CMake），Windows 下自动初始化 MSVC 工具链。
@@ -37,10 +39,10 @@ swift build --package-path Editor
 后续日常开发只需要：
 
 ```bash
-swift build --package-path Editor
+./guava build Editor --mac
 ```
 
-> **强制重编译原生依赖**：`swift run --package-path Tools/Developer guava-dev native-bootstrap --force`
+> **强制重编译原生依赖**：`./guava studio native-bootstrap --force`
 
 ### 本地运行官方网站
 
@@ -69,7 +71,7 @@ GuavaUI 的[跨平台调试服务与共享核心](GuavaUI/Portable/README.md)可
 无需原生图形依赖；[浏览器 Wasm 原型](GuavaUI/Browser/README.md)提供 WebGPU 预览、
 节点检查和状态恢复。
 
-应用开发统一使用 [Guava CLI](Tools/Guava/README.md)：`./guava create app MyApp` 创建共享桌面 / Android / iOS 项目，`./guava run MyApp --mac` 或 `./guava run MyApp --android` 选择宿主；`build --release`、`test`、`clean` 使用同一项目配置。Editor 也是应用，可用 `./guava build Editor --mac`。桌面目标需在匹配主机构建；iOS / iPadOS 使用 Xcode、SDL/UIKit 生命周期和 Metal，可通过 `./guava build MyApp --ios`、`./guava run MyApp --ios --simulator UDID` 构建和运行；真机添加 `--device ID --team TEAM_ID`。Web 完整应用宿主仍在开发。Android 使用 Swift 6.4.1 与 NativeRHI Vulkan，可运行完整 GuavaUI Gallery，并将项目场景、资源和 Swift 游戏脚本静态编译为 APK。工具链、真机验证和签名导出命令见 [Android 接入说明](Platforms/Android/README.md)。
+应用开发统一使用 [Guava CLI](GuavaUI/Tools/Guava/README.md)：`./guava create app MyApp` 创建共享桌面 / Android / iOS 项目，`./guava run MyApp --mac` 或 `./guava run MyApp --android` 选择宿主；`build --release`、`test`、`clean` 使用同一项目配置。Editor 也是应用，可用 `./guava build Editor --mac`。桌面目标需在匹配主机构建；iOS / iPadOS 使用 Xcode、SDL/UIKit 生命周期和 Metal，可通过 `./guava build MyApp --ios`、`./guava run MyApp --ios --simulator UDID` 构建和运行；真机添加 `--device ID --team TEAM_ID`。Web 完整应用宿主仍在开发。Android 使用 Swift 6.4.1 与 NativeRHI Vulkan，可运行完整 GuavaUI Gallery，并将项目场景、资源和 Swift 游戏脚本静态编译为 APK。工具链、真机验证和签名导出命令见 [Android 接入说明](Platforms/Android/README.md)。
 
 ---
 
@@ -80,7 +82,7 @@ GuavaUI 的[跨平台调试服务与共享核心](GuavaUI/Portable/README.md)可
 | Yoga | SwiftPM 源码编译 | SwiftPM `facebook/yoga` 3.2.1 |
 | FreeType | CMake 源码编译 → `.artifactbundle` | submodule `GuavaUI/third-party/freetype` |
 | HarfBuzz | CMake 源码编译 → `.artifactbundle` | submodule `GuavaUI/third-party/harfbuzz` |
-| SDL3 | CMake 源码编译 → `.artifactbundle` | submodule `Engine/third-party/sdl3` |
+| SDL3 | SDK 发布包 / CMake 源码编译 | submodule `GuavaUI/Runtime/third-party/sdl3` |
 | Imath | CMake 源码编译 | submodule `Engine/third-party/imath` |
 | OpenEXR | CMake 源码编译 | submodule `Engine/third-party/openexr` |
 | JoltPhysics | CMake 源码编译 → `.artifactbundle` | submodule `Engine/third-party/jolt` |
@@ -112,7 +114,7 @@ GuavaStudio 以 [Apache License 2.0](LICENSE) 开源。第三方依赖各自遵�
 
 应用开发从 [GuavaUI 安装与第一个应用](docs/getting-started.md) 开始；统一 CLI 提供 SDK 选择、工具链检查、应用创建和开发会话。
 
-日志统一使用 swift-log；配置、文件轮转、Android logcat、Inspector 回放与 API 使用见 [日志系统](Engine/Logging/README.md)。
+日志统一使用 swift-log；配置、文件轮转、Android logcat、Inspector 回放与 API 使用见 [日志系统](GuavaUI/Logging/README.md)。
 
 
 Editor 的文本/代码和视频工作流共用现有 Agent 工具入口。视频时间线支持裁剪、排序、帧预览、播放和 MP4 导出；FFmpeg 负责解码/重采样/导出，SDL 负责设备输出。详见 [工作站边界](docs/architecture/workstation.md)、[媒体系统](Engine/Media/README.md)和 [GuavaUI 组件标准](docs/components/standard.md)。

@@ -1,8 +1,11 @@
 #!/bin/sh
 set -eu
 GUAVA_CHECKOUT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-GUAVA_SOURCE_SWIFT=${GUAVA_SWIFT_EXECUTABLE:-swift}
-"$GUAVA_SOURCE_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Guava" --product guava --jobs 4
-GUAVA_SOURCE_PRODUCTS=$("$GUAVA_SOURCE_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Guava" --show-bin-path)
-# Keep the caller's environment when the CLI launches the compiler itself.
-exec "$GUAVA_SOURCE_PRODUCTS/guava" "$@"
+if [ "${1:-}" = studio ]; then
+  shift
+  GUAVA_STUDIO_SWIFT=${GUAVA_SWIFT_EXECUTABLE:-swift}
+  "$GUAVA_STUDIO_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Developer" --product guava-dev --jobs 4
+  GUAVA_STUDIO_PRODUCTS=$("$GUAVA_STUDIO_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Developer" --show-bin-path)
+  GUAVA_ROOT="$GUAVA_CHECKOUT" exec "$GUAVA_STUDIO_PRODUCTS/guava-dev" "$@"
+fi
+GUAVA_SDK_ROOT=${GUAVA_SDK_ROOT:-"$GUAVA_CHECKOUT/GuavaUI"} exec "$GUAVA_CHECKOUT/GuavaUI/guava" "$@"

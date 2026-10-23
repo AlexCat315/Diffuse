@@ -4,8 +4,8 @@ if(POLICY CMP0177)
 endif()
 project(guava-third-party LANGUAGES C CXX)
 
-include(${CMAKE_SOURCE_DIR}/../../cmake/NativePlatform.cmake)
-include(${CMAKE_SOURCE_DIR}/../../cmake/ArtifactBundleManifest.cmake)
+include(${CMAKE_SOURCE_DIR}/../../GuavaUI/cmake/NativePlatform.cmake)
+include(${CMAKE_SOURCE_DIR}/../../GuavaUI/cmake/ArtifactBundleManifest.cmake)
 
 message(STATUS "Guava third-party target triple: ${GUAVA_TRIPLE} (SPM: ${GUAVA_SPM_TRIPLE})")
 
@@ -28,7 +28,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 # ============================================================================
 # SDL3
 # ============================================================================
-include(${CMAKE_SOURCE_DIR}/cmake/BuildSDL3.cmake)
 
 # ============================================================================
 # OpenEXR + Imath
@@ -46,4 +45,3 @@ include(${CMAKE_SOURCE_DIR}/cmake/BuildJolt.cmake)
 # ============================================================================
 # Unified image decoding dependencies (SVG/WebP)
 # ============================================================================
-include(${CMAKE_SOURCE_DIR}/cmake/BuildImageDecode.cmake)

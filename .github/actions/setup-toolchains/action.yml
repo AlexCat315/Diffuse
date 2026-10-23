@@ -31,7 +31,7 @@ runs:
     - name: Expose MSYS build utilities
       if: runner.os == 'Windows'
       shell: pwsh
-      run: '"${{ steps.mys2.outputs.msys2-location }}/usr/bin" >> $env:GITHUB_PATH'
+      run: '"${{ steps.msys2.outputs.msys2-location }}/usr/bin" >> $env:GITHUB_PATH'
     - name: Load MSVC developer environment
       # FFmpeg is configured with `--toolchain=msvc --cc=cl`; `cl` can only
       # compile and link once INCLUDE/LIB/PATH point at the MSVC toolchain, which

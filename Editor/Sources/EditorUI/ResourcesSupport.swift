@@ -1,3 +1,4 @@
+import GuavaPlatformCore
 import EngineKernel
 import Foundation
 

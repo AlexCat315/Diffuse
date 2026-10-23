@@ -6,7 +6,7 @@ on:
     paths:
       - 'Editor/**'
       - 'Engine/**'
-      - 'GuavaUI/**'
+      - 'GuavaUI'
       - '.github/workflows/ci-editor.yml'
       - '.github/actions/setup-toolchains/**'
       - 'Tools/Developer/**'
@@ -15,7 +15,7 @@ on:
     paths:
       - 'Editor/**'
       - 'Engine/**'
-      - 'GuavaUI/**'
+      - 'GuavaUI'
       - '.github/workflows/ci-editor.yml'
       - '.github/actions/setup-toolchains/**'
       - 'Tools/Developer/**'
@@ -60,12 +60,12 @@ jobs:
       - name: Build native dependencies
         if: runner.os != 'Windows'
         shell: bash
-        run: swift run --package-path Tools/Developer guava-dev native-bootstrap --force
+        run: ./guava studio native-bootstrap --force
 
       - name: Build native dependencies (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: swift run --package-path Tools/Developer guava-dev native-bootstrap --force
+        run: ./guava studio native-bootstrap --force
 
       - name: Resolve packages
         shell: bash

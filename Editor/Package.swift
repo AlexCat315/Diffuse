@@ -48,12 +48,10 @@ let package = Package(
         .executable(name: "GuavaPlayer", targets: ["GuavaPlayer"]),
     ],
     dependencies: [
-        .package(path: "../Engine/Logging"),
         .package(path: "../Engine"),
         .package(path: "../Engine/Media"),
         .package(path: "Documents"),
         .package(path: "../GuavaUI"),
-        .package(path: "../GuavaUI/Terminal"),
     ],
     targets: [
         // MARK: - Editor Domain
@@ -61,7 +59,7 @@ let package = Package(
         // 窗口/NativeRHI 装配交给 EditorApp 那一层依赖的 GuavaUI。
         .target(
             name: "EditorCore",
-            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
+            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "AIRuntime", package: "Engine"),
                 .product(name: "ContextMemory", package: "Engine"),
@@ -81,7 +79,7 @@ let package = Package(
                 .product(name: "LanguageServerRuntime", package: "Engine"),
                 .product(name: "SemanticPipeline", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "NativeRHI", package: "GuavaUI"),
                 .product(name: "SceneRuntime", package: "Engine"),
                 .product(name: "ScriptRuntime", package: "Engine"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
@@ -102,7 +100,7 @@ let package = Package(
         // MARK: - Editor Entry Point
         .target(
             name: "EditorUI",
-            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
+            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
                 "EditorCore",
                 .product(name: "AudioRuntime", package: "Engine"),
                 .product(name: "StudioDocuments", package: "Documents"),
@@ -112,10 +110,10 @@ let package = Package(
                 .product(name: "GuavaUI", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
-                .product(name: "GuavaUITerminal", package: "Terminal"),
+                .product(name: "GuavaUITerminal", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "EngineKernel", package: "Engine"),
-                .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "NativeRHI", package: "GuavaUI"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),
                 .product(name: "CardBattleRuntime", package: "Engine"),
@@ -134,36 +132,42 @@ let package = Package(
         // EngineCore（引擎宿主），但不依赖任何编辑器 UI 模块。
         .target(
             name: "GameRuntime",
-            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
+            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
                 "EditorCore",
                 .product(name: "ScriptRuntime", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "NativeRHI", package: "GuavaUI"),
             ]
         ),
 
-        .executableTarget(name: "GuavaProjectExport", dependencies: [.product(name: "GuavaLogging", package: "Logging"), "EditorCore"]),
+        .executableTarget(name: "GuavaProjectExport", dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"), "EditorCore"]),
 
         // MARK: - Standalone Game Player
         .executableTarget(
             name: "GuavaPlayer",
-            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
-                "GameRuntime",
+            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
+                "GameRuntime", "EditorCore",
                 .product(name: "GuavaUI", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "NativeRHI", package: "GuavaUI"),
             ],
             linkerSettings: guavaScriptExportLinkerSettings
         ),
 
         .testTarget(
             name: "EditorCoreTests",
-            dependencies: [.product(name: "GuavaLogging", package: "Logging"),
+            dependencies: [
+                .product(name: "NativeRendererValidation", package: "Engine"),
+                .product(name: "NativeRHI", package: "GuavaUI"),
+                .product(name: "RenderBackend", package: "Engine"),
+                .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "GuavaUI", package: "GuavaUI"),
+                .product(name: "GuavaLogging", package: "GuavaUI"),
                 "EditorCore",
                 .product(name: "AIRuntime", package: "Engine"),
                 .product(name: "SIMDCompat", package: "Engine"),
@@ -210,7 +214,7 @@ let package = Package(
             dependencies: [
                 "GameRuntime",
                 .product(name: "EngineCore", package: "Engine"),
-                .product(name: "NativeRHI", package: "Engine"),
+                .product(name: "NativeRHI", package: "GuavaUI"),
                 .product(name: "RenderBackend", package: "Engine"),
             ]
         ),

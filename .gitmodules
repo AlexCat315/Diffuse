@@ -1,12 +1,3 @@
-[submodule "GuavaUI/third-party/freetype"]
-	path = GuavaUI/third-party/freetype
-	url = https://github.com/freetype/freetype.git
-[submodule "GuavaUI/third-party/harfbuzz"]
-	path = GuavaUI/third-party/harfbuzz
-	url = https://github.com/harfbuzz/harfbuzz.git
-[submodule "Engine/third-party/sdl3"]
-	path = Engine/third-party/sdl3
-	url = https://github.com/libsdl-org/SDL.git
 [submodule "Engine/third-party/imath"]
 	path = Engine/third-party/imath
 	url = https://github.com/AcademySoftwareFoundation/Imath.git
@@ -16,6 +7,6 @@
 [submodule "Engine/third-party/jolt"]
 	path = Engine/third-party/jolt
 	url = https://github.com/jrouwe/JoltPhysics.git
-[submodule "GuavaUI/third-party/ghostty"]
-	path = GuavaUI/third-party/ghostty
-	url = https://github.com/ghostty-org/ghostty.git
+[submodule "GuavaUI"]
+	path = GuavaUI
+	url = https://github.com/AlexCat315/GuavaUI.git

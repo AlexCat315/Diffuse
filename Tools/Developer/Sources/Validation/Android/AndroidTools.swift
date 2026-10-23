@@ -68,19 +68,13 @@ enum AndroidTools {
   /// in `guava internal android-compile`; this only drives it.
   static func build(_ product: String, _ ndk: URL, configuration: String = "debug") throws -> URL {
     try Fs.directory(output)
-    guard
-      let swift = firstNonEmpty(
-        ProcessInfo.processInfo.environment["GUAVA_SWIFT_EXECUTABLE"],
-        Shell.executable("swift")?.path)
-    else {
-      throw ToolError.message("Install the Swift 6.4.1 release toolchain and add swift to PATH")
-    }
     let result = output.appendingPathComponent("compile-\(UUID().uuidString).json")
     FileManager.default.createFile(atPath: result.path, contents: Data())
     defer { try? Fs.remove(result) }
     try Command.run([
-      swift, "run", "--package-path", root.appendingPathComponent("Tools/Guava").path,
-      "guava", "internal", "android-compile", "--product", product,
+      root.appendingPathComponent("GuavaUI/guava").path,
+      "internal", "android-compile", "--sdk-root", root.appendingPathComponent("GuavaUI").path,
+      "--product", product,
       "--ndk", ndk.path, "--" + configuration, "--result-file", result.path,
     ])
     let document = try JSON.parse(Fs.text(result))

@@ -19,11 +19,11 @@ let gameTargets: [Target.Dependency] = gameplayPath.map {
      .product(name: "GameRuntime", package: "Editor")]
 } ?? []
 let showcasePackages: [Package.Dependency] = showcase ? [
-    .package(path: "../../GuavaUI/Examples"), .package(path: "../../examples/Counter"),
+    .package(path: "../../GuavaUI/Examples"),
 ] : []
 let showcaseTargets: [Target.Dependency] = showcase ? [
     .product(name: "GalleryContent", package: "Examples"),
-    .product(name: "CounterExample", package: "Counter"),
+    .product(name: "CounterExample", package: "Examples"),
 ] : []
 let applicationSettings: [SwiftSetting] = (gameplayPath == nil ? [] : [.define("GUAVA_ANDROID_GAME")])
     + (contentPath == nil ? [] : [.define("GUAVA_ANDROID_UI")])
@@ -32,20 +32,18 @@ let applicationSettings: [SwiftSetting] = (gameplayPath == nil ? [] : [.define("
 let package = Package(
     name: "GuavaAndroid",
     products: [
-        .executable(name: "GuavaAndroidProbe", targets: ["GuavaAndroidProbe"]),
         .library(name: "GuavaAndroidApp", type: .dynamic, targets: ["GuavaAndroidApp"]),
     ],
     dependencies: [
-        .package(path: "../../Engine/Logging"),
-        .package(path: "Contract"), .package(path: "../../Engine"),
-        .package(path: "../../GuavaUI"), .package(path: "../../GuavaUI/Portable"),
+        .package(path: "../../GuavaUI/Hosts/Android/Contract"), .package(path: "../../Engine"),
+        .package(path: "../../GuavaUI"),
     ] + contentPackages + gamePackages + showcasePackages,
     targets: [
-        .target(name: "CAndroidHost", dependencies: [.product(name: "CGuavaLog", package: "Logging")], publicHeadersPath: "include",
+        .target(name: "CAndroidHost", dependencies: [.product(name: "CGuavaLog", package: "GuavaUI")], publicHeadersPath: "include",
                 linkerSettings: [.linkedLibrary("android"), .linkedLibrary("log")]),
-        .target(name: "GuavaAndroidApp", dependencies: [.product(name: "GuavaLogging", package: "Logging"),
+        .target(name: "GuavaAndroidApp", dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
             .product(name: "GuavaAndroidContract", package: "Contract"),
-            .product(name: "NativeRHI", package: "Engine"),
+            .product(name: "NativeRHI", package: "GuavaUI"),
             .product(name: "RenderBackend", package: "Engine"),
             .product(name: "GuavaUIRuntime", package: "GuavaUI"),
             .product(name: "GuavaUIAndroid", package: "GuavaUI"),
@@ -54,10 +52,5 @@ let package = Package(
             swiftSettings: applicationSettings,
             linkerSettings: [.linkedLibrary("ssl"), .linkedLibrary("crypto"), .linkedLibrary("z"),
                 .unsafeFlags(["-Xlinker", "-z", "-Xlinker", "defs"])]),
-        .executableTarget(name: "GuavaAndroidProbe", dependencies: [.product(name: "GuavaLogging", package: "Logging"),
-            .product(name: "NativeRHI", package: "Engine"),
-            .product(name: "GuavaUIRuntime", package: "GuavaUI"),
-            .product(name: "GuavaUIComposeCore", package: "Portable"),
-        ], linkerSettings: [.linkedLibrary("ssl"), .linkedLibrary("crypto"), .linkedLibrary("z")]),
     ]
 )

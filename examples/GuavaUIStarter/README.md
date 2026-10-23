@@ -15,7 +15,7 @@ guava clean
 
 先在 SDK 仓库运行 `Tools/Guava/install.sh`（Windows 为 install.ps1），将安装目录 bin 加入 PATH；也可直接调用仓库的 guava / guava.cmd。
 
-`guava.json` 是应用 ID、名称、版本、SDK 位置和目标的唯一来源。移动项目或 SDK 后修改 enginePath，或设置 GUAVA_ENGINE_ROOT。设备、端口、认证令牌和运行诊断属于临时会话，不写回配置。
+`guava.json` 是应用 ID、名称、版本、SDK 位置和目标的唯一来源。SDK 版本由 toolchain.sdkVersion 固定；本地联调使用 GUAVA_SDK_ROOT。设备、端口、认证令牌和运行诊断属于临时会话，不写回配置。
 
 平台定制：
 

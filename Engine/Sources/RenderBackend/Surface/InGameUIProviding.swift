@@ -38,15 +38,3 @@ public final class InGameUIRecording {
 public protocol InGameUIProviding: AnyObject, Sendable {
     func recordInGameUI(packet: RenderPacket, target: NativeInGameUITarget) throws -> InGameUIRecording?
 }
-
-public final class InGameUIRegistry: @unchecked Sendable {
-    public static let shared = InGameUIRegistry()
-    private var installed: (any InGameUIProviding)?
-    private let lock = NSLock()
-    private init() {}
-
-    public var provider: (any InGameUIProviding)? {
-        get { lock.withLock { installed } }
-        set { lock.withLock { installed = newValue } }
-    }
-}

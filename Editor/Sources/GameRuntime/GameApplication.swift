@@ -43,6 +43,7 @@ public final class GameApplication: @unchecked Sendable {
 
     public init(projectDirectory: String? = nil,
                 renderDevice: Device? = nil,
+                inGameUI: (any InGameUIProviding)? = nil,
                 registerProjectScripts: ((ScriptRuntime) -> Int)? = nil) throws {
         let resolvedRenderDevice = renderDevice
         let scene = EditorSceneAdapter()
@@ -93,7 +94,7 @@ public final class GameApplication: @unchecked Sendable {
             for binding in unresolvedBindings { Self.reportDiagnostic("unresolved script binding: \(binding)") }
         }
 
-        self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: resolvedRenderDevice)
+        self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: resolvedRenderDevice, inGameUI: inGameUI)
         self.scene = scene
         self.scriptCatalogMonitor = scriptMonitor
         self.projectScriptLoader = scriptLoader
