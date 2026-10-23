@@ -13,26 +13,24 @@ ScrollView {
 | --- | --- |
 | `MarkdownView(source, onOpenLink:)` | 渲染一个 Markdown 字符串；相同源文本复用解析结果 |
 | `onOpenLink` | 链接与图片目标的激活回调；组件不自行打开 URL |
-| `MarkdownEditor(text:sourceTitle:previewTitle:onOpenLink:)` | 绑定 `TextBuffer` 的源码编辑与实时预览；标题由调用方本地化，并用于页签和辅助功能命名 |
 
 视图继承外层文字样式与宽度、按内容增高；长文档放进 `ScrollView`。整个文档共享一个文本选区：拖动可跨标题、段落、列表、代码与表格，⌘/Ctrl+C 复制、右键菜单 Copy / Select All，触摸长按选词，细节见 [RichText 选择与复制](richtext.md#选择与复制)。
 
 ## 编辑
 
+Markdown 没有专用编辑器组件。源码由统一的 [TextField](textfield.md) 编辑：等宽字体、行号、小地图、自动换行、IME、选区与撤销/重做都与其他文本格式相同；`MarkdownView` 只负责渲染。
+
 ```swift
 @State private var draft: TextBuffer = "# Notes\n\nStart writing."
 
-MarkdownEditor(text: $draft, sourceTitle: L("Source"), previewTitle: L("Preview")) {
-    destination in router.open(destination)
+TextField("Source", text: $draft) {
+    $0.layout.axis = .vertical
+    $0.layout.wrapsLines = true
 }
-.frame(height: 480)
+.textFieldStyle(.editor)
 ```
 
-`MarkdownEditor` 复用统一 `TextField` 的多行编辑、软换行、2 空格缩进、IME、选区、撤销/重做和剪贴板；源码使用随字号缩放的 15pt 等宽字、24pt 行高。预览沿用 `MarkdownView` 的原生渲染与链接回调。调用方提供有界高度，源码与预览各自滚动。
-
-按**实际分配宽度**选择形态，与窗口宽度独立：≥600pt 为可拖动左右分栏，两侧最小 240pt；<600pt 为源码/预览页签。页签与尺寸切换保留节点、草稿、撤销历史、分栏比例及滚动位置；隐藏面板不接收输入与辅助功能焦点。页签支持键盘与 ≥44pt 触摸目标，RTL 镜像分栏。完整源码只在 `TextBuffer` 修订变化时转为字符串，焦点、主题、分栏与滚动更新复用字符串及解析结果。解析与渲染仍是整篇文档，不宣称任意大 Markdown 文件的恒定预览成本。
-
-文件打开、保存、dirty 与外部修改冲突属于通用文档层；Markdown 编辑器不按扩展名单独实现文件流程。生产 Editor 的 Documents 面板沿用 `DocumentWorkspace` / `EditorDocumentWorkspace`，`.md` / `.markdown` 使用 `MarkdownEditor`，`.txt`、`.swift`、`.java` 等继续使用统一 `TextField`。切换或外部重新加载文档时重置编辑会话；保存刷新保留草稿和撤销历史。Gallery 的 Edit and preview 只演示组件组合。
+文件打开、保存、dirty 与外部修改冲突属于通用文档层，`.md` 与其他扩展名走同一条文档管线。生产 Editor 的 Documents 面板对所有文本格式使用同一编辑面和同一个写作栏；切换或外部重新加载文档时重置编辑会话，保存刷新保留草稿和撤销历史。
 
 ## 块
 
@@ -58,8 +56,6 @@ MarkdownEditor(text: $draft, sourceTitle: L("Source"), previewTitle: L("Preview"
 - 复制按钮沿用 Button 的 44pt 触摸命中。
 
 ## 验收
-
-`MarkdownEditorTests` 覆盖 240/390/720/1280pt 实际容器、100%/200% 字号、触摸/混合/指针、明暗主题与 RTL，以及真实输入后的标题预览、链接激活、页签保留、撤销、程序化替换和空文档。
 
 `MarkdownParsingTests` 覆盖行内样式合并、软/硬换行、标题/引用/嵌套与任务列表/代码/分隔线/表格对齐的块结构与解析缓存；`MarkdownRenderingTests` 覆盖标题角色与字号、长代码行保持单行并提供滚动区域、段落按容器宽度换行、任务复选框只读语义、表格列宽与行对齐。
 

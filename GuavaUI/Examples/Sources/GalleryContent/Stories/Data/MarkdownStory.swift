@@ -50,20 +50,23 @@ struct MarkdownStory: View {
     """
 
     static let editable = """
-    ### Live preview
-    Edit the source; the **preview** updates as you type. See the [guide](guide://markdown).
+    ### Notes
+    Markdown is edited with the same text field as every other format.
     - one
     - two
     """
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 24) {
-            StorySection("Edit and preview", "Write Markdown with live preview.") {
-                MarkdownEditor(text: $draft, sourceTitle: "Markdown source", previewTitle: "Preview") {
-                    lastOpened = $0
+            StorySection("Source editing", "Markdown uses the same TextField as every other text format.") {
+                TextField("Markdown source", text: $draft) {
+                    $0.layout.axis = .vertical
+                    $0.layout.wrapsLines = true
+                    $0.layout.maxVisibleLines = 80
+                    $0.codeEditing.indentationWidth = 2
                 }
-                .frame(height: 420).border(.border, width: 1).cornerRadius(8).clipped()
-                Text("Last opened: \(lastOpened)").font(.caption).foregroundColor(.onSurfaceMuted)
+                .textFieldStyle(.editor).font(.monospaced(size: 13)).lineHeight(20)
+                .frame(height: 220).border(.border, width: 1).cornerRadius(8).clipped()
             }
             StorySection("Document", "Headings, inline styles, nested and task lists, quotes, a scrolling code block, a table and a rule — rendered from one Markdown string.") {
                 MarkdownView(Self.document) { lastOpened = $0 }

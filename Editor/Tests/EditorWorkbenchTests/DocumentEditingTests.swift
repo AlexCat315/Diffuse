@@ -87,7 +87,7 @@ struct DocumentEditingTests {
         #expect(EditorTitleBar.initials(of: "demo") == "DE")
     }
 
-    @Test("Markdown preview and plain code share the workspace editing and saving lifecycle")
+    @Test("Markdown and plain code share the workspace editing and saving lifecycle")
     func formats() throws {
         try WorkbenchUITestSupport.withEnvironment { _, _ in
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

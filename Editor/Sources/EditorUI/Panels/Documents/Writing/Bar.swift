@@ -3,15 +3,14 @@ internal import GuavaUI
 internal import GuavaUIRuntime
 internal import GuavaUIWorkspace
 
-/// Above a text document: where it lives, Markdown formatting and layout,
-/// line wrapping for code, the AI writing assistant and focus mode.
+/// Above a text document: where it lives, line wrapping, the AI writing
+/// assistant and focus mode. Every text format gets the same bar.
 struct DocumentWritingBar: View {
     let app: EditorApplication?
     let path: String
     let session: DocumentWritingSession
     private let writing: Observed<DocumentWritingSession, DocumentWritingSession.State>
     private let layout: Observed<WorkspaceController, UInt64>?
-    @State private var isMorePresented = false
 
     init(app: EditorApplication?, path: String, session: DocumentWritingSession) {
         self.app = app
@@ -24,31 +23,12 @@ struct DocumentWritingBar: View {
     var body: some View {
         let state = writing.wrappedValue
         let _ = layout?.wrappedValue
-        let kind = DocumentKind(path: path)
         Row(alignment: .center, spacing: 2) {
             DocumentPathCrumbs(path: path).flex(0, shrink: 1).frame(minWidth: 0).clipped()
             Spacer(minLength: 8)
-            if kind.isMarkdown {
-                if state.markdownLayout != .preview {
-                    for format in [MarkdownFormat.bold, .italic, .link, .heading, .bulletList] {
-                        AnyView(formatButton(format))
-                    }
-                    moreFormats
-                    separator
-                }
-                for option in MarkdownLayout.allCases {
-                    AnyView(Button(icon: .resource(icon(for: option)), size: 12, isSelected: state.markdownLayout == option,
-                                   tooltip: L(option.title)) {
-                        session.update { $0.markdownLayout = option }
-                    }.buttonStyle(ToggleButtonStyle(height: 22))
-                        .accessibility { $0.label = L(option.title); $0.state.isSelected = state.markdownLayout == option }
-                        .debugName("document-layout-" + option.rawValue))
-                }
-            } else if !kind.isProse {
-                Button(icon: .resource(UIIcons.Text.wrapText), size: 12, isSelected: state.wrapsLines, tooltip: L("Wrap Lines")) {
-                    session.update { $0.wrapsLines.toggle() }
-                }.buttonStyle(ToggleButtonStyle(height: 22)).debugName("document-wrap")
-            }
+            Button(icon: .resource(UIIcons.Text.wrapText), size: 12, isSelected: state.wrapsLines, tooltip: L("Wrap Lines")) {
+                session.update { $0.wrapsLines.toggle() }
+            }.buttonStyle(ToggleButtonStyle(height: 22)).debugName("document-wrap")
             if let app {
                 separator
                 WritingAssistantButton(app: app, path: path, session: session)
@@ -72,34 +52,6 @@ struct DocumentWritingBar: View {
         }.padding(horizontal: 4)
     }
 
-    private func formatButton(_ format: MarkdownFormat) -> some View {
-        let shortcut = format.shortcutLetter.map { " (" + EditorShortcut(.letter($0)).label + ")" } ?? ""
-        return Button(icon: .resource(format.icon), size: 12, tooltip: L(format.title) + shortcut) {
-            session.apply(format)
-        }.buttonStyle(ToggleButtonStyle(height: 22)).debugName("document-format-" + format.rawValue)
-    }
-
-    private var moreFormats: some View {
-        Popover(isPresented: $isMorePresented, width: 200, placement: .bottomTrailing, surface: .content, overflow: .flip) {
-            Icon(UIIcons.Action.moreHorizontal, size: 12, color: .onSurfaceVariant).frame(width: 22, height: 22)
-                .accessibility { $0.label = L("More Formatting") }
-        } content: {
-            Menu([MarkdownFormat.strikethrough, .code, .numberedList, .taskList, .quote].map { format in
-                .item(MenuItem(id: format.rawValue, title: L(format.title)) {
-                    isMorePresented = false
-                    session.apply(format)
-                })
-            }, width: 200)
-        }.debugName("document-format-more")
-    }
-
-    private func icon(for layout: MarkdownLayout) -> BundleImageResource {
-        switch layout {
-        case .source: UIIcons.File.fileText
-        case .split: UIIcons.Layout.columns2
-        case .preview: UIIcons.Status.eye
-        }
-    }
 }
 
 /// Counts for the open document and the caret, below the editor.

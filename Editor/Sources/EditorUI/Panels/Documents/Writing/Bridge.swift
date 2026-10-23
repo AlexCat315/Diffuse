@@ -2,26 +2,12 @@ internal import Foundation
 internal import GuavaUI
 internal import GuavaUIRuntime
 
-/// How a Markdown document is shown: source only, side by side, or preview.
-enum MarkdownLayout: String, CaseIterable {
-    case source, split, preview
-
-    var title: String {
-        switch self {
-        case .source: "Source"
-        case .split: "Split"
-        case .preview: "Preview"
-        }
-    }
-}
-
 /// Connects the writing bar, the status line and the AI actions to the open
 /// editor. The editing surface reports its buffer, caret and commit path here;
 /// commands edit through it so the editor keeps its undo history and caret.
 final class DocumentWritingSession: _ObservableObject {
     struct State: Equatable {
         var caret = TextFieldCaretState.initial
-        var markdownLayout = MarkdownLayout.split
         var wrapsLines = true
         /// A one-shot caret placement; the id makes repeats distinct.
         var caretRequest: CaretRequest?
@@ -41,7 +27,7 @@ final class DocumentWritingSession: _ObservableObject {
     private var path: String?
 
     /// Called while rendering the front document: a different document starts
-    /// with its caret at the top. Layout choices carry over between documents.
+    /// with its caret at the top. Wrapping carries over between documents.
     func show(_ path: String) {
         guard path != self.path else { return }
         self.path = path
