@@ -10,9 +10,12 @@ export interface Inspection {
     imports: QueryPermission[];
     composable_host_capabilities: string[];
     requires: Array<{ kind: 'plugin' | 'capability'; id: string; minimum_version?: number }>;
+    contributes: Record<string, unknown>;
+    resources: Array<{ id: string; path: string; kind: string }>;
   };
   componentHash: string;
   witHash: string;
+  resourceHashes: Record<string, string>;
   contracts: Array<{
     id: string;
     version: number;

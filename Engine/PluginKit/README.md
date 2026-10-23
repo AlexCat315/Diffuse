@@ -6,7 +6,7 @@
 ./guava plugin build Editor/Plugins/Git --output Editor/Sources/EditorCore/Resources/Plugins/Git.guavaplugin
 ```
 
-插件目录包含 `plugin.json`、`capabilities.wit` 与 `Sources/*.swift`。构建会：
+可执行插件目录包含 `plugin.json`、`capabilities.wit` 与 `Sources/*.swift`；纯声明插件只需要 `plugin.json` 和已声明的 `resources/`，同一个打包命令直接复制这些文件。可执行插件的构建会：
 
 1. 由 `GuavaPluginHost --component-shell` 按 WIT 生成组件外壳（`shell.wat`，内含占位核心模块）和导出绑定 `Exports.swift`；
 2. 用所选 Swift 工具链把本 SDK（`-parse-stdlib`，以便调用 `memory.grow`）和插件源码编译成 `wasm32-unknown-none-wasm` 对象，`wasm-ld` 链接成核心模块；
@@ -25,7 +25,7 @@ func provider(request: String, stdout: String) -> String { ... }
 - `Runtime`：分配器（`posix_memalign`、`free`、`cabi_realloc`）、规范 ABI 字符串输入输出、`guava:process/host` 调用。每次调用都在新实例中运行，内存不跨调用。
 - `JSON`：Embedded Swift 没有 Codable 与 Foundation，这里提供 JSON 值、解析与序列化，数字按整数读取。上千条目的结果用 `JSONWriter` 直接写出，再以 `JSON.raw` 返回，避免构建值树。
 - `Text`：按单字节切分工具输出；`String(utf8:)`、`joined(separatorByte:)` 与内部的 `ByteWriter` 用 `copyMemory`（一条 `memory.copy`）整块复制。Embedded Swift 标准库在 WebAssembly 上逐字节复制字符串，燃料按指令计，大段文本应走这里。
-- `Steps`：插件决定命令、编辑器执行的步骤协议，`contributes.versionControl` 与 `contributes.tasks` 共用。
+- `Steps`：插件决定命令、编辑器执行的步骤协议，`contributes["guava.vcs/v1"]` 与 `contributes["guava.tasks/v1"]` 共用。
 - `VersionControl`：分支名校验等版本控制共用规则。
 
 ## 步骤协议

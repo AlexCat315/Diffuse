@@ -1090,9 +1090,11 @@
 "Headings are listed for Markdown documents." = "Headings are listed for Markdown documents.";
 "No document" = "No document";
 "No headings" = "No headings";
+"No headings in this document." = "No headings in this document.";
 "No outline" = "No outline";
 "Open a Markdown file to see its outline." = "Open a Markdown file to see its outline.";
 "Start a line with # to add a heading." = "Start a line with # to add a heading.";
+"This document has no outline." = "This document has no outline.";
 "Start writing…" = "Start writing…";
 "Focus Mode" = "Focus Mode";
 "Exit Focus Mode" = "Exit Focus Mode";
@@ -1174,3 +1176,7 @@
 "%@ failed" = "%@ failed";
 "%@ stopped" = "%@ stopped";
 "Shell" = "Shell";
+
+"Theme" = "Theme";
+
+"Contribution" = "Contribution";

@@ -28,7 +28,7 @@ public enum PluginCapabilityValidationError: Error, Sendable, Equatable, CustomS
 /// and WIT-derived input types. Runtime Component output is never consulted.
 public enum PluginWITContractDeriver {
     public static func contracts(for package: ValidatedPluginPackage) -> [CapabilityContract] {
-        package.witContract.capabilityInputs.map { input in
+        (package.runtime?.witContract.capabilityInputs ?? []).map { input in
             CapabilityContract(
                 id: package.manifest.id + "." + input.name,
                 version: package.manifest.version,
@@ -50,21 +50,23 @@ public enum PluginWITContractDeriver {
 /// exact code, WIT boundary, manifest authority, and AI-visible contracts.
 public struct PluginInspection: Codable, Sendable, Equatable {
     public var manifest: GuavaPluginManifest
-    public var componentHash: String
-    public var witHash: String
+    public var componentHash: String?
+    public var witHash: String?
+    public var resourceHashes: [String: String] = [:]
     public var contracts: [CapabilityContract]
 
     public init(package: ValidatedPluginPackage,
                 contracts: [CapabilityContract]) {
         manifest = package.manifest
-        componentHash = package.componentHash
-        witHash = package.witHash
+        resourceHashes = package.resourceHashes
+        componentHash = package.runtime?.componentHash
+        witHash = package.runtime?.witHash
         self.contracts = contracts.sorted { $0.id < $1.id }
     }
 
     public init(manifest: GuavaPluginManifest,
-                componentHash: String,
-                witHash: String,
+                componentHash: String?,
+                witHash: String?,
                 contracts: [CapabilityContract]) {
         self.manifest = manifest
         self.componentHash = componentHash
@@ -90,8 +92,8 @@ public enum PluginAuthorizationError: Error, Sendable, Equatable, CustomStringCo
 public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
     public var pluginID: String
     public var pluginVersion: Int
-    public var componentHash: String
-    public var witHash: String
+    public var componentHash: String?
+    public var witHash: String?
     public var imports: [PluginImportPermission]
     public var access: CapabilityAccess
     public var composableHostCapabilities: [String]
@@ -99,12 +101,16 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
     /// authority field: changing `requires` invalidates the stored record.
     public var requires: [PluginRequirement]
     public var capabilitySchemaHashes: [String: String]
+    public var manifestHash: String
+    public var resourceHashes: [String: String]
     public var authorisedAt: Date
     public var host: PluginHostPermissions
 
     public init(inspection: PluginInspection,
                 authorisedAt: Date = Date()) throws {
         let hashes = try Self.schemaHashes(inspection.contracts)
+        manifestHash = Self.digest(inspection.manifest)
+        resourceHashes = inspection.resourceHashes
         pluginID = inspection.manifest.id
         pluginVersion = inspection.manifest.version
         componentHash = inspection.componentHash
@@ -128,7 +134,9 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
 
     public func isStillValid(for inspection: PluginInspection) -> Bool {
         guard let hashes = try? Self.schemaHashes(inspection.contracts) else { return false }
-        return pluginID == inspection.manifest.id
+        return manifestHash == Self.digest(inspection.manifest)
+            && resourceHashes == inspection.resourceHashes
+            && pluginID == inspection.manifest.id
             && pluginVersion == inspection.manifest.version
             && componentHash == inspection.componentHash
             && witHash == inspection.witHash
@@ -152,8 +160,10 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
         let object: [String: Any] = [
             "plugin_id": pluginID,
             "plugin_version": pluginVersion,
-            "component_hash": componentHash,
-            "wit_hash": witHash,
+            "component_hash": componentHash as Any? ?? NSNull(),
+            "manifest_hash": manifestHash,
+            "resource_hashes": resourceHashes,
+            "wit_hash": witHash as Any? ?? NSNull(),
             "imports": imports.map(\.rawValue).sorted(),
             "access": access.rawValue,
             "host": try! JSONSerialization.jsonObject(with: JSONEncoder().encode(host)),
@@ -173,6 +183,12 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
         let data = (try? JSONSerialization.data(withJSONObject: object,
                                                 options: [.sortedKeys])) ?? Data()
         return CapabilityDigest.sha256(data)
+    }
+
+    private static func digest(_ manifest: GuavaPluginManifest) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return CapabilityDigest.sha256(try! encoder.encode(manifest))
     }
 
     private static func schemaHashes(_ contracts: [CapabilityContract]) throws -> [String: String] {

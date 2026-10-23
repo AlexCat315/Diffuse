@@ -1,3 +1,4 @@
+internal import EditorCore
 internal import Foundation
 
 /// Counts shown while writing. CJK characters count as words, the way
@@ -74,6 +75,42 @@ struct DocumentHeading: Equatable {
             while title.hasSuffix("#") { title = String(title.dropLast()).trimmingCharacters(in: .whitespaces) }
             guard !title.isEmpty else { continue }
             headings.append(DocumentHeading(level: level, title: title, characterIndex: index))
+        }
+        return headings
+    }
+
+    /// Declarative heading rules from a language contribution. Capture group
+    /// 1 is the title; the match start is where an outline row jumps.
+    static func parse(_ text: String, rules: [LanguageOutlineRule]) -> [DocumentHeading] {
+        guard !rules.isEmpty else { return [] }
+        let fullRange = NSRange(location: 0, length: text.utf16.count)
+        var candidates: [(rule: Int, order: Int, heading: DocumentHeading)] = []
+        for (ruleIndex, rule) in rules.enumerated() {
+            guard let expression = try? NSRegularExpression(pattern: rule.pattern,
+                                                            options: [.anchorsMatchLines]) else {
+                continue
+            }
+            for (order, match) in expression.matches(in: text, options: [], range: fullRange).enumerated() {
+                guard match.numberOfRanges > 1,
+                      let titleRange = Range(match.range(at: 1), in: text),
+                      let matchRange = Range(match.range, in: text) else { continue }
+                let title = String(text[titleRange]).trimmingCharacters(in: .whitespaces)
+                guard !title.isEmpty else { continue }
+                let characterIndex = text.distance(from: text.startIndex, to: matchRange.lowerBound)
+                candidates.append((ruleIndex, order,
+                                   DocumentHeading(level: rule.level,
+                                                   title: title,
+                                                   characterIndex: characterIndex)))
+            }
+        }
+        candidates.sort {
+            ($0.heading.characterIndex, $0.rule, $0.order)
+                < ($1.heading.characterIndex, $1.rule, $1.order)
+        }
+        var headings: [DocumentHeading] = []
+        for candidate in candidates
+        where headings.last?.characterIndex != candidate.heading.characterIndex {
+            headings.append(candidate.heading)
         }
         return headings
     }

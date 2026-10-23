@@ -16,7 +16,7 @@ struct VersionControlProvider: Sendable {
     /// `priority` wins (Lore over Git: it is the deliberate choice for assets).
     static let bundled: [VersionControlProvider] = BundledPlugins.catalog.compactMap { plugin in
         guard case let .versionControl(system) = plugin.host,
-              let contribution = plugin.manifest.contributes.versionControl,
+              let contribution = ((try? plugin.manifest.contributes.decode(VersionControlContributionPoint.self)) ?? []).first,
               let process = plugin.manifest.host.processes.first else { return nil }
         return VersionControlProvider(system: system, manifest: plugin.manifest, contribution: contribution,
                                       package: plugin.package, process: process)

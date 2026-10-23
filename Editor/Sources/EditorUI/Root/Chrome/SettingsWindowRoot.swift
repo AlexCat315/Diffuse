@@ -13,7 +13,8 @@ struct EditorSettingsWindowRoot: View {
 
     var body: some View {
         StoreScope(app.store) { store in
-            EditorPresentationBoundary(presentation: store.presentation) {
+            EditorPresentationBoundary(presentation: store.presentation,
+                                       theme: app.resolvedTheme(dark: store.themeMode == .dark)) {
                 // The settings window is borderless (immersive) like the main
                 // window, so it must mount its own title bar (drag region +
                 // minimize / maximize / close) and a PortalHost for any popovers.

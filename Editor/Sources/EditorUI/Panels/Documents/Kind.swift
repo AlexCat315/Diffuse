@@ -1,14 +1,18 @@
+internal import EditorCore
 internal import GuavaUI
 internal import GuavaUIRuntime
 
 /// What a document path looks like to the user: a language name and a file
 /// icon. Derived on demand from the file name; nothing here is stored. Whole
 /// file names (README, Makefile, package.json…) win over extensions, the way
-/// mature editors recognise them.
+/// mature editors recognise them. Languages themselves come from plugin
+/// contributions, never from a table here.
 struct DocumentKind {
     let name: String
     /// A `filetype-<key>` icon in Resources/FileIcons.
     let iconKey: String
+    /// The contributed language's identifier, when one claims the path.
+    let languageID: String?
 
     init(path: String) {
         let fileName = path.split(separator: "/").last.map(String.init) ?? path
@@ -18,15 +22,22 @@ struct DocumentKind {
             return
         }
         let ext = fileName.contains(".") ? fileName.split(separator: ".").last.map { $0.lowercased() } ?? "" : ""
-        self = Self.extensions[ext] ?? (ext.isEmpty ? Self("Plain Text", "text") : Self(ext.uppercased(), "file"))
+        if let language = LanguageCatalog.descriptor(forExtension: ext) {
+            self = Self(language.title, language.iconKey, languageID: language.id)
+        } else if let file = Self.fileKinds[ext] {
+            self = file
+        } else {
+            self = ext.isEmpty ? Self("Plain Text", "text") : Self(ext.uppercased(), "file")
+        }
     }
 
-    private init(_ name: String, _ iconKey: String) {
+    private init(_ name: String, _ iconKey: String, languageID: String? = nil) {
         self.name = name
         self.iconKey = iconKey
+        self.languageID = languageID
     }
 
-    var isMarkdown: Bool { name == "Markdown" }
+    var isMarkdown: Bool { languageID == "markdown" }
 
     private static let fileNames: [String: DocumentKind] = [
         "makefile": .init("Makefile", "makefile"),
@@ -41,42 +52,18 @@ struct DocumentKind {
     ]
 
     private static let prefixes: [(String, DocumentKind)] = [
-        ("readme", .init("Markdown", "readme")),
+        ("readme", .init("Markdown", "readme", languageID: "markdown")),
         ("license", .init("Plain Text", "license")), ("licence", .init("Plain Text", "license")),
         ("build.gradle", .init("Gradle", "gradle")),
     ]
 
-    private static let extensions: [String: DocumentKind] = {
+    /// File types that are not text languages: their identity cannot come from
+    /// a grammar or language server.
+    private static let fileKinds: [String: DocumentKind] = {
         var table: [String: DocumentKind] = [:]
         func add(_ name: String, _ icon: String, _ extensions: String...) {
             for ext in extensions { table[ext] = .init(name, icon) }
         }
-        add("Swift", "swift", "swift")
-        add("C", "c", "c"); add("C", "c-header", "h")
-        add("C++", "cpp", "cc", "cpp", "cxx", "mm"); add("C++", "cpp-header", "hpp", "hh", "hxx")
-        add("Objective-C", "c", "m")
-        add("C#", "csharp", "cs")
-        add("Java", "java", "java"); add("Kotlin", "kotlin", "kt", "kts")
-        add("Python", "python", "py", "pyi")
-        add("JavaScript", "javascript", "js", "mjs", "cjs", "jsx")
-        add("TypeScript", "typescript", "ts", "mts", "cts", "tsx")
-        add("Rust", "rust", "rs"); add("Go", "go", "go"); add("Lua", "lua", "lua")
-        add("Ruby", "ruby", "rb"); add("PHP", "php", "php"); add("Dart", "dart", "dart")
-        add("Zig", "zig", "zig"); add("Scala", "scala", "scala"); add("Haskell", "haskell", "hs")
-        add("Assembly", "assembly", "s", "asm")
-        add("Shell", "bash", "sh", "bash", "zsh", "fish")
-        add("PowerShell", "powershell", "ps1"); add("Batch", "batch", "bat", "cmd")
-        add("Shader", "shader", "glsl", "hlsl", "metal", "wgsl", "vert", "frag", "comp", "shader")
-        add("Markdown", "markdown", "md", "markdown")
-        add("Plain Text", "text", "txt"); add("Log", "log", "log")
-        add("JSON", "json", "json", "jsonc", "json5"); add("YAML", "yaml", "yml", "yaml")
-        add("TOML", "toml", "toml"); add("XML", "xml", "xml", "plist", "xib", "storyboard")
-        add("HTML", "html", "html", "htm"); add("CSS", "css", "css", "scss", "less")
-        add("CSV", "csv", "csv", "tsv")
-        add("Properties", "properties", "properties"); add("INI", "config", "ini", "cfg", "conf")
-        add("Lock", "lock", "lock")
-        add("CMake", "cmake", "cmake"); add("Gradle", "gradle", "gradle")
-        add("SVG", "svg", "svg")
         add("Image", "image", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tga", "exr", "hdr", "ktx", "dds", "ico")
         add("Video", "video", "mp4", "mov", "mkv", "webm", "avi")
         add("Audio", "audio", "wav", "mp3", "ogg", "flac", "aac", "m4a")
@@ -86,8 +73,8 @@ struct DocumentKind {
         add("Archive", "zip", "zip", "tar", "gz", "7z", "rar", "xz")
         add("Binary", "binary", "bin", "dat", "o", "a", "dylib", "so", "wasm")
         add("Executable", "exe", "exe", "dll", "app")
-        add("Database", "database", "db", "sqlite", "sql")
-        add("LaTeX", "latex", "tex"); add("Protocol Buffers", "proto", "proto"); add("GraphQL", "graphql", "graphql", "gql")
+        add("Database", "database", "db", "sqlite")
+        add("SVG", "svg", "svg")
         return table
     }()
 }
@@ -104,7 +91,10 @@ struct FileIcon: View {
         ThemeReader { theme in
             let background = theme.colors.background
             let isDark = 0.2126 * background.r + 0.7152 * background.g + 0.0722 * background.b < 0.5
-            let key = isFolder ? (isOpen ? "folder_open" : "folder") : DocumentKind(path: path).iconKey
+            let resource = isFolder ? (isOpen ? "folder_open" : "folder") : DocumentKind(path: path).iconKey
+            let key = EditorAppResourceBundle.bundle.url(forResource: "filetype-\(resource)",
+                                                         withExtension: "svg",
+                                                         subdirectory: "FileIcons") != nil ? resource : "file"
             return Image(resource: .svg(named: "filetype-\(key)" + (isDark ? "" : "-light"),
                                         in: EditorAppResourceBundle.bundle, subdirectory: "FileIcons"),
                          width: size, height: size, contentMode: .fit, renderingMode: .color)

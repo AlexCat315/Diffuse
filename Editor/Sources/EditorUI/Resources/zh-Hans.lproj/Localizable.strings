@@ -1170,9 +1170,11 @@
 "Headings are listed for Markdown documents." = "Markdown 文档会在此列出标题。";
 "No document" = "没有文档";
 "No headings" = "没有标题";
+"No headings in this document." = "此文档没有标题。";
 "No outline" = "没有大纲";
 "Open a Markdown file to see its outline." = "打开一个 Markdown 文件以查看大纲。";
 "Start a line with # to add a heading." = "在行首输入 # 即可添加标题。";
+"This document has no outline." = "此文档没有大纲。";
 "Start writing…" = "开始写作…";
 "Focus Mode" = "专注模式";
 "Exit Focus Mode" = "退出专注模式";
@@ -1255,3 +1257,7 @@
 "%@ failed" = "%@失败";
 "%@ stopped" = "%@已停止";
 "Shell" = "Shell";
+
+"Theme" = "主题";
+
+"Contribution" = "贡献点";

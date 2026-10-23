@@ -12,7 +12,7 @@ node Platforms/Web/Plugins/src/packaging/entry.js \
   "$(swift build --package-path Engine --show-bin-path)/GuavaPluginHost"
 ```
 
-输出目录必须是新目录，避免覆盖已经发布的包。工具先复制原始三文件包，再调用原生宿主校验 manifest、WIT、Component 实际类型和 imports；随后让 Jco 生成可重复实例化的模块。没有第二套 WIT 解析器。core Wasm 内存和表的最大值在打包时写入二进制；不允许 shared memory 或 memory64。
+输出目录必须是新目录，避免覆盖已经发布的包。工具先复制运行时插件包（manifest、WIT、component 及可选的已声明资源），再调用原生宿主校验 manifest、WIT、Component 实际类型和 imports；随后让 Jco 生成可重复实例化的模块。没有第二套 WIT 解析器。core Wasm 内存和表的最大值在打包时写入二进制；不允许 shared memory 或 memory64。
 
 把输出和 `src/runtime/` 随应用一起部署。`plugin.web.integrity` 是 `plugin.web.json` 的 SHA256，需要在应用可信构建流程中写入应用自己的插件目录/配置。运行时不接受插件自带哈希作为信任依据，也不要在运行时从未知插件服务器读取这个值后直接信任它。生成的 JS 只能来自受信任的应用打包流程；用户上传插件时，应在受控构建环境中从原始 Component 重新生成并发布经过审核的目录条目。
 

@@ -105,9 +105,9 @@ extension EditorApplication {
     func completeText(instructions: String, prompt: String, maxTokens: Int? = nil) async throws -> String {
         await pendingAISetupTask?.value
         guard let session else {
-            throw EditorProjectToolError(store.state.assistant.aiSettings.provider == .none
-                ? "No AI provider configured. Choose one in Settings."
-                : "The configured AI provider has no usable credential.")
+            throw EditorProjectToolError(store.state.assistant.aiSettings.isEnabled
+                ? "The configured AI provider has no usable credential."
+                : "No AI provider configured. Choose one in Settings.")
         }
         return try await session.complete(instructions: instructions, prompt: prompt, maxTokens: maxTokens)
     }

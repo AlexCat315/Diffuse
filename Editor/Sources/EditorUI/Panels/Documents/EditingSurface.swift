@@ -8,19 +8,25 @@ internal import GuavaUI
 /// editor or another chrome.
 struct DocumentEditingSurface: View {
     private let model: EditorDocumentWorkspace
+    private let app: EditorApplication?
     private let path: String
     private let session: DocumentWritingSession
     private let observed: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
     private let writing: Observed<DocumentWritingSession, DocumentWritingSession.State>
     @State private var source = DocumentBuffer()
     @State private var syntax = ScriptSyntaxSession()
+    @State private var documentSyntax: DocumentSyntaxSession
 
-    init(model: EditorDocumentWorkspace, path: String, session: DocumentWritingSession) {
+    init(model: EditorDocumentWorkspace, app: EditorApplication?, path: String, session: DocumentWritingSession) {
         self.model = model
+        self.app = app
         self.path = path
         self.session = session
         observed = Observed(\.snapshot, on: model)
         writing = Observed(\.state, on: session)
+        _documentSyntax = State(wrappedValue: DocumentSyntaxSession(
+            languageID: DocumentKind(path: path).languageID
+        ))
     }
 
     var body: some View {
@@ -40,7 +46,7 @@ struct DocumentEditingSurface: View {
     private var kind: DocumentKind { DocumentKind(path: path) }
 
     @ViewBuilder private func editing(_ text: Binding<TextBuffer>, state: DocumentWritingSession.State) -> some View {
-        if kind.name == "Swift" {
+        if kind.languageID == "swift" {
             // Swift files share the script editor's tree-sitter colors and folding.
             ScriptSyntaxReader(syntax) { syntax in
                 ThemeReader { theme in
@@ -48,9 +54,24 @@ struct DocumentEditingSurface: View {
                     let _ = syntax.request(text.wrappedValue)
                     self.text(text, wraps: state.wrapsLines) { input in
                         input.codeEditing.syntaxRevision = syntax.revision
-                        input.codeEditing.syntaxColorAtUTF8Offset = { _, offset in syntax.color(atUTF8Offset: offset, light: light) }
+                        input.codeEditing.syntaxColorAtUTF8Offset = { _, offset in syntax.color(atUTF8Offset: offset, light: light, palette: theme.extensions[EditorThemeTokens.self].syntax) }
                         input.codeEditing.folding.regions = syntax.foldRegions
                         input.codeEditing.folding.isReady = syntax.parsedBuffer == text.wrappedValue
+                    }
+                }
+            }
+        } else if !documentSyntax.isEmpty {
+            // Plugin-declared grammar rules: the host matches them; nothing
+            // enters the plugin host on the keystroke path.
+            DocumentSyntaxReader(documentSyntax) { syntax in
+                ThemeReader { theme in
+                    let light = theme.colors.surfaceSunken.r > 0.5
+                    let _ = syntax.request(text.wrappedValue)
+                    self.text(text, wraps: state.wrapsLines) { input in
+                        input.codeEditing.syntaxRevision = syntax.revision
+                        input.codeEditing.syntaxColorAtUTF8Offset = { _, offset in
+                            syntax.color(atUTF8Offset: offset, light: light, palette: theme.extensions[EditorThemeTokens.self].syntax)
+                        }
                     }
                 }
             }
@@ -80,12 +101,35 @@ struct DocumentEditingSurface: View {
             input.navigation.caretRequestID = request.id
             input.navigation.caretRequestIndex = request.index
         }
-        guard kind.isMarkdown else { return }
+        if kind.isMarkdown {
+            input.events.onKeyDown = { event in
+                guard let format = MarkdownFormat.allCases.first(where: { format in
+                    format.shortcutLetter.map { EditorShortcut(.letter($0)).matches(event) } ?? false
+                }) else { return false }
+                session.apply(format)
+                return true
+            }
+            return
+        }
+        guard let app, let languageID = kind.languageID,
+              LanguageCatalog.format(forLanguageID: languageID) != nil else { return }
         input.events.onKeyDown = { event in
-            guard let format = MarkdownFormat.allCases.first(where: { format in
-                format.shortcutLetter.map { EditorShortcut(.letter($0)).matches(event) } ?? false
-            }) else { return false }
-            session.apply(format)
+            guard EditorShortcut(.letter("f"), [.option, .shift]).matches(event) else { return false }
+            let text = session.buffer.stringValue
+            let caret = session.state.caret.caretIndex
+            Task { @MainActor in
+                do {
+                    guard let formatted = try await app.formatDocument(languageID: languageID,
+                                                                       text: text),
+                          formatted != text else { return }
+                    session.replace(0..<session.buffer.characterCount, with: formatted,
+                                    caret: min(caret, formatted.count))
+                } catch {
+                    app.logConsole("Could not format document",
+                                   severity: .error,
+                                   detail: error.localizedDescription)
+                }
+            }
             return true
         }
     }

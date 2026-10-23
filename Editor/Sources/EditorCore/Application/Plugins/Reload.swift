@@ -15,6 +15,10 @@ extension EditorApplication {
         }
         pluginSession.isUpdating = true
         defer { pluginSession.isUpdating = false }
+        if let binding = pluginSession.declarativePlugins[pluginID] {
+            try reloadDeclarativePackage(binding)
+            return
+        }
         guard let binding = pluginSession.bindings[pluginID] else {
             throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
         }
@@ -142,7 +146,7 @@ extension EditorApplication {
                 catch { return }
             }
             guard !isShuttingDown, pluginSession.packageMonitor != nil else { return }
-            guard let binding = pluginSession.bindings[pluginID] else { continue }
+            guard let pluginURL = pluginPackageURLs()[pluginID] else { continue }
             if pluginSession.pendingApproval?.inspection.manifest.id == pluginID { continue }
             do {
                 try await reloadPlugin(id: pluginID)
@@ -153,7 +157,7 @@ extension EditorApplication {
                                severity: .warning,
                                detail: pluginID)
                     await inspectPluginForManagement(
-                        at: URL(fileURLWithPath: binding.pluginPath, isDirectory: true)
+                        at: pluginURL
                     )
                 } else {
                     logConsole("Plugin reload failed",
@@ -174,6 +178,7 @@ extension EditorApplication {
         for (pluginID, binding) in pluginSession.bindings {
             result[pluginID] = URL(fileURLWithPath: binding.pluginPath, isDirectory: true)
         }
+        for (id, binding) in pluginSession.declarativePlugins { result[id] = binding.package.rootURL }
         return result
     }
 
@@ -189,9 +194,9 @@ extension EditorApplication {
                                     message: "Reloaded plugin '\(pluginID)'.")
         } catch let error as EditorPluginCapabilityError {
             if case .pluginAuthorizationStale = error,
-               let binding = pluginSession.bindings[pluginID] {
+               let pluginURL = pluginPackageURLs()[pluginID] {
                 await inspectPluginForManagement(
-                    at: URL(fileURLWithPath: binding.pluginPath, isDirectory: true)
+                    at: pluginURL
                 )
             } else {
                 publishPluginManagement(phase: .failed,

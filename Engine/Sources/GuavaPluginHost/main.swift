@@ -92,9 +92,10 @@ func packagesMatch(_ lhs: ValidatedPluginPackage,
                    _ rhs: ValidatedPluginPackage) -> Bool {
     lhs.rootURL == rhs.rootURL
         && lhs.manifest == rhs.manifest
-        && lhs.witContract == rhs.witContract
-        && lhs.componentHash == rhs.componentHash
-        && lhs.witHash == rhs.witHash
+        && lhs.runtime?.witContract == rhs.runtime?.witContract
+        && lhs.runtime?.componentHash == rhs.runtime?.componentHash
+        && lhs.runtime?.witHash == rhs.runtime?.witHash
+        && lhs.resourceHashes == rhs.resourceHashes
 }
 
 /// Execute only a host-owned copy. Re-hashing the copy closes the window where
@@ -106,15 +107,16 @@ func stagedExecutionCopy(of package: ValidatedPluginPackage) throws -> Validated
                                isDirectory: true)
     try createSecureDirectory(at: destination, withIntermediateDirectories: false)
     do {
-        for name in ["plugin.json", "component.wasm", "capabilities.wit"] {
+        for name in ["plugin.json", "component.wasm", "capabilities.wit"] + (package.resourceHashes.isEmpty ? [] : ["resources"]) {
             try FileManager.default.copyItem(at: package.rootURL.appendingPathComponent(name),
                                              to: destination.appendingPathComponent(name))
         }
         let copy = try loader.load(at: destination)
         guard copy.manifest == package.manifest,
-              copy.witContract == package.witContract,
-              copy.componentHash == package.componentHash,
-              copy.witHash == package.witHash else {
+              copy.runtime?.witContract == package.runtime?.witContract,
+              copy.runtime?.componentHash == package.runtime?.componentHash,
+              copy.runtime?.witHash == package.runtime?.witHash,
+              copy.resourceHashes == package.resourceHashes else {
             throw PluginHostStagingError.packageChangedDuringStaging
         }
         return copy

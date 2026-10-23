@@ -4,30 +4,31 @@ internal import GuavaUIRuntime
 private import Foundation
 
 struct EditorAISettingsDraft: Equatable {
-    private(set) var provider: EditorAIProvider
+    private(set) var providerID: String
     var model: TextBuffer
     var apiKey: TextBuffer
     var autoApprove: Bool
 
     init(settings: EditorAISettings) {
-        provider = settings.provider
+        providerID = settings.providerID
         // A model has no meaning while disabled; start blank so selecting a
         // provider reliably adopts that provider's default model.
-        model = TextBuffer(settings.provider == .none ? "" : settings.model)
+        model = TextBuffer(settings.isEnabled ? settings.model : "")
         apiKey = ""
         autoApprove = settings.autoApprove
     }
 
-    mutating func select(_ nextProvider: EditorAIProvider) {
-        guard provider != nextProvider else { return }
-        let previousDefaultModel = provider.defaultModel
+    mutating func select(_ nextProvider: AIProviderDescriptor?) {
+        let nextID = nextProvider?.id ?? ""
+        guard providerID != nextID else { return }
+        let previousDefaultModel = AIProviderCatalog.provider(id: providerID)?.defaultModel ?? ""
         if model.isEmpty || model.stringValue == previousDefaultModel {
-            model = TextBuffer(nextProvider.defaultModel)
+            model = TextBuffer(nextProvider?.defaultModel ?? "")
         }
         // Never carry an uncommitted secret across providers: otherwise a key
         // typed for one service could silently be stored under another.
         apiKey = ""
-        provider = nextProvider
+        providerID = nextID
     }
 
     mutating func clearCredential() {

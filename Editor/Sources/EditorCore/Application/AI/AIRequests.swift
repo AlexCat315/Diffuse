@@ -46,9 +46,9 @@ extension EditorApplication {
             return true
         }
 
-        let message = store.state.assistant.aiSettings.provider == .none
-            ? "No AI provider configured."
-            : "The configured AI provider has no usable credential."
+        let message = store.state.assistant.aiSettings.isEnabled
+            ? "The configured AI provider has no usable credential."
+            : "No AI provider configured."
         store.dispatch(.setAIStatusMessage(message))
         return false
     }

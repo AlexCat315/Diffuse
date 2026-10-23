@@ -1,0 +1,11 @@
+package studio:languages;
+
+interface capabilities {
+  /// Formats a whole document; the result is the formatted text.
+  record format-input { text: string }
+  format: func(input: format-input) -> string;
+}
+
+world plugin {
+  export capabilities;
+}

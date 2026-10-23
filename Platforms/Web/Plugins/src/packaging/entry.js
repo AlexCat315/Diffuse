@@ -15,13 +15,20 @@ export async function packageWebPlugin(input, output, host) {
     const source = join(temporary, 'source.guavaplugin'); const destination = join(temporary, 'output');
     await mkdir(source); await mkdir(destination);
     const names = await readdir(input);
-    if (names.length !== 3 || names.some(name => !['plugin.json', 'component.wasm', 'capabilities.wit'].includes(name))) {
-      throw Error('Expected a three-file .guavaplugin package');
+    if (!['plugin.json', 'component.wasm', 'capabilities.wit'].every(name => names.includes(name))
+        || names.some(name => !['plugin.json', 'component.wasm', 'capabilities.wit', 'resources'].includes(name))) {
+      throw Error('Expected a runtime .guavaplugin package');
     }
     for (const name of names) await cp(join(input, name), join(source, name), { dereference: false });
     const descriptor = JSON.parse(execFileSync(host, ['--export-web', source], { maxBuffer: 4 * 1024 * 1024, encoding: 'utf8', timeout: 30000 }));
     for (const [name, expected] of [['component.wasm', descriptor.inspection.componentHash], ['capabilities.wit', descriptor.inspection.witHash]]) {
       if (digest(await readFile(join(source, name))) !== expected) throw Error('Plugin changed during packaging');
+    }
+    for (const [path, expected] of Object.entries(descriptor.inspection.resourceHashes)) {
+      const bytes = await readFile(join(source, path));
+      if (digest(bytes) !== expected) throw Error('Plugin resource changed during packaging');
+      await mkdir(dirname(join(destination, path)), { recursive: true });
+      await writeFile(join(destination, path), bytes);
     }
     // Resolve from the package root, independent of the caller's working directory.
     const cli = fileURLToPath(new URL('../../node_modules/@bytecodealliance/jco/dist/jco.js', import.meta.url));

@@ -98,8 +98,8 @@ extension EditorApplication {
                 "pending_confirmation": store.state.assistant.pendingConfirmationRequest != nil,
                 "script_build_in_progress": projectToolBuildInProgress,
                 "script_execution_trusted": dynamicScriptManager.projectTrustState.allowsExecution,
-                "ai_provider": store.state.assistant.aiSettings.provider.rawValue,
-                "ai_credential_available": AICredentialStore.hasKey(for: store.state.assistant.aiSettings.provider),
+                "ai_provider": store.state.assistant.aiSettings.providerID,
+                "ai_credential_available": hasStoredAIKey(),
                 "script_sdk_available": !ProjectScriptBuildConfiguration.discover(
                     for: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
                 ).engineModulePaths.isEmpty,

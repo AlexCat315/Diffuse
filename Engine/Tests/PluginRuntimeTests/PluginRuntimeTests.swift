@@ -357,7 +357,7 @@ struct PluginRuntimeTests {
         let authorization = try PluginAuthorizationRecord(inspection: inspection)
         let session = try await EmbeddedPluginSession.open(at: package.rootURL, authorization: authorization)
         // Mutating the source cannot change an already opened session.
-        try Data([0]).write(to: package.componentURL)
+        try Data([0]).write(to: try package.requireRuntime().componentURL)
         let result = try await session.prepare(capabilityID: "safe.reader.inspect",
                                                input: Data(#"{"enabled":true}"#.utf8))
         #expect(result == .read(Data("true".utf8)))
@@ -398,7 +398,7 @@ struct PluginRuntimeTests {
             from: try #require(inspectionResponse.payload)
         )
         #expect(inspectionResponse.ok)
-        #expect(inspection.componentHash == package.componentHash)
+        #expect(inspection.componentHash == package.runtime?.componentHash)
         #expect(inspection.contracts.map(\.id) == ["safe.reader.inspect"])
         #expect(inspection.contracts[0].inputSchema.type == .object)
         #expect(inspection.contracts[0].inputSchema.properties["enabled"]?.type == .boolean)
@@ -507,7 +507,7 @@ struct PluginRuntimeTests {
                 access: .read,
                 imports: [.sceneQuery]
             ),
-            componentURL: URL(fileURLWithPath: "/safe.reader.guavaplugin/component.wasm"),
+            runtime: ValidatedPluginComponent(componentURL: URL(fileURLWithPath: "/safe.reader.guavaplugin/component.wasm"),
             witURL: URL(fileURLWithPath: "/safe.reader.guavaplugin/capabilities.wit"),
             witContract: WITContract(worldName: "plugin",
                                      imports: ["guava:scene/query"],
@@ -522,7 +522,7 @@ struct PluginRuntimeTests {
                                          ),
                                      ]),
             componentHash: "component-a",
-            witHash: "wit-a"
+            witHash: "wit-a")
         )
         let contract = try #require(PluginWITContractDeriver.contracts(for: package).first)
         let inspection = PluginInspection(

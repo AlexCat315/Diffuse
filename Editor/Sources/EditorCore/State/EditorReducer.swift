@@ -42,6 +42,8 @@ public enum EditorAction: Sendable {
     case setScaleSnapStep(Float)
     case setPrimarySelectBehavior(SelectionPrimaryModifierBehavior)
     case setThemeMode(EditorThemeMode)
+    case setThemeID(String)
+    case themeCatalogChanged
     case setLanguage(EditorLanguage)
     case forceUIRefresh
     case setVSyncMode(EditorVSyncMode)
@@ -197,6 +199,10 @@ public enum EditorReducer {
             state.snapping.scaleSnapStep = EditorState.sanitizedScaleSnapStep(step)
         case let .setPrimarySelectBehavior(behavior):
             state.selection.primarySelectBehavior = behavior
+        case let .setThemeID(id):
+            state.presentation.setThemeID(id)
+        case .themeCatalogChanged:
+            state.presentation.refreshThemeCatalog()
         case let .setThemeMode(mode):
             state.presentation.setThemeMode(mode)
         case let .setLanguage(language):

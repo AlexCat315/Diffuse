@@ -60,7 +60,7 @@ struct VersionControlTests {
         #expect(VersionControlProvider.bundled.map(\.system) == [.lore, .git])
         for provider in VersionControlProvider.bundled {
             let package = try PluginPackageLoader().load(at: provider.package)
-            #expect(package.manifest.contributes.versionControl == provider.contribution)
+            #expect(((try? package.manifest.contributes.decode(VersionControlContributionPoint.self)) ?? []).first == provider.contribution)
             #expect(package.manifest.host.processes.first?.entryPoints == ["provider"])
         }
         #expect(VersionControlSystem.git.title == "Git")

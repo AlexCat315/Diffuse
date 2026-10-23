@@ -52,7 +52,7 @@ struct DocumentsPanel: View {
                     let _ = writing.show(document.path)
                     DocumentWritingBar(app: app, path: document.path, session: writing)
                     errorBanner(snapshot.error)
-                    DocumentEditingSurface(model: model, path: document.path, session: writing).id(document.path).flex()
+                    DocumentEditingSurface(model: model, app: app, path: document.path, session: writing).id(document.path).flex()
                     DocumentWritingStatus(session: writing)
                 }
             } else {

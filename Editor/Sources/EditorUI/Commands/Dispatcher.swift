@@ -314,7 +314,7 @@ enum EditorCommandDispatcher {
     private static func saveShellState(_ app: EditorApplication) {
         let state = app.store.state
         EditorRootViewFactory.saveShellState(workspace: state.workspace,
-                                             themeMode: state.themeMode,
+                                             themeMode: state.themeMode, themeID: state.presentation.themeID,
                                              language: state.language,
                                              vsyncMode: state.vsyncMode,
                                              primarySelectBehavior: state.selection.primarySelectBehavior,

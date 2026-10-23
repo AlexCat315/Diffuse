@@ -27,11 +27,11 @@ struct WritingAssistantButton: View, @unchecked Sendable {
         Popover(isPresented: $isPresented, width: 360, placement: .bottomTrailing, surface: .content, overflow: .flip) {
             Row(alignment: .center, spacing: 4) {
                 if running != nil { Spinner(size: 10) } else {
-                    Icon(UIIcons.Status.sparkles, size: 12, color: EditorChromeTokens.agentColor)
+                    Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.agentColor)
                 }
-                Text(L("AI")).font(.label).foregroundColor(EditorChromeTokens.agentColor)
+                Text(L("AI")).font(.label).foregroundColor(EditorThemeTokens.agentColor)
             }.padding(horizontal: 7).frame(height: 22)
-                .background(EditorChromeTokens.agentColor.opacity(0.10)).cornerRadius(6)
+                .background(EditorThemeTokens.agentColor.opacity(0.10)).cornerRadius(6)
                 .accessibility { $0.label = L("AI Writing Assistant") }
         } content: {
             Column(alignment: .leading, spacing: 0) {
@@ -116,7 +116,7 @@ struct WritingAssistantButton: View, @unchecked Sendable {
     private func review(_ result: WritingResult) -> some View {
         Column(alignment: .leading, spacing: 8) {
             Row(alignment: .center, spacing: 6) {
-                Icon(UIIcons.Status.sparkles, size: 12, color: EditorChromeTokens.agentColor)
+                Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.agentColor)
                 Text(L(result.action.title)).font(.bodyStrong)
             }
             ScrollView(.vertical, scrollbarGutter: .stable) {

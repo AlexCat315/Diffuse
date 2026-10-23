@@ -20,15 +20,16 @@ final class ExecutionPackage: @unchecked Sendable {
                                                 attributes: [.posixPermissions: 0o700])
         #endif
         do {
-            for name in ["plugin.json", "capabilities.wit", "component.wasm"] {
+            for name in ["plugin.json", "capabilities.wit", "component.wasm"] + (original.resourceHashes.isEmpty ? [] : ["resources"]) {
                 try FileManager.default.copyItem(at: source.appendingPathComponent(name),
                                                 to: directory.appendingPathComponent(name))
             }
             package = try loader.load(at: directory)
             guard original.manifest == package.manifest,
-                  original.witContract == package.witContract,
-                  original.componentHash == package.componentHash,
-                  original.witHash == package.witHash else { throw PluginAuthorizationError.noLongerValid }
+                  original.runtime?.witContract == package.runtime?.witContract,
+                  original.runtime?.componentHash == package.runtime?.componentHash,
+                  original.runtime?.witHash == package.runtime?.witHash,
+                  original.resourceHashes == package.resourceHashes else { throw PluginAuthorizationError.noLongerValid }
         } catch {
             try? FileManager.default.removeItem(at: directory)
             throw error

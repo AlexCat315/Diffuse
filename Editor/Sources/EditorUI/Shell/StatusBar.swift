@@ -187,10 +187,10 @@ struct EditorStatusBar: View {
                     Spinner(size: 10)
                 } else {
                     Icon(UIIcons.Status.sparkles, size: 11,
-                         color: available ? EditorChromeTokens.agentColor : .onSurfaceMuted)
+                         color: available ? EditorThemeTokens.agentColor : .onSurfaceMuted)
                 }
                 Text(title, lineLimit: 1).font(emphasized ? .label : .caption)
-                    .foregroundColor(emphasized ? EditorChromeTokens.agentColor : .onSurfaceMuted)
+                    .foregroundColor(emphasized ? EditorThemeTokens.agentColor : .onSurfaceMuted)
             }
         }
         .buttonStyle(EditorChromeButtonStyle(height: 20))

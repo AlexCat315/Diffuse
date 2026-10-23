@@ -1,4 +1,5 @@
-import EditorCore
+import PluginRuntime
+@testable import EditorCore
 import SceneRuntime
 import EngineKernel
 import Testing
@@ -211,28 +212,34 @@ struct EditorPanelWorkflowTests {
     }
 
     @Test("AI settings drafts use provider defaults and never carry a secret across providers")
-    func aiSettingsDraftProviderSwitching() {
+    func aiSettingsDraftProviderSwitching() throws {
+        let providers = try #require(BundledPlugins.plugin(id: "studio.ai-providers"))
+        let package = try PluginPackageLoader().load(at: providers.package)
+        AIProviderCatalog.update(bindings: [:], packages: [package])
+        let openai = try #require(AIProviderCatalog.provider(id: "openai"))
+        let anthropic = try #require(AIProviderCatalog.provider(id: "anthropic"))
+        let deepseek = try #require(AIProviderCatalog.provider(id: "deepseek"))
         var draft = EditorAISettingsDraft(settings: .default)
-        #expect(draft.provider == .none)
+        #expect(draft.providerID.isEmpty)
         #expect(draft.model.isEmpty)
 
         draft.apiKey = "secret-for-openai"
-        draft.select(.openai)
-        #expect(draft.model.stringValue == EditorAIProvider.openai.defaultModel)
+        draft.select(openai)
+        #expect(draft.model.stringValue == openai.defaultModel)
         #expect(draft.apiKey.isEmpty)
 
         draft.apiKey = "openai-secret"
-        draft.select(.openai)
+        draft.select(openai)
         #expect(draft.apiKey.stringValue == "openai-secret")
 
         draft.model = "custom-compatible-model"
-        draft.select(.deepseek)
+        draft.select(deepseek)
         #expect(draft.model.stringValue == "custom-compatible-model")
         #expect(draft.apiKey.isEmpty)
 
-        draft.model = TextBuffer(EditorAIProvider.deepseek.defaultModel)
-        draft.select(.anthropic)
-        #expect(draft.model.stringValue == EditorAIProvider.anthropic.defaultModel)
+        draft.model = TextBuffer(deepseek.defaultModel)
+        draft.select(anthropic)
+        #expect(draft.model.stringValue == anthropic.defaultModel)
     }
 
     @Test("asset browser ordering keeps filters and sort modes deterministic")

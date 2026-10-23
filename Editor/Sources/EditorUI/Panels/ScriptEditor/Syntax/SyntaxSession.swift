@@ -32,13 +32,13 @@ final class ScriptSyntaxSession: _ObservableObject, @unchecked Sendable {
             }
         }
     }
-    func color(atUTF8Offset offset: Int, light: Bool) -> Color? {
-        if let token, token.range.contains(offset) { return token.kind.color(light: light) }
+    func color(atUTF8Offset offset: Int, light: Bool, palette: [String: Color] = [:]) -> Color? {
+        if let token, token.range.contains(offset) { return token.kind.color(light: light, palette: palette) }
         guard let tree else { return nil }
         return colors.kind(at: offset) {
             token = SwiftSyntaxTokenMap.classify(tree.path(atUTF8Offset: offset))
             return token?.kind
-        }?.color(light: light)
+        }?.color(light: light, palette: palette)
     }
     func _registerObserver(_ handler: @escaping () -> Void) -> AnyHashable { publisher.register(on: self, handler: handler) }
     func _unregisterObserver(_ token: AnyHashable) { publisher.unregister(token) }

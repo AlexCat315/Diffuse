@@ -37,7 +37,7 @@ struct SettingsSidebar: View {
     private func destination(_ item: SettingsCategory) -> some View {
         Button(isSelected: !isSearching && category == item, action: { onSelect(item) }) {
             Row(alignment: .center, spacing: 10) {
-                Icon(item.icon, size: 16, color: item == .agent ? EditorChromeTokens.agentColor : .onSurfaceVariant)
+                Icon(item.icon, size: 16, color: item == .agent ? EditorThemeTokens.agentColor : .onSurfaceVariant)
                 Text(item.title, lineLimit: 1).font(.label).flex().frame(minWidth: 0)
             }.padding(horizontal: 12, vertical: 11).frame(width: .percent(100), minWidth: 0)
         }.buttonStyle(SettingsNavigationStyle()).padding(horizontal: 10, vertical: 2)

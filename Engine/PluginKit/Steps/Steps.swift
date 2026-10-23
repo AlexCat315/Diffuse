@@ -1,7 +1,7 @@
 import Swift
 
 /// The step protocol behind contributions whose plugin decides each command
-/// (`contributes.versionControl`, `contributes.tasks`).
+/// (`contributes["guava.vcs/v1"]`, `contributes["guava.tasks/v1"]`).
 ///
 /// The editor sends an operation such as `{"op":"status"}`. The plugin
 /// answers with one step: a command to run, paths to move to the Trash, or

@@ -8,6 +8,14 @@ struct AppearanceSettings: View {
 
     var body: some View {
         SettingsCard(L("Appearance"), subtitle: L("A calm canvas, in your preferred light.")) {
+            Row(alignment: .center, spacing: 12) {
+                Text(L("Theme")).font(.bodyStrong).flex()
+                Select(selection: Binding(get: { app.store.presentation.themeID }, set: {
+                    app.store.dispatch(.setThemeID($0)); onChange()
+                }), options: app.themeCatalog.themes.map {
+                    .init(value: $0.id, label: $0.title)
+                }, width: 200).frame(width: 200).debugName("settings-theme")
+            }
             Row(alignment: .top, spacing: 12) {
                 themeChoice(.dark, title: L("Dark"), dark: true)
                 themeChoice(.light, title: L("Light Theme"), dark: false)
@@ -17,7 +25,7 @@ struct AppearanceSettings: View {
 
     private func themeChoice(_ mode: EditorThemeMode, title: String, dark: Bool) -> some View {
         let selected = app.store.themeMode == mode
-        let palette = EditorVisualTheme.make(dark: dark).colors
+        let palette = app.resolvedTheme(dark: dark).colors
         return Button(isSelected: selected, action: {
             guard app.store.themeMode != mode else { return }
             app.store.dispatch(.setThemeMode(mode)); onChange()

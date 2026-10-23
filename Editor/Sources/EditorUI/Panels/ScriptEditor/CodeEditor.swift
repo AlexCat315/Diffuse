@@ -85,7 +85,7 @@ struct ScriptCodeEditor: View {
                     input.codeEditing.indentationWidth = 4
                     input.codeEditing.editHistory = editHistory
                     input.codeEditing.syntaxRevision = syntaxSession.revision
-                    input.codeEditing.syntaxColorAtUTF8Offset = { _, offset in syntaxSession.color(atUTF8Offset: offset, light: light) }
+                    input.codeEditing.syntaxColorAtUTF8Offset = { _, offset in syntaxSession.color(atUTF8Offset: offset, light: light, palette: theme.extensions[EditorThemeTokens.self].syntax) }
                     input.navigation.caretRequestID = navigation.map { AnyHashable($0.id) }
                     input.navigation.caretRequestIndex = navigation.map {
                         ScriptSourceCoordinates.characterIndex(in: text,

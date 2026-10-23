@@ -26,7 +26,12 @@ extension EditorApplication {
     /// before constructing an explicit authorization record.
     @MainActor
     public func inspectPlugin(at pluginURL: URL) throws -> PluginInspection {
-        try resolvedPluginHostClient().inspectPlugin(at: pluginURL)
+        let package = try PluginPackageLoader().load(at: pluginURL)
+        if package.runtime == nil {
+            try EditorThemeCatalog.validate(package)
+            return PluginInspection(package: package, contracts: [])
+        }
+        return try resolvedPluginHostClient().inspectPlugin(at: pluginURL)
     }
 
     /// Call only after the user has approved the inspection shown by the UI.
@@ -59,7 +64,8 @@ extension EditorApplication {
         }
         pluginSession.isUpdating = true
         defer { pluginSession.isUpdating = false }
-        guard pluginSession.bindings[authorization.pluginID] == nil else {
+        guard pluginSession.bindings[authorization.pluginID] == nil,
+              pluginSession.declarativePlugins[authorization.pluginID] == nil else {
             throw EditorPluginCapabilityError.pluginAlreadyEnabled(authorization.pluginID)
         }
         // Requirements resolve before the package reaches the host: enabling
@@ -67,11 +73,16 @@ extension EditorApplication {
         let unmet = PluginRequirementResolver.unmet(
             authorization.requires,
             requiredBy: authorization.pluginID,
-            enabledPlugins: pluginSession.bindings.mapValues { $0.inspection.manifest.version },
+            enabledPlugins: enabledPluginManifests.mapValues(\.version),
             providedCapabilities: availableCapabilityVersions()
         )
         guard unmet.isEmpty else {
             throw UnmetPluginRequirements(pluginID: authorization.pluginID, violations: unmet)
+        }
+        let package = try PluginPackageLoader().load(at: pluginURL)
+        try EditorThemeCatalog.validate(package)
+        if package.runtime == nil {
+            return try enableDeclarativePackage(package, authorization: authorization)
         }
         let client = try resolvedPluginHostClient()
         let processContext = try pluginProcessContext(for: authorization.host)
@@ -103,6 +114,14 @@ extension EditorApplication {
             throw error
         }
         pluginSession.bindings = nextBindings
+        do {
+            try refreshDeclarativeContributions()
+        } catch {
+            pluginSession.bindings.removeValue(forKey: binding.pluginID)
+            _ = try? await Task.detached { try client.unloadPlugin(at: pluginURL) }.value
+            try? refreshDeclarativeContributions()
+            throw error
+        }
         if let declarations {
             pluginSession.components.set(declarations, pluginID: binding.pluginID)
             pluginSession.components.apply(to: &scene.scene)
@@ -140,6 +159,10 @@ extension EditorApplication {
         }
         pluginSession.isUpdating = true
         defer { pluginSession.isUpdating = false }
+        if pluginSession.declarativePlugins[pluginID] != nil {
+            try disableDeclarativePackage(id: pluginID)
+            return
+        }
         guard let binding = pluginSession.bindings[pluginID] else {
             throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
         }
@@ -148,7 +171,7 @@ extension EditorApplication {
         let dependents = PluginRequirementResolver.dependents(
             of: pluginID,
             providing: Set(binding.inspection.contracts.map(\.id)),
-            among: pluginSession.bindings.mapValues { $0.inspection.manifest }
+            among: enabledPluginManifests
         )
         guard dependents.isEmpty else {
             throw RequiredPluginStillNeeded(pluginID: pluginID, dependents: dependents)
@@ -199,13 +222,13 @@ extension EditorApplication {
     @MainActor
     public func revokePluginAuthorization(id pluginID: String) async throws {
         var disableError: Error?
-        if pluginSession.bindings[pluginID] != nil {
+        if enabledPluginManifests[pluginID] != nil {
             do {
                 try await disablePlugin(id: pluginID)
             } catch {
                 // Dependency/busy rejection leaves the mount live. Its stored
                 // authority must remain paired with that binding as well.
-                if pluginSession.bindings[pluginID] != nil { throw error }
+                if enabledPluginManifests[pluginID] != nil { throw error }
                 disableError = error
             }
         }
@@ -214,7 +237,8 @@ extension EditorApplication {
     }
 
     public func enabledPluginInspections() -> [PluginInspection] {
-        pluginSession.bindings.values.map(\.inspection).sorted {
+        (pluginSession.bindings.values.map(\.inspection)
+            + pluginSession.declarativePlugins.values.map(\.inspection)).sorted {
             $0.manifest.id < $1.manifest.id
         }
     }
@@ -233,10 +257,7 @@ extension EditorApplication {
                                 candidate: nil,
                                 message: nil)
         do {
-            let client = try resolvedPluginHostClient()
-            let inspection = try await Task.detached(priority: .userInitiated) {
-                try client.inspectPlugin(at: pluginURL)
-            }.value
+            let inspection = try inspectPlugin(at: pluginURL)
             let reusable = storedPluginAuthorization(for: inspection) != nil
             pluginSession.pendingApproval = PendingPluginApproval(
                 packageURL: pluginURL.standardizedFileURL,
@@ -284,7 +305,7 @@ extension EditorApplication {
                 ?? makePluginAuthorization(afterUserApprovalOf: pending.inspection)
             // An approved update replaces the enabled build. Disable performs
             // the dependency check before withdrawing the old mount.
-            if pluginSession.bindings[authorization.pluginID] != nil {
+            if enabledPluginManifests[authorization.pluginID] != nil {
                 try await disablePlugin(id: authorization.pluginID)
             }
             let enabledInspection = try await enablePlugin(
@@ -349,8 +370,8 @@ extension EditorApplication {
         candidate: EditorPluginInspectionSummary?,
         message: String?
     ) {
-        let enabled = pluginSession.bindings.values.map {
-            EditorPluginInspectionSummary(inspection: $0.inspection,
+        let enabled = enabledPluginInspections().map {
+            EditorPluginInspectionSummary(inspection: $0,
                                           hasReusableAuthorization: true)
         }
         store.dispatch(.setPluginManagementState(
@@ -426,6 +447,11 @@ extension EditorApplication {
 
     @MainActor
     func activatePluginExecutor(_ executor: PluginCapabilityExecutor?) async {
+        try? refreshDeclarativeContributions()
+        LanguageCatalog.update(bindings: pluginSession.bindings,
+                               packages: pluginSession.declarativePlugins.values.map(\.package))
+        AIProviderCatalog.update(bindings: pluginSession.bindings,
+                                 packages: pluginSession.declarativePlugins.values.map(\.package))
         let languageBinding = pluginSession.bindings[PluginLanguageService.pluginID]
         if dynamicScriptManager.languagePlugin.bind(languageBinding,
             client: languageBinding == nil ? nil : pluginSession.hostClient) {

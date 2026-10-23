@@ -26,7 +26,7 @@ struct ComponentBuildTests {
         Data("""
         {"id": "test.echo", "version": 1, "name": "Echo", "description": "fixture", "access": "read",
          "imports": ["guava:process/host"], "composable_host_capabilities": [], "host": \(processes),
-         "contributes": {"versionControl": \(versionControl)}}
+         "contributes": {"guava.vcs/v1": [\(versionControl)]}}
         """.utf8)
     }
 
@@ -34,17 +34,17 @@ struct ComponentBuildTests {
     func versionControlContributionsAreValidated() throws {
         let valid = #"{"id": "git", "title": "Git", "marker": ".git", "ignoreFile": ".gitignore"}"#
         let manifest = try PluginManifestValidator.decodeAndValidate(Self.manifest(valid))
-        #expect(manifest.contributes.versionControl == VersionControlContribution(id: "git", title: "Git", marker: ".git",
+        #expect(((try? manifest.contributes.decode(VersionControlContributionPoint.self)) ?? []).first == VersionControlContribution(id: "git", title: "Git", marker: ".git",
                                                                                  ignoreFile: ".gitignore"))
         for invalid in [#"{"id": "Git", "title": "Git", "marker": ".git", "ignoreFile": ".gitignore"}"#,
                         #"{"id": "git", "title": "Git", "marker": "../.git", "ignoreFile": ".gitignore"}"#,
                         #"{"id": "git", "title": " ", "marker": ".git", "ignoreFile": ".gitignore"}"#] {
-            #expect(throws: PluginManifestValidationError.invalidContribution("versionControl")) {
+            #expect(throws: PluginManifestValidationError.invalidContribution("guava.vcs/v1")) {
                 try PluginManifestValidator.decodeAndValidate(Self.manifest(invalid))
             }
         }
         let otherEntryPoint = #"{"processes": [{"id": "git", "command": "git", "argumentPrefix": [], "allowsAdditionalArguments": true, "environmentKeys": [], "entryPoints": ["inspect"], "lifetimeMilliseconds": 60000}]}"#
-        #expect(throws: PluginManifestValidationError.invalidContribution("versionControl")) {
+        #expect(throws: PluginManifestValidationError.invalidContribution("guava.vcs/v1")) {
             try PluginManifestValidator.decodeAndValidate(Self.manifest(valid, processes: otherEntryPoint))
         }
     }
@@ -62,20 +62,20 @@ struct ComponentBuildTests {
             """.utf8)
         }
         let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
-            {"tasks": {"id": "pkg", "title": "Package", "marker": "Package.swift"},
-             "languages": [{"id": "swift", "title": "Swift", "extensions": ["swift"],
+            {"guava.tasks/v1": [{"id": "pkg", "title": "Package", "marker": "Package.swift"}],
+             "guava.language/v1": [{"id": "swift", "title": "Swift", "extensions": ["swift"],
                             "server": {"process": "server", "initializationOptions": {"backgroundIndexing": true},
                                        "watchedFiles": ["Package.resolved"]}}]}
             """))
-        #expect(valid.contributes.tasks == TaskContribution(id: "pkg", title: "Package", marker: "Package.swift"))
-        #expect(valid.contributes.languages.first?.server?.initializationOptions == .object(["backgroundIndexing": .bool(true)]))
-        #expect(throws: PluginManifestValidationError.invalidContribution("tasks")) {
-            try PluginManifestValidator.decodeAndValidate(manifest(#"{"tasks": {"id": "pkg", "title": "Package", "marker": "a/b"}}"#))
+        #expect(((try? valid.contributes.decode(TaskContributionPoint.self)) ?? []).first == TaskContribution(id: "pkg", title: "Package", marker: "Package.swift"))
+        #expect(((try? valid.contributes.decode(LanguageContributionPoint.self)) ?? []).first?.server?.initializationOptions == .object(["backgroundIndexing": .bool(true)]))
+        #expect(throws: PluginManifestValidationError.invalidContribution("guava.tasks/v1")) {
+            try PluginManifestValidator.decodeAndValidate(manifest(#"{"guava.tasks/v1": [{"id": "pkg", "title": "Package", "marker": "a/b"}]}"#))
         }
-        for invalid in [#"{"languages": [{"id": "swift", "title": "Swift", "extensions": []}]}"#,
-                        #"{"languages": [{"id": "swift", "title": "Swift", "extensions": [".swift"]}]}"#,
-                        #"{"languages": [{"id": "swift", "title": "Swift", "extensions": ["swift"], "server": {"process": "missing"}}]}"#] {
-            #expect(throws: PluginManifestValidationError.invalidContribution("languages")) {
+        for invalid in [#"{"guava.language/v1": [{"id": "swift", "title": "Swift", "extensions": []}]}"#,
+                        #"{"guava.language/v1": [{"id": "swift", "title": "Swift", "extensions": [".swift"]}]}"#,
+                        #"{"guava.language/v1": [{"id": "swift", "title": "Swift", "extensions": ["swift"], "server": {"process": "missing"}}]}"#] {
+            #expect(throws: PluginManifestValidationError.invalidContribution("guava.language/v1")) {
                 try PluginManifestValidator.decodeAndValidate(manifest(invalid))
             }
         }

@@ -4,6 +4,24 @@ import Foundation
 public struct ValidatedPluginPackage: Sendable, Equatable {
     public var rootURL: URL
     public var manifest: GuavaPluginManifest
+    public var runtime: ValidatedPluginComponent?
+    public var resourceHashes: [String: String] = [:]
+
+    public func requireRuntime() throws -> ValidatedPluginComponent {
+        guard let runtime else { throw PluginPackageError.runtimeRequired }
+        return runtime
+    }
+
+    public func resource(at path: String) throws -> Data {
+        let data = try PluginPackageResources.read(path, beneath: rootURL)
+        guard resourceHashes[path] == CapabilityDigest.sha256(data) else {
+            throw PluginAuthorizationError.noLongerValid
+        }
+        return data
+    }
+}
+
+public struct ValidatedPluginComponent: Sendable, Equatable {
     public var componentURL: URL
     public var witURL: URL
     public var witContract: WITContract
@@ -19,6 +37,9 @@ public enum PluginPackageError: Error, Sendable, Equatable, CustomStringConverti
     case componentTooLarge
     case invalidComponentHeader
     case unexpectedFile(String)
+    case incompleteRuntime
+    case runtimeRequired
+    case invalidResource(String)
 
     public var description: String {
         switch self {
@@ -29,6 +50,9 @@ public enum PluginPackageError: Error, Sendable, Equatable, CustomStringConverti
         case .componentTooLarge: return "component.wasm exceeds the package size limit"
         case .invalidComponentHeader: return "component.wasm does not have a WebAssembly header"
         case let .unexpectedFile(name): return "unexpected file in plugin package: \(name)"
+        case .incompleteRuntime: return "component.wasm and capabilities.wit must both be present"
+        case .runtimeRequired: return "this operation requires a plugin runtime"
+        case let .invalidResource(path): return "invalid plugin resource: \(path)"
         }
     }
 }
@@ -36,11 +60,14 @@ public enum PluginPackageError: Error, Sendable, Equatable, CustomStringConverti
 public struct PluginPackageLoader: Sendable {
     public var registry: CapabilityRegistry
     public var maximumComponentBytes: Int
+    private let contributionPoints: ContributionPointRegistry
 
     public init(registry: CapabilityRegistry = .default,
-                maximumComponentBytes: Int = 128 * 1_024 * 1_024) {
+                maximumComponentBytes: Int = 128 * 1_024 * 1_024,
+                contributionPoints: ContributionPointRegistry = .standard) {
         self.registry = registry
         self.maximumComponentBytes = min(maximumComponentBytes, 128 * 1_024 * 1_024)
+        self.contributionPoints = contributionPoints
     }
 
     public func load(at packageURL: URL) throws -> ValidatedPluginPackage {
@@ -53,7 +80,7 @@ public struct PluginPackageLoader: Sendable {
         guard rootValues?.isSymbolicLink != true else {
             throw PluginPackageError.symbolicLinkNotAllowed(root.lastPathComponent)
         }
-        let allowedNames: Set<String> = ["plugin.json", "component.wasm", "capabilities.wit"]
+        let allowedNames: Set<String> = ["plugin.json", "component.wasm", "capabilities.wit", "resources"]
         let children = try FileManager.default.contentsOfDirectory(at: root,
                                                                   includingPropertiesForKeys: nil)
         if let unexpected = children.first(where: { !allowedNames.contains($0.lastPathComponent) }) {
@@ -61,10 +88,27 @@ public struct PluginPackageLoader: Sendable {
         }
 
         let manifestURL = try fixedFile("plugin.json", beneath: root)
+        let manifest = try PluginManifestValidator.decodeAndValidate(Data(contentsOf: manifestURL),
+                                                                     registry: registry,
+                                                                     contributions: contributionPoints)
+        let resources = try PluginPackageResources.load(manifest.resources, beneath: root)
+        for theme in try manifest.contributes.decode(ThemeContributionPoint.self) {
+            guard manifest.resources.contains(where: { $0.path == theme.path && $0.kind == "theme" }) else {
+                throw PluginPackageError.invalidResource(theme.path)
+            }
+        }
+        let names = Set(children.map(\.lastPathComponent))
+        let hasComponent = names.contains("component.wasm")
+        guard hasComponent == names.contains("capabilities.wit") else { throw PluginPackageError.incompleteRuntime }
+        guard hasComponent else {
+            guard manifest.runtime == nil, manifest.imports.isEmpty, manifest.host.processes.isEmpty,
+                  manifest.composableHostCapabilities.isEmpty, manifest.activation.isEmpty,
+                  manifest.access == .read else { throw PluginPackageError.runtimeRequired }
+            try manifest.contributes.validateRuntime(nil, in: contributionPoints)
+            return ValidatedPluginPackage(rootURL: root, manifest: manifest, runtime: nil, resourceHashes: resources)
+        }
         let componentURL = try fixedFile("component.wasm", beneath: root)
         let witURL = try fixedFile("capabilities.wit", beneath: root)
-        let manifest = try PluginManifestValidator.decodeAndValidate(Data(contentsOf: manifestURL),
-                                                                     registry: registry)
         let componentData = try Data(contentsOf: componentURL, options: [.mappedIfSafe])
         guard componentData.count <= maximumComponentBytes else { throw PluginPackageError.componentTooLarge }
         // Component Model binaries use the standard wasm magic followed by
@@ -80,10 +124,7 @@ public struct PluginPackageLoader: Sendable {
         guard manifest.host.entryPoints.isSubset(of: Set(wit.capabilityInputs.map(\.name))) else {
             throw PluginManifestValidationError.invalidHostPermissions
         }
-        for (entryPoint, contribution) in manifest.contributes.stepEntryPoints
-        where wit.capabilityInputs.first(where: { $0.name == entryPoint })?.inputType != stepInputType {
-            throw PluginManifestValidationError.invalidContribution(contribution)
-        }
+        try manifest.contributes.validateRuntime(wit, in: contributionPoints)
         for input in wit.capabilityInputs {
             let capabilityID = manifest.id + "." + input.name
             guard let range = capabilityID.range(
@@ -95,11 +136,11 @@ public struct PluginPackageLoader: Sendable {
         }
         return ValidatedPluginPackage(rootURL: root,
                                       manifest: manifest,
-                                      componentURL: componentURL,
+                                      runtime: ValidatedPluginComponent(componentURL: componentURL,
                                       witURL: witURL,
                                       witContract: wit,
                                       componentHash: CapabilityDigest.sha256(componentData),
-                                      witHash: CapabilityDigest.sha256(witData))
+                                      witHash: CapabilityDigest.sha256(witData)), resourceHashes: resources)
     }
 
     private func fixedFile(_ name: String, beneath root: URL) throws -> URL {

@@ -82,6 +82,7 @@ struct DocumentEditingTests {
         #expect(DocumentFileNode.keys(in: tree)["Docs/Guide/intro.md"]?.path == [0, 0, 0])
         #expect(DocumentKind(path: "Scripts/Game.swift").name == "Swift")
         #expect(DocumentKind(path: "README.MD").isMarkdown)
+        #expect(DocumentKind(path: "paper.tex").languageID == "latex")
         #expect(EditorTitleBar.initials(of: "CrystalRush") == "CR")
         #expect(EditorTitleBar.initials(of: "my game") == "MG")
         #expect(EditorTitleBar.initials(of: "demo") == "DE")
@@ -103,7 +104,7 @@ struct DocumentEditingTests {
                 let context = PlatformInputContext()
                 try context.withCurrent {
                     let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-                    graph.install(root: DocumentEditingSurface(model: model, path: path, session: DocumentWritingSession()).frame(width: 720, height: 480))
+                    graph.install(root: DocumentEditingSurface(model: model, app: nil, path: path, session: DocumentWritingSession()).frame(width: 720, height: 480))
                     defer { graph.install(root: EmptyView()) }
                     func settle() {
                         for _ in 0..<8 { graph.recomposer.commitAll(); graph.computeLayout(width: 720, height: 480) }

@@ -2,9 +2,9 @@
 import XCTest
 
 final class EditorAISettingsTests: XCTestCase {
-    func testEnvironmentCredentialsUseGuavaOverrideBeforeStandardVariable() {
+    func testEnvironmentCredentialsUseOnlyTheDeclaredVariable() {
         let credential = AICredentialStore.environmentCredential(
-            provider: .openai,
+            variable: "GUAVA_OPENAI_API_KEY",
             environment: [
                 "OPENAI_API_KEY": "standard",
                 "GUAVA_OPENAI_API_KEY": "override",
@@ -18,24 +18,24 @@ final class EditorAISettingsTests: XCTestCase {
     func testEnvironmentCredentialsSupportEveryRemoteProviderAndRejectBlanks() {
         XCTAssertEqual(
             AICredentialStore.environmentCredential(
-                provider: .anthropic,
+                variable: "ANTHROPIC_API_KEY",
                 environment: ["ANTHROPIC_API_KEY": " anthropic-key "]
             )?.key,
             "anthropic-key"
         )
         XCTAssertEqual(
             AICredentialStore.environmentCredential(
-                provider: .deepseek,
+                variable: "DEEPSEEK_API_KEY",
                 environment: ["DEEPSEEK_API_KEY": "deepseek-key"]
             )?.variable,
             "DEEPSEEK_API_KEY"
         )
         XCTAssertNil(AICredentialStore.environmentCredential(
-            provider: .openai,
+            variable: "OPENAI_API_KEY",
             environment: ["OPENAI_API_KEY": "  "]
         ))
         XCTAssertNil(AICredentialStore.environmentCredential(
-            provider: .none,
+            variable: nil,
             environment: ["OPENAI_API_KEY": "ignored"]
         ))
     }
@@ -44,14 +44,14 @@ final class EditorAISettingsTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString).appendingPathComponent("Credentials/ai-providers.json")
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent().deletingLastPathComponent()) }
-        try AICredentialStore.save(key: "sk-one", provider: .anthropic, at: url)
-        try AICredentialStore.save(key: "sk-two", provider: .openai, at: url)
+        try AICredentialStore.save(key: "sk-one", providerID: "anthropic", at: url)
+        try AICredentialStore.save(key: "sk-two", providerID: "openai", at: url)
         XCTAssertEqual(AICredentialStore.stored(at: url), ["anthropic": "sk-one", "openai": "sk-two"])
         let file = try FileManager.default.attributesOfItem(atPath: url.path)
         let folder = try FileManager.default.attributesOfItem(atPath: url.deletingLastPathComponent().path)
         XCTAssertEqual((file[.posixPermissions] as? NSNumber)?.intValue, 0o600)
         XCTAssertEqual((folder[.posixPermissions] as? NSNumber)?.intValue, 0o700)
-        try AICredentialStore.save(key: "", provider: .anthropic, at: url)
+        try AICredentialStore.save(key: "", providerID: "anthropic", at: url)
         XCTAssertEqual(AICredentialStore.stored(at: url), ["openai": "sk-two"])
     }
 }

@@ -8,7 +8,7 @@ struct TaskProvider: Sendable {
     let step: StepProvider
 
     static let bundled: [TaskProvider] = BundledPlugins.catalog.compactMap { plugin in
-        guard let contribution = plugin.manifest.contributes.tasks,
+        guard let contribution = ((try? plugin.manifest.contributes.decode(TaskContributionPoint.self)) ?? []).first,
               let process = plugin.manifest.host.processes.first(where: { $0.entryPoints.contains(TaskContribution.entryPoint) })
         else { return nil }
         return TaskProvider(pluginID: plugin.id, contribution: contribution,

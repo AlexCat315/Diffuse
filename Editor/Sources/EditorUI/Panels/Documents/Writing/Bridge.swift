@@ -5,7 +5,9 @@ internal import GuavaUIRuntime
 /// Connects the writing bar, the status line and the AI actions to the open
 /// editor. The editing surface reports its buffer, caret and commit path here;
 /// commands edit through it so the editor keeps its undo history and caret.
-final class DocumentWritingSession: _ObservableObject {
+/// Mutated from the editor's main thread; the annotation lets a format result
+/// hop back from its detached capability call.
+final class DocumentWritingSession: _ObservableObject, @unchecked Sendable {
     struct State: Equatable {
         var caret = TextFieldCaretState.initial
         var wrapsLines = true

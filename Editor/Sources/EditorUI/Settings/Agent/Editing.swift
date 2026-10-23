@@ -15,7 +15,7 @@ struct AgentSettingsEditor {
         var next = state.wrappedValue; change(&next); state.wrappedValue = next
     }
 
-    func select(_ provider: EditorAIProvider) {
+    func select(_ provider: AIProviderDescriptor?) {
         update { $0.draft.select(provider); $0.feedback = nil; $0.confirmsKeyRemoval = false }
     }
 
@@ -23,12 +23,14 @@ struct AgentSettingsEditor {
 
     func apply() {
         let model = draft.model.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard draft.provider == .none || !model.isEmpty else {
+        guard draft.providerID.isEmpty || !model.isEmpty else {
             update { $0.feedback = .failure(L("Enter a model name.")) }; return
         }
-        let settings = EditorAISettings(provider: draft.provider, model: model, autoApprove: draft.autoApprove)
+        let settings = EditorAISettings(providerID: draft.providerID,
+                                        model: draft.providerID.isEmpty ? "" : model,
+                                        autoApprove: draft.autoApprove)
         let key = draft.apiKey.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard settings.provider == .none || !key.isEmpty || app.aiCredentialSource(for: settings.provider) != nil else {
+        guard !settings.isEnabled || !key.isEmpty || app.aiCredentialSource(for: settings.providerID) != nil else {
             update { $0.feedback = .failure(L("Enter an API key for the selected provider.")) }; return
         }
         guard app.applyAISettings(settings, apiKey: key) else {
@@ -37,7 +39,7 @@ struct AgentSettingsEditor {
         update {
             $0.draft = EditorAISettingsDraft(settings: settings)
             $0.confirmsKeyRemoval = false
-            $0.feedback = .success(settings.provider == .none ? L("AI Assistant disabled.") : L("AI settings applied."))
+            $0.feedback = .success(settings.isEnabled ? L("AI settings applied.") : L("AI Assistant disabled."))
         }
         onChange()
     }
@@ -62,7 +64,7 @@ struct AgentSettingsEditor {
 
 extension EditorAISettingsDraft {
     func differs(from settings: EditorAISettings) -> Bool {
-        provider != settings.provider || autoApprove != settings.autoApprove || !apiKey.isEmpty
-            || (provider != .none && model.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) != settings.model)
+        providerID != settings.providerID || autoApprove != settings.autoApprove || !apiKey.isEmpty
+            || (!providerID.isEmpty && model.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) != settings.model)
     }
 }

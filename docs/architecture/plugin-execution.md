@@ -11,7 +11,35 @@ kind: doc
 
 # 跨平台插件执行
 
-Guava 插件保持同一套三文件契约：`plugin.json` 声明身份和权限，`capabilities.wit` 声明输入类型，`component.wasm` 承载 Component Model 代码。权限和 schema 不由插件运行结果动态决定。
+Guava 插件以 `plugin.json` 为必选文件。纯声明插件只包含 manifest 和已声明的 `resources/` 资源，不创建插件宿主；需要执行代码时，`capabilities.wit` 与 `component.wasm` 必须成对提供。WIT 声明函数输入类型，WASM 承载 Component Model 代码，权限与 schema 不由运行结果决定。
+
+## 声明式贡献与资源
+
+`contributes` 使用有版本的命名空间键，每个值是该贡献点的声明数组：`guava.language/v1`、`guava.vcs/v1`、`guava.tasks/v1`、`guava.ai.provider/v1`、`guava.theme/v1`。`ContributionPointSpec` 由领域定义描述类型和验证规则，`ContributionPointRegistry` 执行解码与校验；未知贡献点、未知 major、重复声明 ID 会被拒绝。所有第一方 manifest 已直接迁移，不解码旧贡献键。
+
+`resources` 为数组，每项包含 `id`、`path`、`kind`。路径必须位于 `resources/`，禁止绝对路径、空路径段、`..` 与任一级符号链接；禁止未声明的资源文件，单包资源总量限制为 16 MiB。资源按相对路径计算 SHA-256，读取时重新比对；完整 manifest、资源哈希以及可选的 WIT / component 哈希都绑定进授权记录和 authority digest。任何声明、资源或代码变化都需要重新授权。
+
+运行时包可声明 `runtime`（`component`、`wit`、`compatibility: 1`）以及 `activation` 事件。当前阶段校验事件格式；按事件惰性激活和统一生命周期管理将在下一阶段接入，运行时插件仍沿用现有加载流程。
+
+`./guava plugin build <source> --output <package.guavaplugin>` 同时支持声明式与运行时插件。纯声明源码无需 `Sources/` 或 WIT，打包不调用 Swift guest 编译器或插件宿主。
+
+## 主题
+
+`studio.theme.default` 从 `Editor/Plugins/Themes/Default` 打包为 `DefaultTheme.guavaplugin`，没有 WASM。`guava.theme/v1` 声明主题 ID、标题、`light/dark/dual` 外观以及主题资源路径。资源 `version: 1` 的 light / dark 分组支持语义色、字体、间距、圆角、动效、输入框、文本强调、阴影和语法配色；颜色支持 `#RRGGBB` / `#RRGGBBAA` 或四个 0...1 浮点通道，未知色槽及越界值拒绝注册。图标替换契约尚未开放。
+
+每个编辑器会话拥有自己的主题目录，UI 读取只读快照。主题 ID 保存在 shell 偏好中，目录 revision 与刷新 revision 不进入持久化。切换、停用、重载只更新主题环境，保留面板节点和 AI 对话。主题不可用时使用 GuavaUI 的基础主题回退；修改资源后重载会进入现有重新授权流程。
+
+声明式插件支持与运行时插件相同的检查、授权、启用、停用、重载和可选开发监视入口；监视包含已声明资源。当前 Web 导出仍面向运行时插件，并携带经过校验的静态资源。
+
+设计参考：[VS Code 贡献点](https://code.visualstudio.com/api/references/contribution-points)、[激活事件](https://code.visualstudio.com/api/references/activation-events)及 [Zed 主题扩展](https://zed.dev/docs/extensions/themes)。
+
+## 语言注册
+
+编辑器的语言名称、文件图标与语言标识来自插件贡献，而不是内置扩展名表。随包分发的每个插件与当前已启用插件都会把 `contributes["guava.language/v1"]` 登记到同一张注册表；同 `id` 只保留先登记的一份。`icon` 可覆盖默认的图标键（默认使用语言 `id`，`plaintext` 用 `text` 图标）。`.tex` 由随包 `Plugins/Languages.guavaplugin`（`studio.languages`）登记为 LaTeX。已分布但未启用的随包插件仍参与识别，停用只影响其语言服务等运行时能力。
+
+`grammar` 与 `outline` 是 `plugin.json` 中的静态数据，不是能力调用。宿主按数组顺序在整个文档上执行正则，已占用的字符不会被后续规则覆盖；`^`/`$` 按行匹配。语法规则只返回 `keyword`、`type`、`function`、`string`、`number`、`comment`、`attribute`、`directive` 八种 token，由宿主映射到统一调色板，插件不能贡献颜色。提纲规则要求第 1 个捕获组是标题，`level` 为 1…6，同一起点保留先出现的规则。两者都在编辑进程内执行，按键路径不进入 WASM，因此随包语言即使未启用也能着色和列提纲。
+
+`format` 是唯一需要插件挂载的语言贡献：`format.entryPoint` 必须指向 WIT 中一个输入为 `record { text: string }` 的能力。编辑器在 `Option+Shift+F` 时调用它，单次最多 64 KiB 文本；返回结果是 JSON 字符串（读取类能力的通用结果格式），宿主解码后作为整篇文本一次替换。未声明、插件未启用或调用失败时文档保持不变，失败写入控制台。`studio.languages` 的 `format` 能力实现 LaTeX 的统一换行、行尾空白清理与连续空行压缩。
 
 ## Swift Support 捆绑插件
 

@@ -1,3 +1,4 @@
+import EditorCore
 @testable import EditorUI
 import GuavaUICompose
 import Testing
@@ -44,4 +45,19 @@ private func apply(_ format: MarkdownFormat, to text: String, _ selection: Range
     #expect(headings.map(\.title) == ["Title", "Part", "Detail"])
     #expect(headings.map(\.level) == [1, 2, 3])
     #expect(headings[1].characterIndex == text.distance(from: text.startIndex, to: text.range(of: "## Part")!.lowerBound))
+}
+
+@Test func declarativeOutlineRulesUseCapturedTitles() {
+    let rules = [
+        LanguageOutlineRule(pattern: #"\\chapter\*?\{([^}]*)\}"#, level: 1),
+        LanguageOutlineRule(pattern: #"\\section\*?\{([^}]*)\}"#, level: 2),
+    ]
+    let text = "\\chapter{Intro}\n\\section*{Part}\n% \\section{Hidden}\n\\section{}"
+    let headings = DocumentHeading.parse(text, rules: rules)
+    #expect(headings.map(\.title) == ["Intro", "Part", "Hidden"])
+    #expect(headings.map(\.level) == [1, 2, 2])
+    #expect(headings[0].characterIndex == 0)
+    #expect(headings[1].characterIndex == text.distance(from: text.startIndex,
+                                                       to: text.range(of: "\\section*")!.lowerBound))
+    #expect(DocumentHeading.parse("# Markdown", rules: rules) == [])
 }

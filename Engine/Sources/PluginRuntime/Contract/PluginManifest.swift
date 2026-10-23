@@ -66,7 +66,10 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
     /// kind then id so the value is deterministic for digests and comparisons.
     public var requires: [PluginRequirement]
     public var host: PluginHostPermissions
-    public var contributes: PluginContributions
+    public var contributes: ContributionDescriptor
+    public var resources: [PluginResource] = []
+    public var runtime: PluginRuntimeDeclaration?
+    public var activation: [String] = []
 
     public init(id: String,
                 version: Int,
@@ -77,7 +80,7 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
                 composableHostCapabilities: [String] = [],
                 requires: [PluginRequirement] = [],
                 host: PluginHostPermissions = .init(),
-                contributes: PluginContributions = .init()) {
+                contributes: ContributionDescriptor = .init()) {
         self.id = id
         self.version = version
         self.name = CapabilityContract.sanitiseMetadata(name, maximumLength: 80)
@@ -107,13 +110,16 @@ public struct GuavaPluginManifest: Codable, Sendable, Equatable {
                   requires: try container.decodeIfPresent([PluginRequirement].self,
                                                           forKey: .requires) ?? [],
                   host: try container.decodeIfPresent(PluginHostPermissions.self, forKey: .host) ?? .init(),
-                  contributes: try container.decodeIfPresent(PluginContributions.self, forKey: .contributes) ?? .init())
+                  contributes: try container.decodeIfPresent(ContributionDescriptor.self, forKey: .contributes) ?? .init())
+        resources = try container.decodeIfPresent([PluginResource].self, forKey: .resources) ?? []
+        runtime = try container.decodeIfPresent(PluginRuntimeDeclaration.self, forKey: .runtime)
+        activation = try container.decodeIfPresent([String].self, forKey: .activation) ?? []
     }
 
     enum CodingKeys: String, CodingKey {
         case id, version, name, description, access, imports
         case composableHostCapabilities = "composable_host_capabilities"
-        case requires, host, contributes
+        case requires, host, contributes, resources, runtime, activation
     }
 }
 
@@ -164,11 +170,12 @@ public enum PluginManifestValidator {
     ]
     private static let allowedFields: Set<String> = [
         "id", "version", "name", "description", "access", "imports",
-        "composable_host_capabilities", "requires", "host", "contributes",
+        "composable_host_capabilities", "requires", "host", "contributes", "resources", "runtime", "activation",
     ]
 
     public static func decodeAndValidate(_ data: Data,
-                                         registry: CapabilityRegistry = .default) throws -> GuavaPluginManifest {
+                                         registry: CapabilityRegistry = .default,
+                                         contributions: ContributionPointRegistry = .standard) throws -> GuavaPluginManifest {
         let raw = try JSONSerialization.jsonObject(with: data)
         guard let object = raw as? [String: Any] else {
             throw PluginManifestValidationError.invalidIdentifier
@@ -180,24 +187,24 @@ public enum PluginManifestValidator {
             throw PluginManifestValidationError.forbiddenMetadataField(unknown)
         }
         let decoded = try JSONDecoder().decode(GuavaPluginManifest.self, from: data)
-        let manifest = GuavaPluginManifest(id: decoded.id,
-                                           version: decoded.version,
-                                           name: decoded.name,
-                                           description: decoded.description,
-                                           access: decoded.access,
-                                           imports: decoded.imports,
-                                           composableHostCapabilities: decoded.composableHostCapabilities,
-                                           requires: decoded.requires,
-                                           host: decoded.host,
-                                           contributes: decoded.contributes)
-        try validate(manifest, registry: registry)
-        return manifest
+        try validate(decoded, registry: registry, contributions: contributions)
+        return decoded
     }
 
     public static func validate(_ manifest: GuavaPluginManifest,
-                                registry: CapabilityRegistry = .default) throws {
+                                registry: CapabilityRegistry = .default,
+                                contributions: ContributionPointRegistry = .standard) throws {
         try manifest.host.validate(imports: manifest.imports)
-        try manifest.contributes.validate(host: manifest.host)
+        try manifest.contributes.validate(in: contributions, host: manifest.host)
+        guard Set(manifest.resources.map(\.id)).count == manifest.resources.count,
+              Set(manifest.resources.map(\.path)).count == manifest.resources.count,
+              manifest.resources.count <= 128,
+              manifest.resources.allSatisfy({ !$0.id.isEmpty && !$0.kind.isEmpty && PluginResource.isValidPath($0.path) }),
+              manifest.runtime.map({ $0.component == "component.wasm" && $0.wit == "capabilities.wit" && $0.compatibility == 1 }) ?? true,
+              Set(manifest.activation).count == manifest.activation.count,
+              manifest.activation.allSatisfy(PluginActivationEvent.isValid) else {
+            throw PluginManifestValidationError.invalidContribution("package")
+        }
         let pattern = "^[a-z][a-z0-9.-]{2,63}$"
         guard manifest.id.range(of: pattern, options: .regularExpression) != nil else {
             throw PluginManifestValidationError.invalidIdentifier

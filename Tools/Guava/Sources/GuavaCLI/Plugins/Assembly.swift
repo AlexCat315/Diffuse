@@ -13,8 +13,18 @@ struct PluginBuild {
     func run() throws {
         let manifest = directory.appendingPathComponent("plugin.json")
         let contract = directory.appendingPathComponent("capabilities.wit")
+        guard FileManager.default.fileExists(atPath: manifest.path),
+              let object = try JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as? [String: Any] else {
+            throw ToolError.invalid("A plugin directory needs plugin.json")
+        }
+        let hasContract = FileManager.default.fileExists(atPath: contract.path)
+        if !hasContract && object["runtime"] == nil {
+            let package = output ?? directory.appendingPathComponent(".guava/build/\(moduleName).guavaplugin")
+            try assemble(manifest: manifest, runtime: [], package: package, object: object)
+            return
+        }
         let sources = try swiftFiles(in: directory.appendingPathComponent("Sources"))
-        guard FileManager.default.fileExists(atPath: manifest.path), FileManager.default.fileExists(atPath: contract.path),
+        guard hasContract,
               !sources.isEmpty else {
             throw ToolError.invalid("A plugin directory needs plugin.json, capabilities.wit and Swift files in Sources/")
         }
@@ -37,9 +47,35 @@ struct PluginBuild {
         try Shell.run([host.path, "--link-component", scratch.appendingPathComponent("shell.wat").path, core.path, component.path])
 
         let package = output ?? scratch.deletingLastPathComponent().appendingPathComponent("\(moduleName).guavaplugin")
-        guard package.pathExtension == "guavaplugin" else { throw ToolError.invalid("--output must end in .guavaplugin") }
+        try assemble(manifest: manifest, runtime: [(contract, "capabilities.wit"), (component, "component.wasm")],
+                     package: package, object: object)
+    }
+
+    private func assemble(manifest: URL, runtime: [(URL, String)], package: URL,
+                          object: [String: Any]) throws {
+        guard package.pathExtension == "guavaplugin", package.standardizedFileURL != directory.standardizedFileURL else {
+            throw ToolError.invalid("--output must be a separate .guavaplugin directory")
+        }
+        let resources = try (object["resources"] as? [[String: Any]] ?? []).map { resource -> (URL, String) in
+            guard let path = resource["path"] as? String else { throw ToolError.invalid("A resource needs a path") }
+            let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+            guard parts.count >= 2, parts.first == "resources", !path.contains("\\"), !path.contains(":"),
+                  parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+                throw ToolError.invalid("Invalid resource path: \(path)")
+            }
+            var source = directory
+            for part in parts {
+                source.appendPathComponent(String(part))
+                guard try source.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else {
+                    throw ToolError.invalid("Symbolic links are not allowed in plugin resources")
+                }
+            }
+            return (source, path)
+        }
         try Files.reset(package)
-        for (source, name) in [(manifest, "plugin.json"), (contract, "capabilities.wit"), (component, "component.wasm")] {
+        for (source, name) in [(manifest, "plugin.json")] + runtime + resources {
+            try FileManager.default.createDirectory(at: package.appendingPathComponent(name).deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
             try Files.copy(source, to: package.appendingPathComponent(name))
         }
         print("Built plugin: \(package.path)")

@@ -57,7 +57,7 @@ struct CommandPaletteOverlay: View {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 8) {
                     let scope = EditorPaletteScope(query: app.store.commandPaletteQuery.stringValue)
-                    Icon(scope.icon, size: 16, color: scope == .intent ? EditorChromeTokens.agentColor : .onSurfaceVariant)
+                    Icon(scope.icon, size: 16, color: scope == .intent ? EditorThemeTokens.agentColor : .onSurfaceVariant)
                         .debugName("command-palette-scope")
                     TextField(L("Tell Guava what you want to do… (> commands, @ files, # entities)"), text: Binding(get: { app.store.commandPaletteQuery }, set: {
                             selectedIndex = 0

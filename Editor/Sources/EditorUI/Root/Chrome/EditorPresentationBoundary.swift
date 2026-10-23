@@ -9,17 +9,20 @@ import GuavaUI
 struct EditorPresentationBoundary<Content: View>: View {
     let presentation: EditorPresentationState
     let content: Content
+    let theme: Theme?
 
     init(presentation: EditorPresentationState,
+         theme: Theme? = nil,
          @ViewBuilder content: () -> Content) {
         self.presentation = presentation
+        self.theme = theme
         self.content = content()
     }
 
     var body: some View {
         content
             .id(presentation.refreshRevision)
-            .theme(EditorVisualTheme.make(dark: presentation.themeMode == .dark))
+            .theme(theme ?? EditorVisualTheme.make(dark: presentation.themeMode == .dark, themeID: presentation.themeID))
             .controlSize(.small)
     }
 }

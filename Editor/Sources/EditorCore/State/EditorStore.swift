@@ -241,6 +241,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.scaleSnapStep, old.snapping.scaleSnapStep, new.snapping.scaleSnapStep)
         case .setPrimarySelectBehavior:
             mark(.primarySelectBehavior, old.selection.primarySelectBehavior, new.selection.primarySelectBehavior)
+        case .setThemeID, .themeCatalogChanged:
+            mark(.presentation, old.presentation, new.presentation)
         case .setThemeMode:
             mark(.presentation, old.presentation, new.presentation)
             mark(.themeMode, old.themeMode, new.themeMode)

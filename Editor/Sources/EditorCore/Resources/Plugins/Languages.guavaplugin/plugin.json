@@ -1,0 +1,111 @@
+{
+  "id": "studio.languages",
+  "version": 1,
+  "name": "Text Languages",
+  "description": "Names, icons, grammar, outline and formatting for text languages the editor recognises without a language server.",
+  "access": "read",
+  "imports": [],
+  "composable_host_capabilities": [],
+  "contributes": {
+    "guava.language/v1": [
+      {
+        "id": "markdown",
+        "title": "Markdown",
+        "extensions": [
+          "md",
+          "markdown"
+        ],
+        "icon": "markdown"
+      },
+      {
+        "id": "latex",
+        "title": "LaTeX",
+        "extensions": [
+          "tex"
+        ],
+        "icon": "latex",
+        "grammar": {
+          "rules": [
+            {
+              "pattern": "%.*$",
+              "token": "comment"
+            },
+            {
+              "pattern": "\\\\begin\\{(?:verbatim|lstlisting|minted)\\}[\\s\\S]*?\\\\end\\{(?:verbatim|lstlisting|minted)\\}",
+              "token": "string"
+            },
+            {
+              "pattern": "\\$\\$[\\s\\S]*?\\$\\$",
+              "token": "string"
+            },
+            {
+              "pattern": "\\\\\\[[\\s\\S]*?\\\\\\]",
+              "token": "string"
+            },
+            {
+              "pattern": "\\$[^$\\n]*\\$",
+              "token": "string"
+            },
+            {
+              "pattern": "\\\\(?:chapter|section|subsection|subsubsection|paragraph|title|author|date|maketitle|documentclass|usepackage|begin|end|label|ref|cite|item|textbf|textit|emph)\\*?",
+              "token": "keyword"
+            },
+            {
+              "pattern": "\\\\[A-Za-z@]+\\*?",
+              "token": "function"
+            },
+            {
+              "pattern": "\\\\[\\\\{}%$&_#^~]",
+              "token": "attribute"
+            },
+            {
+              "pattern": "\\{(?:document|figure|table|itemize|enumerate|equation|align|tabular|verbatim|lstlisting)\\}",
+              "token": "type"
+            },
+            {
+              "pattern": "\\b\\d+(?:\\.\\d+)?\\b",
+              "token": "number"
+            }
+          ]
+        },
+        "outline": {
+          "rules": [
+            {
+              "pattern": "\\\\chapter\\*?\\{([^}]*)\\}",
+              "level": 1
+            },
+            {
+              "pattern": "\\\\section\\*?\\{([^}]*)\\}",
+              "level": 2
+            },
+            {
+              "pattern": "\\\\subsection\\*?\\{([^}]*)\\}",
+              "level": 3
+            },
+            {
+              "pattern": "\\\\subsubsection\\*?\\{([^}]*)\\}",
+              "level": 4
+            }
+          ]
+        },
+        "format": {
+          "entryPoint": "format"
+        }
+      },
+      {
+        "id": "plaintext",
+        "title": "Plain Text",
+        "extensions": [
+          "txt",
+          "text"
+        ],
+        "icon": "text"
+      }
+    ]
+  },
+  "runtime": {
+    "component": "component.wasm",
+    "wit": "capabilities.wit",
+    "compatibility": 1
+  }
+}

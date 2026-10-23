@@ -74,12 +74,12 @@ struct SourceControlPanel: View, @unchecked Sendable {
                     } label: {
                         Row(alignment: .center, spacing: 5) {
                             if isDrafting { Spinner(size: 10) } else {
-                                Icon(UIIcons.Status.sparkles, size: 11, color: EditorChromeTokens.agentColor)
+                                Icon(UIIcons.Status.sparkles, size: 11, color: EditorThemeTokens.agentColor)
                             }
                             Text(L("Generate")).font(.caption)
                         }
                     }.buttonStyle(EditorChromeButtonStyle(height: 24, agent: true))
-                        .background(EditorChromeTokens.agentColor.opacity(0.10)).cornerRadius(6)
+                        .background(EditorThemeTokens.agentColor.opacity(0.10)).cornerRadius(6)
                         .debugName("source-control-generate")
                     Spacer(minLength: 0)
                     if let operation = snapshot.operation {

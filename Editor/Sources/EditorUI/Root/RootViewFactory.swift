@@ -8,6 +8,7 @@ import Foundation
 enum EditorRootViewFactory {
     struct EditorShellState: Codable, Sendable {
         var workspace = EditorWorkspaceState()
+        var themeID = EditorThemeCatalog.defaultThemeID
         var themeMode: EditorThemeMode
         var language: EditorLanguage
         var vsyncMode: EditorVSyncMode
@@ -17,6 +18,7 @@ enum EditorRootViewFactory {
 
         init(workspace: EditorWorkspaceState,
              themeMode: EditorThemeMode = .dark,
+             themeID: String = EditorThemeCatalog.defaultThemeID,
              language: EditorLanguage = .system,
              vsyncMode: EditorVSyncMode = .enabled,
              primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
@@ -24,6 +26,7 @@ enum EditorRootViewFactory {
              capabilitySettings: EditorCapabilitySettings = .default) {
             self.workspace = workspace
             self.themeMode = themeMode
+            self.themeID = themeID
             self.language = language
             self.vsyncMode = vsyncMode
             self.primarySelectBehavior = primarySelectBehavior
@@ -33,7 +36,7 @@ enum EditorRootViewFactory {
 
         enum CodingKeys: String, CodingKey {
             case workspace
-            case themeMode
+            case themeMode, themeID
             case language
             case vsyncMode
             case primarySelectBehavior
@@ -45,6 +48,7 @@ enum EditorRootViewFactory {
             var values = encoder.container(keyedBy: CodingKeys.self)
             try values.encode(workspace, forKey: .workspace)
             try values.encode(themeMode, forKey: .themeMode)
+            try values.encode(themeID, forKey: .themeID)
             try values.encode(language, forKey: .language)
             try values.encode(vsyncMode, forKey: .vsyncMode)
             try values.encode(primarySelectBehavior, forKey: .primarySelectBehavior)
@@ -56,6 +60,7 @@ enum EditorRootViewFactory {
             let values = try decoder.container(keyedBy: CodingKeys.self)
             workspace = try values.decodeIfPresent(EditorWorkspaceState.self, forKey: .workspace) ?? workspace
             themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
+            themeID = try values.decodeIfPresent(String.self, forKey: .themeID) ?? themeID
             language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
             vsyncMode = try values.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) ?? .enabled
             primarySelectBehavior = try values.decodeIfPresent(
@@ -251,6 +256,7 @@ enum EditorRootViewFactory {
 
     static func saveShellState(workspace: EditorWorkspaceState,
                                themeMode: EditorThemeMode,
+                               themeID: String = EditorThemeCatalog.defaultThemeID,
                                language: EditorLanguage,
                                vsyncMode: EditorVSyncMode,
                                primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
@@ -259,6 +265,7 @@ enum EditorRootViewFactory {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let shell = EditorShellState(workspace: workspace,
                                      themeMode: themeMode,
+                                     themeID: themeID,
                                      language: language,
                                      vsyncMode: vsyncMode,
                                      primarySelectBehavior: primarySelectBehavior,

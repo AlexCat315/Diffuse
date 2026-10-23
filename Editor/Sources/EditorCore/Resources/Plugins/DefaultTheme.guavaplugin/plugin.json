@@ -1,0 +1,26 @@
+{
+  "id": "studio.theme.default",
+  "version": 1,
+  "name": "Guava Default",
+  "description": "Default editor theme",
+  "access": "read",
+  "imports": [],
+  "composable_host_capabilities": [],
+  "resources": [
+    {
+      "id": "default-theme",
+      "path": "resources/theme.json",
+      "kind": "theme"
+    }
+  ],
+  "contributes": {
+    "guava.theme/v1": [
+      {
+        "id": "studio.theme.default",
+        "title": "Guava Default",
+        "appearance": "dual",
+        "path": "resources/theme.json"
+      }
+    ]
+  }
+}

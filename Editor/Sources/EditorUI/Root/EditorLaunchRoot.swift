@@ -26,7 +26,8 @@ struct EditorLaunchRoot: View {
             }
         } else {
             WelcomeView(context: context)
-                .theme(EditorVisualTheme.make(dark: context.shellState?.themeMode != .light))
+                .theme(EditorVisualTheme.make(dark: context.shellState?.themeMode != .light,
+                                            themeID: context.shellState?.themeID ?? EditorThemeCatalog.defaultThemeID))
                 .controlSize(.small)
         }
     }

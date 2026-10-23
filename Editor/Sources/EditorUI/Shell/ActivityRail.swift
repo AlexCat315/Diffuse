@@ -82,7 +82,7 @@ private struct ActivityButtonStyle: ButtonStyle {
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let colors = configuration.theme.colors
-        let ink = agent ? configuration.theme.extensions[EditorChromeTokens.self].agent : colors.onSurfaceVariant
+        let ink = agent ? configuration.theme.extensions[EditorThemeTokens.self].agent : colors.onSurfaceVariant
         Row(alignment: .center, spacing: 4) {
             Box {}.frame(width: 2, height: 16)
                 .background(configuration.isSelected ? colors.accent : .clear).cornerRadius(1)

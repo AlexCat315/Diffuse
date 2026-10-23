@@ -370,7 +370,7 @@ public struct PluginRequirement: Codable, Sendable, Equatable, Hashable {
 ## 明确不做
 
 - 不引入运行时 DI 容器或全局服务定位；Cordis 的 profile / bundle / patch 配置分层不落地；
-- 不做 Swift 代码的动态装载——热重载只适用于 WASM 插件；
+- 不做 Swift 代码的动态装载；插件重载覆盖 WASM 及纯声明包，声明式重载只替换领域快照；
 - 不改变插件授权、沙箱、资源限额语义；
 - 不为兼容保留双轨：迁移完成即删除旧分支（遵循仓库 AGENTS.md 的迁移约定）。
 
@@ -386,3 +386,9 @@ npm --prefix Platforms/Web/Plugins test
 ```
 
 本次审计在 macOS 验证：Engine 447 项、Editor 26 项、Web 单元测试 6 项；GuavaMCP 构建、MCP 协议检查与维护性检查通过。跨平台运行结论仍须由各平台 CI / 真机 gate 验证。
+
+## 插件平台的声明式生命周期
+
+平台契约已支持无运行时包、版本化贡献点及资源哈希授权。声明式包的检查、启用、停用与重载直接由编辑器处理，不经过 WASM 宿主；每个编辑器会话独立持有主题目录，目录变更通过主题环境重绘，不触发全窗口重建或 AI 会话替换。
+
+统一 `PluginManager`、按贡献注册的 `Registration` / `DisposalScope`、事件激活和领域失效收窄仍按 `specs/plugin-platform/tasks.md` 阶段 2 推进。当前 `activation` 只校验声明格式，运行时继续使用现有加载方式。资源、主题契约和命令见 [插件执行](plugin-execution.md)。

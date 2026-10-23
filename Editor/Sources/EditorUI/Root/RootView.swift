@@ -16,7 +16,8 @@ struct EditorRootView: View {
         StoreScope(app.store) { store in
             let cb = EditorCallbacks(app: app, controller: controller, registry: registry,
                                      commandPaletteVisible: store.commandPaletteVisible)
-            EditorPresentationBoundary(presentation: store.presentation) {
+            EditorPresentationBoundary(presentation: store.presentation,
+                                       theme: app.resolvedTheme(dark: store.themeMode == .dark)) {
                 LayerRoot {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)

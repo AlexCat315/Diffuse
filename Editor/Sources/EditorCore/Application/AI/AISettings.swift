@@ -25,17 +25,22 @@ extension EditorApplication {
     /// and hot-swaps the Session without restart.
     @discardableResult
     public func applyAISettings(_ settings: EditorAISettings, apiKey: String) -> Bool {
+        let provider = AIProviderCatalog.provider(id: settings.providerID)
         do {
-            if settings.provider != .none, !apiKey.isEmpty {
-                try AICredentialStore.save(key: apiKey, provider: settings.provider)
+            if settings.isEnabled, !apiKey.isEmpty {
+                try AICredentialStore.save(key: apiKey, providerID: settings.providerID)
             }
             // Read the secret once here, on the user's Apply, so a key the
             // session cannot use fails now instead of leaving AI silently off.
-            guard settings.provider == .none || AICredentialStore.load(provider: settings.provider) != nil else {
-                logConsole("AI settings were not applied",
-                           severity: .error,
-                           detail: "Enter an API key for \(settings.provider.displayName).")
-                return false
+            if settings.isEnabled {
+                guard let provider,
+                      AICredentialStore.load(providerID: settings.providerID,
+                                             environmentVariable: provider.environmentVariable) != nil else {
+                    logConsole("AI settings were not applied",
+                               severity: .error,
+                               detail: "Enter an API key for \(provider?.title ?? settings.providerID).")
+                    return false
+                }
             }
         } catch {
             logConsole("AI credentials could not be saved",
@@ -92,7 +97,7 @@ extension EditorApplication {
     @discardableResult
     public func clearAIKey() -> Bool {
         do {
-            try AICredentialStore.delete(provider: store.state.assistant.aiSettings.provider)
+            try AICredentialStore.delete(providerID: store.state.assistant.aiSettings.providerID)
         } catch {
             logConsole("AI credentials could not be removed",
                        severity: .error,
@@ -110,7 +115,8 @@ extension EditorApplication {
         store.dispatch(.clearChatHistory)
         agentExecution.assistantMessageID = nil
         var settings = store.state.assistant.aiSettings
-        settings.provider = .none
+        settings.providerID = ""
+        settings.model = ""
         store.dispatch(.setAISettings(settings))
         return true
     }
@@ -127,15 +133,18 @@ extension EditorApplication {
         agentExecution.proposal = nil
     }
 
-    /// Returns `true` if a non-empty API key is stored for the current provider.
-    public func hasStoredAIKey(for provider: EditorAIProvider? = nil) -> Bool {
-        AICredentialStore.hasKey(for: provider ?? store.state.assistant.aiSettings.provider)
+    /// Returns `true` if a non-empty API key is stored for the provider.
+    public func hasStoredAIKey(for providerID: String? = nil) -> Bool {
+        let id = providerID ?? store.state.assistant.aiSettings.providerID
+        guard let provider = AIProviderCatalog.provider(id: id) else { return false }
+        return AICredentialStore.hasKey(for: id, environmentVariable: provider.environmentVariable)
     }
 
-    public func aiCredentialSource(
-        for provider: EditorAIProvider? = nil
-    ) -> AICredentialSource? {
-        AICredentialStore.credentialSource(for: provider ?? store.state.assistant.aiSettings.provider)
+    public func aiCredentialSource(for providerID: String? = nil) -> AICredentialSource? {
+        let id = providerID ?? store.state.assistant.aiSettings.providerID
+        guard let provider = AIProviderCatalog.provider(id: id) else { return nil }
+        return AICredentialStore.credentialSource(for: id,
+                                                  environmentVariable: provider.environmentVariable)
     }
 
     static func workflowContext(
@@ -191,33 +200,36 @@ extension EditorApplication {
                             pluginCapabilityExecutor: PluginCapabilityExecutor? = nil,
                             pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil,
                             toolPolicy: ToolPolicy? = nil) -> Session? {
-        switch settings.provider {
-        case .none:
+        guard settings.isEnabled,
+              let provider = AIProviderCatalog.provider(id: settings.providerID),
+              let apiFormat = apiFormat(for: provider),
+              let baseURL = provider.baseURL.flatMap(URL.init(string:)),
+              let key = AICredentialStore.load(providerID: provider.id,
+                                               environmentVariable: provider.environmentVariable) else {
             return nil
-        case .anthropic:
-            guard let key = AICredentialStore.load(provider: .anthropic) else { return nil }
-            return Session(config: .anthropic(apiKey: key, model: settings.model, maxTokens: 8192,
-                                              autoApprove: settings.autoApprove),
-                           initialWorldView: initialWorldView,
-                           pluginCapabilityExecutor: pluginCapabilityExecutor,
-                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider,
-                           toolPolicy: toolPolicy)
-        case .openai:
-            guard let key = AICredentialStore.load(provider: .openai) else { return nil }
-            return Session(config: .openAIResponses(apiKey: key, model: settings.model, maxTokens: 8192,
-                                                    autoApprove: settings.autoApprove),
-                           initialWorldView: initialWorldView,
-                           pluginCapabilityExecutor: pluginCapabilityExecutor,
-                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider,
-                           toolPolicy: toolPolicy)
-        case .deepseek:
-            guard let key = AICredentialStore.load(provider: .deepseek) else { return nil }
-            return Session(config: .deepSeek(apiKey: key, model: settings.model, maxTokens: 8192,
-                                             autoApprove: settings.autoApprove),
-                           initialWorldView: initialWorldView,
-                           pluginCapabilityExecutor: pluginCapabilityExecutor,
-                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider,
-                           toolPolicy: toolPolicy)
+        }
+        let model = provider.models.first { $0.id == settings.model }
+            ?? provider.models.first { $0.id == provider.defaultModel }
+        guard let model else { return nil }
+        let config = SessionConfig(apiKey: key,
+                                   model: model.id,
+                                   maxTokens: model.maxOutputTokens ?? 8192,
+                                   baseURL: baseURL,
+                                   apiFormat: apiFormat,
+                                   autoApprove: settings.autoApprove)
+        return Session(config: config,
+                       initialWorldView: initialWorldView,
+                       pluginCapabilityExecutor: pluginCapabilityExecutor,
+                       pluginQuerySnapshotProvider: pluginQuerySnapshotProvider,
+                       toolPolicy: toolPolicy)
+    }
+
+    private static func apiFormat(for provider: AIProviderDescriptor) -> SessionAPIFormat? {
+        switch provider.apiFormat {
+        case "anthropic": .anthropic
+        case "openai-responses": .openAIResponses
+        case "openai-compatible": .openAICompatible
+        default: nil
         }
     }
 }

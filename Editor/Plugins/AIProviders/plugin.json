@@ -1,0 +1,108 @@
+{
+  "id": "studio.ai-providers",
+  "version": 1,
+  "name": "AI Providers",
+  "description": "Bundled model providers for the AI assistant. Credentials and transport stay with the host.",
+  "access": "read",
+  "imports": [],
+  "composable_host_capabilities": [],
+  "contributes": {
+    "guava.ai.provider/v1": [
+      {
+        "id": "anthropic",
+        "title": "Anthropic",
+        "apiFormat": "anthropic",
+        "baseURL": "https://api.anthropic.com",
+        "defaultModel": "claude-sonnet-4-6",
+        "models": [
+          {
+            "id": "claude-sonnet-4-6",
+            "title": "Claude Sonnet 4.6",
+            "contextWindow": 200000,
+            "maxOutputTokens": 8192,
+            "supportsTools": true
+          }
+        ],
+        "auth": {
+          "type": "apiKey",
+          "fields": [
+            {
+              "id": "api-key",
+              "title": "API Key",
+              "secret": true,
+              "environmentVariable": "ANTHROPIC_API_KEY"
+            }
+          ]
+        }
+      },
+      {
+        "id": "openai",
+        "title": "OpenAI",
+        "apiFormat": "openai-responses",
+        "baseURL": "https://api.openai.com",
+        "defaultModel": "gpt-4o",
+        "models": [
+          {
+            "id": "gpt-4o",
+            "title": "GPT-4o",
+            "contextWindow": 128000,
+            "maxOutputTokens": 8192,
+            "supportsTools": true
+          },
+          {
+            "id": "gpt-4o-mini",
+            "title": "GPT-4o mini",
+            "contextWindow": 128000,
+            "maxOutputTokens": 8192,
+            "supportsTools": true
+          }
+        ],
+        "auth": {
+          "type": "apiKey",
+          "fields": [
+            {
+              "id": "api-key",
+              "title": "API Key",
+              "secret": true,
+              "environmentVariable": "OPENAI_API_KEY"
+            }
+          ]
+        }
+      },
+      {
+        "id": "deepseek",
+        "title": "DeepSeek",
+        "apiFormat": "openai-compatible",
+        "baseURL": "https://api.deepseek.com",
+        "defaultModel": "deepseek-chat",
+        "models": [
+          {
+            "id": "deepseek-chat",
+            "title": "DeepSeek Chat",
+            "contextWindow": 64000,
+            "maxOutputTokens": 8192,
+            "supportsTools": true
+          },
+          {
+            "id": "deepseek-reasoner",
+            "title": "DeepSeek Reasoner",
+            "contextWindow": 64000,
+            "maxOutputTokens": 8192,
+            "supportsTools": false
+          }
+        ],
+        "auth": {
+          "type": "apiKey",
+          "fields": [
+            {
+              "id": "api-key",
+              "title": "API Key",
+              "secret": true,
+              "environmentVariable": "DEEPSEEK_API_KEY"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

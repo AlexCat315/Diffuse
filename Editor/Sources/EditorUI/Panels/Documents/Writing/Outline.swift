@@ -20,27 +20,37 @@ struct DocumentOutlinePanel: View {
     var body: some View {
         let document = observed.wrappedValue.selected
         Column(alignment: .leading, spacing: 0) {
-            if let document, DocumentKind(path: document.path).isMarkdown {
-                let outline = cache.outline(for: document.text)
-                let query = filter.stringValue.trimmingCharacters(in: .whitespaces).lowercased()
-                let headings = query.isEmpty ? outline.headings : outline.headings.filter { $0.title.lowercased().contains(query) }
-                EditorPanelSearchBar(L("Filter headings"), text: $filter, summary: "\(outline.headings.count)")
-                summary(outline.statistics)
-                if outline.headings.isEmpty {
-                    EditorPanelEmptyState(L("No headings"), detail: L("Start a line with # to add a heading.")).flex()
+            if let document {
+                let kind = DocumentKind(path: document.path)
+                let hasOutline = kind.isMarkdown
+                    || !LanguageCatalog.outlineRules(forLanguageID: kind.languageID).isEmpty
+                if hasOutline {
+                    let outline = cache.outline(for: document.text, languageID: kind.languageID)
+                    let query = filter.stringValue.trimmingCharacters(in: .whitespaces).lowercased()
+                    let headings = query.isEmpty ? outline.headings : outline.headings.filter { $0.title.lowercased().contains(query) }
+                    EditorPanelSearchBar(L("Filter headings"), text: $filter, summary: "\(outline.headings.count)")
+                    summary(outline.statistics)
+                    if outline.headings.isEmpty {
+                        EditorPanelEmptyState(
+                            L("No headings"),
+                            detail: kind.isMarkdown
+                                ? L("Start a line with # to add a heading.")
+                                : L("No headings in this document.")
+                        ).flex()
+                    } else {
+                        ScrollView(.vertical, scrollbarGutter: .stable) {
+                            Column(alignment: .leading, spacing: 1) {
+                                let base = outline.headings.map(\.level).min() ?? 1
+                                for heading in headings {
+                                    AnyView(row(heading, depth: heading.level - base, path: document.path))
+                                }
+                            }.padding(vertical: 4).frame(width: .percent(100), minWidth: 0)
+                        }.flex().frame(minWidth: 0, minHeight: 0)
+                    }
                 } else {
-                    ScrollView(.vertical, scrollbarGutter: .stable) {
-                        Column(alignment: .leading, spacing: 1) {
-                            let base = outline.headings.map(\.level).min() ?? 1
-                            for heading in headings {
-                                AnyView(row(heading, depth: heading.level - base, path: document.path))
-                            }
-                        }.padding(vertical: 4).frame(width: .percent(100), minWidth: 0)
-                    }.flex().frame(minWidth: 0, minHeight: 0)
+                    summary(cache.outline(for: document.text, languageID: kind.languageID).statistics)
+                    EditorPanelEmptyState(L("No outline"), detail: L("This document has no outline.")).flex()
                 }
-            } else if let document {
-                summary(cache.outline(for: document.text).statistics)
-                EditorPanelEmptyState(L("No outline"), detail: L("Headings are listed for Markdown documents.")).flex()
             } else {
                 EditorPanelEmptyState(L("No document"), detail: L("Open a Markdown file to see its outline.")).flex()
             }
@@ -92,12 +102,17 @@ private final class OutlineCache {
     }
 
     private var text: String?
+    private var languageID: String?
     private var value = Outline()
 
-    func outline(for text: String) -> Outline {
-        guard self.text != text else { return value }
+    func outline(for text: String, languageID: String?) -> Outline {
+        guard self.text != text || self.languageID != languageID else { return value }
         self.text = text
-        value = Outline(headings: DocumentHeading.parse(text), statistics: DocumentStatistics(Substring(text)))
+        self.languageID = languageID
+        let headings = languageID == "markdown"
+            ? DocumentHeading.parse(text)
+            : DocumentHeading.parse(text, rules: LanguageCatalog.outlineRules(forLanguageID: languageID))
+        value = Outline(headings: headings, statistics: DocumentStatistics(Substring(text)))
         return value
     }
 }

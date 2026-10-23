@@ -49,20 +49,21 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
 
     public func validateComponent(_ package: ValidatedPluginPackage,
                                   limits: PluginResourceLimits) throws {
+        let component = try package.requireRuntime()
         try invocationLock.withLock {
             try withDeadline(milliseconds: limits.discoveryTimeoutMilliseconds) { deadline in
                 var error = guava_wasmtime_buffer_t(data: nil, size: 0)
                 var enforcedLimits = bridgeLimitsValue(limits)
-                let capabilities = package.witContract.capabilityInputs.map(\.name)
-                let signatures = package.witContract.capabilityInputs.map {
+                let capabilities = component.witContract.capabilityInputs.map(\.name)
+                let signatures = component.witContract.capabilityInputs.map {
                     $0.inputType.canonicalSignature
                 }
-                let status = withImportNames(package.witContract.imports) { imports, importCount in
+                let status = withImportNames(component.witContract.imports) { imports, importCount in
                     withImportNames(capabilities) { capabilityNames, capabilityCount in
                         withImportNames(signatures) { typeSignatures, signatureCount in
                             precondition(capabilityCount == signatureCount)
-                            return package.componentURL.path.withCString { path in
-                                package.witContract.capabilitiesInterfaceName.withCString {
+                            return component.componentURL.path.withCString { path in
+                                component.witContract.capabilitiesInterfaceName.withCString {
                                     interfaceName in
                                     guava_wasmtime_validate_component(
                                         runtime,
@@ -91,13 +92,14 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                         input: Data,
                         querySnapshot: PluginQuerySnapshot?,
                         limits: PluginResourceLimits) throws -> Data {
+        let component = try package.requireRuntime()
         guard input.count <= limits.maximumOutputBytes else {
             throw EmbeddedWasmtimeError.bridge(
                 status: Int32(GUAVA_WASMTIME_INVALID_ARGUMENT.rawValue),
                 message: "Component input exceeds its limit"
             )
         }
-        guard let capability = package.witContract.capabilityInputs.first(where: {
+        guard let capability = component.witContract.capabilityInputs.first(where: {
             package.manifest.id + "." + $0.name == capabilityID
         }) else {
             throw PluginCapabilityValidationError.unknownCapability(capabilityID)
@@ -138,6 +140,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                         querySnapshot: PluginQuerySnapshot?,
                         timeoutMilliseconds: UInt64,
                         limits: PluginResourceLimits) throws -> Data {
+        let component = try package.requireRuntime()
         let environment = QueryEnvironment(
             snapshot: querySnapshot,
             grantedImports: Set(package.manifest.imports),
@@ -149,18 +152,18 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
             var output = guava_wasmtime_buffer_t(data: nil, size: 0)
             var error = guava_wasmtime_buffer_t(data: nil, size: 0)
             var enforcedLimits = bridgeLimitsValue(limits)
-            let capabilities = package.witContract.capabilityInputs.map(\.name)
-            let signatures = package.witContract.capabilityInputs.map {
+            let capabilities = component.witContract.capabilityInputs.map(\.name)
+            let signatures = component.witContract.capabilityInputs.map {
                 $0.inputType.canonicalSignature
             }
-            let status = withImportNames(package.witContract.imports) { imports, importCount in
+            let status = withImportNames(component.witContract.imports) { imports, importCount in
                 withImportNames(capabilities) { capabilityNames, capabilityCount in
                     withImportNames(signatures) { typeSignatures, signatureCount in
                         precondition(capabilityCount == signatureCount)
                         return typedInput.withUnsafeBytes { bytes in
-                            package.componentURL.path.withCString { path in
+                            component.componentURL.path.withCString { path in
                                 capabilityName.withCString { name in
-                                    package.witContract.capabilitiesInterfaceName.withCString {
+                                    component.witContract.capabilitiesInterfaceName.withCString {
                                         interfaceName in
                                         guava_wasmtime_invoke_capability(
                                             runtime,

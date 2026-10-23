@@ -7,18 +7,20 @@ struct AgentProviderSettings: View {
 
     var body: some View {
         // One credential lookup per render; each reads the credential file.
-        let draftSource = editor.app.aiCredentialSource(for: editor.draft.provider)
-        let active = editor.app.store.aiSettings.provider
-        let activeSource = editor.draft.provider == active ? draftSource : editor.app.aiCredentialSource(for: active)
+        let providers = AIProviderCatalog.providers
+        let draftSource = editor.app.aiCredentialSource(for: editor.draft.providerID)
+        let active = editor.app.store.aiSettings.providerID
+        let activeSource = editor.draft.providerID == active ? draftSource : editor.app.aiCredentialSource(for: active)
         SettingsCard(L("Provider & Credentials"), subtitle: L("Bring your provider. Keep control of your credentials.")) {
             TextScalerReader { scaler in
                 ContainerSizeReader { size in
                     GridLayout(columns: Array(repeating: .flexible(), count: Float(size.width) < scaler.scale(440) ? 2 : 4), columnSpacing: 8, rowSpacing: 8) {
-                        for provider in EditorAIProvider.allCases { AnyView(providerChoice(provider)) }
+                        AnyView(providerChoice(nil))
+                        for provider in providers { AnyView(providerChoice(provider)) }
                     }
                 }
             }
-            if editor.draft.provider != .none {
+            if !editor.draft.providerID.isEmpty {
                 Column(alignment: .leading, spacing: 7) {
                     Text(L("Model")).font(.label).foregroundColor(.onSurface)
                     TextField(L("Model"), text: Binding(get: { editor.draft.model }, set: { value in
@@ -44,7 +46,7 @@ struct AgentProviderSettings: View {
                 Text(L("Agent is disabled. Choose a provider to configure your assistant."))
                     .font(.body).foregroundColor(.onSurfaceMuted)
             }
-            if editor.draft.provider == active, active != .none, activeSource == .credentialFile {
+            if editor.draft.providerID == active, !active.isEmpty, activeSource == .credentialFile {
                 if editor.state.wrappedValue.confirmsKeyRemoval {
                     Alert(L("Remove Stored Key"), message: L("Removing the stored key disables this provider until you add a credential again."), tone: .warning) { _ in } actions: {
                         Button(L("Confirm Remove Key"), role: .destructive, action: editor.removeKey).buttonStyle(.destructive)
@@ -58,24 +60,26 @@ struct AgentProviderSettings: View {
         }
     }
 
-    private func providerChoice(_ provider: EditorAIProvider) -> some View {
-        Button(isSelected: editor.draft.provider == provider, action: { editor.select(provider) }) {
+    private func providerChoice(_ provider: AIProviderDescriptor?) -> some View {
+        let selected = editor.draft.providerID == (provider?.id ?? "")
+        let title = provider?.title ?? "None"
+        return Button(isSelected: selected, action: { editor.select(provider) }) {
             Column(alignment: .leading, spacing: 10) {
                 Row(alignment: .center, spacing: 4) {
                     Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                        Text(provider == .none ? "—" : String(provider.displayName.prefix(1)))
+                        Text(provider == nil ? "—" : String(title.prefix(1)))
                             .font(.bodyStrong).foregroundColor(.onSurface)
                     }.frame(width: 24, height: 24).background(.surfaceVariant).cornerRadius(6)
                     Spacer(minLength: 0)
-                    if editor.draft.provider == provider { Icon(UIIcons.Action.check, size: 12, color: .accent) }
+                    if selected { Icon(UIIcons.Action.check, size: 12, color: .accent) }
                 }
-                Text(L(provider.displayName), lineLimit: 1).font(.label).foregroundColor(.onSurface)
+                Text(L(title), lineLimit: 1).font(.label).foregroundColor(.onSurface)
             }.padding(12).frame(width: .percent(100), minWidth: 0)
-                .background(editor.draft.provider == provider ? .accentMuted : .surfaceSunken)
-                .cornerRadius(7).border(editor.draft.provider == provider ? .accent : .divider, width: 1)
+                .background(selected ? .accentMuted : .surfaceSunken)
+                .cornerRadius(7).border(selected ? .accent : .divider, width: 1)
         }.buttonStyle(.plain).frame(width: .percent(100), minWidth: 0)
-            .accessibility { $0.label = L(provider.displayName); $0.state.isSelected = editor.draft.provider == provider }
-            .debugName("settings-provider-" + provider.rawValue)
+            .accessibility { $0.label = L(title); $0.state.isSelected = selected }
+            .debugName("settings-provider-" + (provider?.id ?? "none"))
     }
 }
 

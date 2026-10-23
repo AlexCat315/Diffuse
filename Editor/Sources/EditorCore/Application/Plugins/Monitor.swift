@@ -1,4 +1,5 @@
 import Foundation
+import PluginRuntime
 
 /// Cross-platform monitor for changes to enabled plugin packages.
 ///
@@ -78,7 +79,10 @@ final class PluginPackageMonitor: @unchecked Sendable {
         var result: [String: Entry] = [:]
         for (pluginID, url) in packages {
             var files: [String: Entry.File] = [:]
-            for name in ["plugin.json", "capabilities.wit", "component.wasm"] {
+            let manifest = try? Data(contentsOf: url.appendingPathComponent("plugin.json"))
+            let resources = manifest.flatMap { try? JSONDecoder().decode(GuavaPluginManifest.self, from: $0) }?
+                .resources.map(\.path).filter(PluginResource.isValidPath) ?? []
+            for name in ["plugin.json", "capabilities.wit", "component.wasm"] + resources {
                 let fileURL = url.appendingPathComponent(name)
                 guard let values = try? fileURL.resourceValues(
                     forKeys: [.fileSizeKey, .contentModificationDateKey]

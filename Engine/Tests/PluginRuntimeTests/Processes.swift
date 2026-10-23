@@ -22,8 +22,8 @@ struct PluginProcessTests {
         world plugin { import guava:process/host; export capabilities; }
         """.utf8), grantedImports: [.process])
         let package = ValidatedPluginPackage(rootURL: URL(fileURLWithPath: "/tmp/test.guavaplugin"), manifest: manifest,
-            componentURL: URL(fileURLWithPath: "/tmp/component.wasm"), witURL: URL(fileURLWithPath: "/tmp/capabilities.wit"),
-            witContract: wit, componentHash: "code", witHash: "contract")
+            runtime: ValidatedPluginComponent(componentURL: URL(fileURLWithPath: "/tmp/component.wasm"), witURL: URL(fileURLWithPath: "/tmp/capabilities.wit"),
+            witContract: wit, componentHash: "code", witHash: "contract"))
         return PluginInspection(package: package, contracts: PluginWITContractDeriver.contracts(for: package))
     }
     private func mount(_ service: PluginProcessService, _ inspection: PluginInspection) throws {

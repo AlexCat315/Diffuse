@@ -2,61 +2,35 @@ import AIRuntime
 import CapabilityRuntime
 import Foundation
 
-// MARK: - Provider
-
-public enum EditorAIProvider: String, Codable, Sendable, Equatable, CaseIterable {
-    case none
-    case anthropic
-    case openai
-    case deepseek
-
-    public var displayName: String {
-        switch self {
-        case .none:      return "None"
-        case .anthropic: return "Anthropic"
-        case .openai:    return "OpenAI"
-        case .deepseek:  return "DeepSeek"
-        }
-    }
-
-    public var defaultModel: String {
-        switch self {
-        case .none:      return ""
-        case .anthropic: return SessionConfig.defaultAnthropicModel
-        case .openai:    return SessionConfig.defaultOpenAIModel
-        case .deepseek:  return SessionConfig.defaultDeepSeekModel
-        }
-    }
-}
-
 // MARK: - Settings
 
 public struct EditorAISettings: Codable, Sendable, Equatable {
-    public var provider: EditorAIProvider
+    /// The plugin-contributed provider id; empty disables the assistant.
+    public var providerID: String
     public var model: String
     /// Compatibility preference for read-only/legacy flows. Capability-backed
     /// AI writes always escalate to the required preview confirmation policy.
     public var autoApprove: Bool
 
-    public static let `default` = EditorAISettings(
-        provider: .none,
-        model: SessionConfig.defaultAnthropicModel
-    )
+    public var isEnabled: Bool { !providerID.isEmpty }
 
-    public init(provider: EditorAIProvider = .none,
-                model: String = SessionConfig.defaultAnthropicModel,
-                autoApprove: Bool = false) {
-        self.provider = provider
+    public static let `default` = EditorAISettings()
+
+    public init(providerID: String = "", model: String = "", autoApprove: Bool = false) {
+        self.providerID = providerID
         self.model = model
         self.autoApprove = autoApprove
     }
 
-    private enum CodingKeys: String, CodingKey { case provider, model, autoApprove }
+    private enum CodingKeys: String, CodingKey {
+        case providerID = "provider_id"
+        case model, autoApprove
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        provider = try c.decodeIfPresent(EditorAIProvider.self, forKey: .provider) ?? .none
-        model = try c.decodeIfPresent(String.self, forKey: .model) ?? SessionConfig.defaultAnthropicModel
+        providerID = try c.decodeIfPresent(String.self, forKey: .providerID) ?? ""
+        model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
         autoApprove = try c.decodeIfPresent(Bool.self, forKey: .autoApprove) ?? false
     }
 }
@@ -139,13 +113,13 @@ public enum AICredentialStore {
         return base.appendingPathComponent("GuavaStudio/Credentials/ai-providers.json")
     }
 
-    public static func save(key: String, provider: EditorAIProvider) throws {
-        try save(key: key, provider: provider, at: fileURL)
+    public static func save(key: String, providerID: String) throws {
+        try save(key: key, providerID: providerID, at: fileURL)
     }
 
-    static func save(key: String, provider: EditorAIProvider, at url: URL) throws {
+    static func save(key: String, providerID: String, at url: URL) throws {
         var keys = stored(at: url)
-        keys[provider.rawValue] = key.isEmpty ? nil : key
+        keys[providerID] = key.isEmpty ? nil : key
         do {
             let directory = url.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
@@ -161,29 +135,36 @@ public enum AICredentialStore {
             let handle = try FileHandle(forWritingTo: staging)
             try handle.write(contentsOf: data)
             try handle.close()
-            _ = try FileManager.default.replaceItemAt(url, withItemAt: staging)
+            if FileManager.default.fileExists(atPath: url.path) {
+                _ = try FileManager.default.replaceItemAt(url, withItemAt: staging)
+            } else {
+                try FileManager.default.moveItem(at: staging, to: url)
+            }
         } catch {
             throw AICredentialStoreError.writeFailed(error.localizedDescription)
         }
     }
 
-    public static func load(provider: EditorAIProvider) -> String? {
-        stored(at: fileURL)[provider.rawValue]
-            ?? environmentCredential(provider: provider, environment: ProcessInfo.processInfo.environment)?.key
+    public static func load(providerID: String, environmentVariable: String? = nil) -> String? {
+        stored(at: fileURL)[providerID]
+            ?? environmentCredential(variable: environmentVariable,
+                                     environment: ProcessInfo.processInfo.environment)?.key
     }
 
-    public static func credentialSource(for provider: EditorAIProvider) -> AICredentialSource? {
-        if stored(at: fileURL)[provider.rawValue] != nil { return .credentialFile }
-        return environmentCredential(provider: provider, environment: ProcessInfo.processInfo.environment)
+    public static func credentialSource(for providerID: String,
+                                        environmentVariable: String? = nil) -> AICredentialSource? {
+        if stored(at: fileURL)[providerID] != nil { return .credentialFile }
+        return environmentCredential(variable: environmentVariable,
+                                     environment: ProcessInfo.processInfo.environment)
             .map { .environment(variable: $0.variable) }
     }
 
-    public static func delete(provider: EditorAIProvider) throws {
-        try save(key: "", provider: provider)
+    public static func delete(providerID: String) throws {
+        try save(key: "", providerID: providerID)
     }
 
-    public static func hasKey(for provider: EditorAIProvider) -> Bool {
-        credentialSource(for: provider) != nil
+    public static func hasKey(for providerID: String, environmentVariable: String? = nil) -> Bool {
+        credentialSource(for: providerID, environmentVariable: environmentVariable) != nil
     }
 
     static func stored(at url: URL) -> [String: String] {
@@ -193,26 +174,13 @@ public enum AICredentialStore {
     }
 
     static func environmentCredential(
-        provider: EditorAIProvider,
+        variable: String?,
         environment: [String: String]
     ) -> (variable: String, key: String)? {
-        let candidates: [String]
-        switch provider {
-        case .none:
-            return nil
-        case .anthropic:
-            candidates = ["GUAVA_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"]
-        case .openai:
-            candidates = ["GUAVA_OPENAI_API_KEY", "OPENAI_API_KEY"]
-        case .deepseek:
-            candidates = ["GUAVA_DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY"]
-        }
-        for variable in candidates {
-            guard let value = environment[variable]?.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            ), !value.isEmpty else { continue }
-            return (variable, value)
-        }
-        return nil
+        guard let variable else { return nil }
+        guard let value = environment[variable]?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ), !value.isEmpty else { return nil }
+        return (variable, value)
     }
 }

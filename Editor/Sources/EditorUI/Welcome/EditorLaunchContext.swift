@@ -69,6 +69,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             app.store.dispatch(.setWorkspaceMode(s.workspace.mode))
             app.store.dispatch(.setActiveLayoutPreset(s.workspace.layoutPreset))
             app.store.dispatch(.setThemeMode(s.themeMode))
+            app.store.dispatch(.setThemeID(s.themeID))
             app.store.dispatch(.setLanguage(s.language))
             app.store.dispatch(.setVSyncMode(s.vsyncMode))
             app.store.dispatch(.setPrimarySelectBehavior(s.primarySelectBehavior))
@@ -160,7 +161,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         let app = bundle.app
         let state = app.store.state
         shellState = .init(workspace: state.workspace,
-                           themeMode: state.themeMode,
+                           themeMode: state.themeMode, themeID: state.presentation.themeID,
                            language: state.language,
                            vsyncMode: state.vsyncMode,
                            primarySelectBehavior: state.selection.primarySelectBehavior,
@@ -168,7 +169,7 @@ final class EditorLaunchContext: @unchecked Sendable {
                            capabilitySettings: state.assistant.capabilitySettings)
         EditorRootViewFactory.saveShellState(
             workspace: state.workspace,
-            themeMode: state.themeMode,
+            themeMode: state.themeMode, themeID: state.presentation.themeID,
             language: state.language,
             vsyncMode: state.vsyncMode,
             primarySelectBehavior: state.selection.primarySelectBehavior,
@@ -343,7 +344,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             lastPrefs = next
             EditorRootViewFactory.saveShellState(
                 workspace: store.state.workspace,
-                themeMode: store.state.themeMode,
+                themeMode: store.state.themeMode, themeID: store.state.presentation.themeID,
                 language: store.state.language,
                 vsyncMode: store.state.vsyncMode,
                 primarySelectBehavior: store.state.selection.primarySelectBehavior,
@@ -382,6 +383,7 @@ final class EditorLaunchContext: @unchecked Sendable {
 
     private typealias ShellPrefs = (
         themeMode: EditorThemeMode,
+        themeID: String,
         language: EditorLanguage,
         vsyncMode: EditorVSyncMode,
         primarySelectBehavior: SelectionPrimaryModifierBehavior,
@@ -390,6 +392,7 @@ final class EditorLaunchContext: @unchecked Sendable {
 
     private func shellPrefs(_ store: EditorStore) -> ShellPrefs {
         (store.state.themeMode,
+         store.state.presentation.themeID,
          store.state.language,
          store.state.vsyncMode,
          store.state.selection.primarySelectBehavior,

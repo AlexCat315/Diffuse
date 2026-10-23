@@ -98,7 +98,7 @@ struct EditorProductivityWorkflowTests {
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false)
         defer { app.shutdown() }
         var settings = app.store.aiSettings
-        settings.provider = .none
+        settings.providerID = ""
         app.store.dispatch(.setAISettings(settings))
         #expect(!app.isAIAvailable)
         #expect(EditorCommandSearch.commands(app: app).contains { $0.id == "scene.settings" && $0.isEnabled })

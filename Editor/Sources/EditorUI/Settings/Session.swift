@@ -36,7 +36,7 @@ struct EditorSettingsPersistence {
     func didChange() {
         let store = app.store
         EditorRootViewFactory.saveShellState(workspace: store.state.workspace,
-            themeMode: store.themeMode, language: store.language, vsyncMode: store.vsyncMode,
+            themeMode: store.themeMode, themeID: store.presentation.themeID, language: store.language, vsyncMode: store.vsyncMode,
             primarySelectBehavior: store.primarySelectBehavior, aiSettings: store.aiSettings,
             capabilitySettings: store.capabilitySettings)
         app.requestDisplayRefresh()

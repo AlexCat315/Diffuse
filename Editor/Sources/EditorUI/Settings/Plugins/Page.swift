@@ -28,9 +28,9 @@ struct PluginSettings: View {
                         }, onCancel: { Task { @MainActor in app.cancelPluginApproval() } })
                 }
             }
-            SettingsCard(L("Installed"), subtitle: L("Plugins run isolated and only get the access you approve.")) {
+            SettingsCard(L("Installed")) {
                 Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                    BundledPluginRows(app: app, management: management, isBusy: busy || !available) { actions(for: $0, isBusy: busy) }
+                    BundledPluginRows(app: app, management: management, isBusy: busy) { actions(for: $0, isBusy: busy) }
                     for plugin in management.enabled where !app.bundledPlugins.contains(where: { $0.id == plugin.id }) {
                         PluginRow(listing: PluginListing(plugin), isEnabled: true, isBusy: busy,
                                   onToggle: { _ in Task { @MainActor in await app.disablePluginFromManagement(id: plugin.id) } },
@@ -42,7 +42,7 @@ struct PluginSettings: View {
                             Text(L("Inspecting plugin without loading it…")).font(.caption).foregroundColor(.onSurfaceMuted)
                         }.padding(horizontal: 4, vertical: 6)
                     }
-                    Button(isEnabled: available && !busy, action: choosePackage) {
+                    Button(isEnabled: !busy, action: choosePackage) {
                         Row(alignment: .center, spacing: 8) {
                             Icon(UIIcons.File.folderPlus, size: 13, color: .onSurfaceVariant)
                             Text(L("Add from Folder…")).font(.label)
@@ -105,11 +105,14 @@ private struct BundledPluginRows: View, @unchecked Sendable {
                 let loaded = management.enabled.first { $0.id == plugin.id }
                 let state: (enabled: Bool, missing: String?) = switch plugin.host {
                 case .application: (loaded != nil, nil)
+                case .declarative: (MainActor.assumeIsolated { app.isBundledPluginEnabled(plugin) }, nil)
                 case let .versionControl(system):
                     (!snapshot.disabledSystems.contains(system), snapshot.installedSystems.contains(system) ? nil : plugin.commands.first)
                 }
                 AnyView(PluginRow(listing: PluginListing(bundled: plugin, loaded: loaded, missingCommand: state.missing),
-                                  isEnabled: state.enabled, isBusy: isBusy || snapshot.operation != nil,
+                                  isEnabled: state.enabled,
+                                  isBusy: isBusy || (plugin.host != .declarative && !app.isPluginHostAvailable)
+                                      || snapshot.operation != nil,
                                   onToggle: { on in Task { @MainActor in await app.setBundledPlugin(plugin, enabled: on) } },
                                   actions: loaded.map(actions) ?? []))
             }

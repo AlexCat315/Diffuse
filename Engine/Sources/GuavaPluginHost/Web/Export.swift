@@ -21,7 +21,7 @@ func exportWebPackage(at url: URL, loader: PluginPackageLoader,
     try runtime.validateComponent(package, limits: limits)
     let inspection = PluginInspection(package: package,
                                       contracts: PluginWITContractDeriver.contracts(for: package))
-    let descriptor = WebPackageDescriptor(inspection: inspection, witContract: package.witContract,
+    let descriptor = WebPackageDescriptor(inspection: inspection, witContract: try package.requireRuntime().witContract,
         hostContracts: package.manifest.composableHostCapabilities.compactMap { registry.descriptor(for: $0)?.contract })
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
