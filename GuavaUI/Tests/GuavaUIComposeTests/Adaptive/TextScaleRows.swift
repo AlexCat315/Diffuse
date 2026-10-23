@@ -4,6 +4,7 @@ import GuavaUIRuntime
 @testable import GuavaUICompose
 
 @Suite("Collection text scaling", .serialized)
+@MainActor
 struct TextScaleRowTests: GuavaUIComposeSerializedSuite {
     private struct Harness<Content: View>: View {
         @State var scale: Float = 1
@@ -176,7 +177,7 @@ struct TextScaleRowTests: GuavaUIComposeSerializedSuite {
             settle(graph, width: 390, height: 310)
             let input = try #require(nodes(graph.tree.root!).first { $0.attachments["dataTable.input"] as? Bool == true })
             context.focusChain.focus(input)
-            func key(_ code: UInt32) {
+            @MainActor func key(_ code: UInt32) {
                 dispatcher.dispatch(.keyDown(KeyEvent(scancode: code, keycode: 0, modifiers: [], isRepeat: false)))
                 settle(graph, width: 390, height: 310)
             }

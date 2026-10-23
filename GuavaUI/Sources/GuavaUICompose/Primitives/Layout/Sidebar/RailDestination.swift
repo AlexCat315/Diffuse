@@ -59,8 +59,8 @@ struct RailDestinationStyle: ButtonStyle {
                 .foregroundColor(foreground)
                 .selectionHighlight(.sidebar, isSelected: c.isSelected,
                                     isHovered: c.isHovered, isPressed: c.isPressed)
-                .border(focus, width: focusWidth)
                 .animation(.semantic(.fast, in: theme), value: c.interactionKey)
+                .border(focus, width: focusWidth)
             )
         }
 
@@ -77,8 +77,8 @@ struct RailDestinationStyle: ButtonStyle {
                 .foregroundColor(foreground)
                 .background(fill)
                 .cornerRadius(appearance.cornerRadius)
-                .border(focus, width: focusWidth)
                 .animation(.semantic(.fast, in: theme), value: c.interactionKey)
+                .border(focus, width: focusWidth)
                 .debugName("rail-selection-tile")
             }
             .frame(width: .percent(100), minHeight: minimumHeight)

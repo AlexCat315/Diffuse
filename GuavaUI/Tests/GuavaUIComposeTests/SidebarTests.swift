@@ -17,7 +17,7 @@ struct SidebarTests: GuavaUIComposeSerializedSuite {
         }
     }
 
-    private func mounted(_ test: (ViewGraph) -> Void) {
+    private func mounted(presentation: SidebarPresentation = .expanded, _ test: (ViewGraph) -> Void) {
         GlobalTestLock.locked {
             let oldChain = FocusChainHolder.current
             FocusChainHolder.current = FocusChain()
@@ -28,7 +28,7 @@ struct SidebarTests: GuavaUIComposeSerializedSuite {
                                         sections: [SidebarSection("controls", title: "Controls", items: [
                                             SidebarItem("button", "Button"),
                                             SidebarItem("checkbox", "Checkbox")
-                                        ])]))
+                                        ])], presentation: presentation))
             graph.computeLayout(width: 226, height: 400)
             test(graph)
         }
@@ -61,9 +61,10 @@ struct SidebarTests: GuavaUIComposeSerializedSuite {
         }
     }
 
-    @Test("A destination rings for the keyboard and stays quiet for the pointer")
-    func ringFollowsTheKeyboard() {
-        mounted { graph in
+    @Test("A destination rings for the keyboard and stays quiet for the pointer",
+          arguments: [SidebarPresentation.expanded, .rail(showsLabels: true), .rail(showsLabels: false)])
+    func ringFollowsTheKeyboard(presentation: SidebarPresentation) {
+        mounted(presentation: presentation) { graph in
             let item = row(graph, "button")!
             FocusChainHolder.current!.focus(item, visible: false)
             graph.recomposer.commitAll()
@@ -73,7 +74,14 @@ struct SidebarTests: GuavaUIComposeSerializedSuite {
             FocusChainHolder.current!.focus(item, visible: true)
             graph.recomposer.commitAll()
             graph.computeLayout(width: 226, height: 400)
-            #expect(rings(in: graph).contains { $0.borderWidth == 2 })
+            #expect(rings(in: graph).contains { $0.borderWidth == (presentation == .expanded ? 2 : 1) })
+
+            FocusChainHolder.current!.focus(item, visible: false)
+            graph.recomposer.commitAll()
+            graph.computeLayout(width: 226, height: 400)
+            #expect(rings(in: graph).isEmpty)
+            AnimatorScheduler.current.tick(deltaTime: 1)
+            #expect(rings(in: graph).isEmpty)
         }
     }
 }

@@ -226,7 +226,7 @@ struct SidebarItemStyle: ButtonStyle, Hashable {
                     isHovered: c.isHovered,
                     isPressed: c.isPressed
                 )
-                .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0)
-                .animation(motion: .fast, value: c.interactionKey))
+                .animation(motion: .fast, value: c.interactionKey)
+                .border(c.isFocused ? c.theme.colors.focusRing : .clear, width: c.isFocused ? 2 : 0))
     }
 }
