@@ -5,6 +5,7 @@ import CoreGraphics
 import Foundation
 #endif
 @testable import GuavaUIRuntime
+@testable import GuavaUICore
 
 /// Rounded clipping containers must keep child geometry inside their corners
 /// on every backend, since GPU scissors are rectangular.
@@ -61,6 +62,95 @@ struct RoundedClipTests {
         frame.append(cached)
         #expect(!covers(1, 1, in: frame) && covers(40, 20, in: frame))
         #expect(frame.batches.reduce(0) { $0 + Int($1.indexCount) } == frame.indices.count)
+    }
+
+    @Test("Glyphs crossing a straight edge keep exact texture interpolation")
+    func straightEdgeGlyph() {
+        let list = DrawList()
+        list.pushMask(UIRoundedRect(UIRect(x: 0, y: 0, width: 100, height: 100), radius: 10))
+        list.addGlyphQuad(x: 95, y: 40, width: 10, height: 10,
+                          uvMinX: 0, uvMinY: 0, uvMaxX: 1, uvMaxY: 1,
+                          color: red, textureID: .none)
+        let visible = Set(list.indices).map { list.vertices[Int($0)] }
+        #expect(!visible.isEmpty)
+        #expect(visible.allSatisfy { $0.posX <= 100 && $0.posX >= 95 })
+        let edge = visible.filter { abs($0.posX - 100) < 0.001 }
+        #expect(!edge.isEmpty && edge.allSatisfy { abs($0.u - 0.5) < 0.001 })
+        #expect(covers(97, 45, in: list) && !covers(103, 45, in: list))
+    }
+
+    @Test("Invisible geometry drops indices while retaining cache bounds")
+    func invisibleGeometry() {
+        let clip = UIRoundedRect(UIRect(x: 0, y: 0, width: 100, height: 100), radius: 10)
+        let outside = DrawList()
+        outside.pushMask(clip)
+        outside.addRect(UIRect(x: 150, y: 20, width: 10, height: 10), color: red)
+        #expect(outside.indices.isEmpty && outside.batches.isEmpty)
+        #expect(outside.vertices.count == 4)
+        #expect(outside.vertices.map(\.posX).max() == 160)
+
+        let cached = DrawList()
+        for x in [Float(-30), 40, 130] {
+            cached.addRect(UIRect(x: x, y: 40, width: 10, height: 10), color: red)
+        }
+        let frame = DrawList()
+        frame.pushMask(clip)
+        frame.append(cached)
+        #expect(frame.indices.count == 6)
+        #expect(frame.vertices.count == cached.vertices.count)
+        #expect(covers(45, 45, in: frame))
+        #expect(!covers(-25, 45, in: frame) && !covers(135, 45, in: frame))
+    }
+
+    @Test("Geometry already clipped to the same mask is reused without retriangulation")
+    func preclippedGeometry() {
+        let clip = UIClip(UIRect(x: 0, y: 0, width: 100, height: 100),
+                          mask: UIRoundedRect(UIRect(x: 0, y: 0, width: 100, height: 100), radius: 15))
+        let cached = DrawList()
+        cached.pushClip(clip)
+        cached.addRect(clip.rect, color: red)
+        cached.popClip(clip)
+        let frame = DrawList()
+        frame.pushClip(clip)
+        frame.appendPreclipped(cached, clips: [clip])
+        #expect(frame.vertices.count == cached.vertices.count)
+        #expect(frame.vertices.map(\.posX) == cached.vertices.map(\.posX))
+        #expect(frame.vertices.map(\.posY) == cached.vertices.map(\.posY))
+        #expect(frame.indices == cached.indices)
+        #expect(!covers(1, 1, in: frame) && covers(50, 3, in: frame))
+
+        let constrained = DrawList()
+        constrained.pushClip(clip)
+        let extra = UIClip(UIRect(x: 40, y: 40, width: 20, height: 20),
+                           mask: UIRoundedRect(UIRect(x: 40, y: 40, width: 20, height: 20), radius: 5))
+        constrained.pushClip(extra)
+        constrained.appendPreclipped(cached, clips: [clip])
+        #expect(covers(50, 50, in: constrained))
+        #expect(!covers(20, 20, in: constrained) && !covers(40.5, 40.5, in: constrained))
+    }
+
+    @Test("Nested rounded caches preserve coverage through recording and reuse")
+    func nestedCacheCoverage() {
+        let root = Node(), pane = Node(), inner = Node(), leaf = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 120, height: 120)
+        pane.frame = root.frame; pane.clipsToBounds = true; pane.cornerRadius = 20
+        inner.frame = CGRect(x: 10, y: 10, width: 100, height: 100)
+        inner.clipsToBounds = true; inner.cornerRadius = 15
+        leaf.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        leaf.updateDraw(identity: "fill") { [red] list, origin in
+            list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 100, height: 100), color: red)
+        }
+        root.addChild(pane); pane.addChild(inner); inner.addChild(leaf)
+        let render = RenderTree(); render.install(rootNode: root)
+        let renderer = LayerAwareNodeRenderer()
+        var counts: [Int] = []
+        for _ in 0..<6 {
+            let frame = DrawList(); renderer.render(tree: render, into: frame)
+            #expect(covers(60, 12, in: frame) && covers(60, 60, in: frame))
+            #expect(!covers(11, 11, in: frame) && !covers(109, 109, in: frame))
+            counts.append(frame.indices.count)
+        }
+        #expect(Set(counts).count == 1)
     }
 
     @Test("A rounded clipping container keeps a full-size child fill inside its border in both renderers")

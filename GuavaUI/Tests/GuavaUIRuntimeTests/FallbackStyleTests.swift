@@ -19,6 +19,19 @@ struct FallbackStyleTests {
         return (traits[kCTFontWeightTrait] as? NSNumber)?.doubleValue ?? 0
     }
 
+    @Test("Reloading the primary font refreshes the cached fallback style")
+    func primaryStyleChange() throws {
+        let provider = FontProvider(size: 14)
+        _ = try #require(provider.loadPrimaryFont(name: ".AppleSystemUIFont", weight: .regular))
+        let regular = try #require(provider.resolveRuns(text: "ab粗体").last?.font)
+        _ = try #require(provider.loadPrimaryFont(name: ".AppleSystemUIFont", weight: .bold))
+        let bold = try #require(provider.resolveRuns(text: "ab粗体").last?.font)
+        #expect(weight(of: bold.postScriptName) > weight(of: regular.postScriptName))
+        _ = try #require(provider.loadPrimaryFont(name: ".AppleSystemUIFont", weight: .regular))
+        #expect(provider.resolveRuns(text: "ab粗体").last?.font.id == regular.id)
+        #expect(provider.resolveRuns(text: "ab粗体").map(\.text).joined() == "ab粗体")
+    }
+
     @Test("Bold Latin text falls back to a heavier CJK face of the same family, regular to a regular one")
     func boldFallback() throws {
         let regular = try #require(fallbackName(weight: .regular))

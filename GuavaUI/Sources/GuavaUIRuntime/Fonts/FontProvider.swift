@@ -69,6 +69,9 @@ public final class FontProvider {
 
 #if canImport(CoreText)
     private var primaryCTFont: CTFont?
+    private var styledFallbackFonts: [CTFont]?
+    private var fallbackNamesByCluster: [String: String] = [:]
+    private var failedFontNames: Set<String> = []
 #else
     // Lazily-loaded system fallback faces (CJK etc.) and the paths still to try.
     private var fallbackChain: [ManagedFont] = []
@@ -131,11 +134,14 @@ public final class FontProvider {
                                 weight: FontWeight = .regular,
                                 isItalic: Bool = false) -> ManagedFont? {
 #if canImport(CoreText)
+        failedFontNames.removeAll(keepingCapacity: true)
         let ctFont = configuredCTFont(named: name, weight: weight, isItalic: isItalic)
         let font = loadFont(ctFont)
         if let font {
             primaryPSName = font.postScriptName
             primaryCTFont = ctFont
+            styledFallbackFonts = nil
+            fallbackNamesByCluster.removeAll(keepingCapacity: true)
         }
         return font
 #else
@@ -479,51 +485,73 @@ public final class FontProvider {
     private func loadFont(_ ctFont: CTFont) -> ManagedFont? {
         let psName = CTFontCopyPostScriptName(ctFont) as String
         if let existing = fonts[psName] { return existing }
-        return loadFontFromCTFont(ctFont, psName: psName)
+        guard !failedFontNames.contains(psName) else { return nil }
+        let font = loadFontFromCTFont(ctFont, psName: psName)
+        if font == nil { failedFontNames.insert(psName) }
+        return font
     }
 
     private func coveringManagedFont(for substring: String,
                                      in fullText: String,
                                      range: NSRange,
                                      primary: CTFont) -> ManagedFont? {
+        if let managed = primaryFont, managedFontCanRenderText(managed, text: substring) {
+            return managed
+        }
+        if let name = fallbackNamesByCluster[substring], let managed = fonts[name] {
+            return managed
+        }
         let logicalSize = CGFloat(size)
-        let direct = CTFontCreateForString(primary,
-                                           fullText as CFString,
-                                           CFRange(location: range.location, length: range.length))
 
         // Stack families carry the primary's weight and slant, so bold or
         // italic text that falls back (CJK through PingFang) keeps its style.
         // They come before CoreText's own pick, which would switch bold CJK
         // to another family (Hiragino) than regular text uses.
-        var candidates: [CTFont] = [primary]
-        let traits = CTFontCopyTraits(primary) as? [CFString: Any] ?? [:]
-        var styled: [CFString: Any] = [:]
-        if let weight = traits[kCTFontWeightTrait] { styled[kCTFontWeightTrait] = weight }
-        if let symbolic = traits[kCTFontSymbolicTrait] as? UInt32 {
-            styled[kCTFontSymbolicTrait] = symbolic & CTFontSymbolicTraits.traitItalic.rawValue
+        if styledFallbackFonts == nil {
+            let traits = CTFontCopyTraits(primary) as? [CFString: Any] ?? [:]
+            var styled: [CFString: Any] = [:]
+            if let weight = traits[kCTFontWeightTrait] { styled[kCTFontWeightTrait] = weight }
+            if let symbolic = traits[kCTFontSymbolicTrait] as? UInt32 {
+                styled[kCTFontSymbolicTrait] = symbolic & CTFontSymbolicTraits.traitItalic.rawValue
+            }
+            styledFallbackFonts = SystemFontDefaults.fontStack.map { family in
+                let descriptor = CTFontDescriptorCreateWithAttributes([
+                    kCTFontFamilyNameAttribute: family, kCTFontTraitsAttribute: styled,
+                ] as CFDictionary)
+                return CTFontCreateWithFontDescriptor(descriptor, logicalSize, nil)
+            }
         }
-        candidates.append(contentsOf: SystemFontDefaults.fontStack.map { family in
-            let descriptor = CTFontDescriptorCreateWithAttributes([
-                kCTFontFamilyNameAttribute: family, kCTFontTraitsAttribute: styled,
-            ] as CFDictionary)
-            return CTFontCreateWithFontDescriptor(descriptor, logicalSize, nil)
-        })
-        // Emoji and scripts outside the stack keep the system cascade.
-        candidates.append(direct)
-
         var seenPostScriptNames: Set<String> = []
-        for candidate in candidates {
+        for candidate in styledFallbackFonts ?? [] {
             let psName = CTFontCopyPostScriptName(candidate) as String
             guard seenPostScriptNames.insert(psName).inserted else { continue }
             guard let managedFont = loadFont(candidate) else { continue }
             if managedFontCanRenderText(managedFont, text: substring) {
+                rememberFallback(managedFont, for: substring)
                 return managedFont
             }
+        }
+
+        // Only consult the system cascade after the primary and styled stack
+        // fail. Ordinary Latin and CJK text need no per-cluster font discovery.
+        let direct = CTFontCreateForString(primary, fullText as CFString,
+                                           CFRange(location: range.location, length: range.length))
+        if let managed = loadFont(direct), managedFontCanRenderText(managed, text: substring) {
+            if managed.colorGlyphFont != nil { rememberFallback(managed, for: substring) }
+            return managed
         }
 
         // An unavailable glyph must still occupy its cluster and UTF-8
         // position. Shape .notdef in the primary face rather than dropping it.
         return primaryFont
+    }
+
+    // Styled stack choices and complete color-emoji clusters are independent
+    // of surrounding text. Other system-cascade results remain contextual.
+    private func rememberFallback(_ font: ManagedFont, for cluster: String) {
+        guard cluster.utf8.count <= 256 else { return }
+        if fallbackNamesByCluster.count >= 1_024 { fallbackNamesByCluster.removeAll(keepingCapacity: true) }
+        fallbackNamesByCluster[cluster] = font.postScriptName
     }
 
     private func loadFontFromCTFont(_ ctFont: CTFont, psName: String) -> ManagedFont? {

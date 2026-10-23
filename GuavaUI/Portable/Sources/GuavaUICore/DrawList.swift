@@ -257,6 +257,16 @@ public final class DrawList {
         if masks.contains(where: { $0.radius > 0 }) { maskBatches(from: firstBatch) }
     }
 
+    /// The scene cache recorded these clips into its geometry at this exact
+    /// placement. Additional destination masks still require ordinary clipping.
+    package func appendPreclipped(_ other: DrawList, clips: [UIClip]) {
+        if masks.allSatisfy({ mask in clips.contains { $0.mask == mask } }) {
+            appendUnmasked(other, vertexTranslationX: 0, vertexTranslationY: 0)
+        } else {
+            append(other)
+        }
+    }
+
     /// Re-index appended batches after clipping them to the active masks.
     private func maskBatches(from first: Int) {
         guard first < batches.count else { return }
@@ -713,6 +723,19 @@ public final class DrawList {
         }
         let bounds = UIRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
         if active.allSatisfy({ masks[$0].contains(bounds) }) { return count }
+        func outsideMask(_ bounds: UIRect) -> Bool {
+            active.contains { index in
+                let rect = masks[index].rect
+                return bounds.maxX < rect.minX || bounds.minX > rect.maxX
+                    || bounds.maxY < rect.minY || bounds.minY > rect.maxY
+            }
+        }
+        // Keep vertices for cached paint bounds, but discard invisible indices
+        // before the rounded outline's much more expensive polygon clipping.
+        if outsideMask(bounds) {
+            indices.removeSubrange(start..<end)
+            return 0
+        }
         let emitted = Array(indices[start..<end])
         var kept: [UInt32] = []
         kept.reserveCapacity(emitted.count)
@@ -724,13 +747,25 @@ public final class DrawList {
             let minX = min(a.posX, min(b.posX, c.posX)), minY = min(a.posY, min(b.posY, c.posY))
             let maxX = max(a.posX, max(b.posX, c.posX)), maxY = max(a.posY, max(b.posY, c.posY))
             let bounds = UIRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+            if outsideMask(bounds) { changed = true; continue }
             let intersecting = active.filter { !masks[$0].contains(bounds) }
             if intersecting.isEmpty {
                 kept.append(contentsOf: emitted[triangle..<(triangle + 3)])
                 continue
             }
             changed = true
-            let polygon = RoundedClipper.clip([a, b, c], against: intersecting.map { maskOutlines[$0] })
+            let outlines = intersecting.map { index -> [(x: Float, y: Float)] in
+                let mask = masks[index], rect = mask.rect
+                // In the horizontal or vertical straight strip, rounded
+                // clipping is exactly rectangular clipping, even across its edge.
+                if (bounds.minY >= rect.minY + mask.radius && bounds.maxY <= rect.maxY - mask.radius)
+                    || (bounds.minX >= rect.minX + mask.radius && bounds.maxX <= rect.maxX - mask.radius) {
+                    return [(rect.minX, rect.minY), (rect.maxX, rect.minY),
+                            (rect.maxX, rect.maxY), (rect.minX, rect.maxY)]
+                }
+                return maskOutlines[index]
+            }
+            let polygon = RoundedClipper.clip([a, b, c], against: outlines)
             guard polygon.count >= 3 else { continue }
             let first = UInt32(vertices.count)
             vertices.append(contentsOf: polygon)

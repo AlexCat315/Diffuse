@@ -8,6 +8,7 @@ import GuavaUIRuntime
 final class ScriptSyntaxSession: _ObservableObject, @unchecked Sendable {
     private let publisher = _ObservablePublisher<ScriptSyntaxSession>()
     private let worker = ScriptSyntaxWorker()
+    private let colors = ScriptSyntaxColorCache()
     private var requested: TextBuffer?
     private var tree: SyntaxTree?
     private var token: (range: Range<Int>, kind: SwiftSyntaxTokenKind)?
@@ -21,21 +22,23 @@ final class ScriptSyntaxSession: _ObservableObject, @unchecked Sendable {
         if let previous = requested, let tree, let delta = buffer.editDelta(from: previous) {
             self.tree = tree.applying(syntaxEdit(delta, previous: previous, current: buffer))
         }
-        requested = buffer; token = nil
+        requested = buffer; token = nil; colors.invalidate()
         worker.request(buffer) { [weak self] buffer, tree, regions, failure in
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.requested == buffer else { return }
                 self.tree = tree; self.parsedBuffer = buffer; self.failure = failure
                 self.foldRegions = regions
-                self.token = nil; self.revision &+= 1; self.publisher.send()
+                self.token = nil; self.colors.invalidate(); self.revision &+= 1; self.publisher.send()
             }
         }
     }
     func color(atUTF8Offset offset: Int, light: Bool) -> Color? {
         if let token, token.range.contains(offset) { return token.kind.color(light: light) }
         guard let tree else { return nil }
-        token = SwiftSyntaxTokenMap.classify(tree.path(atUTF8Offset: offset))
-        return token?.kind.color(light: light)
+        return colors.kind(at: offset) {
+            token = SwiftSyntaxTokenMap.classify(tree.path(atUTF8Offset: offset))
+            return token?.kind
+        }?.color(light: light)
     }
     func _registerObserver(_ handler: @escaping () -> Void) -> AnyHashable { publisher.register(on: self, handler: handler) }
     func _unregisterObserver(_ token: AnyHashable) { publisher.unregister(token) }

@@ -832,6 +832,9 @@ public struct TextField: View {
                                  color: resolvedSelectionColor.multipliedAlpha(node.opacity))
         }
 
+        let syntaxColorAtUTF8Offset = codeEditing.syntaxColorAtUTF8Offset
+        let diagnostics = codeEditing.diagnostics
+        let fadesText = diagnostics.fadesText
         list.addText(visibleLayout,
                      origin: (textOriginX, textOriginY),
                      color: renderColor,
@@ -840,9 +843,9 @@ public struct TextField: View {
                      colorForGlyph: { glyph in
             guard !renderState.showsPlaceholder, !renderState.isComposing else { return nil }
             let cluster = Int(glyph.cluster)
-            let syntaxColor = codeEditing.syntaxColorAtUTF8Offset?(current, cluster)?.multipliedAlpha(node.opacity)
-            if codeEditing.diagnostics.fadesText,
-               codeEditing.diagnostics.overlapping(cluster..<(cluster + 1)).contains(where: { $0.style == .faded }) {
+            let syntaxColor = syntaxColorAtUTF8Offset?(current, cluster)?.multipliedAlpha(node.opacity)
+            if fadesText,
+               diagnostics.overlapping(cluster..<(cluster + 1)).contains(where: { $0.style == .faded }) {
                 return (syntaxColor ?? renderColor).multipliedAlpha(0.5)
             }
             return syntaxColor

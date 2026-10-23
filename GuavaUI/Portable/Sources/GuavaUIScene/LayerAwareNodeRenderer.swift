@@ -83,7 +83,7 @@ public final class LayerAwareNodeRenderer {
                     if RenderCulling.isOutside(translated, list: frame) { return }
                 }
                 if placementUnchanged {
-                    frame.append(cached)
+                    frame.appendPreclipped(cached, clips: parentClipStack)
                     return
                 }
                 // Translation-only reuse. Only valid at an unchanged scale: the
@@ -154,7 +154,7 @@ public final class LayerAwareNodeRenderer {
             // Its painter runs once to establish actual bounds, then the
             // cached geometry remains available when it enters the viewport.
             if let bounds = obj.cachedPaintBounds, RenderCulling.isOutside(bounds, list: frame) { return }
-            frame.append(layerList)
+            frame.appendPreclipped(layerList, clips: parentClipStack)
             return
         }
 

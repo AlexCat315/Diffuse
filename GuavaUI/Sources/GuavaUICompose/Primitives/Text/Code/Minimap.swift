@@ -46,6 +46,7 @@ extension TextField {
         let first = max(0, Int(scroll / Self.minimapRowHeight))
         let last = min(rows, first + Int(frameHeight / Self.minimapRowHeight) + 2)
         let tabWidth = codeEditing.indentationWidth ?? 4
+        let syntaxColorAtUTF8Offset = codeEditing.syntaxColorAtUTF8Offset
         if first < last {
             for row in first..<last {
                 let location = document.index.location(atRow: row)
@@ -59,7 +60,7 @@ extension TextField {
                 var column = 0, runStart: Int?, runColumn = 0
                 func flush(_ index: Int) {
                     guard let begin = runStart else { return }
-                    let color = codeEditing.syntaxColorAtUTF8Offset?(buffer, start + begin) ?? textColor
+                    let color = syntaxColorAtUTF8Offset?(buffer, start + begin) ?? textColor
                     list.addRect(UIRect(x: rect.x + 2 + Float(runColumn) * Self.minimapColumnWidth, y: y,
                                         width: Float(column - runColumn) * Self.minimapColumnWidth,
                                         height: Self.minimapRowHeight - 0.5),
