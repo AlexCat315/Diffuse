@@ -5,9 +5,15 @@ extension EditorApplication {
     /// The host resolves tools from its launch environment, never a package's
     /// environment or a project's bin directory. The approved permission still
     /// restricts command, arguments and environment on every invocation.
-    func pluginProcessContext(for permissions: PluginHostPermissions) throws -> PluginProcessContext {
+    func pluginProcessContext(for authorization: PluginAuthorizationRecord) throws -> PluginProcessContext {
+        let permissions = authorization.host
         let root = URL(fileURLWithPath: projectDirectory).resolvingSymlinksInPath()
         var context = PluginProcessContext(workspace: root)
+        let providers = pluginSession.runtime.versionControlProviders.filter { $0.pluginID == authorization.pluginID }
+        if permissions.entryPoints.contains(VersionControlContribution.entryPoint),
+           let repository = VersionControlProvider.repository(containing: root, among: providers) {
+            context.workspace = repository.root
+        }
         let separator: Character = ProcessInfo.processInfo.operatingSystemVersionString.contains("Windows") ? ";" : ":"
         let directories = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: separator).compactMap { item -> URL? in
             let path = String(item)

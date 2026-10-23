@@ -112,7 +112,7 @@ public final class EditorApplication: @unchecked Sendable {
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
-        let pluginSession = PluginSession(projectDirectory: projectDirectory)
+        let pluginSession = try PluginSession(projectDirectory: projectDirectory)
         let scene = EditorSceneAdapter(seedPreviewScene: seedPreviewScene,
                                        componentRegistry: pluginSession.components.registry())
         scene.setEditorViewportCameraEnabled(true)
@@ -186,7 +186,7 @@ public final class EditorApplication: @unchecked Sendable {
             }
         )
         self.workstation = try EditorWorkstation(root: URL(fileURLWithPath: projectDirectory), scripts: scripts,
-            pluginHost: EditorPluginHostLocator.resolve(injectedURL: trustedPluginHostExecutableURL))
+            plugins: pluginSession.runtime)
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
         self.toolAccess = toolAccess
@@ -200,7 +200,26 @@ public final class EditorApplication: @unchecked Sendable {
             injectedURL: trustedPluginHostExecutableURL
         )
         self.session = initialSession
+        pluginSession.aiProvider = AIProviderCatalog.bundled.provider(id: initialAISettings.providerID)
         self.perceptionService = ps
+        pluginSession.runtime.configure { [weak self] id, event in
+            guard let self else { throw PluginManagerError.stopped }
+            if self.pluginSession.manager.enabledManifests[id] == nil {
+                await self.pluginSession.bundledStartup?.value
+            }
+            if let binding = self.pluginSession.manager.activeBindings[id],
+               let client = self.pluginSession.hostClient { return (binding, client) }
+            try await self.activatePlugins(event: event)
+            guard let binding = self.pluginSession.manager.activeBindings[id] else { throw PluginManagerError.notEnabled(id) }
+            let client = try await MainActor.run { try self.resolvedPluginHostClient() }
+            return (binding, client)
+        }
+        dynamicScriptManager.languagePlugin.requestActivation = { [weak self] in
+            guard let self else { throw PluginManagerError.stopped }
+            // Startup registers bundled declarations before language demand.
+            await self.pluginSession.bundledStartup?.value
+            try await self.activatePlugins(event: "onLanguage:" + (LanguageCatalog.served?.language.id ?? "swift"))
+        }
         if let warning = contextMemoryInitialization.warning {
             logConsole("Recovered AI context memory storage",
                        severity: .warning,

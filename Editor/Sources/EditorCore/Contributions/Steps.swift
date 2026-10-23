@@ -107,7 +107,7 @@ extension StepPlugin {
 
     private func call(_ request: [String: Any], stdout: String) async throws -> [String: Any] {
         let encoded = String(decoding: try JSONSerialization.data(withJSONObject: request), as: UTF8.self)
-        let response = try await Task.detached { try self.invoke(encoded, stdout: stdout) }.value
+        let response = try await invoke(encoded, stdout: stdout)
         guard let step = try JSONSerialization.jsonObject(with: response) as? [String: Any] else {
             throw StepError.protocolViolation("The \(provider.title) plugin sent a malformed step.")
         }
@@ -214,7 +214,7 @@ extension StepPlugin {
     /// against the manifest.
     private func process(_ request: PluginProcessRequest) async throws -> PluginProcessUpdate {
         let forwarded = "{\"process\":" + String(decoding: try JSONEncoder().encode(request), as: UTF8.self) + "}"
-        let response = try await Task.detached { try self.invoke(forwarded, stdout: "") }.value
+        let response = try await invoke(forwarded, stdout: "")
         return try JSONDecoder().decode(PluginProcessUpdate.self, from: response)
     }
 }

@@ -27,7 +27,7 @@ struct AboutSettings: View {
             Text(L("Copy application and workspace information for a support request. Credentials are excluded."))
                 .font(.body).foregroundColor(.onSurfaceMuted)
             Button(copied ? L("Copied") : L("Copy diagnostics"), isEnabled: ClipboardHolder.write != nil) {
-                ClipboardHolder.write?("Guava Studio \(version)\nOS: \(ProcessInfo.processInfo.operatingSystemVersionString)\nProject: \(app.projectDirectory)\nSpace: \(app.store.workspaceMode)\nTheme: \(app.store.themeMode)\nLanguage: \(app.store.language)\nPlugins: \(app.store.pluginManagement.enabled.count)")
+                ClipboardHolder.write?("Guava Studio \(version)\nOS: \(ProcessInfo.processInfo.operatingSystemVersionString)\nProject: \(app.projectDirectory)\nSpace: \(app.store.workspaceMode)\nTheme: \(app.store.themeMode)\nLanguage: \(app.store.language)\nPlugins: \(app.store.pluginManagement.installed.filter(\.lifecycle.isEnabled).count)")
                 copied = true
             }.buttonStyle(.secondary).debugName("settings-copy-diagnostics")
         }

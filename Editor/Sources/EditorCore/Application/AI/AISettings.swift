@@ -25,7 +25,7 @@ extension EditorApplication {
     /// and hot-swaps the Session without restart.
     @discardableResult
     public func applyAISettings(_ settings: EditorAISettings, apiKey: String) -> Bool {
-        let provider = AIProviderCatalog.provider(id: settings.providerID)
+        let provider = aiProviderCatalog.provider(id: settings.providerID)
         do {
             if settings.isEnabled, !apiKey.isEmpty {
                 try AICredentialStore.save(key: apiKey, providerID: settings.providerID)
@@ -55,6 +55,7 @@ extension EditorApplication {
         agentExecution.assistantMessageID = nil
         let newSession = Self.makeSession(
             for: settings,
+            providers: aiProviderCatalog,
             pluginCapabilityExecutor: pluginCapabilityExecutor,
             pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider(),
             toolPolicy: toolAccess.policy
@@ -82,6 +83,7 @@ extension EditorApplication {
             }
         }
         session = newSession
+        pluginSession.aiProvider = provider
         return true
     }
 
@@ -136,13 +138,13 @@ extension EditorApplication {
     /// Returns `true` if a non-empty API key is stored for the provider.
     public func hasStoredAIKey(for providerID: String? = nil) -> Bool {
         let id = providerID ?? store.state.assistant.aiSettings.providerID
-        guard let provider = AIProviderCatalog.provider(id: id) else { return false }
+        guard let provider = aiProviderCatalog.provider(id: id) else { return false }
         return AICredentialStore.hasKey(for: id, environmentVariable: provider.environmentVariable)
     }
 
     public func aiCredentialSource(for providerID: String? = nil) -> AICredentialSource? {
         let id = providerID ?? store.state.assistant.aiSettings.providerID
-        guard let provider = AIProviderCatalog.provider(id: id) else { return nil }
+        guard let provider = aiProviderCatalog.provider(id: id) else { return nil }
         return AICredentialStore.credentialSource(for: id,
                                                   environmentVariable: provider.environmentVariable)
     }
@@ -196,12 +198,13 @@ extension EditorApplication {
     }
 
     static func makeSession(for settings: EditorAISettings,
+                            providers: AIProviderCatalog = .bundled,
                             initialWorldView: WorldView = WorldView(),
                             pluginCapabilityExecutor: PluginCapabilityExecutor? = nil,
                             pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil,
                             toolPolicy: ToolPolicy? = nil) -> Session? {
         guard settings.isEnabled,
-              let provider = AIProviderCatalog.provider(id: settings.providerID),
+              let provider = providers.provider(id: settings.providerID),
               let apiFormat = apiFormat(for: provider),
               let baseURL = provider.baseURL.flatMap(URL.init(string:)),
               let key = AICredentialStore.load(providerID: provider.id,

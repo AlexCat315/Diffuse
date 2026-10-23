@@ -4,9 +4,11 @@ import PluginRuntime
 /// What a step-driven contribution needs from its bundled package: the entry
 /// point the editor calls and the one process permission its commands use.
 struct StepProvider: Sendable {
+    let pluginID: String
     let title: String
     let package: URL
     let entryPoint: String
+    let activationEvent: String
     let process: PluginProcessPermission
 }
 
@@ -25,78 +27,37 @@ enum StepError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Runs step-driven bundled plugins in a plugin host of their own, so their
-/// polling never queues behind AI plugins or the language server.
-final class StepPlugins: @unchecked Sendable {
-    private let hostExecutable: URL?
-    private let lock = NSLock()
-    private var client: PluginHostProcessClient?
-    private var mounts: [URL: StepPlugin] = [:]
+/// Process adapters share the application's manager and authorized host.
+final class StepPlugins: Sendable {
+    let runtime: PluginRuntimeAccess
+    init(runtime: PluginRuntimeAccess) { self.runtime = runtime }
 
-    init(hostExecutable: URL?) {
-        self.hostExecutable = hostExecutable
-    }
-
-    deinit { client?.stop() }
-
-    /// `provider`'s plugin, running its commands in `workspace`.
     func plugin(for provider: StepProvider, workspace: URL) throws -> StepPlugin {
         guard let tool = ContributionTool.locate(provider.process.command) else { throw StepError.toolMissing(provider.process.command) }
-        return try lock.withLock {
-            if let mounted = mounts[provider.package], mounted.workspace == workspace, mounted.tool.executable == tool.executable {
-                return mounted
-            }
-            if client == nil {
-                guard let hostExecutable else {
-                    throw StepError.protocolViolation("GuavaPluginHost was not found; \(provider.title) runs through it.")
-                }
-                client = PluginHostProcessClient(executableURL: hostExecutable)
-            }
-            let plugin = StepPlugin(provider: provider, tool: tool, workspace: workspace, client: client!)
-            mounts[provider.package] = plugin
-            return plugin
-        }
+        return StepPlugin(provider: provider, tool: tool, workspace: workspace,
+            runtime: { [runtime] in try await runtime.resolve(provider.pluginID, event: provider.activationEvent) })
     }
 }
 
-/// One provider mounted for one workspace. The host binding is made on first
-/// use and again after the plugin host restarts.
-final class StepPlugin: @unchecked Sendable {
+final class StepPlugin: Sendable {
     let provider: StepProvider
     let tool: ContributionTool
     let workspace: URL
-    private let client: PluginHostProcessClient
-    private let lock = NSLock()
-    private var binding: PluginExecutionBinding?
+    private let runtime: @Sendable () async throws -> (PluginExecutionBinding, PluginHostProcessClient)
 
-    init(provider: StepProvider, tool: ContributionTool, workspace: URL, client: PluginHostProcessClient) {
-        self.provider = provider
-        self.tool = tool
-        self.workspace = workspace
-        self.client = client
+    init(provider: StepProvider, tool: ContributionTool, workspace: URL,
+         runtime: @escaping @Sendable () async throws -> (PluginExecutionBinding, PluginHostProcessClient)) {
+        self.provider = provider; self.tool = tool; self.workspace = workspace; self.runtime = runtime
     }
 
-    /// One entry point call: the step request and a window of the last command's output.
-    func invoke(_ request: String, stdout: String) throws -> Data {
+    func invoke(_ request: String, stdout: String) async throws -> Data {
         let input = try JSONSerialization.data(withJSONObject: ["request": request, "stdout": stdout])
-        let binding = try mounted()
-        let result = try client.prepareCapability(binding: binding,
-            capabilityID: binding.pluginID + "." + provider.entryPoint, input: input, querySnapshot: nil)
-        guard case let .read(data) = result else { throw StepError.protocolViolation("The plugin returned host calls.") }
-        return data
-    }
-
-    private func mounted() throws -> PluginExecutionBinding {
-        try lock.withLock {
-            if let binding, binding.hostGeneration == client.generation { return binding }
-            // Bundled plugins ship with the editor, so they are trusted as built.
-            let inspection = try client.inspectPlugin(at: provider.package)
-            var context = PluginProcessContext(workspace: workspace)
-            context.executables = [provider.process.command: tool.executable]
-            let binding = try client.loadPlugin(at: provider.package,
-                authorization: PluginAuthorizationRecord(inspection: inspection), processContext: context)
-            self.binding = binding
-            return binding
-        }
+        let (binding, client) = try await runtime()
+        return try await Task.detached {
+            let result = try client.prepareCapability(binding: binding,
+                capabilityID: binding.pluginID + "." + self.provider.entryPoint, input: input, querySnapshot: nil)
+            guard case let .read(data) = result else { throw StepError.protocolViolation("The plugin returned host calls.") }
+            return data
+        }.value
     }
 }

@@ -110,17 +110,6 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
         publish { $0.comparison?.diff = text }
     }
 
-    /// Turns a bundled system on or off for this project; a working tree of a
-    /// system that is off is not detected.
-    @MainActor
-    public func setEnabled(_ enabled: Bool, system: VersionControlSystem) async {
-        guard let provider = VersionControlProvider.provider(for: system) else { return }
-        do { try BundledPlugins.setEnabled(enabled, id: provider.pluginID, in: projectRoot.path) }
-        catch { publish { $0.error = error.localizedDescription } }
-        backend = nil
-        await refresh()
-    }
-
     /// The unified diff of one change; failures read as an explanation.
     @MainActor
     public func diff(_ change: VersionControlChange) async -> String {
@@ -227,7 +216,8 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
             VersionControlProvider.bundled.first { $0.pluginID == id }?.system
         })
         publish { $0.disabledSystems = disabled }
-        let repository = await Task.detached { VersionControlProvider.repository(containing: root, excluding: disabled) }.value
+        let providers = plugins.runtime.versionControlProviders
+        let repository = await Task.detached { VersionControlProvider.repository(containing: root, excluding: disabled, among: providers) }.value
         guard let repository else {
             backend = nil
             publish { $0 = VersionControlSnapshot(availability: .noRepository, installedSystems: installed, disabledSystems: disabled, error: $0.error) }

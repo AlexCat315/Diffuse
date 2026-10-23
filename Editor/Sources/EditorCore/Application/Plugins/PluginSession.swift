@@ -1,38 +1,47 @@
 import Foundation
 import PluginRuntime
+import CapabilityRuntime
+import SceneRuntime
 
 struct PendingPluginApproval {
     var packageURL: URL
     var inspection: PluginInspection
 }
 
-struct DeclarativePluginBinding {
-    let package: ValidatedPluginPackage
-    let authorization: PluginAuthorizationRecord
-
-    var inspection: PluginInspection { PluginInspection(package: package, contracts: []) }
-}
-
-/// Plugin session state: the host connection, execution bindings, authorization
-/// storage, the pending approval and components enabled plugins declared.
-///
-/// Grouped here so the application object does not accumulate plugin fields.
+/// The lifecycle owner, host infrastructure and domain snapshots of one editor.
 final class PluginSession: @unchecked Sendable {
-    var hostClient: PluginHostProcessClient?
-    var bindings: [String: PluginExecutionBinding] = [:]
-    /// Bundled pure-data packages enabled for this project. They never enter
-    /// the process host; their contributions are registered in-process.
-    var declarativePlugins: [String: DeclarativePluginBinding] = [:]
+    private let hostLock = NSLock()
+    private var host: PluginHostProcessClient?
+    var hostClient: PluginHostProcessClient? {
+        get { hostLock.withLock { host } }
+        set { hostLock.withLock { host = newValue } }
+    }
+    let manager: PluginManager
+    let contributions = PluginContributions()
+    let runtime: PluginRuntimeAccess
     let authorizationStore: EditorPluginAuthorizationStore
     var pendingApproval: PendingPluginApproval?
     let components = PluginComponentStore()
-    let themes = EditorThemeCatalog()
-    var isUpdating = false
+    var isUpdating: Bool { manager.isBusy }
+    var themeRevision: UInt64?
+    var providerRevision: UInt64?
+    var languageRevision: UInt64?
+    var aiAuthorities: [String: PluginCapabilityAuthority] = [:]
+    var languages = LanguageCatalog()
+    var providers = AIProviderCatalog()
+    var aiProvider: AIProviderDescriptor?
     var packageMonitor: PluginPackageMonitor?
     var bundledStartup: Task<Void, Never>?
+    @MainActor var projection: Task<Void, Error>?
 
-    init(projectDirectory: String) {
+    init(projectDirectory: String) throws {
         authorizationStore = EditorPluginAuthorizationStore(projectDirectory: projectDirectory)
+        let registry = CapabilityRegistry.aiDefault
+        manager = PluginManager(registrar: try contributions.registrar(),
+            hostCapabilities: Dictionary(uniqueKeysWithValues: registry.allVerbs().compactMap { id in
+                registry.descriptor(for: id).map { (id, $0.version) }
+            }))
+        runtime = PluginRuntimeAccess(contributions: contributions)
     }
 
     func stop() {
@@ -40,10 +49,8 @@ final class PluginSession: @unchecked Sendable {
         bundledStartup = nil
         packageMonitor?.stop()
         packageMonitor = nil
-        hostClient?.stop()
+        manager.stop()
         hostClient = nil
-        bindings.removeAll()
-        declarativePlugins.removeAll()
         pendingApproval = nil
     }
 }

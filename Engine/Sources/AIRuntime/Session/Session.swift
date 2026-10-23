@@ -90,13 +90,7 @@ public actor Session {
     /// BCP-47 locale of the most recent naturalLanguage signal (e.g. "zh-Hans", "ja", "fr").
     /// Used to instruct the model to match the user's language in summaries and entity names.
     private var currentLocale: String? = nil
-    private let capabilityRegistry: CapabilityRegistry
-    private let capabilityDraftStore: CapabilityDraftStore
-    private let pluginCapabilityExecutor: PluginCapabilityExecutor?
-    private let pluginQuerySnapshotProvider: PluginQuerySnapshotProvider?
-    private var capabilityExposureGeneration: UInt64 = 0
-    private var lastSubmittedExposureSnapshot: CapabilityExposureSnapshot?
-    private var lastSubmittedCapabilityDrafts: [CapabilityInvocationDraft] = []
+    private var capabilities: SessionCapabilityState
     private var activeInferenceID: UUID?
     private var projectToolExecutor: ProjectToolset.Executor?
     /// Host policy evaluated before a capability or project tool call executes.
@@ -130,7 +124,6 @@ public actor Session {
                 pluginCapabilityExecutor: PluginCapabilityExecutor? = nil,
                 pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil,
                 toolPolicy: ToolPolicy? = nil) {
-        let resolvedRegistry = pluginCapabilityExecutor?.registry ?? capabilityRegistry
         self.id = id
         self.config = config
         self.workflowScope.context = workflowContext
@@ -138,11 +131,18 @@ public actor Session {
         self.worldView = initialWorldView
         self.conversationHistory = []
         self.maxHistoryTurns = maxHistoryTurns
-        self.capabilityRegistry = resolvedRegistry
-        self.capabilityDraftStore = CapabilityDraftStore(registry: resolvedRegistry)
-        self.pluginCapabilityExecutor = pluginCapabilityExecutor
-        self.pluginQuerySnapshotProvider = pluginQuerySnapshotProvider
+        capabilities = SessionCapabilityState(hostRegistry: capabilityRegistry,
+            executor: pluginCapabilityExecutor, querySnapshotProvider: pluginQuerySnapshotProvider)
         self.toolPolicy = toolPolicy
+    }
+
+    /// Withdraw pending authority without losing the conversation or host context.
+    public func replacePluginCapabilities(_ executor: PluginCapabilityExecutor?,
+                                          querySnapshotProvider: PluginQuerySnapshotProvider?) async {
+        let previousDrafts = capabilities.drafts
+        activeInferenceID = nil
+        capabilities.replace(executor, querySnapshotProvider: querySnapshotProvider)
+        await previousDrafts.removeAll()
     }
 
     public func setWorkflowContext(_ context: WorkflowContext?) async {
@@ -300,8 +300,8 @@ public actor Session {
                 confidence: planConfidence(for: plan),
                 approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
                 toolUseID: toolUseID,
-                capabilityExposureSnapshot: lastSubmittedExposureSnapshot,
-                capabilityDrafts: lastSubmittedCapabilityDrafts
+                capabilityExposureSnapshot: capabilities.submittedSnapshot,
+                capabilityDrafts: capabilities.submittedDrafts
             )
 
         case let .userCorrection(proposalID, acceptedStepIDs, rejectedStepIDs):
@@ -323,9 +323,9 @@ public actor Session {
     /// layer, but its result can no longer create or submit drafts.
     public func cancelActiveRun() async {
         activeInferenceID = nil
-        lastSubmittedExposureSnapshot = nil
-        lastSubmittedCapabilityDrafts = []
-        await capabilityDraftStore.removeAll()
+        capabilities.submittedSnapshot = nil
+        capabilities.submittedDrafts = []
+        await capabilities.drafts.removeAll()
     }
 
     /// Handles a userCorrection signal: records the partial outcome as a tool_result,
@@ -403,8 +403,8 @@ public actor Session {
             confidence: planConfidence(for: plan),
             approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
             toolUseID: newToolUseID,
-            capabilityExposureSnapshot: lastSubmittedExposureSnapshot,
-            capabilityDrafts: lastSubmittedCapabilityDrafts
+            capabilityExposureSnapshot: capabilities.submittedSnapshot,
+            capabilityDrafts: capabilities.submittedDrafts
         )
     }
 
@@ -446,8 +446,8 @@ public actor Session {
             confidence: planConfidence(for: plan),
             approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
             toolUseID: toolUseID,
-            capabilityExposureSnapshot: lastSubmittedExposureSnapshot,
-            capabilityDrafts: lastSubmittedCapabilityDrafts
+            capabilityExposureSnapshot: capabilities.submittedSnapshot,
+            capabilityDrafts: capabilities.submittedDrafts
         )
     }
 
@@ -586,9 +586,9 @@ public actor Session {
     private func infer(onProgress: (@Sendable (String) -> Void)? = nil) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
         guard let runID = activeInferenceID else { throw SessionError.inferenceCancelled }
         try ensureActive(runID)
-        lastSubmittedExposureSnapshot = nil
-        lastSubmittedCapabilityDrafts = []
-        await capabilityDraftStore.removeAll()
+        capabilities.submittedSnapshot = nil
+        capabilities.submittedDrafts = []
+        await capabilities.drafts.removeAll()
         if let mem = contextMemory {
             cachedMemoryView = await mem.symbolicView(budget: 20)
         }
@@ -635,7 +635,7 @@ public actor Session {
                         snapshot = nextSnapshot
                         extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
                     case let .completed(plan, inputJSON, submittedSnapshot):
-                        lastSubmittedExposureSnapshot = submittedSnapshot
+                        capabilities.submittedSnapshot = submittedSnapshot
                         return (plan, call.id, inputJSON)
                     }
                 } catch {
@@ -685,7 +685,7 @@ public actor Session {
                         snapshot = nextSnapshot
                         extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
                     case let .completed(plan, inputJSON, submittedSnapshot):
-                        lastSubmittedExposureSnapshot = submittedSnapshot
+                        capabilities.submittedSnapshot = submittedSnapshot
                         return (plan, call.id, inputJSON)
                     }
                 } catch {
@@ -855,7 +855,7 @@ public actor Session {
                 "max_tokens": config.maxTokens,
                 "system": systemPrompt(),
                 "tools": CapabilityToolset.anthropicTools(snapshot: snapshot,
-                                                           registry: capabilityRegistry) + projectTools,
+                                                           registry: capabilities.registry) + projectTools,
                 "tool_choice": ["type": "any"],
                 "messages": allMessages,
             ]
@@ -866,7 +866,7 @@ public actor Session {
                 "model": config.model,
                 "max_tokens": config.maxTokens,
                 "tools": CapabilityToolset.openAITools(snapshot: snapshot,
-                                                        registry: capabilityRegistry) + projectTools,
+                                                        registry: capabilities.registry) + projectTools,
                 "tool_choice": "required",
                 "messages": messages,
             ]
@@ -876,7 +876,7 @@ public actor Session {
                 "max_output_tokens": config.maxTokens,
                 "instructions": systemPrompt(),
                 "tools": CapabilityToolset.openAIResponsesTools(snapshot: snapshot,
-                                                                  registry: capabilityRegistry) + projectTools,
+                                                                  registry: capabilities.registry) + projectTools,
                 "tool_choice": "required",
                 "input": allMessages,
             ]
@@ -1366,23 +1366,23 @@ public actor Session {
     }
 
     private func initialCapabilitySnapshot() -> CapabilityExposureSnapshot {
-        capabilityExposureGeneration &+= 1
+        capabilities.generation &+= 1
         let coreReadIDs: Set<String> = [
             "scene.get_entities",
             "scene.get_selection",
             "scene.find_entities",
         ]
-        let basePolicy = pluginCapabilityExecutor?.exposurePolicy
+        let basePolicy = capabilities.executor?.exposurePolicy
             ?? CapabilityExposurePolicy(activeReleasePhase: .stable,
                                         allowedDomains: ["scene"],
                                         maximumCapabilities: 16)
-        return capabilityRegistry.exposureSnapshot(
+        return capabilities.registry.exposureSnapshot(
             policy: workflowScope.restricting(basePolicy),
             sceneRevision: worldView.sceneRevision ?? 0,
-            generation: capabilityExposureGeneration,
+            generation: capabilities.generation,
             preferredCapabilityIDs: Array(coreReadIDs).sorted(),
             includedCapabilityIDs: coreReadIDs,
-            pluginAuthorities: pluginCapabilityExecutor?.pluginAuthorities ?? [:]
+            pluginAuthorities: capabilities.executor?.pluginAuthorities ?? [:]
         )
     }
 
@@ -1399,7 +1399,7 @@ public actor Session {
                 throw CapabilityDraftError.invalidInput(String(describing: error))
             }
             if call.name == ProjectToolset.responseTool.name {
-                guard !(await capabilityDraftStore.hasPendingDrafts) else {
+                guard !(await capabilities.drafts.hasPendingDrafts) else {
                     throw CapabilityDraftError.invalidInput("Use submit_plan for scene drafts.")
                 }
                 let plan = SceneEditPlan(summary: call.input["message"] as? String ?? "", steps: [])
@@ -1407,7 +1407,7 @@ public actor Session {
                 return .completed(plan: plan, inputJSON: json, snapshot: snapshot)
             }
             if ["save_scene", "export_project", "set_playback_state"].contains(call.name),
-               await capabilityDraftStore.hasPendingDrafts {
+               await capabilities.drafts.hasPendingDrafts {
                 throw CapabilityDraftError.invalidInput("Submit pending scene drafts for review before saving, exporting or playing.")
             }
             guard workflowScope.allowedProjectToolNames?.contains(call.name) ?? true else {
@@ -1440,12 +1440,12 @@ public actor Session {
         let contract: CapabilityContract
         switch call.name {
         case CapabilityToolset.searchToolName:
-            guard let value = capabilityRegistry.descriptor(for: "system.search_capabilities")?.contract else {
+            guard let value = capabilities.registry.descriptor(for: "system.search_capabilities")?.contract else {
                 throw CapabilityDraftError.unknownTool(call.name)
             }
             contract = value
         case CapabilityToolset.submitToolName:
-            guard let value = capabilityRegistry.descriptor(for: "system.submit_plan")?.contract else {
+            guard let value = capabilities.registry.descriptor(for: "system.submit_plan")?.contract else {
                 throw CapabilityDraftError.unknownTool(call.name)
             }
             contract = value
@@ -1466,7 +1466,7 @@ public actor Session {
             let query = call.input["query"] as? String ?? ""
             let domain = call.input["domain"] as? String
             let requestedAccess = (call.input["access"] as? String).flatMap(CapabilityAccess.init(rawValue:))
-            let unrestrictedPolicy = pluginCapabilityExecutor?.exposurePolicy
+            let unrestrictedPolicy = capabilities.executor?.exposurePolicy
                 ?? CapabilityExposurePolicy(activeReleasePhase: .stable,
                                             allowedDomains: ["scene"],
                                             maximumCapabilities: 16)
@@ -1477,8 +1477,8 @@ public actor Session {
             } ?? basePolicy.allowedDomains
             policy.maximumCapabilities = 64
 
-            let authorities = pluginCapabilityExecutor?.pluginAuthorities ?? [:]
-            let candidates = capabilityRegistry.searchContracts(query: query,
+            let authorities = capabilities.executor?.pluginAuthorities ?? [:]
+            let candidates = capabilities.registry.searchContracts(query: query,
                                                                  policy: policy,
                                                                  pluginAuthorities: authorities,
                                                                  limit: 64)
@@ -1493,11 +1493,11 @@ public actor Session {
             let additions = candidates.filter { !existingSet.contains($0.id) }.prefix(available)
             let preferredIDs = existingIDs + additions.map(\.id)
             let included = coreReadIDs.union(preferredIDs)
-            capabilityExposureGeneration &+= 1
-            var nextSnapshot = capabilityRegistry.exposureSnapshot(
+            capabilities.generation &+= 1
+            var nextSnapshot = capabilities.registry.exposureSnapshot(
                 policy: basePolicy,
                 sceneRevision: revision,
-                generation: capabilityExposureGeneration,
+                generation: capabilities.generation,
                 preferredCapabilityIDs: preferredIDs,
                 includedCapabilityIDs: included,
                 pluginAuthorities: authorities
@@ -1519,12 +1519,12 @@ public actor Session {
             guard ids.count == rawIDs.count else {
                 throw SessionError.planDecodingFailed(detail: "submit_plan contains an invalid draft id")
             }
-            let drafts = try await capabilityDraftStore.validatedDrafts(
+            let drafts = try await capabilities.drafts.validatedDrafts(
                 ids: ids,
                 snapshot: snapshot,
                 currentSceneRevision: revision
             )
-            lastSubmittedCapabilityDrafts = drafts
+            capabilities.submittedDrafts = drafts
             let builtInDrafts = drafts.filter { $0.sourcePluginID == nil }
             let plan: SceneEditPlan
             if builtInDrafts.isEmpty {
@@ -1540,16 +1540,16 @@ public actor Session {
             guard let inputJSON = String(data: planData, encoding: .utf8) else {
                 throw SessionError.planDecodingFailed(detail: "could not encode submitted plan")
             }
-            await capabilityDraftStore.consume(ids: ids)
+            await capabilities.drafts.consume(ids: ids)
             return .completed(plan: plan, inputJSON: inputJSON, snapshot: snapshot)
         }
 
         if contract.access == .read {
             let result: String
             if let pluginID = contract.source.pluginID,
-               let pluginCapabilityExecutor {
-                let querySnapshot = try await pluginQuerySnapshotProvider?(pluginID, revision)
-                let payload = try pluginCapabilityExecutor.executeRead(
+               let executor = capabilities.executor {
+                let querySnapshot = try await capabilities.querySnapshotProvider?(pluginID, revision)
+                let payload = try executor.executeRead(
                     toolName: call.name,
                     input: Data(call.inputJSON.utf8),
                     snapshot: snapshot,
@@ -1587,7 +1587,7 @@ public actor Session {
             return .exchange(resultJSON: result, snapshot: snapshot)
         }
 
-        let draft = try await capabilityDraftStore.createDraft(
+        let draft = try await capabilities.drafts.createDraft(
             toolName: call.name,
             input: Data(call.inputJSON.utf8),
             snapshot: snapshot,

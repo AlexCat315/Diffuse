@@ -50,6 +50,7 @@ public struct PluginCapabilityExecutor: Sendable {
 
     public init(hostRegistry: CapabilityRegistry = .aiDefault,
                 bindings: [PluginExecutionBinding],
+                enabledDeclarations: [PluginInspection] = [],
                 invoker: any PluginCapabilityInvoking) throws {
         var byID: [String: PluginExecutionBinding] = [:]
         var authorities: [String: PluginCapabilityAuthority] = [:]
@@ -65,7 +66,8 @@ public struct PluginCapabilityExecutor: Sendable {
         self.invoker = invoker
         self.pluginAuthorities = authorities
         self.registry = try PluginCapabilityRegistryBuilder.build(base: hostRegistry,
-                                                                  bindings: bindings)
+                                                                  bindings: bindings,
+                                                                  enabledDeclarations: enabledDeclarations)
     }
 
     public var exposurePolicy: CapabilityExposurePolicy {

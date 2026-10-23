@@ -16,10 +16,17 @@ public struct ThemeCatalogSnapshot: Sendable {
 public final class EditorThemeCatalog: @unchecked Sendable {
     public static let defaultThemeID = "studio.theme.default"
     private let lock = NSLock()
-    private var entries: [Entry] = bundled
+    private var packages: [String: PackageThemes] = [:]
     private var revision: UInt64 = 0
 
     init() {}
+
+    private struct PackageThemes {
+        let generation: UUID
+        let entries: [Entry]
+    }
+
+    private var entries: [Entry] { packages.keys.sorted().flatMap { packages[$0]?.entries ?? [] } }
 
     private struct Entry: Sendable {
         let descriptor: EditorThemeDescriptor
@@ -35,20 +42,23 @@ public final class EditorThemeCatalog: @unchecked Sendable {
         _ = try decode(package)
     }
 
-    func update(packages: [ValidatedPluginPackage]) throws {
-        var next: [Entry] = []
-        var ids = Set<String>()
-        for package in packages.sorted(by: { $0.manifest.id < $1.manifest.id }) {
-            for entry in try Self.decode(package) {
-                guard ids.insert(entry.descriptor.id).inserted else {
-                    throw ThemeResourceError.invalidToken(entry.descriptor.id)
-                }
-                next.append(entry)
+    func register(_ package: ValidatedPluginPackage) throws -> Registration {
+        let next = try Self.decode(package), id = package.manifest.id, generation = UUID()
+        try lock.withLock {
+            let claimed = Set(entries.map(\.descriptor.id))
+            guard packages[id] == nil, !next.contains(where: { claimed.contains($0.descriptor.id) }) else {
+                throw ThemeResourceError.invalidToken(id)
             }
-        }
-        lock.withLock {
-            entries = next
+            packages[id] = PackageThemes(generation: generation, entries: next)
             revision &+= 1
+        }
+        return Registration { [weak self] in
+            guard let self else { return }
+            self.lock.withLock {
+                guard self.packages[id]?.generation == generation else { return }
+                self.packages.removeValue(forKey: id)
+                self.revision &+= 1
+            }
         }
     }
 

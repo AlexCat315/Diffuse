@@ -19,7 +19,11 @@ Guava 插件以 `plugin.json` 为必选文件。纯声明插件只包含 manifes
 
 `resources` 为数组，每项包含 `id`、`path`、`kind`。路径必须位于 `resources/`，禁止绝对路径、空路径段、`..` 与任一级符号链接；禁止未声明的资源文件，单包资源总量限制为 16 MiB。资源按相对路径计算 SHA-256，读取时重新比对；完整 manifest、资源哈希以及可选的 WIT / component 哈希都绑定进授权记录和 authority digest。任何声明、资源或代码变化都需要重新授权。
 
-运行时包可声明 `runtime`（`component`、`wit`、`compatibility: 1`）以及 `activation` 事件。当前阶段校验事件格式；按事件惰性激活和统一生命周期管理将在下一阶段接入，运行时插件仍沿用现有加载流程。
+运行时包可声明 `runtime`（`component`、`wit`、`compatibility: 1`）以及 `activation` 事件。`PluginManager` 串行管理安装、启用、激活、重载、停用和卸载；启用先注册声明，不挂载 WASM。语言服务/格式化推导 `onLanguage:<id>`，任务/VCS 按实际请求激活，普通 AI 能力推导 `onAIChat` 与 `onAITool:<id>`；显式事件还支持 `onStartup`、`onCommand`、`onView`、`onAIProvider`、`onAgent`、`onWorkspaceContains` 与 `onURI`。agent/UI 消费者由后续贡献点接入。
+
+每个领域注册返回 `Registration`，由插件的 `DisposalScope` 持有并逆序释放，重复释放无副作用，单个释放失败仍继续其他清理。运行时激活产生的组件声明也进入同一 scope；退出停止宿主，进行中的激活通过代际检查拒绝发布。依赖按启用声明校验、按需求先激活；宿主失效撤回运行中插件及其依赖者，保留无关声明贡献。
+
+主题、语言与 provider 目录属于具体 Editor 会话，不使用全局可变注册表。管理页的分类来自贡献点，允许混合贡献；关闭的外部插件仍保留在当前会话列表。主题/语言刷新不重建 AI；AI 能力变化更新 Session 的能力状态并撤回待执行草案，保留聊天。格式化、进程与组件声明入口不暴露给模型。
 
 `./guava plugin build <source> --output <package.guavaplugin>` 同时支持声明式与运行时插件。纯声明源码无需 `Sources/` 或 WIT，打包不调用 Swift guest 编译器或插件宿主。
 
@@ -35,11 +39,11 @@ Guava 插件以 `plugin.json` 为必选文件。纯声明插件只包含 manifes
 
 ## 语言注册
 
-编辑器的语言名称、文件图标与语言标识来自插件贡献，而不是内置扩展名表。随包分发的每个插件与当前已启用插件都会把 `contributes["guava.language/v1"]` 登记到同一张注册表；同 `id` 只保留先登记的一份。`icon` 可覆盖默认的图标键（默认使用语言 `id`，`plaintext` 用 `text` 图标）。`.tex` 由随包 `Plugins/Languages.guavaplugin`（`studio.languages`）登记为 LaTeX。已分布但未启用的随包插件仍参与识别，停用只影响其语言服务等运行时能力。
+当前已启用插件的 `contributes["guava.language/v1"]` 注册到所属 Editor 会话的语言目录，同 ID 冲突会拒绝注册。`icon` 可覆盖默认图标键；`.tex` 由随包 `studio.languages` 贡献为 LaTeX。停用撤回该插件的语言声明、格式化与服务。没有应用上下文的独立视图可读取不可变的随包元数据完成基本文件识别，不会激活运行时。
 
-`grammar` 与 `outline` 是 `plugin.json` 中的静态数据，不是能力调用。宿主按数组顺序在整个文档上执行正则，已占用的字符不会被后续规则覆盖；`^`/`$` 按行匹配。语法规则只返回 `keyword`、`type`、`function`、`string`、`number`、`comment`、`attribute`、`directive` 八种 token，由宿主映射到统一调色板，插件不能贡献颜色。提纲规则要求第 1 个捕获组是标题，`level` 为 1…6，同一起点保留先出现的规则。两者都在编辑进程内执行，按键路径不进入 WASM，因此随包语言即使未启用也能着色和列提纲。
+`grammar` 与 `outline` 是 `plugin.json` 中的静态数据，不是能力调用。宿主按数组顺序在整个文档上执行正则，已占用的字符不会被后续规则覆盖；`^`/`$` 按行匹配。语法规则只返回 `keyword`、`type`、`function`、`string`、`number`、`comment`、`attribute`、`directive` 八种 token，由宿主映射到统一调色板，插件不能贡献颜色。提纲规则要求第 1 个捕获组是标题，`level` 为 1…6，同一起点保留先出现的规则。两者都在编辑进程内执行，按键路径不进入 WASM，启用后的声明无需运行时即可着色和列提纲。
 
-`format` 是唯一需要插件挂载的语言贡献：`format.entryPoint` 必须指向 WIT 中一个输入为 `record { text: string }` 的能力。编辑器在 `Option+Shift+F` 时调用它，单次最多 64 KiB 文本；返回结果是 JSON 字符串（读取类能力的通用结果格式），宿主解码后作为整篇文本一次替换。未声明、插件未启用或调用失败时文档保持不变，失败写入控制台。`studio.languages` 的 `format` 能力实现 LaTeX 的统一换行、行尾空白清理与连续空行压缩。
+语言服务和格式化在需要时通过 `onLanguage:<id>` 激活运行时。`format.entryPoint` 必须指向 WIT 中一个输入为 `record { text: string }` 的能力。编辑器在 `Option+Shift+F` 时调用它，单次最多 64 KiB 文本；返回结果是 JSON 字符串（读取类能力的通用结果格式），宿主解码后作为整篇文本一次替换。未声明、插件未启用或调用失败时文档保持不变，失败写入控制台。`studio.languages` 的 `format` 能力实现 LaTeX 的统一换行、行尾空白清理与连续空行压缩。
 
 ## Swift Support 捆绑插件
 

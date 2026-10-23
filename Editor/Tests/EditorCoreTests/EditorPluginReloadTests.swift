@@ -35,10 +35,15 @@ final class EditorPluginReloadTests: XCTestCase {
             let authorization = try application.makePluginAuthorization(afterUserApprovalOf: inspection)
             step = "enable"
             _ = try await application.enablePlugin(at: package, authorization: authorization)
+            XCTAssertTrue(application.pluginSession.manager.activeBindings.isEmpty)
+            let opened = await application.handleMCPMessage(Data(
+                #"{"action":"open_capability_session","session_id":"4394C8F4-96BF-48C7-880B-40B83D787DFC"}"#.utf8))
+            let response = try XCTUnwrap(JSONSerialization.jsonObject(with: opened) as? [String: Any])
+            XCTAssertEqual(response["ok"] as? Bool, true, String(describing: response))
             XCTAssertEqual(application.enabledPluginInspections().map(\.manifest.id),
                            ["safe.reloadtest"])
             let generationBefore = try XCTUnwrap(
-                application.pluginSession.bindings["safe.reloadtest"]?.hostGeneration
+                application.pluginSession.manager.activeBindings["safe.reloadtest"]?.hostGeneration
             )
 
             // Byte-identical package: one-step remount on the same host generation.
@@ -46,7 +51,7 @@ final class EditorPluginReloadTests: XCTestCase {
             try await application.reloadPlugin(id: "safe.reloadtest")
             XCTAssertEqual(application.enabledPluginInspections().map(\.manifest.id),
                            ["safe.reloadtest"])
-            XCTAssertEqual(application.pluginSession.bindings["safe.reloadtest"]?.hostGeneration,
+            XCTAssertEqual(application.pluginSession.manager.activeBindings["safe.reloadtest"]?.hostGeneration,
                            generationBefore)
 
             // Changed package: rejected before unload, old generation stays mounted.
@@ -69,7 +74,7 @@ final class EditorPluginReloadTests: XCTestCase {
             }
             XCTAssertEqual(application.enabledPluginInspections().map(\.manifest.id),
                            ["safe.reloadtest"])
-            XCTAssertEqual(application.pluginSession.bindings["safe.reloadtest"]?.hostGeneration,
+            XCTAssertEqual(application.pluginSession.manager.activeBindings["safe.reloadtest"]?.hostGeneration,
                            generationBefore)
 
             // The management entry surfaces the changed build for re-authorization.
@@ -119,7 +124,9 @@ final class EditorPluginReloadTests: XCTestCase {
         let providerAuthorization = try application.makePluginAuthorization(
             afterUserApprovalOf: application.inspectPlugin(at: provider))
         _ = try await application.enablePlugin(at: provider, authorization: providerAuthorization)
+        try await application.activatePlugins(event: "onAITool:safe.reloadtest.inspect")
         _ = try await application.enablePlugin(at: dependent, authorization: dependentAuthorization)
+        try await application.activatePlugins(event: "onAITool:safe.dependent.inspect")
         do {
             try await application.disablePlugin(id: "safe.reloadtest")
             XCTFail("A capability provider cannot be disabled while required")
@@ -133,15 +140,8 @@ final class EditorPluginReloadTests: XCTestCase {
         XCTAssertNotNil(try application.storedPluginAuthorization(for: application.inspectPlugin(at: provider)))
         let first = Task { @MainActor in try await application.reloadPlugin(id: "safe.reloadtest") }
         let second = Task { @MainActor in try await application.reloadPlugin(id: "safe.dependent") }
-        var rejected = 0
-        for task in [first, second] {
-            do { try await task.value }
-            catch let error as EditorPluginCapabilityError {
-                XCTAssertEqual(error, .pluginUpdateInProgress)
-                rejected += 1
-            }
-        }
-        XCTAssertEqual(rejected, 1)
+        try await first.value
+        try await second.value
         XCTAssertEqual(application.enabledPluginInspections().count, 2)
         // Losing the host after enable leaves old dependency bindings stale.
         // Reload reaches unload/load, then the complete executor rejects them;

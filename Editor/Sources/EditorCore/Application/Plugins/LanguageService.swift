@@ -10,6 +10,8 @@ final class PluginLanguageService: @unchecked Sendable {
     private var binding: PluginExecutionBinding?
     private var client: PluginHostProcessClient?
 
+    var requestActivation: (@Sendable () async throws -> Void)?
+
     var isBound: Bool { lock.withLock { binding != nil && client != nil } }
     private var memoryBytes: UInt64?
     var residentMemoryBytes: UInt64? { lock.withLock { memoryBytes } }
@@ -22,6 +24,10 @@ final class PluginLanguageService: @unchecked Sendable {
             memoryBytes = nil
             return changed
         }
+    }
+
+    func activateIfNeeded() async throws {
+        if !isBound { try await requestActivation?() }
     }
 
     func connect(_ command: ProcessCommand) throws -> LanguageServerTransport {

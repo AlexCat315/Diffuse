@@ -11,6 +11,8 @@ struct PluginListing {
     var version: Int?
     var access: String?
     var capabilityCount = 0
+    var categories: [PluginCategory] = []
+    var phase: String?
     var isBundled = false
     var glyph = PluginGlyph.Kind.package
     /// A short warning under the description, e.g. a missing command-line tool.
@@ -19,6 +21,8 @@ struct PluginListing {
     init(_ plugin: EditorPluginInspectionSummary) {
         id = plugin.id; name = plugin.name; description = plugin.description
         version = plugin.version; access = plugin.access; capabilityCount = plugin.capabilities.count
+        categories = plugin.categories; phase = plugin.lifecycle.phase.rawValue
+        note = plugin.lifecycle.failure
     }
 
     /// A plugin that ships with the editor; `loaded` adds what its host reported.
@@ -26,12 +30,14 @@ struct PluginListing {
         id = plugin.id; name = plugin.name; description = plugin.description
         version = plugin.version; access = plugin.access; isBundled = true
         capabilityCount = loaded?.capabilities.count ?? 0
+        categories = plugin.categories; phase = loaded?.lifecycle.phase.rawValue
         switch plugin.host {
         case .versionControl: glyph = .versionControl
         case .application: glyph = plugin.commands.contains("sourcekit-lsp") ? .swift : .package
         case .declarative: glyph = .package
         }
         note = missingCommand.map { String(format: L("The %@ command-line tool is not installed."), $0) }
+            ?? loaded?.lifecycle.failure
     }
 }
 
@@ -61,6 +67,12 @@ struct PluginRow: View {
                     Row(alignment: .center, spacing: 5) {
                         Icon(UIIcons.Status.alertTriangle, size: 11, color: .warning)
                         Text(note, lineLimit: 2).font(.caption).foregroundColor(.warning)
+                    }
+                }
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 6) {
+                    for category in listing.categories { AnyView(Badge(L(category.rawValue)) { $0.variant = .outline }) }
+                    if let phase = listing.phase {
+                        Text(pluginPhaseLabel(phase)).font(.caption).foregroundColor(.onSurfaceMuted)
                     }
                 }
                 if isEnabled, let access = listing.access {
@@ -215,5 +227,15 @@ private func pluginAccessTone(_ rawValue: String) -> StatusTone {
     case "reversible_write": return .info
     case "destructive_write", "external_side_effect": return .warning
     default: return .neutral
+    }
+}
+
+private func pluginPhaseLabel(_ phase: String) -> String {
+    switch phase {
+    case "installed": L("Disabled")
+    case "enabled": L("Enabled")
+    case "activated": L("Running")
+    case "failed": L("Failed")
+    default: phase
     }
 }

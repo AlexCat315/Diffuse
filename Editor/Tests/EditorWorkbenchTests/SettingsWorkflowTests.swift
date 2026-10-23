@@ -30,8 +30,8 @@ struct SettingsWorkflowTests {
             }
             let providerPlugin = try #require(BundledPlugins.plugin(id: "studio.ai-providers"))
             let providers = try PluginPackageLoader().load(at: providerPlugin.package)
-            AIProviderCatalog.update(bindings: [:], packages: [providers])
             let app = try EditorApplication(projectDirectory: directory.path)
+            app.pluginSession.providers = AIProviderCatalog(packages: [providers])
             defer { app.shutdown() }
             try work(app, interactions)
         }
@@ -47,13 +47,29 @@ struct SettingsWorkflowTests {
         #expect(Set(SettingsSectionID.allCases.map(\.category)) == Set(SettingsCategory.allCases))
     }
 
+    @Test("Plugin categories filter actual contributions without hiding mixed packages")
+    func pluginCategories() throws {
+        try withApp { app, _ in
+            for category in [""] + PluginCategory.allCases.map(\.rawValue) {
+                let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+                graph.install(root: PluginSettings(app: app, category: category))
+                for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 720, height: 1200) }
+                let rows = Set(graph.layoutSnapshot().compactMap(\.debugName).filter { $0.hasPrefix("settings-plugin-row-") })
+                let expected = Set(app.bundledPlugins.filter { category.isEmpty || $0.categories.contains { $0.rawValue == category } }
+                    .map { "settings-plugin-row-" + $0.id })
+                #expect(rows == expected)
+                #expect(graph.layoutSnapshot().contains { $0.debugName == "settings-plugin-category" })
+            }
+        }
+    }
+
     @Test("Settings navigation, inputs and actions remain inside narrow and desktop windows",
           arguments: [Float(390), Float(720), Float(1040)], SettingsCategory.allCases)
     func layout(width: Float, category: SettingsCategory) throws {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = category
-            if category == .agent { session.agent.draft.select(AIProviderCatalog.provider(id: "openai")) }
+            if category == .agent { session.agent.draft.select(AIProviderCatalog.bundled.provider(id: "openai")) }
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: SettingsPanel(app: app, session: session).theme(EditorVisualTheme.make(dark: true)))
             for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 740) }
@@ -75,13 +91,13 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             let editor = AgentSettingsEditor(app: app, state: Binding(get: { session.agent }, set: { session.agent = $0 }), onChange: {})
-            editor.select(AIProviderCatalog.provider(id: "openai"))
+            editor.select(AIProviderCatalog.bundled.provider(id: "openai"))
             editor.update { $0.draft.apiKey = "uncommitted-test-secret"; $0.draft.model = "" }
             #expect(app.store.aiSettings.providerID.isEmpty)
             editor.apply()
             #expect(session.agent.feedback?.isError == true)
             #expect(app.store.aiSettings.providerID.isEmpty)
-            editor.select(AIProviderCatalog.provider(id: "deepseek"))
+            editor.select(AIProviderCatalog.bundled.provider(id: "deepseek"))
             #expect(session.agent.draft.apiKey.isEmpty)
             #expect(editor.isDirty)
             editor.reset()
@@ -95,7 +111,7 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .agent
-            session.agent.draft.select(AIProviderCatalog.provider(id: "openai"))
+            session.agent.draft.select(AIProviderCatalog.bundled.provider(id: "openai"))
             session.agent.draft.model = "retained-model"
             let harness = ResizingPreferences(app: app, session: session)
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
@@ -120,7 +136,7 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .agent
-            session.agent.draft.select(AIProviderCatalog.provider(id: "openai"))
+            session.agent.draft.select(AIProviderCatalog.bundled.provider(id: "openai"))
             var surface = UIEnvironment()
             surface.viewport.width = width
             surface.input = width == 390 ? [.touch] : width == 720 ? [.pointer, .touch, .keyboard] : [.pointer, .keyboard]
@@ -145,7 +161,7 @@ struct SettingsWorkflowTests {
         try withApp { app, interactions in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .agent
-            session.agent.draft.select(AIProviderCatalog.provider(id: "openai"))
+            session.agent.draft.select(AIProviderCatalog.bundled.provider(id: "openai"))
             session.agent.draft.model = "my-model"
             session.agent.draft.apiKey = "uncommitted-test-secret"
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
@@ -170,7 +186,7 @@ struct SettingsWorkflowTests {
         try withApp { app, interactions in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .agent
-            session.agent.draft.select(AIProviderCatalog.provider(id: "openai"))
+            session.agent.draft.select(AIProviderCatalog.bundled.provider(id: "openai"))
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: SettingsPanel(app: app, session: session))
             func settle() { for _ in 0..<5 { graph.recomposer.commitAll(); graph.computeLayout(width: 1040, height: 740) } }

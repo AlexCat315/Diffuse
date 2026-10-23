@@ -11,19 +11,20 @@ extension EditorApplication {
     @MainActor
     private func activateSwiftToolchain(path: String?) async throws {
         guard !pluginSession.isUpdating else { throw EditorPluginCapabilityError.pluginUpdateInProgress }
-        let previousBinding = pluginSession.bindings[PluginLanguageService.pluginID]
+        let previousBinding = pluginSession.manager.activeBindings[PluginLanguageService.pluginID]
+        let wasEnabled = enabledPluginManifests[PluginLanguageService.pluginID] != nil
         try await workstation.scripts.configureSwiftToolchain(path: path, activate: { [self] in
             try Task.checkCancellation()
             try await mountSwiftToolchainPlugin()
         }, recover: { [self] in
-            try await restoreSwiftToolchainPlugin(previousBinding)
+            try await restoreSwiftToolchainPlugin(previousBinding, wasEnabled: wasEnabled)
         })
     }
 
     @MainActor
     private func mountSwiftToolchainPlugin() async throws {
         guard try !BundledPlugins.disabled(in: projectDirectory).contains(PluginLanguageService.pluginID) else { return }
-        if pluginSession.bindings[PluginLanguageService.pluginID] != nil {
+        if enabledPluginManifests[PluginLanguageService.pluginID] != nil {
             try await reloadPlugin(id: PluginLanguageService.pluginID)
         } else {
             let client = try resolvedPluginHostClient()
@@ -34,16 +35,18 @@ extension EditorApplication {
     }
 
     @MainActor
-    private func restoreSwiftToolchainPlugin(_ binding: PluginExecutionBinding?) async throws {
+    private func restoreSwiftToolchainPlugin(_ binding: PluginExecutionBinding?, wasEnabled: Bool) async throws {
         let pluginID = PluginLanguageService.pluginID
         guard try !BundledPlugins.disabled(in: projectDirectory).contains(pluginID) else { return }
         if let binding {
-            if pluginSession.bindings[pluginID] != nil {
+            if pluginSession.manager.activeBindings[pluginID] != nil {
                 try await reloadPlugin(id: pluginID)
             } else {
                 try await enablePlugin(at: URL(fileURLWithPath: binding.pluginPath), authorization: binding.authorization)
             }
-        } else if pluginSession.bindings[pluginID] != nil {
+        } else if wasEnabled {
+            try await mountSwiftToolchainPlugin()
+        } else if enabledPluginManifests[pluginID] != nil {
             do {
                 try await disablePlugin(id: pluginID)
             } catch {

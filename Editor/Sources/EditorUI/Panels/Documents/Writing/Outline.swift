@@ -21,11 +21,11 @@ struct DocumentOutlinePanel: View {
         let document = observed.wrappedValue.selected
         Column(alignment: .leading, spacing: 0) {
             if let document {
-                let kind = DocumentKind(path: document.path)
+                let kind = DocumentKind(path: document.path, languages: app.languageCatalog)
                 let hasOutline = kind.isMarkdown
-                    || !LanguageCatalog.outlineRules(forLanguageID: kind.languageID).isEmpty
+                    || !app.languageCatalog.outlineRules(forLanguageID: kind.languageID).isEmpty
                 if hasOutline {
-                    let outline = cache.outline(for: document.text, languageID: kind.languageID)
+                    let outline = cache.outline(for: document.text, languageID: kind.languageID, rules: app.languageCatalog.outlineRules(forLanguageID: kind.languageID))
                     let query = filter.stringValue.trimmingCharacters(in: .whitespaces).lowercased()
                     let headings = query.isEmpty ? outline.headings : outline.headings.filter { $0.title.lowercased().contains(query) }
                     EditorPanelSearchBar(L("Filter headings"), text: $filter, summary: "\(outline.headings.count)")
@@ -48,7 +48,7 @@ struct DocumentOutlinePanel: View {
                         }.flex().frame(minWidth: 0, minHeight: 0)
                     }
                 } else {
-                    summary(cache.outline(for: document.text, languageID: kind.languageID).statistics)
+                    summary(cache.outline(for: document.text, languageID: kind.languageID, rules: app.languageCatalog.outlineRules(forLanguageID: kind.languageID)).statistics)
                     EditorPanelEmptyState(L("No outline"), detail: L("This document has no outline.")).flex()
                 }
             } else {
@@ -103,15 +103,17 @@ private final class OutlineCache {
 
     private var text: String?
     private var languageID: String?
+    private var rules: [LanguageOutlineRule] = []
     private var value = Outline()
 
-    func outline(for text: String, languageID: String?) -> Outline {
-        guard self.text != text || self.languageID != languageID else { return value }
+    func outline(for text: String, languageID: String?, rules: [LanguageOutlineRule]) -> Outline {
+        guard self.text != text || self.languageID != languageID || self.rules != rules else { return value }
         self.text = text
         self.languageID = languageID
+        self.rules = rules
         let headings = languageID == "markdown"
             ? DocumentHeading.parse(text)
-            : DocumentHeading.parse(text, rules: LanguageCatalog.outlineRules(forLanguageID: languageID))
+            : DocumentHeading.parse(text, rules: rules)
         value = Outline(headings: headings, statistics: DocumentStatistics(Substring(text)))
         return value
     }

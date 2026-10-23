@@ -55,6 +55,12 @@ extension EditorApplication {
 
     @MainActor
     private func handleMCPAction(_ action: String, params: [String: Any]) async -> [String: Any] {
+        if ["open_capability_session", "search_capabilities"].contains(action),
+           let sessionID = params["session_id"] as? String, UUID(uuidString: sessionID) != nil {
+            await pluginSession.bundledStartup?.value
+            do { try await activatePlugins(event: "onAIChat") }
+            catch { return ["ok": false, "error": String(describing: error)] }
+        }
         var policy = pluginCapabilityExecutor?.exposurePolicy ?? CapabilityExposurePolicy(allowedDomains: ["scene"])
         let target = EditorAgentTaskTarget(documentID: store.state.document.identity, sceneRevision: store.sceneRevision,
             workspace: store.workspaceMode, selectedEntityIDs: store.selectedEntityIDs, primaryEntityID: store.selectedEntityID)

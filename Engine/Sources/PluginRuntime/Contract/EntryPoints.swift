@@ -1,6 +1,16 @@
 import CapabilityRuntime
 import Foundation
 
+extension GuavaPluginManifest {
+    /// Domain adapters call their declared entry points directly. They must
+    /// not cause AI discovery or chat activation just because they use WIT.
+    public func exposesToAI(entryPoint: String) -> Bool {
+        guard entryPoint != "components", !host.entryPoints.contains(entryPoint) else { return false }
+        let languages = (try? contributes.decode(LanguageContributionPoint.self)) ?? []
+        return !languages.contains { $0.format?.entryPoint == entryPoint }
+    }
+}
+
 /// Capabilities named by `host.processes[].entryPoints` are called by the
 /// editor with whole tool output and never by the model. Their inputs are
 /// checked for shape but not length, under `PluginResourceLimits.hostEntryPoint`.

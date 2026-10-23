@@ -38,7 +38,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
             $0.assistant.pluginManagement = EditorPluginManagementState(
                 phase: .awaitingAuthorization,
                 candidate: summary,
-                enabled: [summary],
+                installed: [summary],
                 message: "approve me"
             )
         }

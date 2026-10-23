@@ -22,19 +22,31 @@ struct VersionControlProvider: Sendable {
                                       package: plugin.package, process: process)
     }.sorted { ($0.contribution.priority ?? 0) > ($1.contribution.priority ?? 0) }
 
+    static func registered(in packages: [ValidatedPluginPackage]) -> [VersionControlProvider] {
+        packages.flatMap { package in
+            ((try? package.manifest.contributes.decode(VersionControlContributionPoint.self)) ?? []).compactMap { contribution in
+                guard let system = VersionControlSystem(rawValue: contribution.id),
+                      let process = package.manifest.host.processes.first else { return nil }
+                return VersionControlProvider(system: system, manifest: package.manifest, contribution: contribution,
+                    package: package.rootURL, process: process)
+            }
+        }.sorted { ($0.contribution.priority ?? 0) > ($1.contribution.priority ?? 0) }
+    }
+
     static func provider(for system: VersionControlSystem) -> VersionControlProvider? {
         bundled.first { $0.system == system }
     }
 
     var step: StepProvider {
-        StepProvider(title: contribution.title, package: package, entryPoint: VersionControlContribution.entryPoint, process: process)
+        StepProvider(pluginID: pluginID, title: contribution.title, package: package,
+            entryPoint: VersionControlContribution.entryPoint, activationEvent: "onCommand:" + contribution.id, process: process)
     }
 
     /// The nearest working tree containing `directory` of a system not `excluding`.
     static func repository(containing directory: URL,
-                           excluding disabled: Set<VersionControlSystem> = []) -> VersionControlRepository? {
+                           excluding disabled: Set<VersionControlSystem> = [], among available: [VersionControlProvider] = bundled) -> VersionControlRepository? {
         let fileManager = FileManager.default
-        let providers = bundled.filter { !disabled.contains($0.system) }
+        let providers = available.filter { !disabled.contains($0.system) }
         var components = directory.resolvingSymlinksInPath().standardizedFileURL.pathComponents
         while !components.isEmpty {
             let current = URL(fileURLWithPath: NSString.path(withComponents: components), isDirectory: true)
@@ -62,7 +74,7 @@ extension StepPlugins {
 
     /// The plugin for `system`, running its commands in `workspace`.
     func plugin(for system: VersionControlSystem, workspace: URL) throws -> StepPlugin {
-        guard let provider = VersionControlProvider.provider(for: system) else {
+        guard let provider = runtime.versionControlProviders.first(where: { $0.system == system }) else {
             throw VersionControlError.unsupported("The \(system.rawValue) plugin is missing from this build.")
         }
         do {

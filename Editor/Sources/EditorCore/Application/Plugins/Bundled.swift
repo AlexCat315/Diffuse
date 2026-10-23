@@ -9,7 +9,7 @@ public struct BundledPlugin: Sendable, Equatable, Identifiable {
         case application
         /// Declarative package with no component or WIT: registered in-process.
         case declarative
-        /// Drives a version control system from its own plugin host.
+        /// Contributes a version control system.
         case versionControl(VersionControlSystem)
     }
 
@@ -23,6 +23,9 @@ public struct BundledPlugin: Sendable, Equatable, Identifiable {
     public let commands: [String]
     let package: URL
     let manifest: GuavaPluginManifest
+    public var categories: [PluginCategory] {
+        PluginCategory.categories(points: manifest.contributes.pointIDs, hasCapabilities: host != .declarative)
+    }
 }
 
 enum BundledPlugins {
@@ -79,11 +82,7 @@ extension EditorApplication {
     /// Whether a bundled plugin is on for this project.
     @MainActor
     public func isBundledPluginEnabled(_ plugin: BundledPlugin) -> Bool {
-        switch plugin.host {
-        case .application: pluginSession.bindings[plugin.id] != nil
-        case .declarative: pluginSession.declarativePlugins[plugin.id] != nil
-        case let .versionControl(system): !workstation.versionControl.snapshot.disabledSystems.contains(system)
-        }
+        pluginSession.manager.enabledManifests[plugin.id] != nil
     }
 
     /// Loads every bundled plugin the project has not switched off. Declarative
@@ -95,65 +94,52 @@ extension EditorApplication {
             let disabled = (try? BundledPlugins.disabled(in: self.projectDirectory)) ?? []
             for plugin in BundledPlugins.catalog where !disabled.contains(plugin.id) {
                 guard !Task.isCancelled, !self.isShuttingDown else { return }
-                switch plugin.host {
-                case .application:
-                    await self.enableBundledPlugin(plugin)
-                case .declarative:
-                    await self.enableBundledPlugin(plugin)
-                case .versionControl:
-                    break
-                }
+                await self.enableBundledPlugin(plugin)
             }
-            try? self.refreshDeclarativeContributions()
+            try? await self.activatePlugins(event: "onStartup")
+            self.refreshContributionSnapshots()
+            await self.workstation.versionControl.refresh()
+            await self.workstation.tasks.refresh()
         }
     }
 
     /// Turns a bundled plugin on or off for this project, wherever it runs.
     @MainActor
     public func setBundledPlugin(_ plugin: BundledPlugin, enabled: Bool) async {
-        switch plugin.host {
-        case .application:
-            if enabled {
-                await enableBundledPlugin(plugin)
-            } else {
-                await disablePluginFromManagement(id: plugin.id)
-            }
-        case .declarative:
-            if enabled {
-                await enableBundledPlugin(plugin)
-            } else {
-                await disablePluginFromManagement(id: plugin.id)
-            }
-        case let .versionControl(system):
-            await workstation.versionControl.setEnabled(enabled, system: system)
-        }
+        if enabled { await enableBundledPlugin(plugin) }
+        else { await disablePluginFromManagement(id: plugin.id) }
+        await workstation.versionControl.refresh()
+        await workstation.tasks.refresh()
     }
 
     /// Replaces data-domain snapshots without touching unrelated AI sessions.
     @MainActor
-    func refreshDeclarativeContributions() throws {
-        let packages = pluginSession.declarativePlugins.values.map(\.package)
-        let runtimeThemes = try pluginSession.bindings.values.compactMap { binding -> ValidatedPluginPackage? in
-            guard binding.inspection.manifest.contributes.pointIDs.contains(ThemeContributionPoint.id) else { return nil }
-            let package = try PluginPackageLoader().load(at: URL(fileURLWithPath: binding.pluginPath))
-            guard binding.authorization.isStillValid(for: PluginInspection(
-                package: package, contracts: PluginWITContractDeriver.contracts(for: package))) else {
-                throw PluginAuthorizationError.noLongerValid
-            }
-            return package
+    func refreshContributionSnapshots() {
+        let contributions = pluginSession.contributions
+        let themes = contributions.themes.snapshot
+        if pluginSession.themeRevision != themes.revision {
+            pluginSession.themeRevision = themes.revision
+            store.dispatch(.themeCatalogChanged)
         }
-        try pluginSession.themes.update(packages: packages + runtimeThemes)
-        AIProviderCatalog.update(bindings: pluginSession.bindings, packages: packages)
-        LanguageCatalog.update(bindings: pluginSession.bindings, packages: packages)
-        store.dispatch(.themeCatalogChanged)
+        let providers = contributions.providers.snapshot
+        if pluginSession.providerRevision != providers.revision {
+            pluginSession.providers = AIProviderCatalog(packages: providers.values.map(\.value))
+            pluginSession.providerRevision = providers.revision
+        }
+        let languages = contributions.languages.snapshot
+        if pluginSession.languageRevision != languages.revision {
+            pluginSession.languages = LanguageCatalog(packages: languages.values.map(\.value))
+            pluginSession.languageRevision = languages.revision
+        }
         displayInvalidationHandler?()
     }
+
 
     /// Bundled packages ship with the editor, so they are trusted as built and
     /// skip the review a package from disk gets.
     @MainActor
     private func enableBundledPlugin(_ plugin: BundledPlugin) async {
-        guard pluginSession.bindings[plugin.id] == nil, pluginSession.declarativePlugins[plugin.id] == nil else { return }
+        guard pluginSession.manager.enabledManifests[plugin.id] == nil else { return }
         do {
             let inspection = try inspectPlugin(at: plugin.package)
             guard inspection.manifest.id == plugin.id else { throw PluginAuthorizationError.noLongerValid }

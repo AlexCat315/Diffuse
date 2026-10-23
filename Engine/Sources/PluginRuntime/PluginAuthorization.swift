@@ -259,7 +259,8 @@ public struct PluginExecutionBinding: Sendable, Equatable {
 public enum PluginCapabilityRegistryBuilder {
     public static func build(
         base: CapabilityRegistry,
-        bindings: [PluginExecutionBinding]
+        bindings: [PluginExecutionBinding],
+        enabledDeclarations: [PluginInspection] = []
     ) throws -> CapabilityRegistry {
         var pluginIDs: Set<String> = []
         var descriptors: [CapabilityDescriptor] = []
@@ -293,13 +294,13 @@ public enum PluginCapabilityRegistryBuilder {
                     access: contract.access,
                     inputSchema: contract.inputSchema,
                     source: contract.source,
-                    isAIExposed: !manifest.host.entryPoints.contains(String(contract.id.dropFirst(prefix.count)))
+                    isAIExposed: manifest.exposesToAI(entryPoint: String(contract.id.dropFirst(prefix.count)))
                 ))
             }
         }
         let result = base.appending(descriptors)
         try result.validateIntegrity()
-        try validateRequirements(bindings, base: base)
+        try validateRequirements(bindings, declarations: enabledDeclarations, base: base)
         return result
     }
 
@@ -307,9 +308,14 @@ public enum PluginCapabilityRegistryBuilder {
     /// No progress means a missing/versioned dependency or a cycle: either way
     /// the entire registry is rejected before any executor is published.
     private static func validateRequirements(_ bindings: [PluginExecutionBinding],
+                                             declarations: [PluginInspection],
                                              base: CapabilityRegistry) throws {
         var remaining = bindings.sorted { $0.pluginID < $1.pluginID }
-        var plugins: [String: Int] = [:]
+        // Runtime dependencies are activated first by PluginManager. Pure
+        // declarations can satisfy package requirements without a binding.
+        var plugins = Dictionary(uniqueKeysWithValues: declarations.filter { $0.componentHash == nil }.map {
+            ($0.manifest.id, $0.manifest.version)
+        })
         var capabilities = Dictionary(uniqueKeysWithValues: base.allVerbs().compactMap { id in
             base.descriptor(for: id).map { (id, $0.version) }
         })

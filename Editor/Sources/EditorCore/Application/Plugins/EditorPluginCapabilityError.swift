@@ -1,28 +1,7 @@
-import AIRuntime
-import ContextMemory
-import AssetPipeline
-import AudioRuntime
-import CapabilityRuntime
-import EngineCore
-import EngineKernel
-import IntentRuntime
-import ObservationBus
-import PerceptionRuntime
-import PluginRuntime
-import SemanticPipeline
-import RenderBackend
-import NativeRHI
-import SceneRuntime
-import GuavaUICompose
-import GuavaUIRuntime
-import Foundation
-import SIMDCompat
-
-
+public import Foundation
 public enum EditorPluginCapabilityError: Error, Sendable, Equatable, LocalizedError {
     case pluginHostUnavailable
     case pluginUpdateInProgress
-    case pluginAlreadyEnabled(String)
     case pluginNotEnabled(String)
     case noPendingPluginApproval
     case missingExposureSnapshot
@@ -40,8 +19,6 @@ public enum EditorPluginCapabilityError: Error, Sendable, Equatable, LocalizedEr
             return "The trusted GuavaPluginHost executable is unavailable. Rebuild or reinstall the Editor."
         case .pluginUpdateInProgress:
             return "Wait for the current plugin update to finish."
-        case let .pluginAlreadyEnabled(id):
-            return "Plugin '\(id)' is already enabled. Disable it before loading another version."
         case let .pluginNotEnabled(id):
             return "Plugin '\(id)' is not enabled."
         case .noPendingPluginApproval:

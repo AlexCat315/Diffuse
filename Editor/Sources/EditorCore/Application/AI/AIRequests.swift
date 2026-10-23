@@ -41,8 +41,8 @@ extension EditorApplication {
             return false
         }
 
-        if let session {
-            submitNaturalLanguageIntentWithSession(text, session: session)
+        if session != nil {
+            submitNaturalLanguageIntentWithSession(text)
             return true
         }
 
@@ -53,7 +53,7 @@ extension EditorApplication {
         return false
     }
 
-    private func submitNaturalLanguageIntentWithSession(_ text: String, session: Session) {
+    private func submitNaturalLanguageIntentWithSession(_ text: String) {
         let locale = store.state.language.lprojName
         let t0 = Date()
         store.dispatch(.setAIStatusMessage("Planning..."))
@@ -93,6 +93,11 @@ extension EditorApplication {
                 }
             }
             do {
+                await self.pluginSession.bundledStartup?.value
+                try await self.activatePlugins(event: "onAIChat")
+                let providerID = self.store.state.assistant.aiSettings.providerID
+                if !providerID.isEmpty { try await self.activatePlugins(event: "onAIProvider:" + providerID) }
+                guard let session = self.session else { throw PluginManagerError.runtimeUnavailable }
                 await self.pendingAISetupTask?.value
                 await self.pendingWorldObservationTask?.value
                 try Task.checkCancellation()

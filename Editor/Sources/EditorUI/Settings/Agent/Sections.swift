@@ -7,7 +7,7 @@ struct AgentProviderSettings: View {
 
     var body: some View {
         // One credential lookup per render; each reads the credential file.
-        let providers = AIProviderCatalog.providers
+        let providers = editor.app.aiProviderCatalog.providers
         let draftSource = editor.app.aiCredentialSource(for: editor.draft.providerID)
         let active = editor.app.store.aiSettings.providerID
         let activeSource = editor.draft.providerID == active ? draftSource : editor.app.aiCredentialSource(for: active)

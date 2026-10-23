@@ -213,12 +213,9 @@ struct EditorPanelWorkflowTests {
 
     @Test("AI settings drafts use provider defaults and never carry a secret across providers")
     func aiSettingsDraftProviderSwitching() throws {
-        let providers = try #require(BundledPlugins.plugin(id: "studio.ai-providers"))
-        let package = try PluginPackageLoader().load(at: providers.package)
-        AIProviderCatalog.update(bindings: [:], packages: [package])
-        let openai = try #require(AIProviderCatalog.provider(id: "openai"))
-        let anthropic = try #require(AIProviderCatalog.provider(id: "anthropic"))
-        let deepseek = try #require(AIProviderCatalog.provider(id: "deepseek"))
+        let openai = try #require(AIProviderCatalog.bundled.provider(id: "openai"))
+        let anthropic = try #require(AIProviderCatalog.bundled.provider(id: "anthropic"))
+        let deepseek = try #require(AIProviderCatalog.bundled.provider(id: "deepseek"))
         var draft = EditorAISettingsDraft(settings: .default)
         #expect(draft.providerID.isEmpty)
         #expect(draft.model.isEmpty)

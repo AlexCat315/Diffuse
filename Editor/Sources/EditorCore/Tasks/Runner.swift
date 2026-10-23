@@ -18,7 +18,7 @@ public final class EditorTasks: _ObservableObject, @unchecked Sendable {
     init(root: URL, plugins: StepPlugins) {
         self.root = root.standardizedFileURL
         self.plugins = plugins
-        snapshot.title = TaskProvider.provider(for: self.root)?.contribution.title
+        snapshot.title = TaskProvider.provider(for: self.root, among: plugins.runtime.taskProviders)?.contribution.title
     }
 
     // MARK: Project
@@ -26,7 +26,7 @@ public final class EditorTasks: _ObservableObject, @unchecked Sendable {
     /// Finds the provider again and re-reads the project's description.
     @MainActor
     public func refresh() async {
-        let provider = TaskProvider.provider(for: root)
+        let provider = TaskProvider.provider(for: root, among: plugins.runtime.taskProviders)
         publish { $0.title = provider?.contribution.title; if provider == nil { $0.description = nil } }
         guard let provider, let plugin = try? plugins.plugin(for: provider.step, workspace: root),
               case let .result(data)? = try? await plugin.perform(["op": "describe"]),
@@ -109,7 +109,7 @@ public final class EditorTasks: _ObservableObject, @unchecked Sendable {
     @MainActor
     private func begin(_ kind: TaskKind, subject: String?) {
         guard snapshot.run?.isRunning != true else { return }
-        guard let provider = TaskProvider.provider(for: root) else { return }
+        guard let provider = TaskProvider.provider(for: root, among: plugins.runtime.taskProviders) else { return }
         publish { snapshot in
             snapshot.run = TaskRun(kind: kind, subject: subject)
             if kind != .run { snapshot.problems = [] }

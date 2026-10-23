@@ -14,7 +14,7 @@ struct DocumentKind {
     /// The contributed language's identifier, when one claims the path.
     let languageID: String?
 
-    init(path: String) {
+    init(path: String, languages: LanguageCatalog = .bundled) {
         let fileName = path.split(separator: "/").last.map(String.init) ?? path
         let lower = fileName.lowercased()
         if let special = Self.fileNames[lower] ?? Self.prefixes.first(where: { lower.hasPrefix($0.0) })?.1 {
@@ -22,7 +22,7 @@ struct DocumentKind {
             return
         }
         let ext = fileName.contains(".") ? fileName.split(separator: ".").last.map { $0.lowercased() } ?? "" : ""
-        if let language = LanguageCatalog.descriptor(forExtension: ext) {
+        if let language = languages.descriptor(forExtension: ext) {
             self = Self(language.title, language.iconKey, languageID: language.id)
         } else if let file = Self.fileKinds[ext] {
             self = file

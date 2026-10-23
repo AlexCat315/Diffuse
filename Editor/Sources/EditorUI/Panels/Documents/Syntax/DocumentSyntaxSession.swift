@@ -12,17 +12,24 @@ struct DocumentSyntaxSegment: Sendable, Equatable {
 /// one serial worker and only the latest buffer may publish.
 final class DocumentSyntaxSession: _ObservableObject, @unchecked Sendable {
     private let publisher = _ObservablePublisher<DocumentSyntaxSession>()
-    private let worker: DocumentSyntaxWorker?
+    private var worker: DocumentSyntaxWorker?
+    private var rules: [LanguageSyntaxRule] = []
     private var requested: TextBuffer?
     private(set) var revision = 0
     private(set) var parsedBuffer: TextBuffer?
     private(set) var segments: [DocumentSyntaxSegment] = []
-    let isEmpty: Bool
+    var isEmpty: Bool { worker == nil }
 
-    init(languageID: String?) {
-        let grammar = DocumentGrammar(rules: LanguageCatalog.syntaxRules(forLanguageID: languageID))
-        isEmpty = grammar == nil
-        worker = grammar.map(DocumentSyntaxWorker.init)
+    init(languageID: String?, languages: LanguageCatalog = .bundled) {
+        configure(languages.syntaxRules(forLanguageID: languageID))
+    }
+
+    func configure(_ rules: [LanguageSyntaxRule]) {
+        guard self.rules != rules else { return }
+        self.rules = rules
+        worker = DocumentGrammar(rules: rules).map(DocumentSyntaxWorker.init)
+        requested = nil; parsedBuffer = nil; segments = []
+        revision &+= 1
     }
 
     func request(_ buffer: TextBuffer) {
@@ -36,9 +43,10 @@ final class DocumentSyntaxSession: _ObservableObject, @unchecked Sendable {
             publisher.send()
             return
         }
+        let rules = rules
         worker.request(buffer) { [weak self] buffer, segments in
             DispatchQueue.main.async { [weak self] in
-                guard let self, self.requested == buffer else { return }
+                guard let self, self.requested == buffer, self.rules == rules else { return }
                 self.segments = segments
                 self.parsedBuffer = buffer
                 self.revision &+= 1

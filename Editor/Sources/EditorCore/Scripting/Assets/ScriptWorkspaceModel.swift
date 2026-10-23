@@ -196,6 +196,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             await previousTask?.value
             guard !Task.isCancelled else { return }
             do {
+                try await manager.languagePlugin.activateIfNeeded()
                 try await manager.startLanguageService(sources: sources, onDiagnostics: { [weak model] update in
                     Task { @MainActor [weak model] in
                         guard let model, model.languageServiceGeneration == generation else { return }

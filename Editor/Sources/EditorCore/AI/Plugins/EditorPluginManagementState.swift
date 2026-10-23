@@ -47,9 +47,15 @@ public struct EditorPluginInspectionSummary: Codable, Sendable, Equatable, Ident
     public var resourceHashes: [String: String]
     public var contributionPoints: [String]
     public var hasReusableAuthorization: Bool
+    public var lifecycle: EditorPluginLifecycle
+
+    public var categories: [PluginCategory] {
+        PluginCategory.categories(points: contributionPoints, hasCapabilities: !capabilities.isEmpty)
+    }
 
     public init(inspection: PluginInspection,
-                hasReusableAuthorization: Bool) {
+                hasReusableAuthorization: Bool,
+                lifecycle: EditorPluginLifecycle = .init()) {
         let manifest = inspection.manifest
         id = manifest.id
         version = manifest.version
@@ -74,24 +80,35 @@ public struct EditorPluginInspectionSummary: Codable, Sendable, Equatable, Ident
         resourceHashes = inspection.resourceHashes
         contributionPoints = manifest.contributes.pointIDs
         self.hasReusableAuthorization = hasReusableAuthorization
+        self.lifecycle = lifecycle
     }
 }
 
 public struct EditorPluginManagementState: Codable, Sendable, Equatable {
     public var phase: EditorPluginManagementPhase
     public var candidate: EditorPluginInspectionSummary?
-    public var enabled: [EditorPluginInspectionSummary]
+    public var installed: [EditorPluginInspectionSummary]
     public var message: String?
 
     public init(phase: EditorPluginManagementPhase = .idle,
                 candidate: EditorPluginInspectionSummary? = nil,
-                enabled: [EditorPluginInspectionSummary] = [],
+                installed: [EditorPluginInspectionSummary] = [],
                 message: String? = nil) {
         self.phase = phase
         self.candidate = candidate
-        self.enabled = enabled.sorted { $0.id < $1.id }
+        self.installed = installed.sorted { $0.id < $1.id }
         self.message = message
     }
 
     public static let idle = EditorPluginManagementState()
+}
+
+public struct EditorPluginLifecycle: Codable, Sendable, Equatable {
+    public var phase: PluginPhase
+    public var isEnabled: Bool
+    public var failure: String?
+
+    public init(phase: PluginPhase = .installed, isEnabled: Bool = false, failure: String? = nil) {
+        self.phase = phase; self.isEnabled = isEnabled; self.failure = failure
+    }
 }

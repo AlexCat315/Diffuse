@@ -11,16 +11,13 @@ private struct ProviderHarness {
 
     init(_ system: VersionControlSystem) throws {
         let provider = try #require(VersionControlProvider.provider(for: system))
-        let client = PluginHostProcessClient(executableURL: try #require(EditorPluginHostLocator.resolve()))
-        plugin = StepPlugin(provider: provider.step,
-                                      tool: ContributionTool(executable: URL(fileURLWithPath: "/usr/bin/false"), environment: [:]),
-                                      workspace: FileManager.default.temporaryDirectory, client: client)
+        plugin = try stepFixture(provider.step)
     }
 
     /// One step, as the plugin answers it.
-    func step(_ request: [String: Any]) throws -> [String: Any] {
+    func step(_ request: [String: Any]) async throws -> [String: Any] {
         let encoded = String(decoding: try JSONSerialization.data(withJSONObject: request), as: UTF8.self)
-        return try #require(try JSONSerialization.jsonObject(with: plugin.invoke(encoded, stdout: "")) as? [String: Any])
+        return try #require(try JSONSerialization.jsonObject(with: await plugin.invoke(encoded, stdout: "")) as? [String: Any])
     }
 
     /// An operation's result given its command's output, paged in `window`-byte windows.
@@ -97,14 +94,14 @@ struct VersionControlTests {
                              VersionControlBranch(name: "origin/main", isCurrent: false, isRemote: true)])
         #expect(try await git.parse("history", "", as: [RevisionWire].self).isEmpty)
         for name in ["-bad", "a..b", "with space", "tilde~1"] {
-            #expect(try git.step(["op": "create-branch", "name": name])["error"] != nil)
+            #expect(try await git.step(["op": "create-branch", "name": name])["error"] != nil)
         }
-        #expect((try git.step(["op": "create-branch", "name": "draft/two"])["run"] as? [String]) == ["switch", "--quiet", "--create", "draft/two"])
+        #expect((try await git.step(["op": "create-branch", "name": "draft/two"])["run"] as? [String]) == ["switch", "--quiet", "--create", "draft/two"])
     }
 
-    @Test func gitPathListsTravelOnStandardInput() throws {
+    @Test func gitPathListsTravelOnStandardInput() async throws {
         let paths = (0..<20_000).map { "Assets/Level \($0)/Texture.png" }
-        let step = try ProviderHarness(.git).step(["op": "stage", "paths": paths])
+        let step = try await ProviderHarness(.git).step(["op": "stage", "paths": paths])
         #expect((step["run"] as? [String])?.contains("--pathspec-from-file=-") == true)
         #expect(step["input"] as? String == paths.joined(separator: "\0"))
         #expect((step["env"] as? [String: String])?["GIT_TERMINAL_PROMPT"] == "0")
@@ -142,21 +139,21 @@ struct VersionControlTests {
                                      window: window, as: [String].self) == ["Art/Hero.png"])
     }
 
-    @Test func loreSplitsLongPathListsAndValidatesRemotes() throws {
+    @Test func loreSplitsLongPathListsAndValidatesRemotes() async throws {
         let lore = try ProviderHarness(.lore)
         let paths = (0..<100).map { "Art/Hero \($0).png" }
-        let first = try lore.step(["op": "stage", "paths": paths])
+        let first = try await lore.step(["op": "stage", "paths": paths])
         #expect((first["run"] as? [String])?.first == "stage")
         #expect((first["run"] as? [String])?.count == 65)
         #expect(first["next"] as? String == "64")
-        let second = try lore.step(["op": "stage", "paths": paths, "next": "64", "output": ["exit": 0, "stderr": ""]])
+        let second = try await lore.step(["op": "stage", "paths": paths, "next": "64", "output": ["exit": 0, "stderr": ""]])
         #expect((second["run"] as? [String]).map { Array($0.dropFirst()) } == Array(paths.dropFirst(64)))
-        let done = try lore.step(["op": "stage", "paths": paths, "next": "100", "output": ["exit": 0, "stderr": ""]])
+        let done = try await lore.step(["op": "stage", "paths": paths, "next": "100", "output": ["exit": 0, "stderr": ""]])
         #expect(done.keys.contains("result"))
-        let failed = try lore.step(["op": "stage", "paths": paths, "next": "64", "output": ["exit": 1, "stderr": "offline\n"]])
+        let failed = try await lore.step(["op": "stage", "paths": paths, "next": "64", "output": ["exit": 1, "stderr": "offline\n"]])
         #expect(failed["error"] as? String == "offline")
-        #expect(try lore.step(["op": "init", "remote": "https://example.com"])["error"] != nil)
-        #expect((try lore.step(["op": "init", "remote": "lore://studio:4100/game"])["run"] as? [String])
+        #expect(try await lore.step(["op": "init", "remote": "https://example.com"])["error"] != nil)
+        #expect((try await lore.step(["op": "init", "remote": "lore://studio:4100/game"])["run"] as? [String])
             == ["repository", "create", "lore://studio:4100/game"])
     }
 
@@ -177,7 +174,11 @@ struct VersionControlTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("vcs-git-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let model = EditorVersionControl(projectRoot: root, plugins: StepPlugins(hostExecutable: EditorPluginHostLocator.resolve()))
+        let app = try EditorApplication(projectDirectory: root.path)
+        defer { app.shutdown() }
+        app.enableBundledPlugins()
+        await app.pluginSession.bundledStartup?.value
+        let model = app.workstation.versionControl
         await model.refresh()
         #expect(model.snapshot.availability == .noRepository)
         #expect(model.snapshot.installedSystems.contains(.git))
@@ -261,11 +262,16 @@ extension VersionControlTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("vcs-off-\(UUID())")
         try FileManager.default.createDirectory(at: root.appendingPathComponent(".git"), withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let model = EditorVersionControl(projectRoot: root, plugins: StepPlugins(hostExecutable: EditorPluginHostLocator.resolve()))
-        await model.setEnabled(false, system: .git)
+        let app = try EditorApplication(projectDirectory: root.path)
+        defer { app.shutdown() }
+        app.enableBundledPlugins()
+        await app.pluginSession.bundledStartup?.value
+        let model = app.workstation.versionControl
+        let bundledGit = try #require(app.bundledPlugins.first { $0.host == .versionControl(.git) })
+        await app.setBundledPlugin(bundledGit, enabled: false)
         #expect(model.snapshot.disabledSystems == [.git])
         #expect(model.snapshot.availability == .noRepository)
-        await model.setEnabled(true, system: .git)
+        await app.setBundledPlugin(bundledGit, enabled: true)
         #expect(model.snapshot.disabledSystems.isEmpty)
         #expect(model.snapshot.repository?.system == .git)
     }

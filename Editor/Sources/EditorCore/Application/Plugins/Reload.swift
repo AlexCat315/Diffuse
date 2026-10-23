@@ -10,105 +10,11 @@ extension EditorApplication {
     /// the management flow.
     @MainActor
     public func reloadPlugin(id pluginID: String) async throws {
-        guard !pluginSession.isUpdating else {
-            throw EditorPluginCapabilityError.pluginUpdateInProgress
-        }
-        pluginSession.isUpdating = true
-        defer { pluginSession.isUpdating = false }
-        if let binding = pluginSession.declarativePlugins[pluginID] {
-            try reloadDeclarativePackage(binding)
-            return
-        }
-        guard let binding = pluginSession.bindings[pluginID] else {
-            throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
-        }
-        let client = try resolvedPluginHostClient()
-        let pluginURL = URL(fileURLWithPath: binding.pluginPath, isDirectory: true)
-        let inspection = try await Task.detached(priority: .userInitiated) {
-            try client.inspectPlugin(at: pluginURL)
-        }.value
-        guard binding.authorization.isStillValid(for: inspection) else {
+        do { try await pluginSession.manager.reload(id: pluginID) }
+        catch PluginAuthorizationError.noLongerValid {
             throw EditorPluginCapabilityError.pluginAuthorizationStale(pluginID)
-        }
-        let reloaded: PluginExecutionBinding
-        let processContext = try pluginProcessContext(for: binding.authorization.host)
-        if pluginID == PluginLanguageService.pluginID {
-            dynamicScriptManager.languagePlugin.bind(nil)
-            workstation.scripts.stopLanguageServiceForPluginChange()
-        }
-        do {
-            try await Task.detached(priority: .userInitiated) {
-                try client.unloadPlugin(at: pluginURL)
-            }.value
-            reloaded = try await Task.detached(priority: .userInitiated) {
-                try client.loadPlugin(at: pluginURL, authorization: binding.authorization, processContext: processContext)
-            }.value
-        } catch {
-            await discardAfterFailedReload(pluginID: pluginID)
-            throw error
-        }
-        // Build the replacement executor before publishing it: a registry that
-        // cannot be proven consistent must not replace the mounted generation.
-        var nextBindings = pluginSession.bindings
-        nextBindings[pluginID] = reloaded
-        let executor: PluginCapabilityExecutor
-        do {
-            executor = try PluginCapabilityExecutor(
-                bindings: nextBindings.values.sorted { $0.pluginID < $1.pluginID },
-                invoker: client
-            )
-        } catch {
-            try? await Task.detached(priority: .userInitiated) {
-                try client.unloadPlugin(at: pluginURL)
-            }.value
-            await discardAfterFailedReload(pluginID: pluginID)
-            throw error
-        }
-        let declarations = try? await Self.componentDeclarations(for: reloaded, client: client)
-        guard !isShuttingDown, reloaded.hostGeneration == client.generation else {
-            await discardAfterFailedReload(pluginID: pluginID)
-            throw PluginAuthorizationError.noLongerValid
-        }
-        pluginSession.bindings = nextBindings
-        pluginSession.components.set(declarations ?? [], pluginID: pluginID)
-        pluginSession.components.apply(to: &scene.scene)
-        await activatePluginExecutor(executor)
-    }
-
-    /// Fail-closed rollback for a reload that already unloaded the previous
-    /// generation: the plugin ends up unmounted instead of half-mounted.
-    @MainActor
-    private func discardAfterFailedReload(pluginID: String) async {
-        var removed: [PluginExecutionBinding] = []
-        var pending = [pluginID]
-        while let id = pending.popLast() {
-            guard let binding = pluginSession.bindings[id] else { continue }
-            pending += PluginRequirementResolver.dependents(
-                of: id,
-                providing: Set(binding.inspection.contracts.map(\.id)),
-                among: pluginSession.bindings.mapValues { $0.inspection.manifest }
-            )
-            pluginSession.bindings.removeValue(forKey: id)
-            pluginSession.components.remove(pluginID: id)
-            removed.append(binding)
-        }
-        pluginSession.components.apply(to: &scene.scene)
-        if let client = pluginSession.hostClient {
-            for binding in removed.reversed() {
-                let url = URL(fileURLWithPath: binding.pluginPath, isDirectory: true)
-                _ = try? await Task.detached {
-                    try client.unloadPlugin(at: url)
-                }.value
-            }
-        }
-        do {
-            let executor = try rebuildPluginExecutor()
-            await activatePluginExecutor(executor)
-        } catch {
-            pluginSession.bindings.removeAll()
-            clearPluginComponents()
-            await activatePluginExecutor(nil)
-        }
+        } catch { try? await synchronizePlugins(); throw error }
+        try await synchronizePlugins()
     }
 
     /// Starts polling enabled plugin packages for changes. A byte-identical
@@ -174,12 +80,8 @@ extension EditorApplication {
 
     /// Package URLs of the currently enabled plugins, keyed by plugin id.
     func pluginPackageURLs() -> [String: URL] {
-        var result: [String: URL] = [:]
-        for (pluginID, binding) in pluginSession.bindings {
-            result[pluginID] = URL(fileURLWithPath: binding.pluginPath, isDirectory: true)
-        }
-        for (id, binding) in pluginSession.declarativePlugins { result[id] = binding.package.rootURL }
-        return result
+        let enabled = Set(pluginSession.manager.enabledManifests.keys)
+        return pluginSession.manager.packageURLs.filter { enabled.contains($0.key) }
     }
 
     /// Reloads an enabled plugin from its package without leaving the Editor.

@@ -72,45 +72,25 @@ public struct AIProviderDescriptor: Sendable, Equatable, Identifiable {
     }
 }
 
-public enum AIProviderCatalog {
-    private static let registryLock = NSLock()
-    nonisolated(unsafe) private static var registered: [AIProviderDescriptor] = []
+/// Immutable domain snapshot. Every editor session owns its enabled providers.
+public struct AIProviderCatalog: Sendable {
+    public let providers: [AIProviderDescriptor]
 
-    /// Bundled declarative providers, then those of enabled runtime plugins.
-    /// A provider id is claimed once; bundled packages win.
-    static func update(bindings: [String: PluginExecutionBinding],
-                       packages: [ValidatedPluginPackage]) {
-        var merged: [AIProviderDescriptor] = []
-        var seen = Set<String>()
-        for package in packages.sorted(by: { $0.manifest.id < $1.manifest.id }) {
-            for provider in (try? package.manifest.contributes.decode(AIProviderContributionPoint.self)) ?? []
-            where seen.insert(provider.id).inserted {
-                merged.append(AIProviderDescriptor(pluginID: package.manifest.id, contribution: provider))
+    public static let bundled = AIProviderCatalog(packages: BundledPlugins.catalog.compactMap {
+        try? PluginPackageLoader().load(at: $0.package)
+    })
+
+    init(packages: [ValidatedPluginPackage] = []) {
+        providers = packages.sorted { $0.manifest.id < $1.manifest.id }.flatMap { package in
+            ((try? package.manifest.contributes.decode(AIProviderContributionPoint.self)) ?? []).map {
+                AIProviderDescriptor(pluginID: package.manifest.id, contribution: $0)
             }
         }
-        for pluginID in bindings.keys.sorted() {
-            guard let binding = bindings[pluginID] else { continue }
-            for provider in ((try? binding.inspection.manifest.contributes.decode(AIProviderContributionPoint.self)) ?? [])
-            where seen.insert(provider.id).inserted {
-                merged.append(AIProviderDescriptor(pluginID: pluginID, contribution: provider))
-            }
-        }
-        registryLock.withLock { registered = merged }
     }
 
-    public static var providers: [AIProviderDescriptor] {
-        registryLock.withLock { registered }
-    }
-
-    public static func provider(id: String) -> AIProviderDescriptor? {
-        providers.first { $0.id == id }
-    }
-
-    public static func model(providerID: String, modelID: String) -> AIModelDescriptor? {
+    public func provider(id: String) -> AIProviderDescriptor? { providers.first { $0.id == id } }
+    public func model(providerID: String, modelID: String) -> AIModelDescriptor? {
         provider(id: providerID)?.models.first { $0.id == modelID }
     }
-
-    public static func defaultModel(for providerID: String) -> String? {
-        provider(id: providerID)?.defaultModel
-    }
+    public func defaultModel(for providerID: String) -> String? { provider(id: providerID)?.defaultModel }
 }

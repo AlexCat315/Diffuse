@@ -9,13 +9,13 @@ public final class EditorWorkstation: @unchecked Sendable {
     public let versionControl: EditorVersionControl
     public let tasks: EditorTasks
     private let root: URL
-    init(root: URL, scripts: ScriptWorkspaceModel, pluginHost: URL?) throws {
+    init(root: URL, scripts: ScriptWorkspaceModel, plugins: PluginRuntimeAccess) throws {
         self.root = root.standardizedFileURL
         self.scripts = scripts
         documents = EditorDocumentWorkspace(root: root)
         media = try EditorMediaWorkspace(root: root)
-        // Step-driven plugins share one plugin host of their own.
-        let stepPlugins = StepPlugins(hostExecutable: pluginHost)
+        // Every domain requests its binding from the same lifecycle owner.
+        let stepPlugins = StepPlugins(runtime: plugins)
         versionControl = EditorVersionControl(projectRoot: root, plugins: stepPlugins)
         tasks = EditorTasks(root: root, plugins: stepPlugins)
         // Every tab in the served language gets the language service: scripts as

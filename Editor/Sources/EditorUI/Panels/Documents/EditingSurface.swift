@@ -25,13 +25,14 @@ struct DocumentEditingSurface: View {
         observed = Observed(\.snapshot, on: model)
         writing = Observed(\.state, on: session)
         _documentSyntax = State(wrappedValue: DocumentSyntaxSession(
-            languageID: DocumentKind(path: path).languageID
+            languageID: DocumentKind(path: path, languages: app?.languageCatalog ?? .bundled).languageID, languages: app?.languageCatalog ?? .bundled
         ))
     }
 
     var body: some View {
         let snapshot = observed.wrappedValue
         let state = writing.wrappedValue
+        let _ = documentSyntax.configure((app?.languageCatalog ?? .bundled).syntaxRules(forLanguageID: kind.languageID))
         let document = snapshot.documents.first { $0.path == path }
         let _ = source.synchronize(document?.text ?? "")
         let _ = source.navigate(reveal: snapshot.reveal?.path == path ? snapshot.reveal : nil, request: state.caretRequest)
@@ -43,7 +44,7 @@ struct DocumentEditingSurface: View {
         return editing(binding, state: state).id(source.generation).flex().frame(minWidth: 0, minHeight: 0)
     }
 
-    private var kind: DocumentKind { DocumentKind(path: path) }
+    private var kind: DocumentKind { DocumentKind(path: path, languages: app?.languageCatalog ?? .bundled) }
 
     @ViewBuilder private func editing(_ text: Binding<TextBuffer>, state: DocumentWritingSession.State) -> some View {
         if kind.languageID == "swift" {
@@ -112,7 +113,7 @@ struct DocumentEditingSurface: View {
             return
         }
         guard let app, let languageID = kind.languageID,
-              LanguageCatalog.format(forLanguageID: languageID) != nil else { return }
+              app.languageCatalog.format(forLanguageID: languageID) != nil else { return }
         input.events.onKeyDown = { event in
             guard EditorShortcut(.letter("f"), [.option, .shift]).matches(event) else { return false }
             let text = session.buffer.stringValue

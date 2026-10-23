@@ -21,12 +21,14 @@ extension EditorApplication {
     /// document unchanged.
     @MainActor
     public func formatDocument(languageID: String, text: String) async throws -> String? {
-        guard let format = LanguageCatalog.format(forLanguageID: languageID),
-              let binding = pluginSession.bindings[format.pluginID],
-              let client = pluginSession.hostClient else {
+        guard let format = languageCatalog.format(forLanguageID: languageID),
+              enabledPluginManifests[format.pluginID] != nil else { return nil }
+        guard text.utf8.count <= 64 * 1_024 else { throw DocumentFormattingError.inputTooLarge }
+        try await activatePlugins(event: "onLanguage:" + languageID)
+        guard let binding = pluginSession.manager.activeBindings[format.pluginID] else { throw DocumentFormattingError.unavailable }
+        guard let client = pluginSession.hostClient else {
             return nil
         }
-        guard text.utf8.count <= 64 * 1_024 else { throw DocumentFormattingError.inputTooLarge }
         let input = try JSONEncoder().encode(["text": text])
         let capabilityID = format.pluginID + "." + format.entryPoint
         let data = try await Task.detached(priority: .userInitiated) {

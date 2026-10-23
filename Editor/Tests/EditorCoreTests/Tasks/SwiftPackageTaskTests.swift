@@ -10,11 +10,8 @@ struct SwiftPackageTaskTests {
     private let plugin: StepPlugin
 
     init() throws {
-        let provider = try #require(TaskProvider.bundled.first { $0.contribution.id == "swiftpm" })
-        let client = PluginHostProcessClient(executableURL: try #require(EditorPluginHostLocator.resolve()))
-        plugin = StepPlugin(provider: provider.step,
-                            tool: ContributionTool(executable: URL(fileURLWithPath: "/usr/bin/false"), environment: [:]),
-                            workspace: FileManager.default.temporaryDirectory, client: client)
+        let provider = try #require(TaskProvider.registered(in: BundledPlugins.catalog.compactMap { try? PluginPackageLoader().load(at: $0.package) }).first { $0.contribution.id == "swiftpm" })
+        plugin = try stepFixture(provider.step)
     }
 
     private func result<T: Decodable>(_ operation: [String: Any], next: String, output: String, as type: T.Type) async throws -> T {
@@ -25,18 +22,18 @@ struct SwiftPackageTaskTests {
     }
 
     @Test("each task names its SwiftPM command; builds and tests stream")
-    func commands() throws {
-        func step(_ operation: [String: Any]) throws -> [String: Any] {
+    func commands() async throws {
+        func step(_ operation: [String: Any]) async throws -> [String: Any] {
             let request = String(decoding: try JSONSerialization.data(withJSONObject: operation), as: UTF8.self)
-            return try #require(try JSONSerialization.jsonObject(with: plugin.invoke(request, stdout: "")) as? [String: Any])
+            return try #require(try JSONSerialization.jsonObject(with: await plugin.invoke(request, stdout: "")) as? [String: Any])
         }
-        #expect(try step(["op": "build"])["run"] as? [String] == ["build"])
-        #expect(try step(["op": "build"])["stream"] as? Bool == true)
-        #expect(try step(["op": "test", "filter": "App.Suite/test()"])["run"] as? [String]
+        #expect(try await step(["op": "build"])["run"] as? [String] == ["build"])
+        #expect(try await step(["op": "build"])["stream"] as? Bool == true)
+        #expect(try await step(["op": "test", "filter": "App.Suite/test()"])["run"] as? [String]
                 == ["test", "--filter", #"(^|\.)App\.Suite/test(\(\))?$"#])
-        #expect(try step(["op": "run", "target": "Tool"])["run"] as? [String] == ["run", "Tool"])
-        #expect(try step(["op": "run", "target": "--help"])["error"] != nil)
-        #expect(try step(["op": "describe"])["stream"] == nil)
+        #expect(try await step(["op": "run", "target": "Tool"])["run"] as? [String] == ["run", "Tool"])
+        #expect(try await step(["op": "run", "target": "--help"])["error"] != nil)
+        #expect(try await step(["op": "describe"])["stream"] == nil)
     }
 
     @Test("describe lists runnable products and the package's sections")

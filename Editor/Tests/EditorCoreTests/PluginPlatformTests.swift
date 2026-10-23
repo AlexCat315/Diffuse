@@ -101,10 +101,13 @@ struct PluginPlatformTests {
         let before = app.store.state.presentation.refreshRevision
         _ = try await app.enablePlugin(at: root, authorization: authorization)
         #expect(app.pluginSession.hostClient == nil)
-        #expect(app.pluginSession.bindings.isEmpty)
-        #expect(LanguageCatalog.descriptor(forExtension: "plgtest")?.id == "fixture")
-        #expect(LanguageCatalog.syntaxRules(forLanguageID: "fixture").count == 1)
+        #expect(app.pluginSession.manager.activeBindings.isEmpty)
+        #expect(app.languageCatalog.descriptor(forExtension: "plgtest")?.id == "fixture")
+        #expect(app.languageCatalog.syntaxRules(forLanguageID: "fixture").count == 1)
         #expect(app.enabledPluginInspections().contains { $0.manifest.id == "test.theme" })
+        let enabled = try #require(app.store.pluginManagement.installed.first { $0.id == "test.theme" })
+        #expect(enabled.categories == [.themes, .languages])
+        #expect(enabled.lifecycle.phase == .enabled)
         #expect(app.resolvedTheme(dark: true).colors.accent
             == Color(red: 255, green: 0, blue: 0))
         app.store.dispatch(.setThemeID(EditorThemeCatalog.defaultThemeID))
@@ -116,8 +119,15 @@ struct PluginPlatformTests {
         #expect(app.store.state.presentation.refreshRevision == before)
         try await app.disablePlugin(id: "test.theme")
         #expect(!app.themeCatalog.themes.contains { $0.id == "test.theme" })
-        #expect(LanguageCatalog.descriptor(forExtension: "plgtest") == nil)
+        #expect(app.languageCatalog.descriptor(forExtension: "plgtest") == nil)
         #expect(app.pluginSession.hostClient == nil)
+        let disabled = try #require(app.store.pluginManagement.installed.first { $0.id == "test.theme" })
+        #expect(!disabled.lifecycle.isEnabled)
+        #expect(disabled.lifecycle.phase == .installed)
+        await app.setInstalledPlugin(id: "test.theme", enabled: true)
+        #expect(app.languageCatalog.descriptor(forExtension: "plgtest") != nil)
+        try await app.uninstallPlugin(id: "test.theme")
+        #expect(app.store.pluginManagement.installed.isEmpty)
     }
 
     @Test func themeResourceMutationRequiresReviewBeforeReload() async throws {
@@ -165,11 +175,35 @@ struct PluginPlatformTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let first = EditorThemeCatalog()
         let second = EditorThemeCatalog()
-        try first.update(packages: [PluginPackageLoader().load(at: root)])
+        let registration = try first.register(PluginPackageLoader().load(at: root))
         #expect(first.snapshot.themes.contains { $0.id == "test.theme" })
         #expect(!second.snapshot.themes.contains { $0.id == "test.theme" })
-        try first.update(packages: [])
-        #expect(second.snapshot.themes.contains { $0.id == EditorThemeCatalog.defaultThemeID })
+        try registration.dispose()
+        #expect(second.snapshot.themes.isEmpty)
+    }
+
+    @Test func providerSnapshotsBelongToTheirEditorSession() async throws {
+        let root = try package()
+        let firstProject = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let secondProject = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { for url in [root, firstProject, secondProject] { try? FileManager.default.removeItem(at: url) } }
+        for url in [firstProject, secondProject] { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
+        var manifest = try PluginPackageLoader().load(at: root).manifest
+        try manifest.contributes.set(AIProviderContributionPoint.self, descriptors: [
+            AIProviderContribution(id: "fixture-provider", title: "Fixture", apiFormat: "openai-compatible",
+                models: [AIModelContribution(id: "fixture", title: "Fixture")])
+        ])
+        try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent("plugin.json"))
+        let first = try EditorApplication(projectDirectory: firstProject.path)
+        let second = try EditorApplication(projectDirectory: secondProject.path)
+        defer { first.shutdown(); second.shutdown() }
+        let inspection = try first.inspectPlugin(at: root)
+        _ = try await first.enablePlugin(at: root, authorization: first.makePluginAuthorization(afterUserApprovalOf: inspection))
+        #expect(first.aiProviderCatalog.provider(id: "fixture-provider") != nil)
+        #expect(second.aiProviderCatalog.provider(id: "fixture-provider") == nil)
+        try await first.disablePlugin(id: "test.theme")
+        #expect(first.aiProviderCatalog.provider(id: "fixture-provider") == nil)
+        #expect(second.aiProviderCatalog.providers.isEmpty)
     }
 
     private func package() throws -> URL {

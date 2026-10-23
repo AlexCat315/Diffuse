@@ -7,6 +7,12 @@ private import Foundation
 /// opens a review card above the list before anything is loaded.
 struct PluginSettings: View {
     let app: EditorApplication
+    @State private var category = ""
+
+    init(app: EditorApplication, category: String = "") {
+        self.app = app
+        _category = State(wrappedValue: category)
+    }
 
     var body: some View {
         let management = app.store.pluginManagement
@@ -23,17 +29,21 @@ struct PluginSettings: View {
             AnimatedVisibility(isVisible: management.candidate != nil) {
                 if let candidate = management.candidate {
                     PluginReviewCard(summary: candidate, isBusy: management.phase == .enabling,
-                        isAlreadyEnabled: management.enabled.contains { $0.id == candidate.id }, onEnable: {
+                        isAlreadyEnabled: management.installed.contains { $0.id == candidate.id && $0.lifecycle.isEnabled }, onEnable: {
                             Task { @MainActor in await app.authorizeAndEnableInspectedPlugin() }
                         }, onCancel: { Task { @MainActor in app.cancelPluginApproval() } })
                 }
             }
+            Select(selection: $category, options: [.init(value: "", label: L("All"))]
+                + PluginCategory.allCases.map { .init(value: $0.rawValue, label: L($0.rawValue)) }, width: 220)
+                .debugName("settings-plugin-category")
             SettingsCard(L("Installed")) {
                 Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                    BundledPluginRows(app: app, management: management, isBusy: busy) { actions(for: $0, isBusy: busy) }
-                    for plugin in management.enabled where !app.bundledPlugins.contains(where: { $0.id == plugin.id }) {
-                        PluginRow(listing: PluginListing(plugin), isEnabled: true, isBusy: busy,
-                                  onToggle: { _ in Task { @MainActor in await app.disablePluginFromManagement(id: plugin.id) } },
+                    BundledPluginRows(app: app, management: management, isBusy: busy, category: category) { actions(for: $0, isBusy: busy) }
+                    for plugin in management.installed where !app.bundledPlugins.contains(where: { $0.id == plugin.id })
+                        && (category.isEmpty || plugin.categories.contains { $0.rawValue == category }) {
+                        PluginRow(listing: PluginListing(plugin), isEnabled: plugin.lifecycle.isEnabled, isBusy: busy,
+                                  onToggle: { on in Task { @MainActor in await app.setInstalledPlugin(id: plugin.id, enabled: on) } },
                                   actions: actions(for: plugin, isBusy: busy))
                     }
                     if management.phase == .inspecting {
@@ -55,12 +65,15 @@ struct PluginSettings: View {
 
     private func actions(for plugin: EditorPluginInspectionSummary, isBusy: Bool) -> [MenuEntry] {
         [
-            .item(MenuItem(id: "reload", title: L("Reload"), isEnabled: !isBusy) {
+            .item(MenuItem(id: "reload", title: L("Reload"), isEnabled: !isBusy && plugin.lifecycle.isEnabled) {
                 Task { @MainActor in await app.reloadPluginFromManagement(id: plugin.id) }
             }),
             .separator("plugin-authorization"),
             .item(MenuItem(id: "revoke", title: L("Revoke Authorization"), isEnabled: !isBusy, role: .destructive) {
                 Task { @MainActor in await app.revokePluginFromManagement(id: plugin.id) }
+            }),
+            .item(MenuItem(id: "uninstall", title: L("Uninstall"), isEnabled: !isBusy, role: .destructive) {
+                Task { @MainActor in await app.uninstallPluginFromManagement(id: plugin.id) }
             }),
         ]
     }
@@ -86,14 +99,16 @@ private struct BundledPluginRows: View, @unchecked Sendable {
     let app: EditorApplication
     let management: EditorPluginManagementState
     let isBusy: Bool
+    let category: String
     let actions: (EditorPluginInspectionSummary) -> [MenuEntry]
     private let versionControl: Observed<EditorVersionControl, VersionControlSnapshot>
 
-    init(app: EditorApplication, management: EditorPluginManagementState, isBusy: Bool,
+    init(app: EditorApplication, management: EditorPluginManagementState, isBusy: Bool, category: String,
          actions: @escaping (EditorPluginInspectionSummary) -> [MenuEntry]) {
         self.app = app
         self.management = management
         self.isBusy = isBusy
+        self.category = category
         self.actions = actions
         versionControl = Observed(\.snapshot, on: app.workstation.versionControl)
     }
@@ -101,18 +116,16 @@ private struct BundledPluginRows: View, @unchecked Sendable {
     var body: some View {
         let snapshot = versionControl.wrappedValue
         Box(direction: .column, alignItems: .stretch, spacing: 8) {
-            for plugin in app.bundledPlugins {
-                let loaded = management.enabled.first { $0.id == plugin.id }
-                let state: (enabled: Bool, missing: String?) = switch plugin.host {
-                case .application: (loaded != nil, nil)
-                case .declarative: (MainActor.assumeIsolated { app.isBundledPluginEnabled(plugin) }, nil)
-                case let .versionControl(system):
-                    (!snapshot.disabledSystems.contains(system), snapshot.installedSystems.contains(system) ? nil : plugin.commands.first)
-                }
-                AnyView(PluginRow(listing: PluginListing(bundled: plugin, loaded: loaded, missingCommand: state.missing),
-                                  isEnabled: state.enabled,
+            for plugin in app.bundledPlugins where category.isEmpty || plugin.categories.contains(where: { $0.rawValue == category }) {
+                let loaded = management.installed.first { $0.id == plugin.id }
+                let enabled = loaded?.lifecycle.isEnabled ?? false
+                let missing = plugin.categories.contains(.versionControl)
+                    && !snapshot.installedSystems.contains(where: { plugin.host == .versionControl($0) })
+                    ? plugin.commands.first : nil
+                AnyView(PluginRow(listing: PluginListing(bundled: plugin, loaded: loaded, missingCommand: missing),
+                                  isEnabled: enabled,
                                   isBusy: isBusy || (plugin.host != .declarative && !app.isPluginHostAvailable)
-                                      || snapshot.operation != nil,
+                                      || (plugin.categories.contains(.versionControl) && snapshot.operation != nil),
                                   onToggle: { on in Task { @MainActor in await app.setBundledPlugin(plugin, enabled: on) } },
                                   actions: loaded.map(actions) ?? []))
             }

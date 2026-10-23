@@ -136,7 +136,7 @@ struct LanguageServerStatus: View {
     // MARK: State
 
     private var isPluginEnabled: Bool {
-        app.store.pluginManagement.enabled.contains { $0.id == "studio.swift-support" }
+        app.store.pluginManagement.installed.contains { $0.id == "studio.swift-support" && $0.lifecycle.isEnabled }
     }
 
     /// Why the service is in its state, most actionable first.

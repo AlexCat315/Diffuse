@@ -21,7 +21,7 @@ struct EditorAISettingsDraft: Equatable {
     mutating func select(_ nextProvider: AIProviderDescriptor?) {
         let nextID = nextProvider?.id ?? ""
         guard providerID != nextID else { return }
-        let previousDefaultModel = AIProviderCatalog.provider(id: providerID)?.defaultModel ?? ""
+        let previousDefaultModel = AIProviderCatalog.bundled.provider(id: providerID)?.defaultModel ?? ""
         if model.isEmpty || model.stringValue == previousDefaultModel {
             model = TextBuffer(nextProvider?.defaultModel ?? "")
         }
