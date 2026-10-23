@@ -393,7 +393,7 @@ struct PhysicsBackendSelectionTests {
 
         #expect(firstReport.physics.backendIdentifier == "jolt")
         #expect(firstReport.physics.contactCount >= 1)
-        #expect(runtime.physicsFrameState.contactCount >= 1)
+        #expect(runtime.physicsFrameState.counts.contacts >= 1)
         #expect(firstPair != nil)
         #expect(firstPair.map { simd_length($0.normal) > 0.5 } ?? false)
 

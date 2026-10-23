@@ -97,18 +97,18 @@ struct PhysicsJointTests {
         ), for: joint)
 
         _ = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(runtime.physicsFrameState.synchronizedConstraintCount == 1)
+        #expect(runtime.physicsFrameState.synchronization.constraints == 1)
         _ = runtime.updateComponent(Collider.self, for: first) {
             $0.shape = .sphere(radius: 0.6, center: .zero)
         }
         let recreated = runtime.tick(deltaTime: 1.0 / 60.0)
         #expect(recreated.physics.error == nil)
-        #expect(runtime.physicsFrameState.synchronizedBodyCount == 1)
-        #expect(runtime.physicsFrameState.synchronizedConstraintCount == 1)
+        #expect(runtime.physicsFrameState.synchronization.bodies == 1)
+        #expect(runtime.physicsFrameState.synchronization.constraints == 1)
 
         _ = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(runtime.physicsFrameState.synchronizedBodyCount == 0)
-        #expect(runtime.physicsFrameState.synchronizedConstraintCount == 0)
+        #expect(runtime.physicsFrameState.synchronization.bodies == 0)
+        #expect(runtime.physicsFrameState.synchronization.constraints == 0)
     }
 
     @Test("joint break thresholds emit events and disable the authored joint")
@@ -204,6 +204,6 @@ struct PhysicsJointTests {
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
         #expect(report.physics.error == nil)
         #expect(report.physics.constraintCount == 1)
-        #expect(runtime.physicsFrameState.constraintCount == 1)
+        #expect(runtime.physicsFrameState.counts.constraints == 1)
     }
 }

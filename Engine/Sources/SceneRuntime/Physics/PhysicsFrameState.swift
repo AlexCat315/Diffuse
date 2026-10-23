@@ -26,23 +26,52 @@ public struct PhysicsStepClockResource: Sendable, Equatable {
     }
 }
 
+/// Authored bodies the backend actually simulated this frame.
+public struct PhysicsFrameBodyCounts: Sendable, Equatable {
+    public var total: Int = 0
+    public var soft: Int = 0
+    public var softVertices: Int = 0
+    public var constraints: Int = 0
+    public var contacts: Int = 0
+    public var writebacks: Int = 0
+
+    public init(total: Int = 0, soft: Int = 0, softVertices: Int = 0,
+                constraints: Int = 0, contacts: Int = 0, writebacks: Int = 0) {
+        self.total = total
+        self.soft = soft
+        self.softVertices = softVertices
+        self.constraints = constraints
+        self.contacts = contacts
+        self.writebacks = writebacks
+    }
+}
+
+/// Entities synchronized from the simulation back into the scene this frame.
+public struct PhysicsFrameSynchronization: Sendable, Equatable {
+    public var bodies: Int = 0
+    public var softBodies: Int = 0
+    public var constraints: Int = 0
+    /// Time spent copying simulation state into scene storage.
+    public var nanoseconds: UInt64 = 0
+
+    public init(bodies: Int = 0, softBodies: Int = 0, constraints: Int = 0,
+                nanoseconds: UInt64 = 0) {
+        self.bodies = bodies
+        self.softBodies = softBodies
+        self.constraints = constraints
+        self.nanoseconds = nanoseconds
+    }
+}
+
 public struct PhysicsFrameStateResource: Sendable, Equatable {
     public var backendIdentifier: String
-    public var bodyCount: Int
-    public var softBodyCount: Int
-    public var softBodyVertexCount: Int
-    public var constraintCount: Int
-    public var contactCount: Int
-    public var writebackCount: Int
+    public var counts = PhysicsFrameBodyCounts()
+    public var synchronization = PhysicsFrameSynchronization()
     public var simulatedSteps: Int
     public var simulatedSeconds: Double
-    public var synchronizedBodyCount: Int
-    public var synchronizedSoftBodyCount: Int
-    public var synchronizedConstraintCount: Int
     public var activeBodyCount: Int
     public var activeSoftBodyCount: Int
     public var droppedStepCount: Int
-    public var synchronizationNanoseconds: UInt64
     public var stepNanoseconds: UInt64
     public var lastError: PhysicsBackendError?
     /// Authored features the active backend cannot simulate.
@@ -50,41 +79,25 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
 
     public init(
         backendIdentifier: String = "none",
-        bodyCount: Int = 0,
-        softBodyCount: Int = 0,
-        softBodyVertexCount: Int = 0,
-        constraintCount: Int = 0,
-        contactCount: Int = 0,
-        writebackCount: Int = 0,
+        counts: PhysicsFrameBodyCounts = PhysicsFrameBodyCounts(),
+        synchronization: PhysicsFrameSynchronization = PhysicsFrameSynchronization(),
         simulatedSteps: Int = 0,
         simulatedSeconds: Double = 0,
-        synchronizedBodyCount: Int = 0,
-        synchronizedSoftBodyCount: Int = 0,
-        synchronizedConstraintCount: Int = 0,
         activeBodyCount: Int = 0,
         activeSoftBodyCount: Int = 0,
         droppedStepCount: Int = 0,
-        synchronizationNanoseconds: UInt64 = 0,
         stepNanoseconds: UInt64 = 0,
         lastError: PhysicsBackendError? = nil,
         unsupportedFeatures: PhysicsBackendCapabilities = []
     ) {
         self.backendIdentifier = backendIdentifier
-        self.bodyCount = bodyCount
-        self.softBodyCount = softBodyCount
-        self.softBodyVertexCount = softBodyVertexCount
-        self.constraintCount = constraintCount
-        self.contactCount = contactCount
-        self.writebackCount = writebackCount
+        self.counts = counts
+        self.synchronization = synchronization
         self.simulatedSteps = simulatedSteps
         self.simulatedSeconds = simulatedSeconds
-        self.synchronizedBodyCount = synchronizedBodyCount
-        self.synchronizedSoftBodyCount = synchronizedSoftBodyCount
-        self.synchronizedConstraintCount = synchronizedConstraintCount
         self.activeBodyCount = activeBodyCount
         self.activeSoftBodyCount = activeSoftBodyCount
         self.droppedStepCount = droppedStepCount
-        self.synchronizationNanoseconds = synchronizationNanoseconds
         self.stepNanoseconds = stepNanoseconds
         self.lastError = lastError
         self.unsupportedFeatures = unsupportedFeatures

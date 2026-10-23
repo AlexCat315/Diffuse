@@ -245,17 +245,17 @@ struct AdvancedRigidBodyTests {
         ), for: entity)
 
         _ = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(runtime.physicsFrameState.synchronizedBodyCount == 1)
+        #expect(runtime.physicsFrameState.synchronization.bodies == 1)
 
         _ = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(runtime.physicsFrameState.synchronizedBodyCount == 0)
+        #expect(runtime.physicsFrameState.synchronization.bodies == 0)
 
         _ = runtime.applyForce(SIMD3<Float>(0, 2, 0), to: entity)
         _ = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(runtime.physicsFrameState.synchronizedBodyCount == 1)
+        #expect(runtime.physicsFrameState.synchronization.bodies == 1)
 
         _ = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(runtime.physicsFrameState.synchronizedBodyCount == 0)
+        #expect(runtime.physicsFrameState.synchronization.bodies == 0)
 
         let destroyed = runtime.destroyEntity(entity)
         #expect(destroyed)

@@ -438,7 +438,7 @@ struct RuntimeWorldTests {
         #expect(report.physics.bodyCount == 1)
         #expect(runtime.physicsClock.lastStepCount == 2)
         #expect(runtime.physicsClock.simulatedSteps == 2)
-        #expect(runtime.physicsFrameState.contactCount == 2)
+        #expect(runtime.physicsFrameState.counts.contacts == 2)
         #expect(runtime.worldTransform(for: entity)?.translation == SIMD3<Float>(2, 0, 0))
         #expect(runtime.component(RigidBody.self, for: entity)?.linearVelocity == SIMD3<Float>(2, 0, 0))
         #expect(backend.prepareContexts.count == 1)

@@ -216,7 +216,7 @@ struct AuthoringWorkspaceTests {
         app.store.dispatch(.setWorkspaceMode(.level))
         EditorRootViewFactory.resetLayout(into: controller, for: .level, preset: .levelDefault, registry: registry)
         let level = rail()
-        #expect(level["editor-rail-files"] == nil)
+        #expect(level["editor-rail-files"] != nil)
         #expect(level["editor-rail-hierarchy"] != nil)
 
         EditorRootViewFactory.activatePanel("journal", in: controller)

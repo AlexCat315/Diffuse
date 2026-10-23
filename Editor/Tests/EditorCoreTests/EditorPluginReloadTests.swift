@@ -143,16 +143,15 @@ final class EditorPluginReloadTests: XCTestCase {
         try await first.value
         try await second.value
         XCTAssertEqual(application.enabledPluginInspections().count, 2)
-        // Losing the host after enable leaves old dependency bindings stale.
-        // Reload reaches unload/load, then the complete executor rejects them;
-        // rollback must withdraw the provider and its capability dependents.
+        // Each plugin owns its process. Dropping the provider's host stops only
+        // that plugin; its dependent keeps the process that loaded it.
         application.pluginSession.hosts.discard("safe.reloadtest")
-        do {
-            try await application.reloadPlugin(id: "safe.reloadtest")
-            XCTFail("Expected the stale dependent binding to reject publication")
-        } catch PluginAuthorizationError.noLongerValid {}
-        XCTAssertTrue(application.enabledPluginInspections().isEmpty)
-        XCTAssertNil(application.pluginCapabilityExecutor)
+        XCTAssertNil(application.pluginSession.hosts.existing("safe.reloadtest"))
+        XCTAssertNotNil(application.pluginSession.hosts.existing("safe.dependent"))
+        try await application.reloadPlugin(id: "safe.reloadtest")
+        XCTAssertNotNil(application.pluginSession.hosts.existing("safe.reloadtest"))
+        XCTAssertEqual(application.enabledPluginInspections().count, 2)
+        XCTAssertNotNil(application.pluginCapabilityExecutor)
     }
 
     // MARK: - Fixtures

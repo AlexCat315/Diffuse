@@ -43,9 +43,12 @@ struct ScriptSourceEditor: View {
                     Button(L("Close"), action: semantic.selectedProjectDocument).buttonStyle(.ghost)
                 }.padding(horizontal: 12).frame(height: 28)
                 ScriptCodeEditor(source: .constant(external.source), annotations: .constant(.init()), hover: .constant(.hidden),
-                                 caretLabel: .constant(""), onChange: { _ in }, navigation: external.navigation,
-                                 onHover: { _ in }, onHoverEnd: {}, onCaret: semantic.updateCaret,
-                                 onKey: semantic.handleKey, languageEntries: languageEntries, isReadOnly: true)
+                                 caretLabel: .constant(""), onChange: { _ in },
+                                 services: ScriptEditorServices(navigation: external.navigation),
+                                 interactions: ScriptEditorInteractions(onCaret: semantic.updateCaret,
+                                                                        onKey: semantic.handleKey,
+                                                                        languageEntries: languageEntries),
+                                 isReadOnly: true)
                     .id(external.url.absoluteString).flex(1, shrink: 1)
             } else if let document = workspace.selectedDocument {
                 editor(document)
@@ -80,18 +83,21 @@ struct ScriptSourceEditor: View {
                                  semantic.sourceChanged()
                                  scripts.updateSelectedSource(text)
                              },
-                             diagnostics: document.diagnostics,
-                             completionProvider: completionProvider(for: id),
-                             completionResolver: completions.resolver(app.dynamicScriptManager),
-                             editHistory: history(for: id),
-                             navigation: app.store.scriptNavigation.flatMap { $0.scriptID == id ? $0 : nil },
-                             onHover: requestHover,
-                             onHoverEnd: cancelHover,
-                             onCaret: { semantic.updateCaret($0); insights.caretMoved($0) },
-                             onKey: semantic.handleKey,
-                             languageEntries: languageEntries,
-                             occurrences: insights.occurrences,
-                             markers: markers(document, colors: theme.colors))
+                             services: ScriptEditorServices(
+                                 diagnostics: document.diagnostics,
+                                 completionProvider: completionProvider(for: id),
+                                 completionResolver: completions.resolver(app.dynamicScriptManager),
+                                 editHistory: history(for: id),
+                                 navigation: app.store.scriptNavigation.flatMap { $0.scriptID == id ? $0 : nil }),
+                             interactions: ScriptEditorInteractions(
+                                 onHover: requestHover,
+                                 onHoverEnd: cancelHover,
+                                 onCaret: { semantic.updateCaret($0); insights.caretMoved($0) },
+                                 onKey: semantic.handleKey,
+                                 languageEntries: languageEntries),
+                             decoration: ScriptEditorDecoration(
+                                 occurrences: insights.occurrences,
+                                 markers: markers(document, colors: theme.colors)))
                 .id(id)
                 .flex(1, shrink: 1)
         }

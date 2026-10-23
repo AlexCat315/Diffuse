@@ -74,7 +74,8 @@ struct WorkbenchProductivityTests {
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: ScriptCodeEditor(source: .constant(TextBuffer(source)), annotations: .constant(.init()), hover: .constant(.hidden),
             caretLabel: Binding(get: { label }, set: { label = $0 }), onChange: { _ in },
-            navigation: .init(scriptID: "Test", line: 2, column: 4), onHover: { _ in }, onHoverEnd: {}))
+            services: ScriptEditorServices(navigation: .init(scriptID: "Test", line: 2, column: 4)),
+            interactions: ScriptEditorInteractions(onHover: { _ in }, onHoverEnd: {})))
         graph.computeLayout(width: 600, height: 400)
         let field = try #require(WorkbenchUITestSupport.firstNode(graph.tree.root) { registry.handlers(for: $0).text != nil })
         #expect(focus.focused === field)

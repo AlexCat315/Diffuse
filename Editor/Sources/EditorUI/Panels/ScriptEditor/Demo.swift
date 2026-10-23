@@ -158,9 +158,13 @@ private struct ScriptEditorDemoView: View {
                         }),
                     hover: Binding(get: { session.hover }, set: { session.hover = $0 }),
                     caretLabel: Binding(get: { session.caretLabel }, set: { session.caretLabel = $0 }),
-                    onChange: { _ in }, diagnostics: session.diagnostics, completionProvider: session.completionProvider(),
-                    editHistory: session.history, navigation: session.navigation,
-                    onHover: session.requestHover, onHoverEnd: session.cancelHover)
+                    onChange: { _ in },
+                    services: ScriptEditorServices(diagnostics: session.diagnostics,
+                                                   completionProvider: session.completionProvider(),
+                                                   editHistory: session.history,
+                                                   navigation: session.navigation),
+                    interactions: ScriptEditorInteractions(onHover: session.requestHover,
+                                                           onHoverEnd: session.cancelHover))
                     .flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
                 Divider()
                 Row(spacing: 16) {

@@ -13,7 +13,7 @@ struct InspectorSearchRegressionTests {
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: ScriptCodeEditor(source: .constant("let value = 1"), annotations: .constant(.init()), hover: .constant(.hidden),
                                              caretLabel: .constant("Ln 1, Col 1"), onChange: { _ in },
-                                             onHover: { _ in }, onHoverEnd: {})
+                                             interactions: ScriptEditorInteractions(onHover: { _ in }, onHoverEnd: {}))
             .theme(EditorVisualTheme.make(dark: false))
             .flex(1, shrink: 1).frame(width: 600, height: 400))
         graph.computeLayout(width: 600, height: 400)

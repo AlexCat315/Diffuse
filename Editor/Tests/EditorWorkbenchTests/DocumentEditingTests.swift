@@ -45,7 +45,7 @@ struct DocumentEditingTests {
                 settle()
                 #expect(model.selectedPath == "Scripts/Game.swift")
                 let source = try #require(WorkbenchUITestSupport.firstNode(graph.tree.root) {
-                    $0.acceptsSubtreeInput && $0.accessibility?.role == .textField && $0.accessibility?.label == L("Source code")
+                    $0.acceptsSubtreeInput && $0.accessibility?.role == .textField && $0.accessibility?.label == L("Start writing…")
                 })
                 #expect(source.absoluteFrame.minX >= 240)
                 #expect(source.frame.width > 500)
@@ -119,8 +119,10 @@ struct DocumentEditingTests {
                     }
                     settle()
                     let initialField = try field()
+                    // Every text file shares one editing surface; Markdown is
+                    // edited as source rather than split into a preview.
                     let hasPreview = WorkbenchUITestSupport.firstNode(graph.tree.root) { $0.accessibility?.role == .heading } != nil
-                    #expect(hasPreview == ["md", "MARKDOWN"].contains(ext))
+                    #expect(!hasPreview, "\(ext) must edit as source without a rendered preview")
                     context.focusChain.focus(initialField); key(Scancode.a)
                     dispatcher.dispatch(.textInput("# Edited\r\n\r\n**Preview**\r\n")); settle()
                     #expect(model.hasUnsavedChanges)

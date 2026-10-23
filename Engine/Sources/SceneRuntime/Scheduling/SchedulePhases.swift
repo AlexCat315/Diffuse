@@ -313,25 +313,29 @@ extension RuntimeWorldSchedule {
 
         physicsFrameState = PhysicsFrameStateResource(
             backendIdentifier: physicsBackend.identifier,
-            bodyCount: frame.metrics.bodyCount,
-            softBodyCount: frame.metrics.softBodyCount,
-            softBodyVertexCount: frame.results.softBodyStates.values.reduce(0) {
-                $0 + $1.positions.count
-            },
-            constraintCount: frame.metrics.constraintCount,
-            contactCount: frame.metrics.contactCount,
-            writebackCount: frame.metrics.writebackCount,
+            counts: PhysicsFrameBodyCounts(
+                total: frame.metrics.bodyCount,
+                soft: frame.metrics.softBodyCount,
+                softVertices: frame.results.softBodyStates.values.reduce(0) {
+                    $0 + $1.positions.count
+                },
+                constraints: frame.metrics.constraintCount,
+                contacts: frame.metrics.contactCount,
+                writebacks: frame.metrics.writebackCount
+            ),
+            synchronization: PhysicsFrameSynchronization(
+                bodies: frame.metrics.synchronizedBodyCount,
+                softBodies: frame.metrics.synchronizedSoftBodyCount,
+                constraints: frame.metrics.synchronizedConstraintCount,
+                nanoseconds: frame.metrics.synchronizationNanoseconds
+            ),
             simulatedSteps: frame.metrics.stepCount,
             simulatedSeconds: physicsClock.lastSteppedSeconds,
-            synchronizedBodyCount: frame.metrics.synchronizedBodyCount,
-            synchronizedSoftBodyCount: frame.metrics.synchronizedSoftBodyCount,
-            synchronizedConstraintCount: frame.metrics.synchronizedConstraintCount,
             activeBodyCount: frame.results.writebacks.filter { $0.isSleeping == false }.count,
             activeSoftBodyCount: frame.results.softBodyStates.values.filter {
                 !$0.isSleeping
             }.count,
             droppedStepCount: physicsClock.lastDroppedStepCount,
-            synchronizationNanoseconds: frame.metrics.synchronizationNanoseconds,
             stepNanoseconds: frame.metrics.stepNanoseconds,
             lastError: frame.metrics.error,
             unsupportedFeatures: frame.metrics.unsupportedFeatures

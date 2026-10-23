@@ -21,7 +21,7 @@ struct LSPUIRenderingTests {
                 ScriptCodeEditor(source: Binding(get: { source }, set: { source = $0 }),
                     annotations: Binding(get: { annotations }, set: { annotations = $0 }),
                     hover: .constant(.hidden), caretLabel: .constant(""), onChange: { _ in },
-                    onHover: { _ in }, onHoverEnd: {})
+                    interactions: ScriptEditorInteractions(onHover: { _ in }, onHoverEnd: {}))
                     .flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
             })
             graph.computeLayout(width: 800, height: 600)
