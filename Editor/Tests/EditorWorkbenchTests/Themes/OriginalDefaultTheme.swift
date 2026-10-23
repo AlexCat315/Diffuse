@@ -84,7 +84,7 @@ enum OriginalDefaultTheme {
     }
 
     private static func decorations(_ theme: inout Theme, dark: Bool) {
-        theme.extensions[EditorThemeTokens.self].agent = dark
+        theme.extensions[EditorThemeTokens.self].harness = dark
             ? Color(red: 0xF0, green: 0x7D, blue: 0x96)
             : Color(red: 0xC8, green: 0x43, blue: 0x5F)
         if dark {

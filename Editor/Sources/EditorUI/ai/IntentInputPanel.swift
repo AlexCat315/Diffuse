@@ -27,7 +27,7 @@ struct IntentInputPanel: View {
                 || store.chatMessages.contains(where: isActiveAssistantMessage)
             Column(alignment: .leading, spacing: 0) {
                 EditorPanelToolbar {
-                    Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.agentColor)
+                    Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.harnessColor)
                     Text(store.agentTasks.first.map { L($0.phase.title) } ?? L("New Task"))
                         .font(.label).flex()
                     if store.agentTasks.first?.phase == .planning {
@@ -60,9 +60,9 @@ struct IntentInputPanel: View {
 
     private var introduction: some View {
         Column(alignment: .leading, spacing: 12) {
-            Icon(UIIcons.Status.sparkles, size: 22, color: EditorThemeTokens.agentColor)
+            Icon(UIIcons.Status.sparkles, size: 22, color: EditorThemeTokens.harnessColor)
                 .frame(width: 42, height: 42)
-                .background(EditorThemeTokens.agentColor.opacity(0.10)).cornerRadius(12)
+                .background(EditorThemeTokens.harnessColor.opacity(0.10)).cornerRadius(12)
             Text(L("What shall we make?")).font(.headline).foregroundColor(.onSurface)
             Text(L("One workspace. A shared scene. Tell Guava what you want to create, change, or understand."))
                 .font(.body).foregroundColor(.onSurfaceVariant)
@@ -70,9 +70,9 @@ struct IntentInputPanel: View {
                 Column(alignment: .leading, spacing: 8) {
                     Text(L("Connect an AI provider to start working together."))
                         .font(.caption).foregroundColor(.onSurfaceMuted)
-                    Button(L("Set up Agent")) { app.openSettingsWindow() }
+                    Button(L("Set up Harness")) { app.openSettingsWindow() }
                         .buttonStyle(EditorChromeButtonStyle(agent: true))
-                        .background(EditorThemeTokens.agentColor.opacity(0.10)).cornerRadius(6)
+                        .background(EditorThemeTokens.harnessColor.opacity(0.10)).cornerRadius(6)
                 }.padding(vertical: 4)
             }
             Text(L("TRY A STARTING POINT")).font(.caption).foregroundColor(.onSurfaceMuted).padding(EdgeInsets(top: 12))
@@ -94,7 +94,7 @@ struct IntentInputPanel: View {
     private func suggestion(_ text: String) -> some View {
         Button { updateDraft(TextBuffer(text)) } label: {
             Row(alignment: .center, spacing: 8) {
-                Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.agentColor)
+                Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.harnessColor)
                 Text(text, lineLimit: 2).font(.body).foregroundColor(.onSurfaceVariant).flex()
                 Icon(UIIcons.Navigation.arrowUpRight, size: 12, color: .onSurfaceMuted)
             }.padding(horizontal: 10, vertical: 10).frame(width: .percent(100), minWidth: 0)
@@ -125,7 +125,7 @@ struct IntentInputPanel: View {
                                && !inputText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                            tooltip: L("Send"), action: submitInput)
                         .buttonStyle(EditorChromeButtonStyle(height: 26, agent: true))
-                        .background(EditorThemeTokens.agentColor.opacity(0.14)).cornerRadius(6)
+                        .background(EditorThemeTokens.harnessColor.opacity(0.14)).cornerRadius(6)
                         .debugName("editor-agent-send")
                 }.frame(width: .percent(100), minWidth: 0)
             }.padding(10).background(.surfaceSunken).cornerRadius(10).border(.borderStrong, width: 1)
@@ -134,7 +134,7 @@ struct IntentInputPanel: View {
 
     /// Why Send is unavailable, or the review promise when it is.
     private func sendHint(busy: Bool) -> String {
-        if !app.isAIAvailable { return L("Agent offline") }
+        if !app.isAIAvailable { return L("Harness offline") }
         if !app.isSceneAuthoringEnabled { return L("Stop the game to send a request") }
         if app.store.pendingConfirmationRequest != nil { return L("Review the pending changes first") }
         if busy { return L("Guava is working") }

@@ -9,7 +9,7 @@ struct EditorChromeButtonStyle: ButtonStyle {
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let colors = configuration.theme.colors
-        let ink = agent ? configuration.theme.extensions[EditorThemeTokens.self].agent : colors.onSurface
+        let ink = agent ? configuration.theme.extensions[EditorThemeTokens.self].harness : colors.onSurface
         Box(direction: .row, alignItems: .center, justifyContent: .center) {
             AnyView(configuration.label).font(.label)
                 .foregroundColor(!configuration.isEnabled ? colors.onSurfaceMuted

@@ -322,7 +322,7 @@ enum EditorRootViewFactory {
         case "assets":
             return L("Assets")
         case "intent-input":
-            return L("Agent")
+            return L("Harness")
         case "journal":
             return L("Journal")
         case "render-pipeline":

@@ -13,7 +13,7 @@ public enum PluginCategory: String, CaseIterable, Codable, Sendable {
         for point in points {
             if point.hasPrefix("guava.theme/") { categories.insert(.themes) }
             else if point.hasPrefix("guava.language/") { categories.insert(.languages) }
-            else if point.hasPrefix("guava.ai.") || point.hasPrefix("guava.agent/") { categories.insert(.ai) }
+            else if point.hasPrefix("guava.ai.") { categories.insert(.ai) }
             else if point.hasPrefix("guava.ui.") || point.hasPrefix("guava.command/") { categories.insert(.ui) }
             else if point.hasPrefix("guava.vcs/") { categories.insert(.versionControl) }
             else if point.hasPrefix("guava.tasks/") { categories.insert(.tasks) }

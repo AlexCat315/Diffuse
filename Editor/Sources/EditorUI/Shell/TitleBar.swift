@@ -99,7 +99,7 @@ struct EditorTitleBar: View {
                 }
                 .frame(width: 22, height: 22)
                 .background(UILinearGradient(Color(red: 0x5F, green: 0xAF, blue: 0x82),
-                                             EditorThemeTokens.defaultValue.agent, angle: 135))
+                                             EditorThemeTokens.defaultValue.harness, angle: 135))
                 .cornerRadius(6)
                 .debugName("editor-project-mark")
                 if width >= 800 {
@@ -153,7 +153,7 @@ struct EditorTitleBar: View {
             onCommand(.showCommandPalette(.intent))
         } label: {
             Row(alignment: .center, spacing: 7) {
-                Icon(UIIcons.Status.sparkles, size: 13, color: EditorThemeTokens.agentColor)
+                Icon(UIIcons.Status.sparkles, size: 13, color: EditorThemeTokens.harnessColor)
                 if width >= 1100 {
                     Text(L("Tell Guava what you want to do…"), lineLimit: 1)
                         .font(.caption).foregroundColor(.onSurfaceMuted).flex(1, shrink: 1).frame(minWidth: 0)
@@ -190,10 +190,10 @@ struct EditorTitleBar: View {
             // Padding a styled box would move only its content; the wrapper moves the circle.
             Box(direction: .row, alignItems: .center, spacing: 0) {
                 Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                    Icon(UIIcons.Status.sparkles, size: 11, color: EditorThemeTokens.agentColor)
+                    Icon(UIIcons.Status.sparkles, size: 11, color: EditorThemeTokens.harnessColor)
                 }
                 .frame(width: 24, height: 24).background(Color(red: 0x5A, green: 0x29, blue: 0x34)).cornerRadius(12)
-                .border(working ? EditorThemeTokens.agentColor : .surface, width: 2)
+                .border(working ? EditorThemeTokens.harnessColor : .surface, width: 2)
                 .accessibility { $0.label = working ? L("Guava is working") : "Guava" }
             }.padding(EdgeInsets(leading: 17))
         }.frame(width: 41, height: 24).debugName("editor-presence")

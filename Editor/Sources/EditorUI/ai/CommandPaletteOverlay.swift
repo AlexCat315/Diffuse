@@ -57,7 +57,7 @@ struct CommandPaletteOverlay: View {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 8) {
                     let scope = EditorPaletteScope(query: app.store.commandPaletteQuery.stringValue)
-                    Icon(scope.icon, size: 16, color: scope == .intent ? EditorThemeTokens.agentColor : .onSurfaceVariant)
+                    Icon(scope.icon, size: 16, color: scope == .intent ? EditorThemeTokens.harnessColor : .onSurfaceVariant)
                         .debugName("command-palette-scope")
                     TextField(L("Tell Guava what you want to do… (> commands, @ files, # entities)"), text: Binding(get: { app.store.commandPaletteQuery }, set: {
                             selectedIndex = 0
@@ -206,8 +206,8 @@ struct CommandPaletteOverlay: View {
         }.prefix(60).map { $0.0 }
         if !commandsOnly && !resourcesOnly && !entitiesOnly {
             let text = raw
-            let intent = ResultItem(id: "agent.intent", title: text.isEmpty ? L("Open Agent") : L("Ask Guava") + ": " + text,
-                detail: app.isAIAvailable ? L("Work with Agent in this context") : L("Set an AI provider in Settings to enable."),
+            let intent = ResultItem(id: "agent.intent", title: text.isEmpty ? L("Open Harness") : L("Ask Guava") + ": " + text,
+                detail: app.isAIAvailable ? L("Work with Harness in this context") : L("Set an AI provider in Settings to enable."),
                 shortcut: "↵", enabled: true, searchText: "", perform: {
                     EditorCommandDispatcher.handle(.showPanel("intent-input"), app: app, controller: controller,
                                                    registry: registry, fromCommandPalette: true)

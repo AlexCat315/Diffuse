@@ -125,7 +125,7 @@
 "About Guava" = "关于 Guava";
 "Version" = "版本";
 "Development Build" = "开发版本";
-"An AI Agent driven workstation for code, games, animation and video." = "以 AI Agent 驱动的代码、游戏、动画与视频工作站。";
+"An AI harness driven workstation for code, games, animation and video." = "以 AI Harness 驱动的代码、游戏、动画与视频工作站。";
 "Workspace: Level" = "工作区：关卡";
 "Workspace: Modeling" = "工作区：建模";
 "Workspace: Animation" = "工作区：动画";
@@ -791,7 +791,6 @@
 
 "Manual Editing" = "手动编辑";
 
-"Agent Workbench" = "Agent 工作台";
 
 
 "Task Conversation" = "任务对话";
@@ -843,7 +842,7 @@
 "Video" = "剪辑";
 "Outline" = "大纲";
 "Properties" = "属性";
-"Agent" = "Agent";
+"Harness" = "Harness";
 "Review" = "审阅";
 "Journal" = "日志";
 "Session Journal" = "会话日志";
@@ -858,7 +857,7 @@
 "What shall we make?" = "一起创造点什么？";
 "One workspace. A shared scene. Tell Guava what you want to create, change, or understand." = "同一个工作台，共同的场景。告诉 Guava，你想创造、修改，或了解什么。";
 "Connect an AI provider to start working together." = "连接 AI 服务，开始一起工作。";
-"Set up Agent" = "配置 Agent";
+"Set up Harness" = "配置 Harness";
 "TRY A STARTING POINT" = "从这里开始";
 "Explain the current selection" = "解释当前选中的对象";
 "Help me plan the next step" = "帮我规划下一步";
@@ -866,8 +865,8 @@
 "Review before applying" = "审阅后应用";
 "Context" = "上下文";
 "Ask Guava" = "交给 Guava";
-"Open Agent" = "打开 Agent";
-"Work with Agent in this context" = "在当前上下文中与 Agent 协作";
+"Open Harness" = "打开 Harness";
+"Work with Harness in this context" = "在当前上下文中与 Harness 协作";
 
 "Import Assets" = "导入资源";
 "Content Browser" = "资源浏览器";
@@ -894,8 +893,8 @@
 "Hide Others" = "隐藏其他";
 "Quit %@" = "退出 %@";
 "Guava is working" = "Guava 正在执行";
-"Agent ready" = "Agent 就绪";
-"Agent offline" = "Agent 未连接";
+"Harness ready" = "Harness 就绪";
+"Harness offline" = "Harness 未连接";
 "Select" = "选择";
 "Select All" = "全选";
 "Deselect" = "取消选择";
@@ -927,7 +926,7 @@
 "Keyboard Shortcuts" = "键盘快捷键";
 "Make this workspace feel like yours." = "让工作台更贴合你的习惯。";
 "Fine-tune how you work with the scene." = "调整场景操作与显示偏好。";
-"Connect your assistant and choose how it works with you." = "连接智能助手，决定它如何与你协作。";
+"Connect your model provider and choose how the harness works with you." = "连接模型服务商，决定 Harness 如何与你协作。";
 "Inspect, authorize, and manage your AI extensions." = "检查、授权并管理你的 AI 扩展。";
 "The shortcuts available in your current Space." = "查看当前工作空间可用的快捷键。";
 "Your workspace, application, and support information." = "查看工作空间、应用及诊断信息。";
@@ -936,7 +935,7 @@
 "Execution & Review" = "执行与审阅";
 "Workspace Information" = "工作空间信息";
 "WORKSPACE" = "工作空间";
-"TOOLS & ASSISTANT" = "工具与助手";
+"TOOLS & HARNESS" = "工具与 Harness";
 "Settings categories" = "设置分类";
 "A calm canvas, in your preferred light." = "选择适合你的明暗，专注于眼前的创作。";
 "Display language" = "界面语言";
@@ -946,7 +945,7 @@
 "Synchronize presentation with the display to reduce tearing." = "让画面呈现与显示器同步，减少画面撕裂。";
 "Bring your provider. Keep control of your credentials." = "使用你选择的服务商，凭据由你掌控。";
 "Use a model supported by the selected provider." = "填写所选服务商支持的模型名称。";
-"Agent is disabled. Choose a provider to configure your assistant." = "Agent 尚未启用。选择服务商，配置你的智能助手。";
+"Harness is disabled. Choose a provider to configure it." = "Harness 尚未启用。选择服务商进行配置。";
 "Available capabilities" = "可用能力";
 "Stable keeps the default capability set. Beta and Experimental expose earlier-stage tools." = "稳定版使用默认能力集；测试版和实验版开放仍在演进的工具。";
 "Review a package and its capabilities before enabling it." = "启用前先检查扩展包、访问范围和能力。";
@@ -966,7 +965,7 @@
 "No settings found" = "没有找到设置";
 "Try a provider name, a feature, or a different keyword." = "试试服务商名称、功能名称或其他关键词。";
 "Clear search" = "清除搜索";
-"Unapplied Agent changes" = "Agent 更改尚未应用";
+"Unapplied Harness changes" = "Harness 更改尚未应用";
 "Preferences are saved on this computer." = "偏好设置保存在这台电脑上。";
 "Discard changes" = "放弃更改";
 

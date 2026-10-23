@@ -45,7 +45,7 @@ struct EditorActivityRail: View {
             if controller.document.panels["inspector"] != nil {
                 panel(UIIcons.Action.sliders, title: L("Properties"), id: "inspector")
             }
-            panel(UIIcons.Status.sparkles, title: L("Agent"), id: "intent-input", agent: true)
+            panel(UIIcons.Status.sparkles, title: L("Harness"), id: "intent-input", agent: true)
             panel(UIIcons.Editor.gitCommit, title: L("Session Journal"), id: "journal")
             if controller.document.panels["assets"] != nil {
                 panel(UIIcons.File.package, title: L("Assets"), id: "assets")
@@ -82,7 +82,7 @@ private struct ActivityButtonStyle: ButtonStyle {
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let colors = configuration.theme.colors
-        let ink = agent ? configuration.theme.extensions[EditorThemeTokens.self].agent : colors.onSurfaceVariant
+        let ink = agent ? configuration.theme.extensions[EditorThemeTokens.self].harness : colors.onSurfaceVariant
         Row(alignment: .center, spacing: 4) {
             Box {}.frame(width: 2, height: 16)
                 .background(configuration.isSelected ? colors.accent : .clear).cornerRadius(1)

@@ -21,9 +21,9 @@ struct SettingsSidebar: View {
             Text(L("WORKSPACE")).font(.caption).foregroundColor(.onSurfaceMuted)
                 .padding(horizontal: 20, vertical: 8)
             for item in [SettingsCategory.general, .editor] { AnyView(destination(item)) }
-            Text(L("TOOLS & ASSISTANT")).font(.caption).foregroundColor(.onSurfaceMuted)
+            Text(L("TOOLS & HARNESS")).font(.caption).foregroundColor(.onSurfaceMuted)
                 .padding(EdgeInsets(top: 24, leading: 20, bottom: 8, trailing: 20))
-            for item in [SettingsCategory.agent, .plugins, .shortcuts] { AnyView(destination(item)) }
+            for item in [SettingsCategory.harness, .plugins, .shortcuts] { AnyView(destination(item)) }
             Spacer(minLength: 24)
             destination(.about)
             Row(alignment: .center, spacing: 6) {
@@ -37,7 +37,7 @@ struct SettingsSidebar: View {
     private func destination(_ item: SettingsCategory) -> some View {
         Button(isSelected: !isSearching && category == item, action: { onSelect(item) }) {
             Row(alignment: .center, spacing: 10) {
-                Icon(item.icon, size: 16, color: item == .agent ? EditorThemeTokens.agentColor : .onSurfaceVariant)
+                Icon(item.icon, size: 16, color: item == .harness ? EditorThemeTokens.harnessColor : .onSurfaceVariant)
                 Text(item.title, lineLimit: 1).font(.label).flex().frame(minWidth: 0)
             }.padding(horizontal: 12, vertical: 11).frame(width: .percent(100), minWidth: 0)
         }.buttonStyle(SettingsNavigationStyle()).padding(horizontal: 10, vertical: 2)

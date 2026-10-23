@@ -2,8 +2,8 @@ internal import EditorCore
 internal import GuavaUI
 internal import GuavaUIRuntime
 
-struct AgentProviderSettings: View {
-    let editor: AgentSettingsEditor
+struct HarnessProviderSettings: View {
+    let editor: HarnessSettingsEditor
 
     var body: some View {
         // One credential lookup per render; each reads the credential file.
@@ -26,7 +26,7 @@ struct AgentProviderSettings: View {
                     TextField(L("Model"), text: Binding(get: { editor.draft.model }, set: { value in
                         editor.update { $0.draft.model = value; $0.feedback = nil }
                     })) { input in input.behavior.clearable = true; input.events.onSubmit = editor.apply }
-                        .frame(width: .percent(100), minWidth: 0).debugName("settings-agent-model")
+                        .frame(width: .percent(100), minWidth: 0).debugName("settings-harness-model")
                     Text(L("Use a model supported by the selected provider.")).font(.caption).foregroundColor(.onSurfaceMuted)
                 }.frame(width: .percent(100))
                 Column(alignment: .leading, spacing: 7) {
@@ -36,14 +36,14 @@ struct AgentProviderSettings: View {
                         editor.update { $0.draft.apiKey = value; $0.feedback = nil }
                     })) { input in
                         input.behavior.secure = true; input.behavior.clearable = true; input.events.onSubmit = editor.apply
-                    }.frame(width: .percent(100), minWidth: 0).debugName("settings-agent-key")
+                    }.frame(width: .percent(100), minWidth: 0).debugName("settings-harness-key")
                     Row(alignment: .center, spacing: 6) {
                         Icon(UIIcons.Status.shieldCheck, size: 12, color: .onSurfaceMuted)
                         Text(editor.credentialStatus(draftSource)).font(.caption).foregroundColor(.onSurfaceMuted).flex().frame(minWidth: 0)
                     }
                 }.frame(width: .percent(100))
             } else {
-                Text(L("Agent is disabled. Choose a provider to configure your assistant."))
+                Text(L("Harness is disabled. Choose a provider to configure it."))
                     .font(.body).foregroundColor(.onSurfaceMuted)
             }
             if editor.draft.providerID == active, !active.isEmpty, activeSource == .credentialFile {
@@ -54,7 +54,7 @@ struct AgentProviderSettings: View {
                     }
                 } else {
                     Button(L("Remove Stored Key")) { editor.update { $0.confirmsKeyRemoval = true } }
-                        .buttonStyle(.ghost).debugName("settings-agent-remove-key")
+                        .buttonStyle(.ghost).debugName("settings-harness-remove-key")
                 }
             }
         }
@@ -83,15 +83,15 @@ struct AgentProviderSettings: View {
     }
 }
 
-struct AgentExecutionSettings: View {
-    let editor: AgentSettingsEditor
+struct HarnessExecutionSettings: View {
+    let editor: HarnessSettingsEditor
 
     var body: some View {
         SettingsCard(L("Execution & Review")) {
             SettingsField(L("Automatically apply safe AI changes"), help: L("Operations that require confirmation will still wait for approval.")) {
                 Toggle(isOn: Binding(get: { editor.draft.autoApprove }, set: { value in
                     editor.update { $0.draft.autoApprove = value; $0.feedback = nil }
-                })).accessibility { $0.label = L("Automatically apply safe AI changes") }.debugName("settings-agent-auto-approve")
+                })).accessibility { $0.label = L("Automatically apply safe AI changes") }.debugName("settings-harness-auto-approve")
             }
         }
     }

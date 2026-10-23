@@ -1,8 +1,8 @@
 {
-  "id": "studio.ai-providers",
+  "id": "studio.ai",
   "version": 1,
-  "name": "AI Providers",
-  "description": "Bundled model providers for the AI assistant. Credentials and transport stay with the host.",
+  "name": "AI",
+  "description": "Model providers for the harness. Credentials and transport stay with the host.",
   "access": "read",
   "imports": [],
   "composable_host_capabilities": [],

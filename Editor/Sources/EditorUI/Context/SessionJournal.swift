@@ -48,8 +48,8 @@ struct SessionJournal: View {
     private func taskRow(_ task: EditorAgentTask) -> some View {
         Column(alignment: .leading, spacing: 4) {
             Row(alignment: .center, spacing: 6) {
-                Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.agentColor)
-                Text(L(task.phase.title)).font(.caption).foregroundColor(EditorThemeTokens.agentColor)
+                Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.harnessColor)
+                Text(L(task.phase.title)).font(.caption).foregroundColor(EditorThemeTokens.harnessColor)
                 Spacer(minLength: 0)
                 Text("r\(task.target.sceneRevision)").font(.mono).foregroundColor(.onSurfaceMuted)
             }
