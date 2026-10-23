@@ -119,6 +119,46 @@ struct CatalogInteractionTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    private final class LoadingHarness: View {
+        @State var loading = false
+        var body: some View {
+            Button("Save", isLoading: loading) {}
+        }
+    }
+
+    @Test("Toggling isLoading preserves text measurement in both directions")
+    func loadingToggleRestoresMeasurement() {
+        withScene { graph, _, _, _ in
+            let oldText = TextEnvironmentHolder.current
+            TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+            defer { TextEnvironmentHolder.current = oldText }
+            let harness = LoadingHarness()
+            graph.install(root: harness)
+            graph.computeLayout(width: 200, height: 60)
+            let initialLabel = nodes(graph.tree.root!).first { $0.accessibility?.role == .staticText }
+            let initialSize = initialLabel?.frame.size
+            #expect((initialSize?.width ?? 0) > 0)
+            #expect((initialSize?.height ?? 0) > 0)
+
+            for loading in [true, false, true, false] {
+                harness.loading = loading
+                graph.recomposer.commitAll()
+                graph.computeLayout(width: 200, height: 60)
+                let label = nodes(graph.tree.root!).first {
+                    $0.accessibility?.role == .staticText && graph.layoutNode(for: $0)?.hasMeasureFunc == true
+                }
+                #expect(label?.accessibility?.label == "Save")
+                #expect(label?.frame.size == initialSize)
+                if let layout = label.flatMap({ graph.layoutNode(for: $0) }) {
+                    #expect(layout.hasMeasureFunc)
+                    #expect(layout.textMeasure != nil)
+                } else {
+                    Issue.record("Missing label layout")
+                }
+            }
+        }
+    }
+
     @Test("Loading blocks activation and cancels the spinner on unmount")
     func loadingLifecycle() {
         withScene { graph, registry, _, _ in

@@ -7,6 +7,20 @@
   "imports": [],
   "composable_host_capabilities": [],
   "contributes": {
+    "guava.agent/v1": [
+      {
+        "id": "assistant",
+        "title": "Assistant",
+        "panels": [
+          {
+            "id": "intent-input",
+            "title": "Harness",
+            "slot": "trailing",
+            "icon": "ai-intent"
+          }
+        ]
+      }
+    ],
     "guava.ai.provider/v1": [
       {
         "id": "anthropic",

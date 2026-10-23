@@ -107,9 +107,27 @@ public final class LayoutNode: @unchecked Sendable {
     // MARK: - Tree
 
     public func addChild(_ child: LayoutNode) {
-        if calculation.custom == nil { YGNodeInsertChild(ygNode, child.ygNode, children.count) }
+        if calculation.custom == nil {
+            // Reusing a measured leaf as a container ends its old measurement.
+            setMeasureFunc(nil)
+            YGNodeInsertChild(ygNode, child.ygNode, children.count)
+        }
         child.parent = self
         children.append(child)
+        markLayoutDirtyHint()
+    }
+
+    private func syncMeasureFuncWithChildren() {
+        // Custom layouts own authored children in independent Yoga trees.
+        let wantsMeasure = measureClosure != nil && YGNodeGetChildCount(ygNode) == 0
+        guard wantsMeasure != hasMeasureFunc else { return }
+        if wantsMeasure {
+            YGNodeSetContext(ygNode, Unmanaged.passUnretained(self).toOpaque())
+            YGNodeSetMeasureFunc(ygNode, layoutNodeMeasureTrampoline)
+        } else {
+            YGNodeSetMeasureFunc(ygNode, nil)
+            YGNodeSetContext(ygNode, nil)
+        }
         markLayoutDirtyHint()
     }
 
@@ -120,6 +138,7 @@ public final class LayoutNode: @unchecked Sendable {
         children.removeAll { $0 === child }
         if children.count != previousCount {
             child.parent = nil
+            syncMeasureFuncWithChildren()
             markLayoutDirtyHint()
         }
     }
@@ -526,20 +545,12 @@ public final class LayoutNode: @unchecked Sendable {
     fileprivate var _measureClosure: MeasureFunc? { measureClosure }
 
     /// Sets a measure callback for leaf nodes (e.g. Text). Calling `nil` clears it.
+    ///
+    /// When replacing a container, defer installation until reconciliation
+    /// removes its Yoga children. Custom layouts remain Yoga leaves.
     public func setMeasureFunc(_ closure: MeasureFunc?) {
-        let hadMeasureFunc = measureClosure != nil
-        self.measureClosure = closure
-        if closure == nil {
-            guard hadMeasureFunc else { return }
-            YGNodeSetMeasureFunc(ygNode, nil)
-            YGNodeSetContext(ygNode, nil)
-            markLayoutDirtyHint()
-            return
-        }
-        guard !hadMeasureFunc else { return }
-        YGNodeSetContext(ygNode, Unmanaged.passUnretained(self).toOpaque())
-        YGNodeSetMeasureFunc(ygNode, layoutNodeMeasureTrampoline)
-        markLayoutDirtyHint()
+        measureClosure = closure
+        syncMeasureFuncWithChildren()
     }
 
     /// Mark this node's measurement as stale (call after content changes).
@@ -547,13 +558,14 @@ public final class LayoutNode: @unchecked Sendable {
     /// callers should guard with `hasMeasureFunc` when applying generic
     /// modifiers.
     public func markDirty() {
+        guard hasMeasureFunc else { return }
         YGNodeMarkDirty(ygNode)
         markLayoutDirtyHint()
     }
 
-    /// True iff this node has a custom measure callback installed via
-    /// `setMeasureFunc`. Use to gate `markDirty()` from generic modifiers.
-    public var hasMeasureFunc: Bool { measureClosure != nil }
+    /// True iff Yoga has a measure callback installed. Use to gate `markDirty()`
+    /// from generic modifiers.
+    public var hasMeasureFunc: Bool { YGNodeHasMeasureFunc(ygNode) }
 
     private func applyWidthStyle(_ style: LayoutStyleValue) {
         guard widthStyle != style else { return }

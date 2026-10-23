@@ -5,6 +5,9 @@ public import GuavaUICompose
 extension EditorApplication {
     public var languageCatalog: LanguageCatalog { pluginSession.languages }
     public var aiProviderCatalog: AIProviderCatalog { pluginSession.providers }
+    /// Enabled agents. Empty means this editor has no assistant surface.
+    public var agentCatalog: AgentCatalog { pluginSession.agents }
+    public var isAgentEnabled: Bool { !pluginSession.agents.isEmpty }
 
     public var themeCatalog: ThemeCatalogSnapshot { pluginSession.contributions.themes.snapshot }
 

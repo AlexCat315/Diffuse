@@ -23,7 +23,9 @@ struct SettingsSidebar: View {
             for item in [SettingsCategory.general, .editor] { AnyView(destination(item)) }
             Text(L("TOOLS & HARNESS")).font(.caption).foregroundColor(.onSurfaceMuted)
                 .padding(EdgeInsets(top: 24, leading: 20, bottom: 8, trailing: 20))
-            for item in [SettingsCategory.harness, .plugins, .shortcuts] { AnyView(destination(item)) }
+            for item in [SettingsCategory.harness, .plugins, .shortcuts] where item != .harness || app.isAgentEnabled {
+                AnyView(destination(item))
+            }
             Spacer(minLength: 24)
             destination(.about)
             Row(alignment: .center, spacing: 6) {
@@ -48,6 +50,7 @@ struct SettingsSidebar: View {
 
 struct SettingsCategoryMenu: View {
     let category: SettingsCategory
+    let showsHarness: Bool
     let onSelect: (SettingsCategory) -> Void
     @State private var isPresented = false
 
@@ -59,7 +62,7 @@ struct SettingsCategoryMenu: View {
             }.frame(width: 44, height: 32).background(.surfaceVariant).cornerRadius(6)
                 .accessibility { $0.label = L("Settings categories"); $0.value = category.title }
         } content: {
-            Menu(SettingsCategory.allCases.map { item in
+            Menu(SettingsCategory.allCases.filter { $0 != .harness || showsHarness }.map { item in
                 .item(MenuItem(id: item.rawValue, title: item.title, isSelected: item == category, action: {
                     onSelect(item); isPresented = false
                 }))

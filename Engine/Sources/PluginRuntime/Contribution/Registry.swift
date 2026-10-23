@@ -122,6 +122,7 @@ public struct ContributionPointRegistry: Sendable {
         try! registry.register(VersionControlContributionPoint.self)
         try! registry.register(TaskContributionPoint.self)
         try! registry.register(AIProviderContributionPoint.self)
+        try! registry.register(AgentContributionPoint.self)
         try! registry.register(ThemeContributionPoint.self)
         return registry
     }()

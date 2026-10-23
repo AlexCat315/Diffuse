@@ -31,7 +31,11 @@ extension EditorApplication {
             try EditorThemeCatalog.validate(package)
             return PluginInspection(package: package, contracts: [])
         }
-        return try resolvedPluginHostClient().inspectPlugin(at: pluginURL)
+        // Inspection is a one-shot read of an uninstalled package: give it a
+        // throwaway process so it never joins the pool serving enabled plugins.
+        let client = PluginHostProcessClient(executableURL: try resolvedPluginHostExecutable())
+        defer { client.stop() }
+        return try client.inspectPlugin(at: pluginURL)
     }
 
     /// Call only after the user has approved the inspection shown by the UI.
@@ -81,12 +85,15 @@ extension EditorApplication {
     func configurePluginRuntime() {
         pluginSession.manager.configureRuntime(PluginRuntimeDriver(activate: { [weak self] url, authorization in
             guard let self else { throw PluginManagerError.stopped }
-            let (client, context) = try await MainActor.run {
-                (try self.resolvedPluginHostClient(), try self.pluginProcessContext(for: authorization))
+            let (hosts, context) = try await MainActor.run {
+                (self.pluginSession.hosts, try self.pluginProcessContext(for: authorization))
             }
+            let pluginID = authorization.pluginID
             let binding = try await Task.detached(priority: .userInitiated) {
-                try client.loadPlugin(at: url, authorization: authorization, processContext: context)
+                try hosts.client(forPluginID: pluginID)
+                    .loadPlugin(at: url, authorization: authorization, processContext: context)
             }.value
+            let client = try hosts.client(forPluginID: pluginID)
             let declarations = (try? await Self.componentDeclarations(for: binding, client: client)) ?? []
             let components = self.pluginSession.components
             components.set(declarations, pluginID: binding.pluginID)
@@ -94,11 +101,16 @@ extension EditorApplication {
                 components?.remove(pluginID: binding.pluginID)
             })
         }, deactivate: { [weak self] binding in
-            guard let client = await MainActor.run(body: { self?.pluginSession.hostClient }) else { return }
+            guard let hosts = await MainActor.run(body: { self?.pluginSession.hosts }) else { return }
             try await Task.detached {
-                try client.unloadPlugin(at: URL(fileURLWithPath: binding.pluginPath))
+                // Unloading drops this plugin's process only; its neighbours
+                // keep their own.
+                if let client = hosts.existing(binding.pluginID) {
+                    try client.unloadPlugin(at: URL(fileURLWithPath: binding.pluginPath))
+                }
+                _ = hosts.discard(binding.pluginID)
             }.value
-        }, stop: { [weak self] in self?.pluginSession.hostClient?.stop() }))
+        }, stop: { [weak self] in self?.pluginSession.hosts.stopAll() }))
     }
 
     @MainActor
@@ -163,9 +175,10 @@ extension EditorApplication {
     @MainActor
     func rebuildPluginExecutor() throws -> PluginCapabilityExecutor? {
         let bindings = pluginSession.manager.activeBindings.values.sorted { $0.pluginID < $1.pluginID }
-        guard !bindings.isEmpty, let client = pluginSession.hostClient else { return nil }
+        guard !bindings.isEmpty else { return nil }
         return try PluginCapabilityExecutor(bindings: bindings,
-            enabledDeclarations: pluginSession.manager.enabledInspections, invoker: client)
+            enabledDeclarations: pluginSession.manager.enabledInspections,
+            invoker: PluginHostRouter(pool: pluginSession.hosts))
     }
 
     @MainActor
@@ -388,23 +401,17 @@ extension EditorApplication {
     }
 
     @MainActor
-    func resolvedPluginHostClient() throws -> PluginHostProcessClient {
+    func resolvedPluginHostExecutable() throws -> URL {
         guard !isShuttingDown else { throw PluginManagerError.stopped }
-        if let existing = pluginSession.hostClient { return existing }
         guard let resolvedURL = trustedPluginHostExecutableURL else {
             throw EditorPluginCapabilityError.pluginHostUnavailable
         }
-        let client = PluginHostProcessClient(executableURL: resolvedURL)
-        client.onInvalidation = { [weak self] generation in
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                Task { @MainActor in
-                    await self.invalidatePluginsAfterHostRestart(generation: generation)
-                }
-            }
-        }
-        pluginSession.hostClient = client
-        return client
+        return resolvedURL
+    }
+
+    @MainActor
+    func resolvedPluginHostClient(forPluginID pluginID: String) throws -> PluginHostProcessClient {
+        try pluginSession.hosts.client(forPluginID: pluginID)
     }
 
     @MainActor
@@ -428,7 +435,7 @@ extension EditorApplication {
         let languageBinding = pluginSession.manager.activeBindings[PluginLanguageService.pluginID]
         let languageWasBound = dynamicScriptManager.languagePlugin.isBound
         if dynamicScriptManager.languagePlugin.bind(languageBinding,
-            client: languageBinding == nil ? nil : pluginSession.hostClient) {
+            client: languageBinding.flatMap { pluginSession.hosts.existing($0.pluginID) }) {
             if languageWasBound { workstation.scripts.stopLanguageServiceForPluginChange() }
             if languageBinding != nil { workstation.scripts.startLanguageServiceForPluginChange() }
         }

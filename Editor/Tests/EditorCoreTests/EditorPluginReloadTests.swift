@@ -146,7 +146,7 @@ final class EditorPluginReloadTests: XCTestCase {
         // Losing the host after enable leaves old dependency bindings stale.
         // Reload reaches unload/load, then the complete executor rejects them;
         // rollback must withdraw the provider and its capability dependents.
-        application.pluginSession.hostClient?.stop()
+        application.pluginSession.hosts.discard("safe.reloadtest")
         do {
             try await application.reloadPlugin(id: "safe.reloadtest")
             XCTFail("Expected the stale dependent binding to reject publication")

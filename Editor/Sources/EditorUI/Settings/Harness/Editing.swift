@@ -16,7 +16,7 @@ struct HarnessSettingsEditor {
     }
 
     func select(_ provider: AIProviderDescriptor?) {
-        update { $0.draft.select(provider); $0.feedback = nil; $0.confirmsKeyRemoval = false }
+        update { $0.draft.select(provider, in: app.aiProviderCatalog); $0.feedback = nil; $0.confirmsKeyRemoval = false }
     }
 
     func reset() { state.wrappedValue = HarnessSettingsState(settings: app.store.aiSettings) }

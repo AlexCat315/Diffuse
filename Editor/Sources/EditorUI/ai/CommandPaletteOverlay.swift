@@ -204,7 +204,7 @@ struct CommandPaletteOverlay: View {
             }
             return lhs.1 == rhs.1 ? lhs.0.id < rhs.0.id : lhs.1 > rhs.1
         }.prefix(60).map { $0.0 }
-        if !commandsOnly && !resourcesOnly && !entitiesOnly {
+        if !commandsOnly && !resourcesOnly && !entitiesOnly && app.isAgentEnabled {
             let text = raw
             let intent = ResultItem(id: "agent.intent", title: text.isEmpty ? L("Open Harness") : L("Ask Guava") + ": " + text,
                 detail: app.isAIAvailable ? L("Work with Harness in this context") : L("Set an AI provider in Settings to enable."),

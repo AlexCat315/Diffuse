@@ -30,9 +30,12 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
     private let runtime: OpaquePointer
     private let invocationLock = NSLock()
     private let processes: PluginProcessService?
+    private let http: PluginHTTPService?
 
-    public init(useInterpreter: Bool = false, processes: PluginProcessService? = nil) throws {
+    public init(useInterpreter: Bool = false, processes: PluginProcessService? = nil,
+                http: PluginHTTPService? = nil) throws {
         self.processes = processes
+        self.http = http
         var error = guava_wasmtime_buffer_t(data: nil, size: 0)
         guard let runtime = guava_wasmtime_runtime_new(useInterpreter ? GUAVA_WASMTIME_INTERPRETER : GUAVA_WASMTIME_AUTOMATIC, &error) else {
             let message = Self.consume(&error)
@@ -145,6 +148,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
             snapshot: querySnapshot,
             grantedImports: Set(package.manifest.imports),
             processes: processes,
+            http: http,
             pluginID: package.manifest.id,
             entryPoint: capabilityName
         )
@@ -332,15 +336,18 @@ private final class QueryEnvironment: @unchecked Sendable {
     let snapshot: PluginQuerySnapshot?
     let grantedImports: Set<PluginImportPermission>
     let processes: PluginProcessService?
+    let http: PluginHTTPService?
     let pluginID: String
     let entryPoint: String
 
     init(snapshot: PluginQuerySnapshot?,
          grantedImports: Set<PluginImportPermission>,
-         processes: PluginProcessService?, pluginID: String, entryPoint: String) {
+         processes: PluginProcessService?, http: PluginHTTPService?,
+         pluginID: String, entryPoint: String) {
         self.snapshot = snapshot
         self.grantedImports = grantedImports
         self.processes = processes
+        self.http = http
         self.pluginID = pluginID
         self.entryPoint = entryPoint
     }
@@ -351,6 +358,12 @@ private final class QueryEnvironment: @unchecked Sendable {
                 throw PluginProcessError.notAuthorized
             }
             return try processes.response(pluginID: pluginID, entryPoint: entryPoint, request: request)
+        }
+        if importName == PluginImportPermission.http.rawValue {
+            guard grantedImports.contains(.http), let http else {
+                throw PluginHTTPError.notAuthorized
+            }
+            return try http.response(pluginID: pluginID, request: request)
         }
         guard let snapshot else {
             throw PluginQuerySnapshotError.importNotGranted(importName)

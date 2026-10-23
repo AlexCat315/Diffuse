@@ -98,6 +98,7 @@ extension EditorApplication {
             }
             try? await self.activatePlugins(event: "onStartup")
             self.refreshContributionSnapshots()
+            self.rebuildAgentSurfaces()
             await self.workstation.versionControl.refresh()
             await self.workstation.tasks.refresh()
         }
@@ -108,6 +109,7 @@ extension EditorApplication {
     public func setBundledPlugin(_ plugin: BundledPlugin, enabled: Bool) async {
         if enabled { await enableBundledPlugin(plugin) }
         else { await disablePluginFromManagement(id: plugin.id) }
+        rebuildAgentSurfaces()
         await workstation.versionControl.refresh()
         await workstation.tasks.refresh()
     }
@@ -125,11 +127,18 @@ extension EditorApplication {
         if pluginSession.providerRevision != providers.revision {
             pluginSession.providers = AIProviderCatalog(packages: providers.values.map(\.value))
             pluginSession.providerRevision = providers.revision
+            pluginSession.aiProvider = pluginSession.providers.provider(
+                id: store.state.assistant.aiSettings.providerID)
         }
         let languages = contributions.languages.snapshot
         if pluginSession.languageRevision != languages.revision {
             pluginSession.languages = LanguageCatalog(packages: languages.values.map(\.value))
             pluginSession.languageRevision = languages.revision
+        }
+        let agents = contributions.agents.snapshot
+        if pluginSession.agentRevision != agents.revision {
+            pluginSession.agents = AgentCatalog(packages: agents.values.map(\.value))
+            pluginSession.agentRevision = agents.revision
         }
         displayInvalidationHandler?()
     }

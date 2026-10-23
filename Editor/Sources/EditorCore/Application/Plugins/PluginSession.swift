@@ -10,12 +10,9 @@ struct PendingPluginApproval {
 
 /// The lifecycle owner, host infrastructure and domain snapshots of one editor.
 final class PluginSession: @unchecked Sendable {
-    private let hostLock = NSLock()
-    private var host: PluginHostProcessClient?
-    var hostClient: PluginHostProcessClient? {
-        get { hostLock.withLock { host } }
-        set { hostLock.withLock { host = newValue } }
-    }
+    /// One host process per plugin: a fault in one plugin cannot stall or kill
+    /// another. The pool is filled on first use.
+    let hosts: PluginHostPool
     let manager: PluginManager
     let contributions = PluginContributions()
     let runtime: PluginRuntimeAccess
@@ -29,13 +26,18 @@ final class PluginSession: @unchecked Sendable {
     var aiAuthorities: [String: PluginCapabilityAuthority] = [:]
     var languages = LanguageCatalog()
     var providers = AIProviderCatalog()
+    var agents = AgentCatalog.empty
+    var agentRevision: UInt64?
     var aiProvider: AIProviderDescriptor?
     var packageMonitor: PluginPackageMonitor?
     var bundledStartup: Task<Void, Never>?
     @MainActor var projection: Task<Void, Error>?
 
-    init(projectDirectory: String) throws {
+    init(projectDirectory: String,
+         hostExecutable: @escaping @Sendable () throws -> URL,
+         onHostCrash: @escaping @Sendable (String) -> Void = { _ in }) throws {
         authorizationStore = EditorPluginAuthorizationStore(projectDirectory: projectDirectory)
+        hosts = PluginHostPool(executable: hostExecutable, onCrash: onHostCrash)
         let registry = CapabilityRegistry.aiDefault
         manager = PluginManager(registrar: try contributions.registrar(),
             hostCapabilities: Dictionary(uniqueKeysWithValues: registry.allVerbs().compactMap { id in
@@ -50,7 +52,7 @@ final class PluginSession: @unchecked Sendable {
         packageMonitor?.stop()
         packageMonitor = nil
         manager.stop()
-        hostClient = nil
+        hosts.stopAll()
         pendingApproval = nil
     }
 }

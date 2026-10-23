@@ -58,7 +58,7 @@ public struct PluginCapabilityExecutor: Sendable {
             guard byID.updateValue(binding, forKey: binding.pluginID) == nil else {
                 throw PluginCapabilityExecutorError.duplicatePlugin(binding.pluginID)
             }
-            try binding.validate(hostGeneration: invoker.generation)
+            try invoker.validate(binding)
             authorities[binding.pluginID] = binding.authority
         }
         self.hostRegistry = hostRegistry
@@ -102,7 +102,7 @@ public struct PluginCapabilityExecutor: Sendable {
             pluginAuthorityValidator: { authority in
                 guard let binding = expectedBindings[authority.pluginID],
                       binding.authority == authority else { return false }
-                return (try? binding.validate(hostGeneration: liveInvoker.generation)) != nil
+                return (try? liveInvoker.validate(binding)) != nil
             }
         )
     }
@@ -349,7 +349,7 @@ public struct PluginCapabilityExecutor: Sendable {
             throw PluginCapabilityExecutorError.authorityChanged(pluginID)
         }
         do {
-            try binding.validate(hostGeneration: invoker.generation)
+            try invoker.validate(binding)
         } catch {
             throw PluginCapabilityExecutorError.authorityChanged(pluginID)
         }
@@ -373,7 +373,7 @@ public struct PluginCapabilityExecutor: Sendable {
 
     private func ensureLive(_ binding: PluginExecutionBinding) throws {
         do {
-            try binding.validate(hostGeneration: invoker.generation)
+            try invoker.validate(binding)
         } catch {
             throw PluginCapabilityExecutorError.authorityChanged(binding.pluginID)
         }

@@ -1,5 +1,6 @@
 @testable import EditorUI
-import EditorCore
+@testable import EditorCore
+import PluginRuntime
 import SceneRuntime
 import ScriptRuntime
 import Foundation
@@ -11,6 +12,14 @@ import Testing
 @Suite("Unified authoring workbench", .serialized)
 @MainActor
 struct AuthoringWorkspaceTests {
+    /// Bundled AI/agent support, as the editor loads it at launch.
+    private static func enableAgent(in app: EditorApplication) throws {
+        let plugin = try #require(BundledPlugins.plugin(id: "studio.ai"))
+        let package = try PluginPackageLoader().load(at: plugin.package)
+        app.pluginSession.providers = AIProviderCatalog(packages: [package])
+        app.pluginSession.agents = AgentCatalog(packages: [package])
+    }
+
     private final class ResizingTitle: View {
         let app: EditorApplication
         @State private var width: Float = 1280
@@ -88,6 +97,7 @@ struct AuthoringWorkspaceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: true)
         defer { app.shutdown() }
+        try Self.enableAgent(in: app)
         let registry = EditorRootViewFactory.makeRegistry(app: app)
         let document = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelDefault, registry: registry)
         let controller = WorkspaceController(document: document)
@@ -182,6 +192,7 @@ struct AuthoringWorkspaceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path)
         defer { app.shutdown() }
+        try Self.enableAgent(in: app)
         let registry = EditorRootViewFactory.makeRegistry(app: app)
         let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
             mode: .documents, preset: .documentsDefault, registry: registry))

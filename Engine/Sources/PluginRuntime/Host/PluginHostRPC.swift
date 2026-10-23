@@ -131,7 +131,7 @@ public struct PluginQuerySnapshot: Codable, Sendable, Equatable {
         case .sceneQuery: return scene
         case .selectionQuery: return selection
         case .assetMetadataQuery: return assetMetadata
-        case .process: return nil
+        case .process, .http: return nil
         }
     }
 }
@@ -158,7 +158,16 @@ public enum PluginPreparedCapabilityResult: Sendable, Equatable {
 /// Narrow seam used by AIRuntime. Tests can provide a deterministic invoker;
 /// production uses the isolated `PluginHostProcessClient` implementation.
 public protocol PluginCapabilityInvoking: Sendable {
+    /// The process generation the invoker currently serves. Single-process
+    /// invokers compare it against every binding; per-plugin invokers override
+    /// `validate(_:)` instead.
     var generation: UInt64 { get }
+
+    /// Validates a binding against the process that currently owns its plugin.
+    ///
+    /// Processes are per plugin, so there is no meaningful host-wide
+    /// generation: a restart invalidates one plugin, not all of them.
+    func validate(_ binding: PluginExecutionBinding) throws
 
     func prepareCapability(
         binding: PluginExecutionBinding,
@@ -166,6 +175,13 @@ public protocol PluginCapabilityInvoking: Sendable {
         input: Data,
         querySnapshot: PluginQuerySnapshot?
     ) throws -> PluginPreparedCapabilityResult
+}
+
+extension PluginCapabilityInvoking {
+    /// Single-process invokers have one generation for every binding.
+    public func validate(_ binding: PluginExecutionBinding) throws {
+        try binding.validate(hostGeneration: generation)
+    }
 }
 
 public enum PluginHostFrameError: Error, Sendable, Equatable {

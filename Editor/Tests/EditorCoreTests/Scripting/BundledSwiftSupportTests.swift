@@ -162,8 +162,25 @@ struct BundledSwiftSupportTests {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         for package in BundledPlugins.catalog.map(\.package) {
-            let source = root.appendingPathComponent("Plugins/" + package.deletingPathExtension().lastPathComponent)
-            for file in ["plugin.json", "capabilities.wit"] {
+            // Sources are grouped by domain (`Plugins/Themes/Default`), while a
+            // package file may sit at either depth.
+            let name = package.deletingPathExtension().lastPathComponent
+            let manifestID = try #require(try? PluginPackageLoader().load(at: package)).manifest.id
+            let plugins = root.appendingPathComponent("Plugins")
+            let candidates = ((try? FileManager.default.subpathsOfDirectory(atPath: plugins.path)) ?? [])
+                .filter { $0.hasSuffix("plugin.json") }
+                .map { plugins.appendingPathComponent($0).deletingLastPathComponent() }
+            let source = candidates.first { directory in
+                guard let data = try? Data(contentsOf: directory.appendingPathComponent("plugin.json")),
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    return false
+                }
+                return object["id"] as? String == manifestID
+            } ?? plugins.appendingPathComponent(name)
+            // Declarative packages own no component, so they ship no contract.
+            let shipsContract = FileManager.default.fileExists(
+                atPath: package.appendingPathComponent("capabilities.wit").path)
+            for file in ["plugin.json"] + (shipsContract ? ["capabilities.wit"] : []) {
                 #expect(try Data(contentsOf: source.appendingPathComponent(file)) == Data(contentsOf: package.appendingPathComponent(file)),
                         "\(package.lastPathComponent)/\(file) is out of date; run guava plugin build")
             }

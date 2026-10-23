@@ -221,21 +221,21 @@ struct EditorPanelWorkflowTests {
         #expect(draft.model.isEmpty)
 
         draft.apiKey = "secret-for-openai"
-        draft.select(openai)
+        draft.select(openai, in: .bundled)
         #expect(draft.model.stringValue == openai.defaultModel)
         #expect(draft.apiKey.isEmpty)
 
         draft.apiKey = "openai-secret"
-        draft.select(openai)
+        draft.select(openai, in: .bundled)
         #expect(draft.apiKey.stringValue == "openai-secret")
 
         draft.model = "custom-compatible-model"
-        draft.select(deepseek)
+        draft.select(deepseek, in: .bundled)
         #expect(draft.model.stringValue == "custom-compatible-model")
         #expect(draft.apiKey.isEmpty)
 
         draft.model = TextBuffer(deepseek.defaultModel)
-        draft.select(anthropic)
+        draft.select(anthropic, in: .bundled)
         #expect(draft.model.stringValue == anthropic.defaultModel)
     }
 

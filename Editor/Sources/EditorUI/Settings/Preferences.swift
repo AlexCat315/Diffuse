@@ -20,7 +20,9 @@ struct SettingsPanel: View {
     var body: some View {
         ContainerSizeReader { size in
             let wide = size.width >= 760
-            let sections = SettingsSectionID.visible(category: navigation.category, query: navigation.query.stringValue)
+            let sections = SettingsSectionID.visible(category: navigation.category,
+                                                     query: navigation.query.stringValue,
+                                                     agentEnabled: app.isAgentEnabled)
             let editor = HarnessSettingsEditor(app: app, state: Binding(get: { harness }, set: {
                 harness = $0; session.harness = $0
             }), onChange: EditorSettingsPersistence(app: app).didChange)
@@ -75,7 +77,8 @@ struct SettingsPanel: View {
                 // share a node.
                 Box(direction: .row, alignItems: .center, justifyContent: .center) {
                     Row(alignment: .center, spacing: 10) {
-                        if !wide { SettingsCategoryMenu(category: navigation.category, onSelect: select) }
+                        if !wide { SettingsCategoryMenu(category: navigation.category,
+                                                           showsHarness: app.isAgentEnabled, onSelect: select) }
                         Row(alignment: .center, spacing: 10) {
                             Icon(UIIcons.Action.search, size: 15, color: .onSurfaceMuted)
                             TextField(L("Search all settings…"), text: Binding(get: { navigation.query }, set: {

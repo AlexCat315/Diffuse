@@ -26,7 +26,7 @@ extension EditorApplication {
         guard text.utf8.count <= 64 * 1_024 else { throw DocumentFormattingError.inputTooLarge }
         try await activatePlugins(event: "onLanguage:" + languageID)
         guard let binding = pluginSession.manager.activeBindings[format.pluginID] else { throw DocumentFormattingError.unavailable }
-        guard let client = pluginSession.hostClient else {
+        guard let client = pluginSession.hosts.existing(format.pluginID) else {
             return nil
         }
         let input = try JSONEncoder().encode(["text": text])

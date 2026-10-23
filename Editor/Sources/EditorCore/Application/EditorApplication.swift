@@ -112,7 +112,13 @@ public final class EditorApplication: @unchecked Sendable {
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
-        let pluginSession = try PluginSession(projectDirectory: projectDirectory)
+        // Resolved on first use: a project with no plugins launches nothing.
+        let pluginSession = try PluginSession(projectDirectory: projectDirectory) {
+            guard let url = EditorPluginHostLocator.resolve(injectedURL: trustedPluginHostExecutableURL) else {
+                throw EditorPluginCapabilityError.pluginHostUnavailable
+            }
+            return url
+        }
         let scene = EditorSceneAdapter(seedPreviewScene: seedPreviewScene,
                                        componentRegistry: pluginSession.components.registry())
         scene.setEditorViewportCameraEnabled(true)
@@ -200,18 +206,19 @@ public final class EditorApplication: @unchecked Sendable {
             injectedURL: trustedPluginHostExecutableURL
         )
         self.session = initialSession
-        pluginSession.aiProvider = AIProviderCatalog.bundled.provider(id: initialAISettings.providerID)
+        pluginSession.aiProvider = pluginSession.providers.provider(id: initialAISettings.providerID)
         self.perceptionService = ps
         pluginSession.runtime.configure { [weak self] id, event in
             guard let self else { throw PluginManagerError.stopped }
             if self.pluginSession.manager.enabledManifests[id] == nil {
                 await self.pluginSession.bundledStartup?.value
             }
+            let hosts = self.pluginSession.hosts
             if let binding = self.pluginSession.manager.activeBindings[id],
-               let client = self.pluginSession.hostClient { return (binding, client) }
+               let client = hosts.existing(id) { return (binding, client) }
             try await self.activatePlugins(event: event)
             guard let binding = self.pluginSession.manager.activeBindings[id] else { throw PluginManagerError.notEnabled(id) }
-            let client = try await MainActor.run { try self.resolvedPluginHostClient() }
+            let client = try hosts.client(forPluginID: id)
             return (binding, client)
         }
         dynamicScriptManager.languagePlugin.requestActivation = { [weak self] in
@@ -454,7 +461,40 @@ public final class EditorApplication: @unchecked Sendable {
     /// credential is missing, so UI should not treat `provider != .none` as
     /// sufficient proof that requests can be submitted.
     public var isAIAvailable: Bool {
-        session != nil
+        isAgentEnabled && session != nil
+    }
+
+    /// Drops or restores the assistant session when the agent package that owns
+    /// it is enabled or disabled. Disabling must leave no runtime behind, not
+    /// merely hide the panel.
+    @MainActor
+    func rebuildAgentSurfaces() {
+        guard !isShuttingDown else { return }
+        if isAgentEnabled {
+            let settings = store.state.assistant.aiSettings
+            guard session == nil, settings.isEnabled else { return }
+            session = Self.makeSession(
+                for: settings,
+                providers: aiProviderCatalog,
+                pluginCapabilityExecutor: pluginCapabilityExecutor,
+                pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider(),
+                toolPolicy: toolAccess.policy
+            )
+            pluginSession.aiProvider = aiProviderCatalog.provider(id: settings.providerID)
+        } else {
+            let oldSession = session
+            cancelActiveAIRequest()
+            session = nil
+            pluginSession.aiProvider = nil
+            agentExecution.assistantMessageID = nil
+            let previousTask = pendingAISetupTask
+            pendingAISetupTask = Task {
+                await previousTask?.value
+                await oldSession?.cancelActiveRun()
+            }
+            store.dispatch(.clearChatHistory)
+        }
+        displayInvalidationHandler?()
     }
 
     public var isSceneAuthoringEnabled: Bool {

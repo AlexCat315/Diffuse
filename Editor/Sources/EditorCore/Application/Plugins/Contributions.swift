@@ -5,6 +5,7 @@ final class PluginContributions: Sendable {
     let themes = EditorThemeCatalog()
     let languages = ContributionCatalog<ValidatedPluginPackage>()
     let providers = ContributionCatalog<ValidatedPluginPackage>()
+    let agents = ContributionCatalog<ValidatedPluginPackage>()
     let tasks = ContributionCatalog<ValidatedPluginPackage>()
     let versionControl = ContributionCatalog<ValidatedPluginPackage>()
 
@@ -19,6 +20,9 @@ final class PluginContributions: Sendable {
         }
         try registrar.register(AIProviderContributionPoint.self) { [providers] values, package in
             try providers.install(values, package: package, point: AIProviderContributionPoint.self, id: { $0.id })
+        }
+        try registrar.register(AgentContributionPoint.self) { [agents] values, package in
+            try agents.install(values, package: package, point: AgentContributionPoint.self, id: { $0.id })
         }
         try registrar.register(TaskContributionPoint.self) { [tasks] values, package in
             try tasks.install(values, package: package, point: TaskContributionPoint.self, id: { $0.id })

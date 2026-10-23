@@ -78,7 +78,7 @@ struct EditorStatusBar: View {
             TaskStatus(app: app) { onCommand(.showPanel("tasks")) }
             activity(snapshot)
             LanguageServerStatus(app: app, snapshot: snapshot, onCommand: onCommand)
-            agent
+            if app.isAgentEnabled { agent }
         }
         .padding(horizontal: 12, vertical: 0)
         .frame(height: 24)

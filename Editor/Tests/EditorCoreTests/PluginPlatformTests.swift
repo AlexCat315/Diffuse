@@ -100,7 +100,7 @@ struct PluginPlatformTests {
         app.store.dispatch(.setThemeID("test.theme"))
         let before = app.store.state.presentation.refreshRevision
         _ = try await app.enablePlugin(at: root, authorization: authorization)
-        #expect(app.pluginSession.hostClient == nil)
+        #expect(app.pluginSession.hosts.pluginIDs.isEmpty)
         #expect(app.pluginSession.manager.activeBindings.isEmpty)
         #expect(app.languageCatalog.descriptor(forExtension: "plgtest")?.id == "fixture")
         #expect(app.languageCatalog.syntaxRules(forLanguageID: "fixture").count == 1)
@@ -120,7 +120,7 @@ struct PluginPlatformTests {
         try await app.disablePlugin(id: "test.theme")
         #expect(!app.themeCatalog.themes.contains { $0.id == "test.theme" })
         #expect(app.languageCatalog.descriptor(forExtension: "plgtest") == nil)
-        #expect(app.pluginSession.hostClient == nil)
+        #expect(app.pluginSession.hosts.pluginIDs.isEmpty)
         let disabled = try #require(app.store.pluginManagement.installed.first { $0.id == "test.theme" })
         #expect(!disabled.lifecycle.isEnabled)
         #expect(disabled.lifecycle.phase == .installed)
@@ -224,3 +224,32 @@ struct PluginPlatformTests {
     }
 }
 
+
+@Suite("Plugin host isolation")
+struct PluginHostIsolationTests {
+    @Test("each plugin gets its own host process")
+    func perPluginProcesses() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pool = PluginHostPool(executable: { root.appendingPathComponent("host") })
+        let first = try pool.client(forPluginID: "fixture.one")
+        let second = try pool.client(forPluginID: "fixture.two")
+        #expect(first !== second)
+        #expect(try pool.client(forPluginID: "fixture.one") === first)
+        #expect(pool.pluginIDs == ["fixture.one", "fixture.two"])
+    }
+
+    @Test("dropping one plugin leaves the others running")
+    func discardIsPerPlugin() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pool = PluginHostPool(executable: { root.appendingPathComponent("host") })
+        let kept = try pool.client(forPluginID: "fixture.kept")
+        _ = try pool.client(forPluginID: "fixture.dropped")
+        _ = pool.discard("fixture.dropped")
+        #expect(pool.pluginIDs == ["fixture.kept"])
+        #expect(try pool.client(forPluginID: "fixture.kept") === kept)
+    }
+}

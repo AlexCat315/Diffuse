@@ -26,7 +26,9 @@ private func createSecureDirectory(at url: URL,
 }
 
 let processService = PluginProcessService()
-let runtime = try EmbeddedWasmtimeComponentRuntime(processes: processService)
+let httpService = PluginHTTPService()
+let runtime = try EmbeddedWasmtimeComponentRuntime(processes: processService,
+                                                   http: httpService)
 let runtimeMode = runtime.usesInterpreter ? "embedded-pulley" : "embedded"
 let capabilityRegistry = CapabilityRegistry.aiDefault
 let loader = PluginPackageLoader(registry: capabilityRegistry)
@@ -204,12 +206,16 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
             }
             if let previous = loadedPackages[package.manifest.id] {
                 processService.unmount(pluginID: package.manifest.id)
+                httpService.unmount(pluginID: package.manifest.id)
                 runtime.interrupt(pluginID: previous.executionCopy.manifest.id)
                 try? FileManager.default.removeItem(at: previous.executionCopy.rootURL)
             }
             if !package.manifest.host.processes.isEmpty {
                 guard let context = request.processContext else { throw PluginProcessError.notAuthorized }
                 try processService.mount(inspection: inspection, authorization: authorization, context: context)
+            }
+            if !package.manifest.host.http.isEmpty {
+                try httpService.mount(inspection: inspection, authorization: authorization)
             }
             loadedPackages[package.manifest.id] = LoadedPlugin(source: package,
                                                                executionCopy: executionCopy,
@@ -303,6 +309,7 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
                 let sourceRoot = URL(fileURLWithPath: path).standardizedFileURL
                 if let entry = loadedPackages.first(where: { $0.value.source.rootURL == sourceRoot }) {
                     processService.unmount(pluginID: entry.key)
+                    httpService.unmount(pluginID: entry.key)
                     runtime.interrupt(pluginID: entry.value.executionCopy.manifest.id)
                     try? FileManager.default.removeItem(at: entry.value.executionCopy.rootURL)
                     loadedPackages.removeValue(forKey: entry.key)
@@ -327,5 +334,8 @@ while true {
         break
     }
 }
-for pluginID in loadedPackages.keys { processService.unmount(pluginID: pluginID) }
+for pluginID in loadedPackages.keys {
+    processService.unmount(pluginID: pluginID)
+    httpService.unmount(pluginID: pluginID)
+}
 try? FileManager.default.removeItem(at: stagingRoot)

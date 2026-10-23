@@ -6,11 +6,12 @@ public enum PluginImportPermission: String, Codable, Sendable, CaseIterable, Has
     case selectionQuery = "guava:selection/query"
     case assetMetadataQuery = "guava:asset/metadata-query"
     case process = "guava:process/host"
+    case http = "guava:http/host"
 
-    public var isSnapshot: Bool { self != .process }
+    public var isSnapshot: Bool { self != .process && self != .http }
 
     /// Bounded host requests. Snapshot imports expose immutable revision data;
-    /// process imports expose nonblocking operations on host-owned resources.
+    /// process and http imports expose nonblocking operations on host-owned resources.
     public var witInterface: String {
         "interface query { query: func(request: string) -> string; }"
     }

@@ -32,6 +32,7 @@ struct SettingsWorkflowTests {
             let providers = try PluginPackageLoader().load(at: providerPlugin.package)
             let app = try EditorApplication(projectDirectory: directory.path)
             app.pluginSession.providers = AIProviderCatalog(packages: [providers])
+            app.pluginSession.agents = AgentCatalog(packages: [providers])
             defer { app.shutdown() }
             try work(app, interactions)
         }
@@ -69,7 +70,7 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = category
-            if category == .harness { session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai")) }
+            if category == .harness { session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled) }
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: SettingsPanel(app: app, session: session).theme(EditorVisualTheme.make(dark: true)))
             for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 740) }
@@ -111,7 +112,7 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .harness
-            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"))
+            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
             session.harness.draft.model = "retained-model"
             let harness = ResizingPreferences(app: app, session: session)
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
@@ -136,7 +137,7 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .harness
-            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"))
+            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
             var surface = UIEnvironment()
             surface.viewport.width = width
             surface.input = width == 390 ? [.touch] : width == 720 ? [.pointer, .touch, .keyboard] : [.pointer, .keyboard]
@@ -161,7 +162,7 @@ struct SettingsWorkflowTests {
         try withApp { app, interactions in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .harness
-            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"))
+            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
             session.harness.draft.model = "my-model"
             session.harness.draft.apiKey = "uncommitted-test-secret"
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
@@ -186,7 +187,7 @@ struct SettingsWorkflowTests {
         try withApp { app, interactions in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .harness
-            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"))
+            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: SettingsPanel(app: app, session: session))
             func settle() { for _ in 0..<5 { graph.recomposer.commitAll(); graph.computeLayout(width: 1040, height: 740) } }
@@ -201,5 +202,53 @@ struct SettingsWorkflowTests {
             #expect(session.navigation.query.stringValue == "vsync")
             #expect(graph.layoutSnapshot().contains { $0.debugName == "settings-vsync" })
         }
+    }
+}
+
+@Suite("Agent surface ownership", .serialized)
+@MainActor
+struct AgentSurfaceTests {
+    private func withApp(_ work: (EditorApplication) throws -> Void) throws {
+        try WorkbenchUITestSupport.withEnvironment { _, _ in
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("agent-surface-\(UUID())")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let key = "GUAVA_EDITOR_STATE_DIRECTORY"
+            let previous = ProcessInfo.processInfo.environment[key]
+            #expect(WorkbenchUITestSupport.setEnvironmentValue(directory.path, for: key))
+            defer {
+                _ = WorkbenchUITestSupport.setEnvironmentValue(previous, for: key)
+                try? FileManager.default.removeItem(at: directory)
+            }
+            let app = try EditorApplication(projectDirectory: directory.path)
+            defer { app.shutdown() }
+            try work(app)
+        }
+    }
+
+    @Test("Disabling the agent package removes the assistant panel from the workbench")
+    func agentPanelFollowsPackageState() throws {
+        try withApp { app in
+            let plugin = try #require(BundledPlugins.plugin(id: "studio.ai"))
+            let package = try PluginPackageLoader().load(at: plugin.package)
+            app.pluginSession.agents = AgentCatalog(packages: [package])
+            #expect(app.isAgentEnabled)
+
+            let enabled = EditorRootViewFactory.makeRegistry(app: app)
+            #expect(enabled.descriptor(for: "intent-input") != nil)
+
+            app.pluginSession.agents = .empty
+            let disabled = EditorRootViewFactory.makeRegistry(app: app)
+            #expect(disabled.descriptor(for: "intent-input") == nil)
+            #expect(!app.isAgentEnabled)
+            #expect(!app.isAIAvailable)
+        }
+    }
+
+    @Test("Without an agent package the Harness settings section is not offered")
+    func harnessSettingsHideWithoutAgent() {
+        let hidden = SettingsSectionID.visible(category: .harness, query: "", agentEnabled: false)
+        #expect(hidden.isEmpty)
+        #expect(SettingsSectionID.visible(category: .harness, query: "", agentEnabled: true) == [.provider, .execution, .capabilities])
+        #expect(SettingsSectionID.visible(category: .general, query: "harness", agentEnabled: false).isEmpty)
     }
 }

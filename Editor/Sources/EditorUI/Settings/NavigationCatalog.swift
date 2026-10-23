@@ -95,8 +95,11 @@ enum SettingsSectionID: String, CaseIterable, Sendable {
         }
     }
 
-    static func visible(category: SettingsCategory, query: String) -> [Self] {
+    static func visible(category: SettingsCategory, query: String,
+                        agentEnabled: Bool = true) -> [Self] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return allCases.filter { query.isEmpty ? $0.category == category : $0.matches(query) }
+        return allCases.filter { section in
+            agentEnabled || section.category != .harness
+        }.filter { query.isEmpty ? $0.category == category : $0.matches(query) }
     }
 }

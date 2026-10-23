@@ -152,7 +152,7 @@ enum EditorRootViewFactory {
         let agentDraft = AgentDraft()
         let terminal = EditorTerminal(projectDirectory: app.projectDirectory)
         terminal.follow(app.workstation.tasks) { app.showPanel("terminal") }
-        return WorkspacePanelRegistry([
+        var registry = WorkspacePanelRegistry([
             WorkspacePanelDescriptor(id: "hierarchy", title: localizedPanelTitle(for: "hierarchy"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.hierarchy" }) {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
@@ -175,9 +175,6 @@ enum EditorRootViewFactory {
             },
             WorkspacePanelDescriptor(id: "assets", title: localizedPanelTitle(for: "assets"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.assets" }) {
                 AssetBrowserPanel(app: app)
-            },
-            WorkspacePanelDescriptor(id: "intent-input", title: localizedPanelTitle(for: "intent-input"), defaultSlot: .trailing, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.intent-input" }) {
-                IntentInputPanel(app: app, draft: agentDraft)
             },
             WorkspacePanelDescriptor(id: "journal", title: localizedPanelTitle(for: "journal"), defaultSlot: .trailing,
                                      configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.journal" }) {
@@ -215,6 +212,25 @@ enum EditorRootViewFactory {
                 MediaTimelinePanel(model: app.workstation.media, projectRoot: URL(fileURLWithPath: app.projectDirectory))
             },
         ])
+        // The assistant surface belongs to an agent package. Without one the
+        // editor has no panel, and disabling the package reconciles it away.
+        for agent in app.agentCatalog.agents {
+            for panel in agent.panels where registry.descriptor(for: WorkspacePanelID(rawValue: panel.id)) == nil {
+                let iconKey = "panel." + panel.id
+                WorkspacePanelIconCatalog.register(iconKey,
+                    .svg(named: panel.icon ?? "ai-intent", in: EditorAppResourceBundle.bundle,
+                         subdirectory: "PanelIcons"))
+                registry.register(WorkspacePanelDescriptor(
+                    id: WorkspacePanelID(rawValue: panel.id),
+                    title: panel.title,
+                    defaultSlot: WorkspaceSlotID(rawValue: panel.slot),
+                    configure: { $0.isCollapsible = true; $0.iconAssetKey = iconKey }
+                ) {
+                    IntentInputPanel(app: app, draft: agentDraft)
+                })
+            }
+        }
+        return registry
     }
 
     private static func registerPanelIcons() {
