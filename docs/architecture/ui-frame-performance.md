@@ -1,3 +1,14 @@
+---
+path: /zh/docs/architecture/ui-frame-performance
+title: 'UI 帧调度与性能验证'
+description: '窗口帧调度、辅助功能快照与进度动画的性能验证'
+locale: zh
+translationKey: architecture/ui-frame-performance
+category: architecture
+order: 110
+kind: doc
+---
+
 # UI 帧调度与性能验证
 
 2026-10-21，在 Apple M1 / Metal、60 Hz、1280 × 720 逻辑分辨率（2560 × 1440 drawable）的 Debug Gallery 中，对 Progress / Spinner 页面采集 120 个真实窗口帧，预热 20 帧。页面包含 2667 个节点，镜像回读关闭。
