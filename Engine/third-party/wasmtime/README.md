@@ -30,7 +30,7 @@ swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-
 | Windows MSVC | x86_64、arm64 | Wasmtime 原生 / 可选 Pulley |
 | Linux glibc | x86_64、aarch64 | Wasmtime 原生 / 可选 Pulley |
 | Android | arm64、x86_64 | Wasmtime 原生 / 可选 Pulley |
-| iOS 16+ | arm64；arm64/x86_64 Simulator | 强制 Pulley |
+| iOS 26+ | arm64；arm64/x86_64 Simulator | 强制 Pulley |
 | 浏览器 | 独立 Web 交付流程 | 见 [插件执行说明](../../../../docs/architecture/plugin-execution.md) |
 
 此表描述插件运行库的目标，其他 Engine/GuavaUI 模块和应用构建命令仍以各自支持矩阵为准。预编译 Linux 包使用 glibc，不包括 musl；Android UI 工具链目前仍以 arm64 为应用目标。

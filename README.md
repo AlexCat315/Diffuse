@@ -20,7 +20,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 | Text shaping / rendering | HarfBuzz + FreeType |
 | Physics | Jolt Physics |
 | Platform shell | SDL3 / native |
-| Target platform (first) | macOS 14+ (Sonoma); Linux & Windows in progress |
+| Target platform (first) | macOS 26+; Linux & Windows in progress |
 
 The repository ships three top-level SwiftPM packages plus an MCP server:
 
