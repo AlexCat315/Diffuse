@@ -1,4 +1,3 @@
-import CoreFoundation
 import Foundation
 import SIMDCompat
 
@@ -97,10 +96,10 @@ public enum ScriptPropertyValue: Sendable, Equatable, Codable {
         case .string:
             return (value as? String).map(Self.string)
         case .boolean:
-            guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+            guard let number = value as? NSNumber, (number === NSNumber(value: true) || number === NSNumber(value: false)) else { return nil }
             return .boolean(number.boolValue)
         case .number, .integer, .entity:
-            guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+            guard let number = value as? NSNumber, number !== NSNumber(value: true), number !== NSNumber(value: false),
                   number.doubleValue.isFinite else { return nil }
             switch self {
             case .integer: return Int(exactly: number.doubleValue).map(Self.integer)

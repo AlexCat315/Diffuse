@@ -13,7 +13,8 @@ on:
       - 'Editor/guava.json'
       - 'guava'
       - 'guava.cmd'
-      - 'Tools/Developer/**'
+      - 'Tools/Developer/Package.swift'
+      - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
   pull_request:
     paths:
@@ -26,7 +27,8 @@ on:
       - 'Editor/guava.json'
       - 'guava'
       - 'guava.cmd'
-      - 'Tools/Developer/**'
+      - 'Tools/Developer/Package.swift'
+      - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
 
 concurrency:

@@ -4,7 +4,7 @@
     "name": "GuavaStudio"
   },
   "toolchain": {
-    "sdkVersion": "0.1.2"
+    "sdkVersion": "0.1.3"
   },
   "targets": {
     "platforms": [
@@ -13,7 +13,9 @@
       "linux"
     ],
     "desktopExecutable": "EditorApp",
-    "desktopHelpers": ["GuavaPluginHost"]
+    "desktopHelpers": [
+      "GuavaPluginHost"
+    ]
   },
   "version": {
     "name": "0.1.0",

@@ -40,7 +40,12 @@ public final class ProcessSession: @unchecked Sendable {
         process.standardError = errors
         ProcessPlatform.prepareInput(input.fileHandleForWriting)
         process.terminationHandler = { [weak self] process in self?.terminated(process.terminationStatus) }
-        do { try process.run() } catch { close(); throw error }
+        do { try process.run() } catch {
+            try? output.fileHandleForReading.close()
+            try? errors.fileHandleForReading.close()
+            close()
+            throw error
+        }
         installReader(output.fileHandleForReading, isError: false)
         installReader(errors.fileHandleForReading, isError: true)
         ProcessPlatform.isolate(process.processIdentifier)
@@ -75,6 +80,9 @@ public final class ProcessSession: @unchecked Sendable {
 
     private func installReader(_ handle: FileHandle, isError: Bool) {
         let thread = Thread { [weak self] in
+            // The reader owns this handle until its blocking read completes.
+            // Closing it from deinit races fileDescriptor access on macOS.
+            defer { try? handle.close() }
             do {
                 while true {
                     let data = try ProcessPlatform.read(from: handle)
@@ -121,8 +129,6 @@ public final class ProcessSession: @unchecked Sendable {
         process.terminationHandler = nil
         ProcessPlatform.terminate(process, force: true)
         try? input.fileHandleForWriting.close()
-        try? output.fileHandleForReading.close()
-        try? errors.fileHandleForReading.close()
     }
 }
 #else

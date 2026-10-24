@@ -407,8 +407,12 @@ struct DeveloperProfilerOverview: View {
                                        .line(simulation, color: .accentSecondary)],
                              thresholds: [ChartThreshold(value: 16.7, color: .warning)],
                              style: ChartStyle(minValue: 0, maxValue: domainMax,
-                                               gridLineCount: 4, lineWidth: 1.4,
-                                               contentInset: 4, background: .surfaceSunken))
+                                               lineWidth: 1.4,
+                                               contentInset: 4, background: .surfaceSunken)) {
+                    $0.axis.y.tickCount = 4
+                    $0.axis.x.isLabeled = false
+                    $0.axis.y.isLabeled = false
+                }
                     .flex(1, shrink: 1, basis: 0)
                     .frame(minWidth: 0, minHeight: 24)
                     .debugName("profiler-overview-chart")
@@ -1041,12 +1045,15 @@ private struct DeveloperProfilerFrameGraph: View {
                                                    selectedSample: selectedSample).map { [$0] } ?? [],
                          style: ChartStyle(minValue: 0,
                                            maxValue: graphMaxValue,
-                                           gridLineCount: 5,
                                            lineWidth: 2.0,
                                            barSpacing: 1,
                                            contentInset: 6,
                                            background: .surfaceSunken,
-                                           gridColor: .divider))
+                                           gridColor: .divider)) {
+                $0.axis.y.tickCount = 5
+                $0.axis.x.isLabeled = false
+                $0.axis.y.isLabeled = false
+            }
                 .frame(height: 76)
         }
         .padding(horizontal: 10, vertical: 8)
@@ -1651,19 +1658,22 @@ private struct DeveloperPerformanceMonitorGraphCard: View {
                     .buttonStyle(.ghost)
                 }
 
-                Chart([ChartSeries(values: monitor.values,
+                Chart([ChartSeries(monitor.values,
                                    color: monitor.status == .nominal ? monitor.category.color : developerPerformanceStatusColor(monitor.status),
                                    mark: monitor.id.chartMode)],
                       thresholds: monitor.limit.map { [ChartThreshold(value: $0, color: .warning)] } ?? [],
                       markers: developerPerformanceMonitorMarker(monitor: monitor,
                                                                  selectedSampleIndex: selectedSampleIndex.wrappedValue).map { [$0] } ?? [],
                              style: ChartStyle(minValue: 0,
-                                               gridLineCount: 5,
                                                lineWidth: 1.4,
                                                barSpacing: 1,
                                                contentInset: 6,
                                                background: .surfaceSunken,
-                                               gridColor: .divider))
+                                               gridColor: .divider)) {
+                    $0.axis.y.tickCount = 5
+                    $0.axis.x.isLabeled = false
+                    $0.axis.y.isLabeled = false
+                }
                     .frame(height: 112)
 
                 Row(alignment: .center, spacing: 12) {
