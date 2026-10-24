@@ -249,7 +249,13 @@ private enum LSPFixtureServer {
 
         let process = Process()
         process.executableURL = try compiler()
-        process.arguments = [source.path, "-o", binary.path]
+        var arguments = [source.path, "-o", binary.path]
+        #if os(macOS)
+        // A standalone Swift toolchain does not infer the platform SDK when it
+        // is invoked directly, so pass the selected Xcode SDK explicitly.
+        arguments += ["-sdk", try sdkPath()]
+        #endif
+        process.arguments = arguments
         let output = Pipe()
         process.standardOutput = output
         process.standardError = output
@@ -281,6 +287,26 @@ private enum LSPFixtureServer {
         }
         throw LSPFixtureError("swiftc is not on PATH; set GUAVA_SWIFTC to a Swift compiler")
     }
+
+    #if os(macOS)
+    private static func sdkPath() throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        process.arguments = ["--sdk", "macosx", "--show-sdk-path"]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = Pipe()
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let path = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard process.terminationStatus == 0, !path.isEmpty else {
+            throw LSPFixtureError("xcrun could not resolve the macOS SDK")
+        }
+        return path
+    }
+    #endif
 
     private struct LSPFixtureError: Error, CustomStringConvertible {
         let description: String
