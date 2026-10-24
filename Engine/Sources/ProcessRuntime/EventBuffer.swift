@@ -3,7 +3,7 @@ import Foundation
 private enum ProcessEventBufferError: Error { case multipleConsumers }
 
 final class ProcessEventBuffer: @unchecked Sendable {
-    private let lock = NSLock()
+    private let lock = NSCondition()
     private let maximumBytes: Int
     private var events: [ProcessEvent?] = []
     private var head = 0
@@ -25,6 +25,7 @@ final class ProcessEventBuffer: @unchecked Sendable {
             guard size <= maximumBytes - bytes else { return false }
             events.append(event)
             bytes += size
+            lock.signal()
             return true
         }
     }
@@ -33,6 +34,7 @@ final class ProcessEventBuffer: @unchecked Sendable {
         lock.withLock {
             guard completion == nil else { return }
             completion = error.map { .failure($0) } ?? .success(())
+            lock.broadcast()
             if let waiter {
                 self.waiter = nil
                 if let error { waiter.resume(throwing: error) }
@@ -62,6 +64,25 @@ final class ProcessEventBuffer: @unchecked Sendable {
                 }
             }
         } onCancel: { self.finish(throwing: CancellationError()) }
+    }
+
+    /// Synchronous discovery never schedules work on the executor it blocks.
+    /// Reader threads and the process deadline signal this condition directly.
+    func nextSynchronously() throws -> ProcessEvent? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard waiter == nil else { throw ProcessEventBufferError.multipleConsumers }
+        while true {
+            if head < events.count, let event = events[head] {
+                events[head] = nil
+                head += 1
+                bytes -= Self.size(event)
+                if head >= 64 { events.removeFirst(head); head = 0 }
+                return event
+            }
+            if let completion { return try completion.map { nil }.get() }
+            lock.wait()
+        }
     }
 
     private static func size(_ event: ProcessEvent) -> Int {

@@ -78,6 +78,8 @@ public final class ProcessSession: @unchecked Sendable {
 
     public func cancel() { fail(CancellationError()) }
 
+    func nextSynchronously() throws -> ProcessEvent? { try eventBuffer.nextSynchronously() }
+
     private func installReader(_ handle: FileHandle, isError: Bool) {
         let thread = Thread { [weak self] in
             // The reader owns this handle until its blocking read completes.

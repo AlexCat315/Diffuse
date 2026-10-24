@@ -12,6 +12,22 @@ struct ProcessTests {
         return command
     }
 
+    @Test("parallel synchronous discovery does not starve the cooperative executor")
+    func parallelSynchronousDiscovery() async throws {
+        let count = min(32, max(8, ProcessInfo.processInfo.activeProcessorCount * 2))
+        try await withThrowingTaskGroup(of: ProcessOutput.self) { group in
+            for _ in 0..<count {
+                group.addTask {
+                    var budget = ProcessBudget(); budget.lifetimeMilliseconds = 3000
+                    return try ProcessRunner.runSynchronously(command("printf ready"), budget: budget)
+                }
+            }
+            for try await result in group {
+                #expect(result.status == 0 && String(decoding: result.stdout, as: UTF8.self) == "ready")
+            }
+        }
+    }
+
     @Test("stdout and stderr are drained through exit, including final bytes")
     func output() async throws {
         let result = try await ProcessRunner.run(command("printf stdout; printf stderr >&2; exit 7"))

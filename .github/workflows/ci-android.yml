@@ -59,10 +59,14 @@ jobs:
         shell: bash
         run: |
           "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify --verbose "$RUNNER_TEMP/android/Application.apk"
-          unzip -l "$RUNNER_TEMP/android/Application.apk" | tee "$RUNNER_TEMP/android/contents.txt"
-          rg 'lib/arm64-v8a/libGuavaAndroidApp.so' "$RUNNER_TEMP/android/contents.txt"
-          rg 'lib/arm64-v8a/libc\+\+_shared.so' "$RUNNER_TEMP/android/contents.txt"
-          rg 'assets/launch.json' "$RUNNER_TEMP/android/contents.txt"
+          unzip -Z -1 "$RUNNER_TEMP/android/Application.apk" > "$RUNNER_TEMP/android/contents.txt"
+          node <<'NODE'
+          const fs = require('fs');
+          const files = new Set(fs.readFileSync(process.env.RUNNER_TEMP + '/android/contents.txt', 'utf8').trim().split('\n'));
+          for (const file of ['lib/arm64-v8a/libGuavaAndroidApp.so', 'lib/arm64-v8a/libc++_shared.so', 'assets/launch.json']) {
+            if (!files.has(file)) throw new Error('Missing APK payload: ' + file);
+          }
+          NODE
       - uses: actions/upload-artifact@v4
         with:
           name: android-arm64-application
