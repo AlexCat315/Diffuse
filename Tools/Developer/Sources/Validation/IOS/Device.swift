@@ -16,14 +16,27 @@
     /// Creates an isolated simulator from the newest available device type so a
     /// validation run never disturbs a developer's own device.
     static func createIsolated() throws -> Device {
-      guard let runtime = try availableRuntimes().first else {
-        throw ToolError.message("No available iOS simulator runtime")
-      }
+      let devices = (try json(["list", "devices", "available", "--json"])["devices"] as? [String: Any]) ?? [:]
+      let configuration = try configuration(runtimes: availableRuntimes(), devices: devices)
       let udid = try simctl([
-        "create", "GuavaStudio UI validation",
-        "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro", runtime.identifier,
+        "create", "GuavaStudio UI validation", configuration.deviceType, configuration.runtime,
       ])
       return Device(udid: udid)
+    }
+
+    /// Existing available devices identify the runtime/type combinations this Xcode supports.
+    static func configuration(runtimes: [Runtime], devices: [String: Any]) throws
+      -> (runtime: String, deviceType: String)
+    {
+      for runtime in runtimes {
+        for entry in (devices[runtime.identifier] as? [[String: Any]]) ?? [] {
+          guard let name = entry["name"] as? String, name.hasPrefix("iPhone"),
+            let type = entry["deviceTypeIdentifier"] as? String
+          else { continue }
+          return (runtime.identifier, type)
+        }
+      }
+      throw ToolError.message("No compatible available iPhone simulator")
     }
 
     /// Prints the UDID of the first available device named like `prefix`, newest

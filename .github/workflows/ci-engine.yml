@@ -79,7 +79,7 @@ jobs:
             libudev-dev libwayland-dev libx11-dev libxcursor-dev libxext-dev \
             libxfixes-dev libxi-dev libxinerama-dev libxkbcommon-dev \
             libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
-            mesa-common-dev ninja-build
+            mesa-common-dev ninja-build vulkan-validationlayers
 
       - name: Prepare cached native dependencies
         uses: ./.github/actions/native-dependencies
