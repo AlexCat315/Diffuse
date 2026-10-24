@@ -27,7 +27,7 @@ enum DevOperation {
   }
 
   static func dev(port: Int) throws {
-    let root = Repository.path("GuavaUI/Browser")
+    let root = Browser.sdkRoot.appendingPathComponent("Browser")
     let outcome = try build(root: root)
     guard let revision = outcome.revision else { throw ToolError.message("Initial build failed") }
     let server = try DevServer(port: port, revision: revision, root: root)
@@ -117,7 +117,7 @@ enum DevOperation {
       repositoryRoot.appendingPathComponent(
         "Tools/Developer/Sources/Validation/Browser/Operations/BuildFonts.swift"),
       root.deletingLastPathComponent().appendingPathComponent("DevTools"),
-      repositoryRoot.appendingPathComponent("GuavaUI/PlatformCore"),
+      Browser.sdkRoot.appendingPathComponent("PlatformCore"),
       root.appendingPathComponent("Package.swift"),
       root.deletingLastPathComponent().appendingPathComponent("Portable/Package.swift"),
       root.appendingPathComponent("build.sh"),

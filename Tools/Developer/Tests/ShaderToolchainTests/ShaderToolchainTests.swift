@@ -19,7 +19,14 @@ enum Fixtures {
     fatalError("Could not locate repository root")
   }()
 
-  static func path(_ relative: String) -> URL { root.appendingPathComponent(relative) }
+  static func path(_ relative: String) -> URL {
+    if relative.hasPrefix("GuavaUI/") {
+      let sdk = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+        .map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent("GuavaUI")
+      return sdk.appendingPathComponent(String(relative.dropFirst("GuavaUI/".count)))
+    }
+    return root.appendingPathComponent(relative)
+  }
 }
 
 func makeTestDirectory() throws -> URL {

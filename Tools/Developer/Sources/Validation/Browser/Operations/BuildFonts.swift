@@ -17,7 +17,7 @@ enum BuildFontsOperation {
     try buildFonts()
   }
 
-  private static let here = Repository.path("GuavaUI/Browser")
+  private static let here = Browser.sdkRoot.appendingPathComponent("Browser")
   private static let root = here.deletingLastPathComponent()
   private static let build = here.appendingPathComponent(".build/fonts")
   private static let vendor = here.appendingPathComponent(".build/font-vendor")

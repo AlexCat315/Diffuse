@@ -1,8 +1,7 @@
 internal import Foundation
 internal import ToolSupport
 
-/// Every assertion from the former `scripts/check-module-boundaries.py`, in the
-/// same order, so the first reported failure is the one a maintainer saw there.
+/// Verifies ownership between the standalone SDK and Studio packages.
 struct BoundaryChecks {
   private static let demoProducts: Set<String> = [
     "GuavaUIDemo", "PetDemo", "GalleryContent", "CounterExample", "GuavaUIApp",
@@ -24,6 +23,8 @@ struct BoundaryChecks {
     """
 
   private let root: URL
+  private let sdkRoot: URL
+  private let application = FileManager.default.temporaryDirectory.appendingPathComponent("guava-boundary-" + UUID().uuidString)
   private var loader: ManifestLoader
 
   init(
@@ -31,11 +32,19 @@ struct BoundaryChecks {
   ) {
     let root = root.standardizedFileURL.resolvingSymlinksInPath()
     self.root = root
+    self.sdkRoot = canonicalPath(environment["GUAVA_SDK_ROOT"] ?? "GuavaUI", relativeTo: root)
     self.loader = ManifestLoader(root: root, environment: environment)
   }
 
   mutating func perform() throws {
-    let ui = try loader.manifest("GuavaUI")
+    defer { try? Fs.remove(application) }
+    #if os(Windows)
+    let command = sdkRoot.appendingPathComponent("guava.cmd")
+    #else
+    let command = sdkRoot.appendingPathComponent("guava")
+    #endif
+    try Shell.inherit([command.path, "create", "app", application.path, "--sdk-root", sdkRoot.path])
+    let ui = try loader.manifest(at: sdkRoot)
     try require(
       ui.productNames.contains("GuavaUI"),
       "GuavaUI must remain a production product")
@@ -48,7 +57,7 @@ struct BoundaryChecks {
       !launcher.byName.contains("GuavaUIWorkspace"),
       "GuavaUI must not depend on the GuavaUIWorkspace launcher target")
 
-    let portable = try loader.manifest("GuavaUI/Portable")
+    let portable = try loader.manifest(at: sdkRoot.appendingPathComponent("Portable"))
     for (name, package) in [("GuavaUI", ui), ("GuavaUI/Portable", portable)] {
       for dependency in package.localDependencies
       where dependency.path.lowercased().contains("examples") {
@@ -74,12 +83,12 @@ struct BoundaryChecks {
     try checkSDKIndependence(ui)
     try checkEngineIndependence()
 
-    let capability = try loader.manifest("Engine").target(named: "CapabilityRuntime")
+    let capability = try loader.manifest(at: path("Engine")).target(named: "CapabilityRuntime")
     try require(
       capability.products == ["GuavaUIAgentCore"],
       "CapabilityRuntime must depend on exactly the GuavaUIAgentCore product")
 
-    let workspace = try loader.manifest(".")
+    let workspace = try loader.manifest(at: path("."))
     try require(
       workspace.localDependencies == [path("Editor")],
       "The workspace package must depend on Editor and nothing else")
@@ -89,7 +98,6 @@ struct BoundaryChecks {
 
     try checkAndroidApplications()
     try checkAppContent()
-    try checkTemplateParity()
     try checkTooling()
 
     Terminal.info(Self.success)
@@ -116,7 +124,7 @@ struct BoundaryChecks {
   /// Scene and render modules live in Studio. They may consume the SDK's shared
   /// native layer, but never the Compose view tree or the window host.
   private mutating func checkEngineIndependence() throws {
-    let engine = try loader.manifest("Engine")
+    let engine = try loader.manifest(at: path("Engine"))
     let leaked = engine.referencedProducts.intersection(Self.uiOnlyProducts)
     try require(
       leaked.isEmpty,
@@ -126,15 +134,15 @@ struct BoundaryChecks {
   /// The Android package is dumped once per application configuration: content
   /// (UI) from a starter package, a game package, and its own showcase graph.
   private mutating func checkAndroidApplications() throws {
-    let starter = root.appendingPathComponent("examples/GuavaUIStarter").path
+    let starter = application.path
     let content = try loader.manifest(
-      "Platforms/Android",
+      at: path("Platforms/Android"),
       overrides: ["GUAVA_ANDROID_UI_PACKAGE": starter])
-    let forbidden: Set<URL> = [path("Editor"), path("GuavaUI/Examples"), path("GuavaUI/Examples/Counter")]
+    let forbidden: Set<URL> = [path("Editor"), sdkRoot.appendingPathComponent("Examples"), sdkRoot.appendingPathComponent("Examples/Counter")]
     let pulled = content.localDependencies.intersection(forbidden)
     try require(
       pulled.isEmpty,
-      "An Android application built from examples/GuavaUIStarter must not depend on \(pulled.sorted { $0.path < $1.path }.map(\.path).joined(separator: ", "))"
+      "An Android application built from the generated application must not depend on \(pulled.sorted { $0.path < $1.path }.map(\.path).joined(separator: ", "))"
     )
 
     let gameDirectory = FileManager.default.temporaryDirectory
@@ -142,32 +150,32 @@ struct BoundaryChecks {
     try Fs.directory(gameDirectory)
     defer { try? Fs.remove(gameDirectory) }
     let game = try loader.manifest(
-      "Platforms/Android",
+      at: path("Platforms/Android"),
       overrides: ["GUAVA_ANDROID_GAME_PACKAGE": gameDirectory.path])
     try require(
       game.localDependencies.contains(path("Editor")),
       "An Android game application must depend on Editor")
     try require(
-      !game.localDependencies.contains(path("GuavaUI/Examples")),
+      !game.localDependencies.contains(sdkRoot.appendingPathComponent("Examples")),
       "An Android game application must not depend on GuavaUI/Examples")
 
-    let showcase = try loader.manifest("Platforms/Android")
+    let showcase = try loader.manifest(at: path("Platforms/Android"))
     try require(
-      showcase.localDependencies.contains(path("GuavaUI/Examples")),
+      showcase.localDependencies.contains(sdkRoot.appendingPathComponent("Examples")),
       "The Android showcase must depend on GuavaUI/Examples")
     try require(
       !showcase.localDependencies.contains(path("Editor")),
       "The Android showcase must not depend on Editor")
   }
 
-  /// The starter and its template must present the UI module directly, and both
+  /// The Studio example and SDK template present the UI module directly; both
   /// AppContent entry points must call the same factory.
   private func checkAppContent() throws {
-    for base in [
-      "examples/GuavaUIStarter/Sources", "GuavaUI/Tools/Guava/Sources/GuavaCLI/Templates/UI/Sources",
+    for file in [
+      application.appendingPathComponent("Sources/AppContent/App.swift"),
+      sdkRoot.appendingPathComponent("Tools/Guava/Sources/GuavaCLI/Templates/UI/Sources/AppContent/App.swift"),
     ] {
-      let file = "\(base)/AppContent/App.swift"
-      let content = try text(root.appendingPathComponent(file))
+      let content = try text(file)
       try require(
         content.contains("import GuavaUI\n"),
         "\(file) must import GuavaUI")
@@ -180,45 +188,26 @@ struct BoundaryChecks {
     }
   }
 
-  /// Every template file must match the starter byte for byte, with the `.in`
-  /// suffix stripped from the destination name.
-  private func checkTemplateParity() throws {
-    let template = root.appendingPathComponent(
-      "GuavaUI/Tools/Guava/Sources/GuavaCLI/Templates/UI")
-    let example = root.appendingPathComponent("examples/GuavaUIStarter")
-    for source in try Fs.files(in: template) {
-      let relative = Fs.relative(source, to: template)
-      let destination = example.appendingPathComponent(
-        relative.hasSuffix(".in") ? String(relative.dropLast(3)) : relative)
-      guard FileManager.default.fileExists(atPath: destination.path) else {
-        throw ToolError.message("Starter drifted from its template: \(relative)")
-      }
-      let expected = try Fs.read(source)
-      let actual = try Fs.read(destination)
-      try require(actual == expected, "Starter drifted from its template: \(relative)")
-    }
-  }
-
   /// The CLI ships with the SDK, owns no Android side copy, and the starter's
   /// configuration and resources describe those real package names.
   private mutating func checkTooling() throws {
-    let developer = try loader.manifest("Tools/Developer")
+    let developer = try loader.manifest(at: path("Tools/Developer"))
     try require(
       developer.productNames == ["guava-dev"],
       "Tools/Developer must vend only the guava-dev executable")
-    let example = root.appendingPathComponent("examples/GuavaUIStarter")
-    let tools = try loader.manifest("GuavaUI/Tools/Guava")
+    let example = application
+    let tools = try loader.manifest(at: sdkRoot.appendingPathComponent("Tools/Guava"))
     try require(
       tools.productNames == ["guava"],
       "GuavaUI/Tools/Guava must vend exactly the guava product")
     try require(
-      developer.localDependencies.isSubset(of: [path("GuavaUI/Tools/Support")]),
+      developer.localDependencies.isSubset(of: [sdkRoot.appendingPathComponent("Tools/Support")]),
       "Repository tools must build independently of application and engine packages: "
         + developer.localDependencies.map(\.path).sorted().joined(separator: ", "))
     try require(
       tools.localDependencies == [
-        path("GuavaUI/Hosts/Android/Contract"), path("GuavaUI/Portable"), path("GuavaUI/Logging"),
-        path("GuavaUI/Tools/Support"),
+        sdkRoot.appendingPathComponent("Hosts/Android/Contract"), sdkRoot.appendingPathComponent("Portable"), sdkRoot.appendingPathComponent("Logging"),
+        sdkRoot.appendingPathComponent("Tools/Support"),
       ],
       "The shipped CLI must depend only on SDK packages: "
         + tools.localDependencies.map(\.path).sorted().joined(separator: ", "))
@@ -228,21 +217,21 @@ struct BoundaryChecks {
       "Android must not own a separate developer CLI")
     try require(
       !FileManager.default.fileExists(atPath: example.appendingPathComponent("android.swift").path),
-      "examples/GuavaUIStarter must not ship its own android.swift launcher")
+      "the generated application must not ship its own android.swift launcher")
     try require(
       !FileManager.default.fileExists(
         atPath: example.appendingPathComponent("guava-android.json").path),
-      "examples/GuavaUIStarter must not ship a separate guava-android.json")
+      "the generated application must not ship a separate guava-android.json")
     try checkConfiguration(in: example)
     try require(
       !FileManager.default.fileExists(
         atPath: example.appendingPathComponent("Sources/DesktopApp").path),
-      "examples/GuavaUIStarter must not ship a DesktopApp outside its template")
+      "the generated application must not ship a DesktopApp outside AppContent")
 
-    let starter = try loader.manifest("examples/GuavaUIStarter")
+    let starter = try loader.manifest(at: application)
     try require(
       starter.productNames == ["AppContent"],
-      "examples/GuavaUIStarter must vend exactly the AppContent product")
+      "the generated application must vend exactly the AppContent product")
     let resources = try text(
       example.appendingPathComponent("Sources/AppContent/AppResources.swift"))
     try require(
@@ -253,7 +242,7 @@ struct BoundaryChecks {
   private func checkConfiguration(in example: URL) throws {
     guard let configuration = Self.json(try text(example.appendingPathComponent("guava.json")))
     else {
-      throw ToolError.message("examples/GuavaUIStarter/guava.json is not a JSON object")
+      throw ToolError.message("the generated application/guava.json is not a JSON object")
     }
     let platforms = Set(
       (configuration["targets"] as? [String: Any])?["platforms"] as? [String] ?? [])
@@ -263,7 +252,7 @@ struct BoundaryChecks {
     guard let sdkVersion = (configuration["toolchain"] as? [String: Any])?["sdkVersion"] as? String
     else {
       throw ToolError.message(
-        "examples/GuavaUIStarter/guava.json must declare toolchain.sdkVersion")
+        "the generated application/guava.json must declare toolchain.sdkVersion")
     }
     try require(
       !sdkVersion.isEmpty,

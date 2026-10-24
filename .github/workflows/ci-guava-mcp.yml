@@ -8,6 +8,11 @@ on:
       - 'Engine/**'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
+      - '.github/actions/native-dependencies/**'
+      - '.github/actions/fetch-sdk/**'
+      - 'Editor/guava.json'
+      - 'guava'
+      - 'guava.cmd'
       - 'Tools/Developer/**'
       - 'cmake/**'
   pull_request:
@@ -16,6 +21,11 @@ on:
       - 'Engine/**'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
+      - '.github/actions/native-dependencies/**'
+      - '.github/actions/fetch-sdk/**'
+      - 'Editor/guava.json'
+      - 'guava'
+      - 'guava.cmd'
       - 'Tools/Developer/**'
       - 'cmake/**'
 
@@ -59,9 +69,8 @@ jobs:
             libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
             mesa-common-dev ninja-build
 
-      - name: Build native dependencies
-        shell: bash
-        run: ./guava studio native-bootstrap --force
+      - name: Prepare cached native dependencies
+        uses: ./.github/actions/native-dependencies
 
       - name: Swift version
         run: swift --version

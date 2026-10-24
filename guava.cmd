@@ -12,7 +12,7 @@ set "GUAVA_STUDIO_ARGS=%GUAVA_STUDIO_ARGS% "%~1""
 shift
 goto collect
 :studio
-"%GUAVA_SWIFT_EXECUTABLE%" build --package-path "%~dp0Tools\Developer" --product guava-dev --jobs 4
+"%GUAVA_SWIFT_EXECUTABLE%" build --package-path "%~dp0Tools\Developer" --product guava-dev --jobs 4 1>&2
 if errorlevel 1 exit /b %errorlevel%
 set "GUAVA_PRODUCTS_FILE=%TEMP%\guava-dev-products-%RANDOM%-%RANDOM%.txt"
 "%GUAVA_SWIFT_EXECUTABLE%" build --package-path "%~dp0Tools\Developer" --show-bin-path > "%GUAVA_PRODUCTS_FILE%"

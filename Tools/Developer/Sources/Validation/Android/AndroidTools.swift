@@ -6,6 +6,11 @@ internal import ToolSupport
 /// writes into.
 enum AndroidTools {
   static var root: URL { Repository.root }
+  static var guavaSDKRoot: URL {
+    ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+      .map { URL(fileURLWithPath: $0).standardizedFileURL }
+      ?? root.appendingPathComponent("GuavaUI")
+  }
 
   /// `OUTPUT = ROOT / 'Engine/build/android-validation'`.
   static var output: URL { Repository.path("Engine/build/android-validation") }
@@ -72,8 +77,8 @@ enum AndroidTools {
     FileManager.default.createFile(atPath: result.path, contents: Data())
     defer { try? Fs.remove(result) }
     try Command.run([
-      root.appendingPathComponent("GuavaUI/guava").path,
-      "internal", "android-compile", "--sdk-root", root.appendingPathComponent("GuavaUI").path,
+      guavaSDKRoot.appendingPathComponent("guava").path,
+      "internal", "android-compile", "--sdk-root", guavaSDKRoot.path,
       "--product", product,
       "--ndk", ndk.path, "--" + configuration, "--result-file", result.path,
     ])

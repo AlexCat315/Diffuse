@@ -33,7 +33,7 @@ git submodule update --init --recursive
 ./guava build Editor --mac
 ```
 
-`./guava` 会先拉取 `Editor/guava.json` 声明的 SDK 版本到被忽略的 `GuavaUI/` 目录，也支持用 `GUAVA_SDK_ROOT` 选择本地检出。`guava-dev native-bootstrap` 随后编译 Engine 与 SDK 的 C/C++ 原生依赖（CMake），Windows 下自动初始化 MSVC 工具链。
+`./guava` 会先拉取 `Editor/guava.json` 声明的 SDK 版本到被忽略的 `GuavaUI/` 目录，也支持用 `GUAVA_SDK_ROOT` 选择本地检出。`guava studio native-bootstrap` 随后安装 SDK 发布的原生依赖，构建 Studio 的 FFmpeg、Jolt、OpenEXR/Imath，并准备固定版本的 Wasmtime；Windows 下自动初始化 MSVC 工具链。
 
 后续日常开发只需要：
 
@@ -46,10 +46,9 @@ git submodule update --init --recursive
 ### 按包独立构建
 
 ```bash
-swift build --package-path Engine    # 引擎核心
-swift run --package-path examples/HelloUI HelloUI
-swift build --package-path Editor    # 编辑器（运行: swift run --package-path Editor EditorApp）
-swift build --package-path GuavaMcp # MCP 服务（运行: swift run GuavaMCP）
+./guava internal build-package Engine    # 引擎核心
+./guava build Editor    # 编辑器（运行: ./guava run Editor）
+./guava internal build-package GuavaMcp --product GuavaMCP # MCP 服务
 ```
 
 SDK 的共享核心、跨平台调试服务、浏览器原型与示例位于 [GuavaUI 仓库](https://github.com/AlexCat315/GuavaUI)。

@@ -76,8 +76,10 @@ struct GameProjectScriptLoaderTests {
         let editorRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let override = ProcessInfo.processInfo.environment["GUAVA_TEST_PLAYER_EXECUTABLE"].map { URL(fileURLWithPath: $0) }
-        let player = override ?? Bundle(for: PlayerScriptTestBundle.self).bundleURL.deletingLastPathComponent().appendingPathComponent("GuavaPlayer")
-        #expect(fileManager.isExecutableFile(atPath: player.path))
+        let bundle = Bundle(for: PlayerScriptTestBundle.self).bundleURL
+        let player = try #require(override ?? [bundle, bundle.deletingLastPathComponent()]
+            .map { $0.appendingPathComponent("GuavaPlayer") }
+            .first { fileManager.isExecutableFile(atPath: $0.path) })
         let configuration = ProjectScriptBuildConfiguration.discover(for: player)
         #expect(!configuration.engineModulePaths.isEmpty)
         let project = try temporaryProject()

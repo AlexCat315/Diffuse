@@ -8,6 +8,11 @@ private import ToolSupport
 /// are its flags. This replaces the former `GuavaUI/Browser/*.py` scripts and
 /// `Platforms/Web/Plugins/tests/browser.py`.
 package enum Browser {
+  static var sdkRoot: URL {
+    ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+      .map { URL(fileURLWithPath: $0).standardizedFileURL }
+      ?? Repository.path("GuavaUI")
+  }
   package static func run(_ arguments: [String]) throws {
     guard let operation = arguments.first else {
       throw ToolError.message("Missing operation; expected \(operations.joined(separator: ", "))")

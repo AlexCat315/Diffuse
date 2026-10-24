@@ -81,8 +81,10 @@ struct WelcomeWorkflowTests {
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: false)
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let host = Bundle(for: WelcomeTestBundle.self).bundleURL.deletingLastPathComponent().appendingPathComponent("EditorApp")
-        #expect(FileManager.default.isExecutableFile(atPath: host.path))
+        let bundle = Bundle(for: WelcomeTestBundle.self).bundleURL
+        let host = try #require([bundle, bundle.deletingLastPathComponent()]
+            .map { $0.appendingPathComponent("EditorApp") }
+            .first { FileManager.default.isExecutableFile(atPath: $0.path) })
         let sdk = ProjectScriptBuildConfiguration.discover(for: host.resolvingSymlinksInPath(), environment: [:])
         #expect(!sdk.engineModulePaths.isEmpty)
         let overrides = ["GUAVA_ENGINE_MODULE_PATHS": sdk.engineModulePaths.joined(separator: ","),
@@ -131,7 +133,11 @@ struct WelcomeWorkflowTests {
         app.workstation.scripts.setProjectTrusted(false)
         context.closeProject()
         #expect(!context.isProjectLoaded)
+        #if os(macOS)
         #expect(backend.backendAPI == .metal)
+        #elseif os(Linux)
+        #expect(backend.backendAPI == .vulkan)
+        #endif
         try context.createProject(name: "Empty", parent: parent, template: .blank)
         let empty = try #require(context.bundle?.app)
         #expect(empty.store.state.themeMode == .light)

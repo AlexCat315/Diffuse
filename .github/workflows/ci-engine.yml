@@ -8,6 +8,11 @@ on:
       - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
+      - '.github/actions/native-dependencies/**'
+      - '.github/actions/fetch-sdk/**'
+      - 'Editor/guava.json'
+      - 'guava'
+      - 'guava.cmd'
       - 'Tools/Developer/**'
       - 'cmake/**'
   pull_request:
@@ -16,6 +21,11 @@ on:
       - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
+      - '.github/actions/native-dependencies/**'
+      - '.github/actions/fetch-sdk/**'
+      - 'Editor/guava.json'
+      - 'guava'
+      - 'guava.cmd'
       - 'Tools/Developer/**'
       - 'cmake/**'
 
@@ -67,13 +77,8 @@ jobs:
             libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
             mesa-common-dev ninja-build
 
-      - name: Prepare SDK and Studio native dependencies
-        shell: bash
-        run: ./guava studio native-bootstrap
-
-      - name: Build pinned FFmpeg
-        shell: bash
-        run: ./guava studio media
+      - name: Prepare cached native dependencies
+        uses: ./.github/actions/native-dependencies
 
       # The Engine package depends on the local Media package, whose FFmpeg
       # binaryTarget needs the bundle that `guava-dev media` just staged into

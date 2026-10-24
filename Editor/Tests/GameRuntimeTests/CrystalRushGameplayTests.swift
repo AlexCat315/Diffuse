@@ -16,8 +16,10 @@ struct CrystalRushGameplayTests {
     func playableLoop() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let playerBinary = Bundle(for: CrystalRushTestBundle.self).bundleURL.deletingLastPathComponent().appendingPathComponent("GuavaPlayer")
-        #expect(FileManager.default.isExecutableFile(atPath: playerBinary.path))
+        let bundle = Bundle(for: CrystalRushTestBundle.self).bundleURL
+        let playerBinary = try #require([bundle, bundle.deletingLastPathComponent()]
+            .map { $0.appendingPathComponent("GuavaPlayer") }
+            .first { FileManager.default.isExecutableFile(atPath: $0.path) })
         let project = FileManager.default.temporaryDirectory.appendingPathComponent("guava-crystal-rules-\(UUID())")
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

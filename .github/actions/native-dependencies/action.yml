@@ -1,0 +1,33 @@
+name: Studio native dependencies
+description: Restore or build the native artifacts for the pinned Studio and SDK inputs.
+runs:
+  using: composite
+  steps:
+    - name: Identify native source revisions
+      id: sources
+      shell: bash
+      run: |
+        revision=$(git ls-tree HEAD Engine/third-party/imath Engine/third-party/jolt Engine/third-party/openexr | git hash-object --stdin)
+        echo "revision=$revision" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache/restore@v5
+      id: native
+      with:
+        path: |
+          Engine/vendor
+          Engine/Media/vendor
+        key: studio-native-v1-${{ runner.os }}-${{ runner.arch }}-6.4.1-${{ steps.sources.outputs.revision }}-${{ hashFiles('Editor/guava.json', 'Engine/third-party/CMakeLists.txt', 'Engine/third-party/cmake/**', 'Tools/Developer/Sources/Build/NativeBootstrap/**', 'Tools/Developer/Sources/Build/MediaStaging/**', 'Tools/Developer/Sources/Build/PluginStaging/**', '.github/actions/setup-toolchains/action.yml') }}
+    - name: Prepare native artifacts
+      if: runner.os != 'Windows'
+      shell: bash
+      run: ./guava studio native-bootstrap
+    - name: Prepare native artifacts (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: ./guava studio native-bootstrap
+    - uses: actions/cache/save@v5
+      if: steps.native.outputs.cache-hit != 'true'
+      with:
+        path: |
+          Engine/vendor
+          Engine/Media/vendor
+        key: ${{ steps.native.outputs.cache-primary-key }}

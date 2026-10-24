@@ -22,7 +22,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 | Platform shell | SDL3 / native |
 | Target platform (first) | macOS 26+; Linux & Windows in progress |
 
-The repository ships three top-level SwiftPM packages plus an MCP server:
+Studio contains the Engine and Editor packages plus an MCP server; the SDK is an independent repository:
 
 - **`Engine/`** — rendering, scene, simulation, asset pipeline, AI runtime kernels, observation bus, film pipeline (EXR / color / denoise / render farm).
 - **`GuavaUI/`** — the [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) is a separate project, fetched at the version pinned by `Editor/guava.json` when you run `./guava`; it owns UI, NativeRHI, platform services and the CLI.
@@ -100,15 +100,15 @@ git clone https://github.com/AlexCat315/GuavaStudio.git
 cd GuavaStudio
 git submodule update --init --recursive
 ./guava studio native-bootstrap
-swift build --package-path Editor
+./guava build Editor
 ```
 
-`./guava` fetches the GuavaUI SDK version declared by `Editor/guava.json` into the ignored `GuavaUI/` checkout, or uses `GUAVA_SDK_ROOT` when a local SDK checkout is selected. `guava-dev native-bootstrap` then compiles the native C/C++ dependencies (Yoga, FreeType, HarfBuzz, SDL3, Jolt, OpenEXR/Imath) for each package into its `vendor/` directory and wraps them for SwiftPM. On macOS it also verifies and stages the pinned official Wasmtime Component C API dynamic artifact. It is cross-platform and initializes the MSVC toolchain on Windows.
+`./guava` fetches the GuavaUI SDK version declared by `Editor/guava.json` into the ignored `GuavaUI/` checkout, or uses `GUAVA_SDK_ROOT` when a local SDK checkout is selected. `guava studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg, Jolt and OpenEXR/Imath dependencies, and stages the pinned Wasmtime runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
 
 After the first bootstrap, day-to-day development only needs:
 
 ```bash
-swift build --package-path Editor
+./guava build Editor
 ```
 
 > **Force rebuild of native deps:** `./guava studio native-bootstrap --force`
@@ -116,10 +116,9 @@ swift build --package-path Editor
 ### Individual packages
 
 ```bash
-swift build --package-path Engine   # engine + renderers
-swift run --package-path examples/HelloUI HelloUI
-swift build --package-path Editor   # editor (run: swift run --package-path Editor EditorApp)
-swift build --package-path GuavaMcp # MCP server (run: swift run GuavaMCP)
+./guava internal build-package Engine   # engine + renderers
+./guava build Editor   # editor (run: ./guava run Editor)
+./guava internal build-package GuavaMcp --product GuavaMCP # MCP server
 ```
 
 The SDK's portable core, DevTools server, browser prototype and examples live in the [GuavaUI repository](https://github.com/AlexCat315/GuavaUI).
@@ -160,10 +159,8 @@ GuavaStudio/
 │   ├── ImageIO/              (EXRReader, EXRWriter, DeepEXRWriter, Cryptomatte)
 │   ├── IntentRuntime/        (Edit, IntentIR, TransactionIR, TransactionExecutor, AmbiguityScorer)
 │   ├── ObservationBus/       (Publisher/Subscriber, Bus bridge)
-│   ├── PlatformShell/        (SDL3 + native platform abstraction, Cursor, logging)
 │   ├── RenderBackend/        (render packet, multi-threaded renderer scheduling)
 │   ├── RenderFarm/           (orchestrator, worker, job scheduler, result collector)
-│   ├── NativeRHI/              (native Metal / Vulkan / DX12 device, resources and command submission)
 │   ├── SceneRuntime/         (ECS, entities, components, audio, physics, prefabs, schedules)
 │   ├── SceneFromImage/       (reference image → layout inference → scene draft)
 │   ├── ScriptRuntime/        (script context, component, lifecycle, input, drawUI)
@@ -177,7 +174,7 @@ GuavaStudio/
 │   ├── EditorUI/              (editor windows and panels)
 │   ├── EditorCore/            (editor project/application domain)
 │   └── GameRuntime/           (project simulation and player services)
-├── examples/                  (HelloUI, GuavaUIStarter, portable Counter, CrystalRush)
+├── examples/                  (CrystalRush game content)
 ├── GuavaMcp/Sources/GuavaMCP/  (MCP server exposing Guava capabilities)
 └── .github/workflows/        (CI matrices for engine / editor / MCP + release)
 ```

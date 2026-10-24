@@ -287,8 +287,8 @@ enum GalleryOperation {
 
   /// `re.findall(r'\.init\(\.(\w+),', GalleryCatalog.swift)`.
   private static func catalog() throws -> [String] {
-    let url = AndroidTools.root.appendingPathComponent(
-      "GuavaUI/Examples/Sources/GalleryContent/GalleryCatalog.swift")
+    let url = AndroidTools.guavaSDKRoot.appendingPathComponent(
+      "Examples/Sources/GalleryContent/GalleryCatalog.swift")
     let text = try Fs.text(url)
     let pattern = try NSRegularExpression(pattern: "\\.init\\(\\.(\\w+),")
     let range = NSRange(text.startIndex..., in: text)

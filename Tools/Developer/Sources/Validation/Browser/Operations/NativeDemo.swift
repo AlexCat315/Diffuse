@@ -26,7 +26,7 @@ enum NativeDemoOperation {
   static func demo(endpoint: String, screenshot: String?, requirePresented: Bool) throws {
     // The client directory is served from the repo-relative path the
     // reference script builds, `GuavaUI/DevTools/Client/Client`.
-    let client = Repository.path("GuavaUI/DevTools/Client/Client")
+    let client = Browser.sdkRoot.appendingPathComponent("DevTools/Client/Client")
     let server = try staticServer(directory: client)
     server.start()
     defer { server.stop() }

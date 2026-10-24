@@ -8,10 +8,6 @@ enum Inventory {
   static let packageRoots = [
     "Engine", "Engine/Media",
     "Editor", "Editor/Documents",
-    "GuavaUI",
-    "GuavaUI/Logging",
-    "GuavaUI/Tools/Guava",
-    "GuavaUI/Hosts/Android/Contract",
     "Tools/Developer",
     "Platforms/Android",
   ]

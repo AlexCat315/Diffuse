@@ -39,10 +39,10 @@ public final class ProcessSession: @unchecked Sendable {
         process.standardOutput = output
         process.standardError = errors
         ProcessPlatform.prepareInput(input.fileHandleForWriting)
-        installReader(output.fileHandleForReading, isError: false)
-        installReader(errors.fileHandleForReading, isError: true)
         process.terminationHandler = { [weak self] process in self?.terminated(process.terminationStatus) }
         do { try process.run() } catch { close(); throw error }
+        installReader(output.fileHandleForReading, isError: false)
+        installReader(errors.fileHandleForReading, isError: true)
         ProcessPlatform.isolate(process.processIdentifier)
         if let milliseconds = budget.lifetimeMilliseconds {
             let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
@@ -74,18 +74,22 @@ public final class ProcessSession: @unchecked Sendable {
     public func cancel() { fail(CancellationError()) }
 
     private func installReader(_ handle: FileHandle, isError: Bool) {
-        handle.readabilityHandler = { [weak self] handle in
-            guard let self else { return }
-            let data = handle.availableData
-            if data.isEmpty {
-                handle.readabilityHandler = nil
+        let thread = Thread { [weak self] in
+            do {
+                while let data = try handle.read(upToCount: 65_536), !data.isEmpty {
+                    guard let self else { return }
+                    if !eventBuffer.append(isError ? .stderr(data) : .stdout(data)) {
+                        fail(ProcessRuntimeError.outputLimit)
+                        return
+                    }
+                }
+                guard let self else { return }
                 _ = eventBuffer.append(isError ? .stderrClosed : .stdoutClosed)
                 if let status = state.closedPipe() { finish(status) }
-            } else {
-                guard data.count <= budget.outputBytes else { fail(ProcessRuntimeError.outputLimit); return }
-                if !eventBuffer.append(isError ? .stderr(data) : .stdout(data)) { fail(ProcessRuntimeError.outputLimit) }
-            }
+            } catch { self?.fail(error) }
         }
+        thread.name = isError ? "guava.process.stderr" : "guava.process.stdout"
+        thread.start()
     }
 
     private func terminated(_ status: Int32) {
@@ -112,8 +116,6 @@ public final class ProcessSession: @unchecked Sendable {
         state.cancelTimer()
         _ = state.stop()
         eventBuffer.finish()
-        output.fileHandleForReading.readabilityHandler = nil
-        errors.fileHandleForReading.readabilityHandler = nil
         process.terminationHandler = nil
         ProcessPlatform.terminate(process, force: true)
         try? input.fileHandleForWriting.close()

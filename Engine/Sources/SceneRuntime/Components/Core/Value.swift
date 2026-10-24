@@ -1,5 +1,4 @@
 import Foundation
-import CoreFoundation
 import SIMDCompat
 
 /// A lossless, Codable component document. Large integer identifiers and seeds
@@ -20,7 +19,7 @@ public enum ComponentValue: Codable, Sendable, Equatable {
         case let value as SIMD4<Float>: self = .array([value.x, value.y, value.z, value.w].map { .number(Double($0)) })
         case is NSNull: self = .null
         case let value as NSNumber:
-            if CFGetTypeID(value) == CFBooleanGetTypeID() {
+            if value === NSNumber(value: true) || value === NSNumber(value: false) {
                 self = .bool(value.boolValue)
             } else if !["f", "d"].contains(String(cString: value.objCType)),
                       value.compare(NSNumber(value: 9_007_199_254_740_992 as UInt64)) == .orderedDescending {

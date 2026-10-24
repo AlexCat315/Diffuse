@@ -11,13 +11,22 @@ final class PluginHostDiagnostics: @unchecked Sendable {
 
     func start(pid: Int32) {
         processID = pid
-        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            if data.isEmpty { handle.readabilityHandler = nil }
-            self?.consume(data, pid: pid, ending: data.isEmpty)
+        let handle = pipe.fileHandleForReading
+        let reader = Thread { [weak self] in
+            do {
+                while let data = try handle.read(upToCount: 4096), !data.isEmpty {
+                    self?.consume(data, pid: pid)
+                }
+            } catch {}
+            self?.consume(Data(), pid: pid, ending: true)
         }
+        reader.name = "guava.plugin.stderr"
+        reader.start()
     }
-    func stop() { pipe.fileHandleForReading.readabilityHandler = nil; consume(Data(), pid: processID, ending: true) }
+    func stop() {
+        try? pipe.fileHandleForReading.close()
+        consume(Data(), pid: processID, ending: true)
+    }
     deinit { stop() }
 
     private func consume(_ data: Data, pid: Int32, ending: Bool = false) {

@@ -2,9 +2,9 @@ name: iOS application host
 on:
   push:
     branches: [main]
-    paths: ['Engine/**', 'cmake/**', 'Tools/Developer/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
+    paths: ['Editor/guava.json', 'Tools/Developer/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
   pull_request:
-    paths: ['Engine/**', 'cmake/**', 'Tools/Developer/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
+    paths: ['Editor/guava.json', 'Tools/Developer/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
   workflow_dispatch:
 jobs:
   simulator:
@@ -15,18 +15,12 @@ jobs:
       - name: Fetch pinned Guava SDK
         uses: ./.github/actions/fetch-sdk
       - uses: ./.github/actions/setup-toolchains
-      - name: Install Rust targets
-        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
       - name: Stage iOS dependencies and build the shared application
         shell: bash
         run: |
-          ./guava studio ios-native
-          GUAVA_SDK_ROOT="$PWD/GuavaUI" GUAVA_ENGINE_ARTIFACT_ROOT=build/ios-arm64-simulator/vendor \
-            GUAVA_RUNTIME_ARTIFACT_ROOT=Runtime/build/ios-arm64-simulator/vendor \
-            GUAVA_TEXT_ARTIFACT_ROOT=build/ios-arm64-simulator/vendor \
-            xcodebuild -quiet -jobs 4 -project examples/GuavaUIStarter/Platforms/iOS/Application.xcodeproj \
-            -scheme Application -configuration Debug -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/guava-ios" \
-            CODE_SIGNING_ALLOWED=NO ARCHS=arm64 build
+          ./guava setup --ios
+          application="$RUNNER_TEMP/guava-ios-application"
+          ./guava create app "$application" --platforms ios
+          ./guava build "$application" --ios --debug --output "$RUNNER_TEMP/guava-ios/Application.app"
       - name: Verify actual simulator rendering
-        run: ./guava studio ios-simulator validate "$RUNNER_TEMP/guava-ios/Build/Products/Debug-iphonesimulator/Application.app"
+        run: ./guava studio ios-simulator validate "$RUNNER_TEMP/guava-ios/Application.app"

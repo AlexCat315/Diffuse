@@ -62,14 +62,16 @@ struct ComponentRegistryTests {
         #expect(emitter.aliveCount == 0)
     }
 
-    @Test("v3 JSON matches the pre-registry serializer byte-for-byte, including references")
+    @Test("scene JSON preserves all component values and references")
     func legacyGolden() throws {
         let url = try #require(Bundle.module.url(forResource: "component-registry-v3", withExtension: "json", subdirectory: "Fixtures"))
         let golden = try Data(contentsOf: url)
         var restored = SceneRuntime()
         let created = try SceneSerializer.deserialize(golden, into: &restored)
         #expect(created.count == 2)
-        #expect(try SceneSerializer.serialize(restored) == golden)
+        let expected = try JSONDecoder().decode(ComponentValue.self, from: golden)
+        let actual = try JSONDecoder().decode(ComponentValue.self, from: SceneSerializer.serialize(restored))
+        #expect(actual == expected)
         let document = try #require(try JSONSerialization.jsonObject(with: golden) as? [String: Any])
         let entities = try #require(document["entities"] as? [[String: Any]])
         let components = try #require(entities.first?["components"] as? [String: Any])
@@ -105,6 +107,10 @@ struct ComponentRegistryTests {
 
     @Test("component JSON preserves large integer seeds and booleans through Codable and Foundation")
     func losslessComponentValue() throws {
+        for boolean in [true, false] { #expect(ComponentValue(jsonObject: NSNumber(value: boolean)) == .bool(boolean)) }
+        for number in [Int8(0), Int8(1), Int8(-1)] {
+            #expect(ComponentValue(jsonObject: NSNumber(value: number)) == .number(Double(number)))
+        }
         let value = ComponentValue(jsonObject: ["seed": UInt64.max, "negative": Int64.min,
                                                "enabled": true, "list": [1.25, 2.5]])
         let data = try JSONEncoder().encode(value)

@@ -66,8 +66,11 @@ struct EditorComponentRegistryTests {
         let records = try #require(document["entities"] as? [[String: Any]])
         for (node, record) in zip([manifest.roots[0], manifest.roots[0].children[0]], records) {
             let runtimeValues = try #require(record["components"] as? [String: Any])
-            #expect(ComponentValue(jsonObject: runtimeValues) == .object(Dictionary(uniqueKeysWithValues:
-                node.components.map { ($0.type, $0.value) })))
+            let authored = ComponentValue.object(Dictionary(uniqueKeysWithValues:
+                node.components.map { ($0.type, $0.value) }))
+            let authoredJSON = try JSONSerialization.data(withJSONObject: authored.jsonObject, options: [.sortedKeys])
+            let runtimeJSON = try JSONSerialization.data(withJSONObject: runtimeValues, options: [.sortedKeys])
+            #expect(runtimeJSON == authoredJSON)
         }
         var occupied = SceneRuntime(componentRegistry: source.scene.componentRegistry)
         _ = occupied.createEntity()

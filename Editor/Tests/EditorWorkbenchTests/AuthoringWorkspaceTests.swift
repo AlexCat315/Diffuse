@@ -167,10 +167,10 @@ struct AuthoringWorkspaceTests {
                 #expect(frame.minY >= 0 && frame.maxY <= 40)
             }
         }
-        // The trailing cluster ends at the window edge; free space belongs between
-        // the intent field and the Spaces, never after the last control.
+        // Include the custom window buttons on platforms that draw them in the title bar.
+        // The complete trailing cluster must reach the window edge.
         let trailing = frames.filter { ["editor-spaces", "editor-spaces-menu", "editor-presence",
-                                        "editor-playback-toolbar"].contains($0.debugName) }
+                                        "editor-playback-toolbar", "window-control-close"].contains($0.debugName) }
             .map(\.absoluteFrame.maxX).max() ?? 0
         #expect(trailing >= CGFloat(width) - 12, "trailing controls end at \(trailing) in \(width)")
         let titleMenu = frames.first { $0.debugName == "editor-title-menu" }

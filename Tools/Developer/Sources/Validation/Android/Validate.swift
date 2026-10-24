@@ -50,7 +50,7 @@ enum ValidateOperation {
     let artifacts = directory.appendingPathComponent("Artifacts")
     try Fs.directory(artifacts)
     let slangc = AndroidTools.root.appendingPathComponent("Engine/vendor/slang/bin/slangc")
-    let fixtures = AndroidTools.root.appendingPathComponent("GuavaUI/Runtime/Tests/NativeRHITests/Fixtures")
+    let fixtures = AndroidTools.guavaSDKRoot.appendingPathComponent("Runtime/Tests/NativeRHITests/Fixtures")
     for shader in [
       ("compute", "compute", "computeMain", "compute"),
       ("raster.vertex", "raster", "vertexMain", "vertex"),

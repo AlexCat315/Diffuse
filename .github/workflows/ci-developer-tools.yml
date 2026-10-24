@@ -3,9 +3,9 @@ name: Developer tools
 on:
   push:
     branches: [main]
-    paths: ['Tools/Developer/**', '.github/workflows/ci-developer-tools.yml']
+    paths: ['Tools/Developer/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
   pull_request:
-    paths: ['Tools/Developer/**', '.github/workflows/ci-developer-tools.yml']
+    paths: ['Tools/Developer/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
 
 jobs:
   test:
@@ -34,6 +34,9 @@ jobs:
         env:
           GUAVA_TEST_CHROMIUM: '1'
         run: ./guava test Tools/Developer
+      - name: Verify SDK and Studio package boundaries
+        shell: bash
+        run: ./guava studio boundaries
       - name: Smoke test safe command entry points
         shell: bash
         run: |

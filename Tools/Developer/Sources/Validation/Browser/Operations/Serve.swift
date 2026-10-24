@@ -24,7 +24,7 @@ enum ServeOperation {
     } else {
       port = 8080
     }
-    let root = Repository.path("GuavaUI/Browser")
+    let root = Browser.sdkRoot.appendingPathComponent("Browser")
     let dist = parser.values["--dist"] ?? "dist"
     let directory =
       (dist as NSString).isAbsolutePath

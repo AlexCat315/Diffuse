@@ -20,7 +20,7 @@ func analysisChecks(page: Page, inspector: Frame) throws {
     throw ToolError.message("Source location is missing: \(source.serialized)")
   }
   let filePath = source["filePath"]?.string ?? ""
-  let file = Repository.path("GuavaUI/Examples/Counter/Sources/CounterExample/CounterView.swift")
+  let file = Browser.sdkRoot.appendingPathComponent("Examples/Counter/Sources/CounterExample/CounterView.swift")
   let lines = try Fs.text(file).split(separator: "\n", omittingEmptySubsequences: false).map(
     String.init)
   try ensure(
@@ -51,13 +51,13 @@ func analysisChecks(page: Page, inspector: Frame) throws {
 
   _ = try inspector.locator("details").filter(has: inspector.locator("#sourceBuildRoot")).evaluate(
     "e => e.open = true")
-  let buildRoot = filePath.components(separatedBy: "/GuavaUI/Examples/Counter/").first ?? ""
+  let buildRoot = filePath.components(separatedBy: "/Examples/Counter/").first ?? ""
   try inspector.locator("#sourceBuildRoot").fill(buildRoot)
   try inspector.locator("#sourceLocalRoot").fill("C:\\我的项目\\Guava UI")
   let uri = try inspector.locator("#openSource").attribute("href") ?? ""
   try ensure(
     uri.hasPrefix(
-      "cursor://file/C:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/Guava%20UI/GuavaUI/Examples/Counter/"),
+      "cursor://file/C:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/Guava%20UI/Examples/Counter/"),
     "Windows remote path mapping failed: \(uri)")
 
   try ensure(

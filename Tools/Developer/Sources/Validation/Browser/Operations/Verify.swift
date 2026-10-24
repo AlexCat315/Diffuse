@@ -36,7 +36,7 @@ enum VerifyOperation {
     requireWebGPU: Bool, requireHardwareGPU: Bool, skipNative: Bool,
     nativeOnly: Bool, dist: String, screenshot: String?
   ) throws {
-    let root = Repository.path("GuavaUI/Browser")
+    let root = Browser.sdkRoot.appendingPathComponent("Browser")
     let distURL =
       (dist as NSString).isAbsolutePath
       ? URL(fileURLWithPath: dist).standardizedFileURL

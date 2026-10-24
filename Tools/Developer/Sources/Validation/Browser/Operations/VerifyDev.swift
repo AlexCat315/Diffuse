@@ -31,7 +31,7 @@ enum VerifyDevOperation {
   }
 
   static func verify() throws {
-    let root = Repository.path("GuavaUI/Browser")
+    let root = Browser.sdkRoot.appendingPathComponent("Browser")
     let source = root.appendingPathComponent("Sources/GuavaUIBrowserPrototype/main.swift")
     let original = try Fs.read(source)
     defer { try? Fs.write(original, to: source) }

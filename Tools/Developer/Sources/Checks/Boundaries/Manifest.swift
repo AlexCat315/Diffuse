@@ -107,8 +107,8 @@ struct ManifestLoader {
     self.executable = environment["GUAVA_SWIFT_EXECUTABLE"] ?? "swift"
   }
 
-  mutating func manifest(_ path: String, overrides: [String: String] = [:]) throws -> DumpPackage {
-    let directory = root.appendingPathComponent(path).standardizedFileURL
+  mutating func manifest(at location: URL, overrides: [String: String] = [:]) throws -> DumpPackage {
+    let directory = location.standardizedFileURL
     let key =
       ([directory.path] + overrides.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" })
       .joined(separator: "\u{0}")
@@ -119,7 +119,7 @@ struct ManifestLoader {
       [executable, "package", "--package-path", directory.path, "dump-package"],
       environment: environment)
     let package = try DumpPackage(
-      directory: directory, root: root, json: try Self.decode(output, path: path))
+      directory: directory, root: root, json: try Self.decode(output, path: directory.path))
     cache[key] = package
     return package
   }

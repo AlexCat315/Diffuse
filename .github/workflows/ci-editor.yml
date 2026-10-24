@@ -8,6 +8,11 @@ on:
       - 'Engine/**'
       - '.github/workflows/ci-editor.yml'
       - '.github/actions/setup-toolchains/**'
+      - '.github/actions/native-dependencies/**'
+      - '.github/actions/fetch-sdk/**'
+      - 'Editor/guava.json'
+      - 'guava'
+      - 'guava.cmd'
       - 'Tools/Developer/**'
       - 'cmake/**'
   pull_request:
@@ -16,6 +21,11 @@ on:
       - 'Engine/**'
       - '.github/workflows/ci-editor.yml'
       - '.github/actions/setup-toolchains/**'
+      - '.github/actions/native-dependencies/**'
+      - '.github/actions/fetch-sdk/**'
+      - 'Editor/guava.json'
+      - 'guava'
+      - 'guava.cmd'
       - 'Tools/Developer/**'
       - 'cmake/**'
 
@@ -57,15 +67,8 @@ jobs:
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
 
-      - name: Build native dependencies
-        if: runner.os != 'Windows'
-        shell: bash
-        run: ./guava studio native-bootstrap --force
-
-      - name: Build native dependencies (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./guava studio native-bootstrap --force
+      - name: Prepare cached native dependencies
+        uses: ./.github/actions/native-dependencies
 
       - name: Resolve packages
         shell: bash

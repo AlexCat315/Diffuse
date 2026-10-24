@@ -22,7 +22,7 @@ export GUAVA_SDK_ROOT
 if [ "${1:-}" = studio ]; then
   shift
   GUAVA_STUDIO_SWIFT=${GUAVA_SWIFT_EXECUTABLE:-swift}
-  "$GUAVA_STUDIO_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Developer" --product guava-dev --jobs 4
+  "$GUAVA_STUDIO_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Developer" --product guava-dev --jobs 4 >&2
   GUAVA_STUDIO_PRODUCTS=$("$GUAVA_STUDIO_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Developer" --show-bin-path)
   GUAVA_ROOT="$GUAVA_CHECKOUT" exec "$GUAVA_STUDIO_PRODUCTS/guava-dev" "$@"
 fi

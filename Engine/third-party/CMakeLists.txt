@@ -4,8 +4,12 @@ if(POLICY CMP0177)
 endif()
 project(guava-third-party LANGUAGES C CXX)
 
-include(${CMAKE_SOURCE_DIR}/../../GuavaUI/cmake/NativePlatform.cmake)
-include(${CMAKE_SOURCE_DIR}/../../GuavaUI/cmake/ArtifactBundleManifest.cmake)
+set(GUAVA_SDK_ROOT "$ENV{GUAVA_SDK_ROOT}" CACHE PATH "Guava SDK checkout")
+if(NOT GUAVA_SDK_ROOT)
+    set(GUAVA_SDK_ROOT "${CMAKE_SOURCE_DIR}/../../GuavaUI")
+endif()
+include("${GUAVA_SDK_ROOT}/cmake/NativePlatform.cmake")
+include("${GUAVA_SDK_ROOT}/cmake/ArtifactBundleManifest.cmake")
 
 message(STATUS "Guava third-party target triple: ${GUAVA_TRIPLE} (SPM: ${GUAVA_SPM_TRIPLE})")
 

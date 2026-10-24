@@ -162,6 +162,7 @@ let toolReloadPlugin: [String: Any] = [
     ],
 ]
 
+@MainActor
 func installCapabilityTools(from response: [String: Any]) {
     guard response["ok"] as? Bool == true else { return }
     if let snapshotID = response["snapshot_id"] as? String,
@@ -184,6 +185,7 @@ func installCapabilityTools(from response: [String: Any]) {
 }
 
 @discardableResult
+@MainActor
 func openCapabilitySessionIfNeeded() -> [String: Any] {
     if !activeCapabilityTools.isEmpty { return ["ok": true] }
     let response = editorCall([
@@ -226,6 +228,7 @@ func capabilitySearchText(_ response: [String: Any]) -> String {
     return jsonText(publicResponse)
 }
 
+@MainActor
 func toolDescriptors() throws -> [AgentTool] {
     _ = openCapabilitySessionIfNeeded()
     let definitions = [toolSearchCapabilities, toolSubmitPlan, toolReloadPlugin]
@@ -240,6 +243,7 @@ func toolDescriptors() throws -> [AgentTool] {
     return ProjectToolset.tools + capabilities
 }
 
+@MainActor
 func invokeTool(_ name: String, input: Data) throws -> AgentToolResult {
     let args = try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:]
     let response: [String: Any]
@@ -275,7 +279,7 @@ func invokeTool(_ name: String, input: Data) throws -> AgentToolResult {
 }
 
 let mcp = MCPServer(name: "guava", version: "0.0.9", skills: try UIDiagnosticTools.skills(),
-    tools: { try toolDescriptors() }, execute: { try invokeTool($0, input: $1) })
+    tools: { try await toolDescriptors() }, execute: { try await invokeTool($0, input: $1) })
 
 // MARK: - Main loop
 

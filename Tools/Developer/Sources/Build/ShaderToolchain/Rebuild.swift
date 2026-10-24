@@ -136,7 +136,9 @@ enum RebuildCommand {
 
   private static func buildPrograms(uiOnly: Bool) -> [Program] {
     let renderShaders = Repository.path("Engine/Sources/RenderBackend/Resources/Shaders")
-    let uiShaders = Repository.path("GuavaUI/Sources/GuavaUIRuntime/Resources/Shaders")
+    let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+      .map { URL(fileURLWithPath: $0) } ?? Repository.path("GuavaUI")
+    let uiShaders = sdkRoot.appendingPathComponent("Sources/GuavaUIRuntime/Resources/Shaders")
     var programs: [(String, String, [(String, String)])] = []
     if !uiOnly {
       programs = fixedShaders
