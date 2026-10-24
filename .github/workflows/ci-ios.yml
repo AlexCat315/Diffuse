@@ -15,10 +15,25 @@ jobs:
       - name: Fetch pinned Guava SDK
         uses: ./.github/actions/fetch-sdk
       - uses: ./.github/actions/setup-toolchains
-      - name: Stage iOS dependencies and build the shared application
+      - uses: actions/cache/restore@v5
+        id: native
+        with:
+          path: |
+            GuavaUI/Runtime/build/ios-arm64-simulator/vendor
+            GuavaUI/build/ios-arm64-simulator/vendor
+          key: ios-native-v1-${{ runner.arch }}-xcode27-${{ hashFiles('Editor/guava.json') }}
+      - name: Prepare iOS SDK dependencies
+        run: ./guava setup --ios
+      - uses: actions/cache/save@v5
+        if: steps.native.outputs.cache-hit != 'true'
+        with:
+          path: |
+            GuavaUI/Runtime/build/ios-arm64-simulator/vendor
+            GuavaUI/build/ios-arm64-simulator/vendor
+          key: ${{ steps.native.outputs.cache-primary-key }}
+      - name: Build the shared application
         shell: bash
         run: |
-          ./guava setup --ios
           application="$RUNNER_TEMP/guava-ios-application"
           ./guava create app "$application" --platforms ios
           ./guava build "$application" --ios --debug --output "$RUNNER_TEMP/guava-ios/Application.app"
