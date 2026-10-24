@@ -31,6 +31,10 @@ on:
 
 # SwiftPM validates every Engine binary target even when GuavaMCP only
 # imports Swift products. Bootstrap native artifacts before package resolution.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build (${{ matrix.name }})

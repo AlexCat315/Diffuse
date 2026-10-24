@@ -6,6 +6,10 @@ on:
   pull_request:
     paths: ['Editor/guava.json', 'Tools/Developer/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   simulator:
     runs-on: xcode-27

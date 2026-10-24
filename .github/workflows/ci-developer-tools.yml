@@ -7,6 +7,10 @@ on:
   pull_request:
     paths: ['Tools/Developer/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     strategy:

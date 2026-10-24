@@ -29,6 +29,10 @@ on:
       - 'Tools/Developer/**'
       - 'cmake/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build (${{ matrix.name }})

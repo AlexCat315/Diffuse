@@ -17,6 +17,10 @@ on:
       - 'Tools/Developer/**'
       - '.github/workflows/ci-swift-maintainability.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
