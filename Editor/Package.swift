@@ -57,7 +57,7 @@ let package = Package(
         .package(path: "../Engine"),
         .package(path: "../Engine/Media"),
         .package(path: "Documents"),
-        .package(path: sdkRoot),
+        .package(name: "GuavaUI", path: sdkRoot),
     ],
     targets: [
         // MARK: - Editor Domain

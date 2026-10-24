@@ -41,7 +41,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "\(sdkRoot)/Hosts/Android/Contract"), .package(path: "../../Engine"),
-        .package(path: sdkRoot),
+        .package(name: "GuavaUI", path: sdkRoot),
     ] + contentPackages + gamePackages + showcasePackages,
     targets: [
         .target(name: "CAndroidHost", dependencies: [.product(name: "CGuavaLog", package: "GuavaUI")], publicHeadersPath: "include",

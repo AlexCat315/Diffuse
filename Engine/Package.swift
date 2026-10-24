@@ -78,7 +78,7 @@ let package = Package(
         .executable(name: "GuavaPluginHost", targets: ["GuavaPluginHost"]),
     ],
     dependencies: [
-        .package(path: sdkRoot),
+        .package(name: "GuavaUI", path: sdkRoot),
         .package(path: "Media"),
     ],
     targets: [
