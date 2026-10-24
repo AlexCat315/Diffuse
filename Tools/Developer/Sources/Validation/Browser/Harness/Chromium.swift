@@ -45,12 +45,7 @@ final class ChromiumBrowser: @unchecked Sendable {
       if let status = process.poll() {
         throw ToolError.message("Chromium exited with status \(status):\n\(process.output)")
       }
-      if let endpoint = try? SystemHTTP.get(Chromium.versionURL(port), timeout: 1),
-        endpoint.status == 200,
-        let version = try? JSON.parse(String(decoding: endpoint.body, as: UTF8.self)),
-        let address = version["webSocketDebuggerUrl"]?.string,
-        let url = URL(string: address)
-      {
+      if let url = Chromium.debuggingEndpoint(from: process.output, port: port) {
         websocket = url
         break
       }
@@ -156,8 +151,18 @@ final class ChromiumBrowser: @unchecked Sendable {
 }
 
 enum Chromium {
-  static func versionURL(_ port: Int) -> URL {
-    URL(string: "http://127.0.0.1:\(port)/json/version")!
+  /// Chromium publishes the browser endpoint once its debugging server starts.
+  /// Read that endpoint directly, avoiding an extra HTTP readiness dependency.
+  static func debuggingEndpoint(from output: String, port: Int) -> URL? {
+    let prefix = "DevTools listening on "
+    for line in output.components(separatedBy: .newlines).reversed() {
+      let text = line.trimmingCharacters(in: .whitespaces)
+      guard text.hasPrefix(prefix), let url = URL(string: String(text.dropFirst(prefix.count))),
+        url.scheme == "ws", url.host == "127.0.0.1", url.port == port,
+        url.path.hasPrefix("/devtools/browser/") else { continue }
+      return url
+    }
+    return nil
   }
 
   /// Matches Playwright's launching defaults closely enough that rendering and

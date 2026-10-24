@@ -4,6 +4,18 @@ import XCTest
 @testable import Browser
 
 final class HostTests: XCTestCase {
+  func testDebuggerEndpointMatchesTheLaunchedBrowser() {
+    let address = "ws://127.0.0.1:41234/devtools/browser/fixture"
+    XCTAssertEqual(Chromium.debuggingEndpoint(from: "startup log\nDevTools listening on \(address)\n", port: 41234)?.absoluteString, address)
+    for rejected in [address.replacingOccurrences(of: "41234", with: "41235"),
+                     address.replacingOccurrences(of: "127.0.0.1", with: "example.com"),
+                     address.replacingOccurrences(of: "ws:", with: "http:"),
+                     address.replacingOccurrences(of: "/browser/", with: "/page/")] {
+      XCTAssertNil(Chromium.debuggingEndpoint(from: "DevTools listening on \(rejected)\n", port: 41234))
+    }
+    XCTAssertNil(Chromium.debuggingEndpoint(from: "DevTools listening on ws://127.", port: 41234))
+  }
+
   func testHTTPServerServesRealRequestsAndMissingFiles() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
