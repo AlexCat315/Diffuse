@@ -9,7 +9,7 @@ enum IOSRuntime {
     let buildRoot = cache.appendingPathComponent("ios-target").resolvingSymlinksInPath()
     var environment = ProcessInfo.processInfo.environment
     environment["CARGO_TARGET_DIR"] = buildRoot.path
-    environment["IPHONEOS_DEPLOYMENT_TARGET"] = "16.0"
+    environment["IPHONEOS_DEPLOYMENT_TARGET"] = "26.0"
     try Shell.inherit(
       [
         "cargo", "build",

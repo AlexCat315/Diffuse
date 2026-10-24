@@ -47,7 +47,7 @@ enum Targets {
       let sysroot = try Shell.output(
         ["xcrun", "--sdk", sdk, "--show-sdk-path"], environment: environment)
       let triple =
-        (arch == "aarch64" ? "arm64" : arch) + "-apple-ios16.0"
+        (arch == "aarch64" ? "arm64" : arch) + "-apple-ios26.0"
         + (sdk.hasSuffix("simulator") ? "-simulator" : "")
       let hostRoot = try hostSysroot(environment: environment)
       options += [
@@ -93,7 +93,7 @@ enum Targets {
       // neither headers nor libraries on its own, so the SDK is passed
       // explicitly to both the target compile and the host compiler checks.
       let sysroot = try hostSysroot(environment: environment)
-      let flags = "\(arch == "aarch64" ? "arm64" : arch) -mmacosx-version-min=13.0"
+      let flags = "\(arch == "aarch64" ? "arm64" : arch) -mmacosx-version-min=26.0"
       options += [
         "--target-os=darwin", "--cc=clang", "--sysroot=\(sysroot)",
         "--host-cflags=--sysroot \(sysroot)",

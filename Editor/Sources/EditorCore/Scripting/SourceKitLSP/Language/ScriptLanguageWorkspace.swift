@@ -127,12 +127,12 @@ struct ScriptLanguageWorkspace {
         }.joined(separator: ",\n")
 
         return """
-        // swift-tools-version: 6.1
+        // swift-tools-version: 6.4
         import PackageDescription
 
         let package = Package(
             name: "GuavaScriptAnalysis",
-            platforms: [.macOS(.v13)],
+            platforms: [.macOS(.v26), .iOS(.v26)],
             targets: [
         \(targets)
             ]

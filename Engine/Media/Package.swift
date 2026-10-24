@@ -1,11 +1,11 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.4
 import Foundation
 import PackageDescription
 
 let artifacts = ProcessInfo.processInfo.environment["GUAVA_MEDIA_ARTIFACT_ROOT"] ?? "vendor"
 let package = Package(
     name: "GuavaMedia",
-    platforms: [.macOS(.v13), .iOS(.v16)],
+    platforms: [.macOS(.v26), .iOS(.v26)],
     products: [.library(name: "MediaRuntime", targets: ["MediaRuntime"])],
     targets: [
         .binaryTarget(name: "FFmpeg", path: "\(artifacts)/FFmpeg.artifactbundle"),

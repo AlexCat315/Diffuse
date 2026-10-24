@@ -1,10 +1,10 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.4
 // guava-mcp 0.0.9
 import PackageDescription
 
 let package = Package(
     name: "guava-mcp",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v26), .iOS(.v26)],
     dependencies: [
         .package(path: "../Engine"),
     ],

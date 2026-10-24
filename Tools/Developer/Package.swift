@@ -7,9 +7,13 @@ import PackageDescription
 let sdkRoot =
   ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
     .map { URL(fileURLWithPath: $0).standardizedFileURL.path } ?? "../../GuavaUI"
+let decoderHeaders = URL(fileURLWithPath: sdkRoot,
+  relativeTo: URL(fileURLWithPath: #filePath).deletingLastPathComponent())
+  .appendingPathComponent("Runtime/Sources/Bridge/CImageDecodeBridge").standardizedFileURL.path
 
 let infrastructure: [Target] = [
-  .target(name: "CImageDecoder", path: "Sources/Infrastructure/CImageDecoder"),
+  .target(name: "CImageDecoder", path: "Sources/Infrastructure/CImageDecoder",
+    cSettings: [.unsafeFlags(["-I", decoderHeaders])]),
   .target(
     name: "ImageCodec", dependencies: ["CImageDecoder", .product(name: "ToolSupport", package: "Support")],
     path: "Sources/Infrastructure/ImageCodec"),
@@ -66,7 +70,7 @@ let checks: [Target] = [
 
 let package = Package(
   name: "GuavaDeveloper",
-  platforms: [.macOS(.v13)],
+  platforms: [.macOS(.v26), .iOS(.v26)],
   products: [.executable(name: "guava-dev", targets: ["GuavaDev"])],
   dependencies: [.package(path: "\(sdkRoot)/Tools/Support")],
   targets: infrastructure + buildTools + checks + hostTools + [

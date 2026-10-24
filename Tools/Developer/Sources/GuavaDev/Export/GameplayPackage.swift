@@ -45,6 +45,7 @@ enum GameplayPackage {
             import PackageDescription
             let package = Package(
                 name: "GuavaAndroidGameplay",
+                platforms: [.macOS(.v26), .iOS(.v26)],
                 products: [.library(name: "GuavaAndroidGameplay", targets: ["GuavaAndroidGameplay"])],
                 dependencies: [.package(path: \(literal(root.appendingPathComponent("Engine").path)))],
                 targets: [\(targets.joined(separator: ",\n        "))]

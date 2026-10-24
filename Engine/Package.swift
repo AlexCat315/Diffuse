@@ -1,7 +1,10 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.4
 // GuavaStudioRuntime 0.0.9
 import PackageDescription
 import Foundation
+
+let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+    .map { URL(fileURLWithPath: $0).standardizedFileURL.path } ?? "../GuavaUI"
 
 // Cross builds stage target archives separately from the host's vendor directory.
 let nativeArtifactRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ARTIFACT_ROOT"] ?? "vendor"
@@ -39,7 +42,7 @@ let wasmtimeTargets: [Target] = [
 
 let package = Package(
     name: "GuavaStudioRuntime",
-    platforms: [.macOS(.v13), .iOS(.v16)],
+    platforms: [.macOS(.v26), .iOS(.v26)],
     products: [
         .library(name: "SIMDCompat", targets: ["SIMDCompat"]),
         .library(name: "EngineKernel", targets: ["EngineKernel"]),
@@ -75,7 +78,7 @@ let package = Package(
         .executable(name: "GuavaPluginHost", targets: ["GuavaPluginHost"]),
     ],
     dependencies: [
-        .package(path: "../GuavaUI"),
+        .package(path: sdkRoot),
         .package(path: "Media"),
     ],
     targets: [

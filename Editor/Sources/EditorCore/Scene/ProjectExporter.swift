@@ -369,7 +369,7 @@ public enum ProjectExporter {
             "CFBundlePackageType": "APPL",
             "CFBundleShortVersionString": "1.0",
             "CFBundleVersion": "1",
-            "LSMinimumSystemVersion": "13.0",
+            "LSMinimumSystemVersion": "26.0",
             "NSHighResolutionCapable": true,
         ]
         let plist = try PropertyListSerialization.data(fromPropertyList: info,

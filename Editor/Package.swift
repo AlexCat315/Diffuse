@@ -1,4 +1,4 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.4
 // GuavaStudioEditor 0.0.9
 import Foundation
 import PackageDescription
@@ -44,7 +44,7 @@ let guavaScriptExportLinkerSettings: [LinkerSetting] = [
 let package = Package(
     name: "GuavaStudioEditor",
     defaultLocalization: "en",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v26), .iOS(.v26)],
     products: [
         .executable(name: "EditorApp", targets: ["EditorApp"]),
         .library(name: "EditorCore", targets: ["EditorCore"]),

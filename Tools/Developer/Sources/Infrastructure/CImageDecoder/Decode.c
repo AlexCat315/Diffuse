@@ -7,7 +7,7 @@
 #define STBI_NO_STDIO
 #define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
-#include "../../../../../GuavaUI/Runtime/Sources/Bridge/CImageDecodeBridge/stb_image.h"
+#include "stb_image.h"
 
 unsigned char *guava_tool_decode_image(const unsigned char *data, int count, int *width, int *height) {
     return stbi_load_from_memory(data, count, width, height, NULL, 4);

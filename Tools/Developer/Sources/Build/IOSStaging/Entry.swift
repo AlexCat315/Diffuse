@@ -69,7 +69,7 @@ package enum IOSStaging {
           "-B", build.appendingPathComponent("native").path,
           "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_SYSTEM_NAME=iOS",
           "-DCMAKE_OSX_SYSROOT=\(sysroot)", "-DCMAKE_OSX_ARCHITECTURES=\(arch)",
-          "-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0",
+          "-DCMAKE_OSX_DEPLOYMENT_TARGET=26.0",
           "-DGUAVA_VENDOR_DIR=\(build.appendingPathComponent("vendor").path)",
         ]
         var targets: [String]

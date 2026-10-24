@@ -35,6 +35,7 @@ let applicationSettings: [SwiftSetting] = (gameplayPath == nil ? [] : [.define("
 
 let package = Package(
     name: "GuavaAndroid",
+    platforms: [.macOS(.v26), .iOS(.v26)],
     products: [
         .library(name: "GuavaAndroidApp", type: .dynamic, targets: ["GuavaAndroidApp"]),
     ],

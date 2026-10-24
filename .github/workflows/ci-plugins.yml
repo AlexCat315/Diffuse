@@ -60,7 +60,7 @@ jobs:
           cmake -S Engine/Validation/Plugins -B Engine/build/plugin-ios -G Ninja \
             -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/ios-arm64-simulator" \
             -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphonesimulator \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0
+            -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0
           cmake --build Engine/build/plugin-ios --parallel 4
           ./guava studio plugins prepare --probe '${{ matrix.probe }}' --output "$RUNNER_TEMP/plugin-fixtures"
           simulator_id=$(./guava studio ios-simulator udid --prefix iPhone)

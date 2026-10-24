@@ -415,7 +415,7 @@ struct ProjectExporterTests {
             PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any]
         )
         #expect(plist["CFBundleExecutable"] as? String == "Demo_Game")
-        #expect(plist["LSMinimumSystemVersion"] as? String == "13.0")
+        #expect(plist["LSMinimumSystemVersion"] as? String == "26.0")
         #endif
     }
 
