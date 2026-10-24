@@ -56,16 +56,21 @@ package enum IOSStaging {
         throw ToolError.message("iOS builds require macOS; devices require arm64")
       }
       let root = Repository.root
+      let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+        .map { URL(fileURLWithPath: $0).standardizedFileURL }
+        ?? root.appendingPathComponent("GuavaUI")
+      let engineRoot = root.appendingPathComponent("Engine")
+      let runtimeRoot = sdkRoot.appendingPathComponent("Runtime")
       let variant = "ios-\(arch)" + (sdk == "iphonesimulator" ? "-simulator" : "")
       let vendor = Repository.path("Engine/Media/vendor")
       if !MediaStaging.isReady(platform: variant, vendor: vendor) {
         try MediaStaging.run(["--platform", variant])
       }
       let sysroot = try Shell.output(["xcrun", "--sdk", sdk, "--show-sdk-path"])
-      for package in ["Engine", "GuavaUI/Runtime", "GuavaUI"] {
-        let build = root.appendingPathComponent("\(package)/build/\(variant)")
+      for package in [engineRoot, runtimeRoot, sdkRoot] {
+        let build = package.appendingPathComponent("build/\(variant)")
         var command = [
-          "cmake", "-S", root.appendingPathComponent("\(package)/third-party").path,
+          "cmake", "-S", package.appendingPathComponent("third-party").path,
           "-B", build.appendingPathComponent("native").path,
           "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_SYSTEM_NAME=iOS",
           "-DCMAKE_OSX_SYSROOT=\(sysroot)", "-DCMAKE_OSX_ARCHITECTURES=\(arch)",
@@ -73,7 +78,7 @@ package enum IOSStaging {
           "-DGUAVA_VENDOR_DIR=\(build.appendingPathComponent("vendor").path)",
         ]
         var targets: [String]
-        if package == "Engine" {
+        if package == engineRoot {
           command += [
             "-DGUAVA_STAGE_WASMTIME=" + (plugins ? "ON" : "OFF"),
           ]
@@ -82,7 +87,7 @@ package enum IOSStaging {
           // native dependency; a missing bundle breaks package resolution.
           targets = ["stage_jolt", "stage_ocio_openexr"]
           if plugins { targets.append("stage_wasmtime") }
-        } else if package == "GuavaUI/Runtime" {
+        } else if package == runtimeRoot {
           targets = ["stage_sdl3", "stage_image_decode"]
         } else {
           targets = ["stage_freetype", "stage_harfbuzz"]

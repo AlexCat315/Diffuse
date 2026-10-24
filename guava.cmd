@@ -1,6 +1,8 @@
 @echo off
 setlocal
 if not defined GUAVA_SWIFT_EXECUTABLE set "GUAVA_SWIFT_EXECUTABLE=swift"
+call :select_sdk
+if errorlevel 1 exit /b %errorlevel%
 if /i not "%~1"=="studio" goto forward
 set "GUAVA_STUDIO_ARGS="
 shift
@@ -24,6 +26,9 @@ set "GUAVA_ROOT=%~dp0"
 "%GUAVA_STUDIO_PRODUCTS%\guava-dev.exe" %GUAVA_STUDIO_ARGS%
 exit /b %errorlevel%
 :forward
+"%GUAVA_SDK_ROOT%\guava.cmd" %*
+exit /b %errorlevel%
+:select_sdk
 if defined GUAVA_SDK_ROOT goto verify_selection
 set "GUAVA_SDK_ROOT=%~dp0GuavaUI"
 if exist "%GUAVA_SDK_ROOT%\Tools\Guava\Sources\GuavaCLI\SDK.json" goto run
@@ -43,5 +48,4 @@ git clone --depth 1 --branch "v%GUAVA_SDK_VERSION%" --recurse-submodules --shall
 if errorlevel 1 exit /b %errorlevel%
 set "GUAVA_SDK_ROOT=%~dp0GuavaUI"
 :run
-"%GUAVA_SDK_ROOT%\guava.cmd" %*
-exit /b %errorlevel%
+exit /b 0

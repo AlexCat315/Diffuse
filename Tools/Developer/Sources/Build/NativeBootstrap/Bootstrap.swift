@@ -9,6 +9,9 @@ enum Bootstrap {
   static func run(_ arguments: [String]) throws {
     let force = arguments.contains("--force")
     let root = Repository.root
+    let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+      .map { URL(fileURLWithPath: $0).standardizedFileURL }
+      ?? root.appendingPathComponent("GuavaUI")
 
     // mimalloc must not redirect the CRT allocator while the graphics
     // libraries and their consumers are built.
@@ -27,17 +30,17 @@ enum Bootstrap {
     }
 
     #if os(Windows)
-    let sdkCommand = root.appendingPathComponent("GuavaUI/guava.cmd")
+    let sdkCommand = sdkRoot.appendingPathComponent("guava.cmd")
     #else
-    let sdkCommand = root.appendingPathComponent("GuavaUI/guava")
+    let sdkCommand = sdkRoot.appendingPathComponent("guava")
     #endif
-    try Shell.inherit([sdkCommand.path, "setup", "--sdk-root", root.appendingPathComponent("GuavaUI").path], environment: environment)
+    try Shell.inherit([sdkCommand.path, "setup", "--sdk-root", sdkRoot.path], environment: environment)
 
     // ── Sentinels ────────────────────────────────────────────────────────
 
     let engineDone = root.appendingPathComponent("Engine/vendor/Jolt.artifactbundle")
-    let guavaUIDone = root.appendingPathComponent("GuavaUI/vendor/CFreeType.artifactbundle")
-    let terminalDone = root.appendingPathComponent("GuavaUI/vendor/GhosttyVt.artifactbundle")
+    let guavaUIDone = sdkRoot.appendingPathComponent("vendor/CFreeType.artifactbundle")
+    let terminalDone = sdkRoot.appendingPathComponent("vendor/GhosttyVt.artifactbundle")
     var wasmtimeReady = true
     do { try PluginStaging.run(["stage", "--check"]) } catch { wasmtimeReady = false }
     if !wasmtimeReady {

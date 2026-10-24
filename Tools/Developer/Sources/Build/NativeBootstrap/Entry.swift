@@ -13,8 +13,8 @@ package enum NativeBootstrap {
   static let usage = """
     guava-dev native-bootstrap [--force]
 
-      --force  Discard Engine/build/native and GuavaUI/build/native and restage
-               Media and Wasmtime even when they already verify.
+      --force  Discard Engine/build/native and restage Media and Wasmtime
+               even when they already verify.
     """
 
   package static func run(_ arguments: [String]) throws {
