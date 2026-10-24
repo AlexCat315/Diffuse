@@ -85,14 +85,24 @@ public final class DocumentWorkspace: @unchecked Sendable {
             }
         }
     }
-    /// Moves a file or folder to the Trash and closes documents beneath it.
+    /// Moves a file or folder to recoverable trash and closes documents beneath it.
+    /// Hosts without Foundation's Trash API retain it in `.guava/trash`.
     public func remove(_ path: String) throws {
         try withLock {
             let url = try resolve(path)
-            #if os(macOS) || os(Windows)
+            #if os(macOS)
             try FileManager.default.trashItem(at: url, resultingItemURL: nil)
             #else
-            try FileManager.default.removeItem(at: url)
+            var trash = root
+            for component in [".guava", "trash"] {
+                trash.appendPathComponent(component)
+                guard (try? trash.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true else {
+                    throw DocumentError.invalidPath
+                }
+            }
+            let destination = trash.appendingPathComponent(UUID().uuidString).appendingPathComponent(path)
+            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.moveItem(at: url, to: destination)
             #endif
             for key in Array(storage.keys) where key == path || key.hasPrefix(path + "/") { storage.removeValue(forKey: key) }
         }
@@ -109,6 +119,7 @@ public final class DocumentWorkspace: @unchecked Sendable {
             var paths: [String] = []
             let excluded: Set<String> = ["vendor", "build", "node_modules", "third-party"]
             while let url = enumerator.nextObject() as? URL, paths.count < 10000 {
+                if url.lastPathComponent.hasPrefix(".") { enumerator.skipDescendants(); continue }
                 let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 if values?.isSymbolicLink == true || excluded.contains(url.lastPathComponent) { enumerator.skipDescendants(); continue }
                 if values?.isDirectory == false {
@@ -138,7 +149,9 @@ public final class DocumentWorkspace: @unchecked Sendable {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
         guard values.isRegularFile == true, let size = values.fileSize, size <= 4 * 1024 * 1024 else { throw DocumentError.unsupportedText }
-        let data = try Data(contentsOf: url)
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let data = try handle.readToEnd() ?? Data()
         guard data.count <= 4 * 1024 * 1024, !data.contains(0), let text = String(data: data, encoding: .utf8) else { throw DocumentError.unsupportedText }
         return text
     }

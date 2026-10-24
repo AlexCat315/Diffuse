@@ -69,8 +69,10 @@ struct EditorComponentRegistryTests {
             let authored = ComponentValue.object(Dictionary(uniqueKeysWithValues:
                 node.components.map { ($0.type, $0.value) }))
             let authoredJSON = try JSONSerialization.data(withJSONObject: authored.jsonObject, options: [.sortedKeys])
-            let runtimeJSON = try JSONSerialization.data(withJSONObject: runtimeValues, options: [.sortedKeys])
-            #expect(runtimeJSON == authoredJSON)
+            // Prefab values have already crossed the JSON boundary. Put both
+            // documents through that boundary before comparing numeric values.
+            let authoredWireValue = try JSONSerialization.jsonObject(with: authoredJSON)
+            #expect(ComponentValue(jsonObject: runtimeValues) == ComponentValue(jsonObject: authoredWireValue))
         }
         var occupied = SceneRuntime(componentRegistry: source.scene.componentRegistry)
         _ = occupied.createEntity()

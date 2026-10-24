@@ -2,6 +2,22 @@ import Foundation
 import Testing
 import StudioDocuments
 
+#if !os(macOS)
+@Test func removedDocumentsRemainRecoverableOutsideTheFileListing() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let workspace = DocumentWorkspace(root: root)
+    try workspace.create("notes/设计.md", text: "Keep this content")
+    _ = try workspace.open("notes/设计.md")
+    try workspace.remove("notes/设计.md")
+    #expect(workspace.documents.isEmpty && workspace.files().isEmpty)
+    let trash = root.appendingPathComponent(".guava/trash")
+    let entries = try FileManager.default.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil)
+    let stored = try #require(entries.first).appendingPathComponent("notes/设计.md")
+    #expect(try String(contentsOf: stored, encoding: .utf8) == "Keep this content")
+}
+#endif
+
 @Test func fileListingUsesCanonicalProjectRelativePaths() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory.appendingPathComponent("Notes"), withIntermediateDirectories: true)
