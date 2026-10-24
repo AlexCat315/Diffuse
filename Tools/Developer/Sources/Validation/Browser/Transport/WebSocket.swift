@@ -19,7 +19,10 @@ final class WebSocketTransport: Sendable {
       .connectTimeout(.seconds(10))
       .channelInitializer { channel in
         let upgrader = NIOWebSocketClientUpgrader(maxFrameSize: 32 << 20) { channel, _ in
-          channel.pipeline.addHandler(WebSocketReceiver(inbox: inbox)).map { inbox.open() }
+          channel.eventLoop.makeCompletedFuture {
+            try channel.pipeline.syncOperations.addHandler(WebSocketReceiver(inbox: inbox))
+            inbox.open()
+          }
         }
         return channel.pipeline.addHTTPClientHandlers(
           withClientUpgrade: ([upgrader], { _ in }))

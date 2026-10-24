@@ -7,6 +7,26 @@ private import Glibc
 
 #if os(macOS) || os(Linux) || os(Windows)
 enum ProcessPlatform {
+    static func read(from handle: FileHandle) throws -> Data {
+        #if os(macOS) || os(Linux)
+        var buffer = [UInt8](repeating: 0, count: 65_536)
+        while true {
+            let count = buffer.withUnsafeMutableBytes { bytes in
+                #if canImport(Darwin)
+                Darwin.read(handle.fileDescriptor, bytes.baseAddress, bytes.count)
+                #else
+                Glibc.read(handle.fileDescriptor, bytes.baseAddress, bytes.count)
+                #endif
+            }
+            if count < 0, errno == EINTR { continue }
+            guard count >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            return Data(buffer.prefix(count))
+        }
+        #else
+        return try handle.read(upToCount: 65_536) ?? Data()
+        #endif
+    }
+
     static func prepareInput(_ handle: FileHandle) {
         #if os(macOS)
         _ = fcntl(handle.fileDescriptor, F_SETNOSIGPIPE, 1)

@@ -4,7 +4,7 @@ internal import ToolSupport
 /// Canonicalizes a manifest path the way `Path(...).resolve()` did: absolute,
 /// free of `.`/`..` components and with symlinks resolved.
 func canonicalPath(_ path: String, relativeTo base: URL) -> URL {
-  let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : base.appendingPathComponent(path)
+  let url = URL(fileURLWithPath: path, relativeTo: base)
   return url.standardizedFileURL.resolvingSymlinksInPath()
 }
 

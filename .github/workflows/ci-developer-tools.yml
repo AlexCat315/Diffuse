@@ -30,10 +30,17 @@ jobs:
           chrome-version: stable
           install-dependencies: true
       - name: Test repository tools
+        if: runner.os != 'Linux'
         shell: bash
         env:
           GUAVA_TEST_CHROMIUM: '1'
         run: ./guava test Tools/Developer
+      - name: Test repository tools with a Linux session bus
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          GUAVA_TEST_CHROMIUM: '1'
+        run: dbus-run-session -- ./guava test Tools/Developer
       - name: Verify SDK and Studio package boundaries
         shell: bash
         run: ./guava studio boundaries

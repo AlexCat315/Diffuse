@@ -76,7 +76,9 @@ public final class ProcessSession: @unchecked Sendable {
     private func installReader(_ handle: FileHandle, isError: Bool) {
         let thread = Thread { [weak self] in
             do {
-                while let data = try handle.read(upToCount: 65_536), !data.isEmpty {
+                while true {
+                    let data = try ProcessPlatform.read(from: handle)
+                    if data.isEmpty { break }
                     guard let self else { return }
                     if !eventBuffer.append(isError ? .stderr(data) : .stdout(data)) {
                         fail(ProcessRuntimeError.outputLimit)

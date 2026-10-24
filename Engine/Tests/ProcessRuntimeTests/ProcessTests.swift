@@ -26,6 +26,29 @@ struct ProcessTests {
         #expect(String(decoding: result.stdout, as: UTF8.self) == "hellounset")
     }
 
+    @Test("interactive output arrives while standard input remains open")
+    func interactiveOutput() async throws {
+        let session = try ProcessSession(command: command("printf ready; /bin/cat"))
+        defer { session.cancel() }
+        var events = session.events.makeAsyncIterator()
+        var output = Data()
+        while output.count < 5, let event = try await events.next() {
+            if case let .stdout(data) = event { output.append(data) }
+        }
+        #expect(String(decoding: output, as: UTF8.self) == "ready")
+        try session.write(Data("ping".utf8))
+        while output.count < 9, let event = try await events.next() {
+            if case let .stdout(data) = event { output.append(data) }
+        }
+        #expect(String(decoding: output, as: UTF8.self) == "readyping")
+        session.closeInput()
+        var status: Int32?
+        while let event = try await events.next() {
+            if case let .exited(value) = event { status = value }
+        }
+        #expect(status == 0)
+    }
+
     @Test("output is bounded even when the child never exits")
     func outputLimit() async throws {
         var budget = ProcessBudget(); budget.outputBytes = 100

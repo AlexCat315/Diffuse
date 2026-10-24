@@ -87,6 +87,7 @@ let package = Package(
     .testTarget(name: "ToolSupportTests", dependencies: [.product(name: "ToolSupport", package: "Support")]),
     .testTarget(name: "ImageCodecTests", dependencies: ["ImageCodec"]),
     .testTarget(name: "MaintainabilityTests", dependencies: ["Maintainability"]),
+    .testTarget(name: "BoundaryTests", dependencies: ["Boundaries"]),
     .testTarget(name: "ShaderToolchainTests", dependencies: ["ShaderToolchain"]),
     .testTarget(name: "PluginStagingTests", dependencies: ["PluginStaging"]),
     .testTarget(name: "RegressionReportTests", dependencies: ["RegressionReport"]),

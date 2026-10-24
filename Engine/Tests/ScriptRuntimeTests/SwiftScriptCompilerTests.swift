@@ -125,9 +125,12 @@ struct SwiftScriptCompilerTests {
 
         // Bridges live in both packages now: engine-owned ones under Engine,
         // and the shared graphics/image ones under the GuavaUI SDK.
+        let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+            .map { URL(fileURLWithPath: $0).standardizedFileURL }
+            ?? engineRoot.appendingPathComponent("../GuavaUI").standardizedFileURL
         let bridgeRoots = [
             engineRoot.appendingPathComponent("Sources/Bridge", isDirectory: true),
-            engineRoot.appendingPathComponent("../GuavaUI/Runtime/Sources/Bridge", isDirectory: true),
+            sdkRoot.appendingPathComponent("Runtime/Sources/Bridge", isDirectory: true),
         ]
         for bridgeRoot in bridgeRoots {
             guard let enumerator = fileManager.enumerator(
