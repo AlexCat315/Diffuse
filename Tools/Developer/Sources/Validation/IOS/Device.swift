@@ -72,7 +72,7 @@
     func launch(_ identifier: String) throws {
       try simctl(["launch", "--terminate-running-process", udid, identifier])
     }
-    func screenshot(to url: URL) throws { try simctl(["io", udid, "screenshot", url.path]) }
+    func screenshot(to url: URL) throws { try simctl(["io", udid, "screenshot", "--display=1", url.path]) }
 
     /// Best-effort teardown; an already-shutdown device still deletes cleanly.
     func dispose() {

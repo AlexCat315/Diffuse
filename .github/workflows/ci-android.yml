@@ -1,0 +1,70 @@
+name: Android application build
+on:
+  push:
+    branches: [main]
+    paths: ['Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
+  pull_request:
+    paths: ['Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  application:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: ./.github/actions/fetch-sdk
+      - uses: SwiftyLab/setup-swift@v1.14.1
+        with:
+          swift-version: '6.4.1'
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: '4.4.4'
+          ninjaVersion: '1.13.2'
+      - uses: actions/cache@v5
+        id: swift-sdk
+        with:
+          path: ~/.swiftpm/swift-sdks
+          key: swift-6.4.1-android-sdk-${{ runner.os }}-${{ runner.arch }}
+      - name: Install the verified Swift Android SDK
+        if: steps.swift-sdk.outputs.cache-hit != 'true'
+        run: swift sdk install https://download.swift.org/swift-6.4.1-release/android-sdk/swift-6.4.1-RELEASE/swift-6.4.1-RELEASE_android.artifactbundle.tar.gz --checksum a356b79f8f1daa6ae3a66f4c556966ca20c0208b3659805cf30a83a0a31d6772
+      - name: Install Android platform and NDK
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip -o "$RUNNER_TEMP/android-tools.zip"
+          unzip -q "$RUNNER_TEMP/android-tools.zip" -d "$RUNNER_TEMP/android-tools"
+          manager="$RUNNER_TEMP/android-tools/cmdline-tools/bin/sdkmanager"
+          printf 'y\n%.0s' {1..100} | "$manager" --sdk_root="$ANDROID_HOME" --licenses > /dev/null
+          "$manager" --sdk_root="$ANDROID_HOME" 'platform-tools' 'platforms;android-36' 'build-tools;36.1.0' 'ndk;30.0.16248370'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+      - uses: actions/cache@v5
+        with:
+          path: GuavaUI/build/android-validation
+          key: android-native-v1-${{ runner.os }}-ndk30-${{ hashFiles('Editor/guava.json') }}
+      - name: Build a standalone arm64 application through Guava CLI
+        shell: bash
+        run: |
+          ./guava doctor --android
+          ./guava create app "$RUNNER_TEMP/guava-android-application" --id com.guava.ci.android --platforms android
+          ./guava build "$RUNNER_TEMP/guava-android-application" --android --release --output "$RUNNER_TEMP/android/Application.apk"
+      - name: Verify the APK signature and native payload
+        shell: bash
+        run: |
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify --verbose "$RUNNER_TEMP/android/Application.apk"
+          unzip -l "$RUNNER_TEMP/android/Application.apk" | tee "$RUNNER_TEMP/android/contents.txt"
+          rg 'lib/arm64-v8a/libGuavaAndroidApp.so' "$RUNNER_TEMP/android/contents.txt"
+          rg 'lib/arm64-v8a/libc\+\+_shared.so' "$RUNNER_TEMP/android/contents.txt"
+          rg 'assets/launch.json' "$RUNNER_TEMP/android/contents.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-arm64-application
+          path: ${{ runner.temp }}/android
+          if-no-files-found: error
