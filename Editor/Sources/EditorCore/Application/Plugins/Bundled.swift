@@ -31,8 +31,9 @@ public struct BundledPlugin: Sendable, Equatable, Identifiable {
 enum BundledPlugins {
     /// Every package in `Resources/Plugins` whose manifest is valid.
     static let catalog: [BundledPlugin] = {
-        let root = (EditorCoreResourceBundle.bundle.resourceURL ?? EditorCoreResourceBundle.bundle.bundleURL)
-            .appendingPathComponent("Plugins", isDirectory: true)
+        let bundle = EditorCoreResourceBundle.bundle
+        let root = bundle.url(forResource: "Plugins", withExtension: nil)
+            ?? bundle.bundleURL.appendingPathComponent("Plugins", isDirectory: true)
         let packages = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
         return packages.filter { $0.pathExtension == "guavaplugin" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
             .compactMap { package in

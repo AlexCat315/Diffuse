@@ -140,15 +140,15 @@ public struct ProjectCompiledScripts: Codable, Sendable, Equatable {
         guard let configuration else {
             throw ProjectExporterError.missingScriptBuildConfiguration
         }
-        // The existing Windows script bridge exports only a subset of C operations;
-        // Swift ScriptBehavior libraries need the full host Swift symbol surface.
-        #if os(Windows)
-        throw ProjectExporterError.unsupportedScriptExportTarget(currentTarget)
-        #else
         let assets = try ScriptAssetRegistry(projectDirectory: projectDirectory.path).resolve(sources)
         if configuration.delivery == .staticLink {
             return try ProjectStaticScripts.stage(assets, in: outputDirectory)
         }
+        // Staging statically linked sources is portable. Only dynamic libraries
+        // depend on the host's exported Swift symbol surface.
+        #if os(Windows)
+        throw ProjectExporterError.unsupportedScriptExportTarget(currentTarget)
+        #else
         guard !configuration.engineModulePaths.isEmpty else { throw ProjectExporterError.missingScriptBuildConfiguration }
         let aliasCounts = assets.flatMap(\.legacyIdentifiers).reduce(into: [String: Int]()) {
             $0[$1, default: 0] += 1

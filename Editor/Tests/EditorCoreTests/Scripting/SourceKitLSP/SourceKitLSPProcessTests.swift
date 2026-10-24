@@ -244,7 +244,11 @@ private enum LSPFixtureServer {
             .appendingPathComponent("guava-lsp-fixture-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let source = directory.appendingPathComponent("main.swift")
+        #if os(Windows)
+        let binary = directory.appendingPathComponent("sourcekit-fixture.exe")
+        #else
         let binary = directory.appendingPathComponent("sourcekit-fixture")
+        #endif
         try script.write(to: source, atomically: true, encoding: .utf8)
 
         let process = Process()
@@ -359,7 +363,7 @@ func readByte() -> UInt8? {
     // returns whatever the client has written so far.
     var chunk = [UInt8](repeating: 0, count: 4096)
     while buffer.isEmpty {
-        let count = read(STDIN_FILENO, &chunk, chunk.count)
+        let count = Int(read(STDIN_FILENO, &chunk, .init(chunk.count)))
         if count < 0 && errno == EINTR { continue }
         guard count > 0 else { return nil }
         buffer.append(contentsOf: chunk[..<count])

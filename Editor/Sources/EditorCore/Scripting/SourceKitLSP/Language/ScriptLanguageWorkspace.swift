@@ -80,12 +80,27 @@ struct ScriptLanguageWorkspace {
     }
 
     func validateGeneratedLocation(_ url: URL) throws {
-        let state = projectRootURL.appendingPathComponent(".guava", isDirectory: true)
-            .resolvingSymlinksInPath().standardizedFileURL.path
-        let root = rootURL.resolvingSymlinksInPath().standardizedFileURL.path
-        let target = url.resolvingSymlinksInPath().standardizedFileURL.path
-        guard root.hasPrefix(state + "/"), target.hasPrefix(root + "/") else {
-            throw ScriptLanguageSupportError.unavailable("The generated Swift analysis workspace must remain inside the project's .guava folder.")
+        let failure = ScriptLanguageSupportError.unavailable("The generated Swift analysis workspace must remain inside the project's .guava folder.")
+        func components(_ url: URL) -> [String] {
+            #if os(Windows)
+            url.standardizedFileURL.pathComponents.map { $0.lowercased() }
+            #else
+            url.standardizedFileURL.pathComponents
+            #endif
+        }
+        let state = components(projectRootURL.appendingPathComponent(".guava", isDirectory: true))
+        let root = components(rootURL), target = components(url)
+        guard url.isFileURL, root.count > state.count, root.starts(with: state),
+              target.count > root.count, target.starts(with: root) else { throw failure }
+        // Validate each lexical component before creating it. Windows changes
+        // the spelling of existing paths when resolving symlinks, so comparing
+        // independently resolved existing and future paths is not reliable.
+        var ancestor = projectRootURL.standardizedFileURL
+        for component in url.standardizedFileURL.pathComponents.dropFirst(components(projectRootURL).count) {
+            ancestor.appendPathComponent(component)
+            if (try? ancestor.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true {
+                throw failure
+            }
         }
     }
 
