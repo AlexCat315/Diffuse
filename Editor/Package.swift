@@ -1,6 +1,12 @@
 // swift-tools-version: 6.1
 // GuavaStudioEditor 0.0.9
+import Foundation
 import PackageDescription
+
+/// The standalone Guava SDK checkout, matching the CLI's selection.
+let sdkRoot =
+    ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+        .map { URL(fileURLWithPath: $0).standardizedFileURL.path } ?? "../GuavaUI"
 
 // MARK: - C ABI exports for dynamically loaded Swift scripts
 //
@@ -51,7 +57,7 @@ let package = Package(
         .package(path: "../Engine"),
         .package(path: "../Engine/Media"),
         .package(path: "Documents"),
-        .package(path: "../GuavaUI"),
+        .package(path: sdkRoot),
     ],
     targets: [
         // MARK: - Editor Domain

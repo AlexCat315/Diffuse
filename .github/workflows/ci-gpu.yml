@@ -7,7 +7,6 @@ on:
     paths:
       - 'Engine/**'
       - 'Editor/**'
-      - 'GuavaUI'
       - 'Tools/Developer/**'
       - '.github/workflows/ci-gpu.yml'
       - '.github/actions/setup-toolchains/**'
@@ -34,6 +33,8 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
+      - name: Fetch pinned Guava SDK
+        uses: ./.github/actions/fetch-sdk
 
       - name: Verify build tools and hardware
         run: |

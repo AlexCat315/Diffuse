@@ -2,9 +2,9 @@ name: iOS application host
 on:
   push:
     branches: [main]
-    paths: ['GuavaUI', 'Engine/**', 'cmake/**', 'Tools/Developer/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
+    paths: ['Engine/**', 'cmake/**', 'Tools/Developer/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
   pull_request:
-    paths: ['GuavaUI', 'Engine/**', 'cmake/**', 'Tools/Developer/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
+    paths: ['Engine/**', 'cmake/**', 'Tools/Developer/**', 'examples/GuavaUIStarter/**', '.github/workflows/ci-ios.yml']
   workflow_dispatch:
 jobs:
   simulator:
@@ -12,6 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with: {submodules: recursive}
+      - name: Fetch pinned Guava SDK
+        uses: ./.github/actions/fetch-sdk
       - uses: ./.github/actions/setup-toolchains
       - name: Install Rust targets
         run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
@@ -28,5 +30,3 @@ jobs:
             CODE_SIGNING_ALLOWED=NO ARCHS=arm64 build
       - name: Verify actual simulator rendering
         run: ./guava studio ios-simulator validate "$RUNNER_TEMP/guava-ios/Build/Products/Debug-iphonesimulator/Application.app"
-      - name: Verify the generated iOS CLI project
-        run: ./guava test GuavaUI/Tools/Guava

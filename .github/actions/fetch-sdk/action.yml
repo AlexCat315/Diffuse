@@ -1,0 +1,21 @@
+name: Fetch Guava SDK
+description: Clone the pinned standalone GuavaUI SDK checkout this repository builds against.
+runs:
+  using: composite
+  steps:
+    - name: Clone pinned SDK checkout
+      shell: bash
+      run: |
+        set -euo pipefail
+        version=$(sed -n 's/.*"sdkVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' Editor/guava.json)
+        if [ -z "$version" ]; then
+          echo "Editor/guava.json must declare toolchain.sdkVersion" >&2
+          exit 1
+        fi
+        if [ -f GuavaUI/Tools/Guava/Sources/GuavaCLI/SDK.json ]; then
+          echo "Guava SDK checkout already present"
+          exit 0
+        fi
+        git clone --depth 1 --branch "v$version" \
+          --recurse-submodules --shallow-submodules \
+          https://github.com/AlexCat315/GuavaUI.git GuavaUI

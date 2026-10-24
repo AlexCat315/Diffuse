@@ -18,7 +18,7 @@ The executable discovers the checkout by walking up from its current directory,
 or from `GUAVA_ROOT` when set. From another directory, invoke the checkout's
 `guava` wrapper with an absolute path.
 
-The standalone SDK CLI lives in `GuavaUI/Tools/Guava`. Studio's root wrapper
+The standalone SDK CLI lives in the [GuavaUI repository](https://github.com/AlexCat315/GuavaUI). Studio's root wrapper
 dispatches `studio` commands here and forwards application commands to the SDK.
 The SDK has no dependency on Studio tooling.
 
@@ -114,7 +114,7 @@ Build recipes depend on infrastructure or another recipe they orchestrate.
 Validation harnesses depend on infrastructure; they launch built applications
 at the process boundary. There are no package dependencies on Engine, Editor,
 or UI/rendering products, so tooling can build before native artifacts exist.
-Processes, files, archives and digests come from `GuavaUI/Tools/Support`.
+Processes, files, archives and digests come from the SDK checkout's `Tools/Support`.
 Screenshot decoding includes the SDK's stb header directly, without linking Engine.
 The `boundaries` command guards this separation; `maintainability` also scans
 this package's first-party Swift sources.

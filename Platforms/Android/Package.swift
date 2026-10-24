@@ -3,6 +3,10 @@ import PackageDescription
 import Foundation
 
 let environment = ProcessInfo.processInfo.environment
+/// The standalone Guava SDK checkout, matching the CLI's selection.
+let sdkRoot =
+    environment["GUAVA_SDK_ROOT"].map { URL(fileURLWithPath: $0).standardizedFileURL.path }
+    ?? "../../GuavaUI"
 let gameplayPath = environment["GUAVA_ANDROID_GAME_PACKAGE"]
 let contentPath = environment["GUAVA_ANDROID_UI_PACKAGE"]
 let showcase = gameplayPath == nil && contentPath == nil
@@ -19,7 +23,7 @@ let gameTargets: [Target.Dependency] = gameplayPath.map {
      .product(name: "GameRuntime", package: "Editor")]
 } ?? []
 let showcasePackages: [Package.Dependency] = showcase ? [
-    .package(path: "../../GuavaUI/Examples"),
+    .package(path: "\(sdkRoot)/Examples"),
 ] : []
 let showcaseTargets: [Target.Dependency] = showcase ? [
     .product(name: "GalleryContent", package: "Examples"),
@@ -35,8 +39,8 @@ let package = Package(
         .library(name: "GuavaAndroidApp", type: .dynamic, targets: ["GuavaAndroidApp"]),
     ],
     dependencies: [
-        .package(path: "../../GuavaUI/Hosts/Android/Contract"), .package(path: "../../Engine"),
-        .package(path: "../../GuavaUI"),
+        .package(path: "\(sdkRoot)/Hosts/Android/Contract"), .package(path: "../../Engine"),
+        .package(path: sdkRoot),
     ] + contentPackages + gamePackages + showcasePackages,
     targets: [
         .target(name: "CAndroidHost", dependencies: [.product(name: "CGuavaLog", package: "GuavaUI")], publicHeadersPath: "include",

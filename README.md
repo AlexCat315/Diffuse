@@ -25,7 +25,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 The repository ships three top-level SwiftPM packages plus an MCP server:
 
 - **`Engine/`** — rendering, scene, simulation, asset pipeline, AI runtime kernels, observation bus, film pipeline (EXR / color / denoise / render farm).
-- **`GuavaUI/`** — a pinned submodule of the independent [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI), owning UI, NativeRHI, platform services and the CLI.
+- **`GuavaUI/`** — the [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) is a separate project, fetched at the version pinned by `Editor/guava.json` when you run `./guava`; it owns UI, NativeRHI, platform services and the CLI.
 - **`Editor/`** — the desktop editor application. Hosts the engine, mounts GuavaUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
 - **`GuavaMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
 
@@ -59,7 +59,7 @@ Editor (top-level app)
 - **Proposal** — any author's intent-to-change. Always validated, optionally staged for ghost-world preview, optionally requires user confirmation.
 - **Edit** — a change already applied to the World. Every Edit is a training datum by default; there is no separate "intent training logger."
 
-Full design (in Chinese): [`docs/architecture.md`](docs/architecture.md).
+Full design (in Chinese): [`docs/architecture.md`](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/architecture.md).
 
 ### Roadmap
 
@@ -76,7 +76,7 @@ Full design (in Chinese): [`docs/architecture.md`](docs/architecture.md).
 - **M10 – scene-from-image + first end-to-end workflows** reference image → SceneDocument; LLM agent bridge; film dailies & game playtest loops.
 - **M11 – render farm + long-session memory** cross-process ObservationBus bridge; farm orchestrator; cross-session WorldView reconciliation.
 
-Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap.md`](docs/roadmap.md).
+Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap.md`](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/roadmap.md).
 
 ---
 
@@ -90,7 +90,6 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
   - **macOS**: Xcode Command Line Tools
   - **Linux**: GCC or Clang
   - **Windows**: Visual Studio 2026 (C++ workload)
-- Node.js 26.10.0 / npm (website)
 - Git
 - Graphics: system Metal on macOS; DX12 by default on Windows, with the Windows SDK and DXC for shader compilation; Vulkan on Linux and as a Windows alternative. Vulkan headers are pinned in the SDK and the runtime loads the system graphics driver.
 
@@ -100,11 +99,11 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
 git clone https://github.com/AlexCat315/GuavaStudio.git
 cd GuavaStudio
 git submodule update --init --recursive
-swift run --package-path Tools/Developer guava-dev native-bootstrap
+./guava studio native-bootstrap
 swift build --package-path Editor
 ```
 
-The `guava-dev native-bootstrap` command compiles the native C/C++ dependencies (Yoga, FreeType, HarfBuzz, SDL3, Jolt, OpenEXR/Imath) for each package into its `vendor/` directory and wraps them for SwiftPM. On macOS it also verifies and stages the pinned official Wasmtime Component C API dynamic artifact. It is cross-platform and initializes the MSVC toolchain on Windows.
+`./guava` fetches the GuavaUI SDK version declared by `Editor/guava.json` into the ignored `GuavaUI/` checkout, or uses `GUAVA_SDK_ROOT` when a local SDK checkout is selected. `guava-dev native-bootstrap` then compiles the native C/C++ dependencies (Yoga, FreeType, HarfBuzz, SDL3, Jolt, OpenEXR/Imath) for each package into its `vendor/` directory and wraps them for SwiftPM. On macOS it also verifies and stages the pinned official Wasmtime Component C API dynamic artifact. It is cross-platform and initializes the MSVC toolchain on Windows.
 
 After the first bootstrap, day-to-day development only needs:
 
@@ -112,34 +111,18 @@ After the first bootstrap, day-to-day development only needs:
 swift build --package-path Editor
 ```
 
-> **Force rebuild of native deps:** `swift run --package-path Tools/Developer guava-dev native-bootstrap --force`
-
-### Run the website locally
-
-The official website and documentation portal live under `website/` and use Vue 3, TypeScript, and Vite:
-
-```bash
-cd website
-npm install
-npm run dev
-```
-
-`npm run build` validates content, checks types, runs tests, and generates the static site.
+> **Force rebuild of native deps:** `./guava studio native-bootstrap --force`
 
 ### Individual packages
 
 ```bash
 swift build --package-path Engine   # engine + renderers
-swift build --package-path GuavaUI  # UI framework
 swift run --package-path examples/HelloUI HelloUI
-swift run --package-path GuavaUI/Examples GuavaUIDemo
 swift build --package-path Editor   # editor (run: swift run --package-path Editor EditorApp)
 swift build --package-path GuavaMcp # MCP server (run: swift run GuavaMCP)
 ```
 
-GuavaUI's [portable core and DevTools server](GuavaUI/Portable/README.md) build and
-test without native graphics dependencies. The [Wasm browser prototype](GuavaUI/Browser/README.md)
-provides a WebGPU preview, node inspection and state checkpoints.
+The SDK's portable core, DevTools server, browser prototype and examples live in the [GuavaUI repository](https://github.com/AlexCat315/GuavaUI).
 
 ---
 
@@ -148,9 +131,9 @@ provides a WebGPU preview, node inspection and state checkpoints.
 | Library | Form | Source |
 |---------|------|--------|
 | Yoga | SwiftPM source build | SwiftPM `facebook/yoga` 3.2.1 |
-| FreeType | CMake source build → `.artifactbundle` | submodule under `GuavaUI/third-party/freetype` |
-| HarfBuzz | CMake source build → `.artifactbundle` | submodule under `GuavaUI/third-party/harfbuzz` |
-| SDL3 | SDK release artifact / CMake source build | submodule under `GuavaUI/Runtime/third-party/sdl3` |
+| FreeType | CMake source build → `.artifactbundle` | SDK checkout `third-party/freetype` |
+| HarfBuzz | CMake source build → `.artifactbundle` | SDK checkout `third-party/harfbuzz` |
+| SDL3 | SDK release artifact / CMake source build | SDK checkout `Runtime/third-party/sdl3` |
 | Imath | CMake source build | submodule under `Engine/third-party/imath` |
 | OpenEXR | CMake source build | submodule under `Engine/third-party/openexr` |
 | JoltPhysics | CMake source build → `.artifactbundle` | submodule under `Engine/third-party/jolt` |
@@ -187,15 +170,7 @@ GuavaStudio/
 │   ├── SemanticPipeline/     (structure extraction, fingerprinting, analysis, memory)
 │   ├── SequenceRuntime/      (SequenceDocument, ShotEvaluator, ClipScheduler)
 │   └── SIMDCompat/           (cross-platform SIMD helpers)
-├── GuavaUI/
-│   ├── Sources/GuavaUI/       (application API and native window host)
-│   ├── Sources/GuavaUICompose/ (native components and themes)
-│   ├── Sources/GuavaUIRuntime/ (native text, images, rendering and SDL host)
-│   ├── Sources/GuavaUIWorkspace/ (optional workspace model and views)
-│   ├── Portable/              (portable scene, composition and DevTools contracts)
-│   ├── Text/                  (FreeType/HarfBuzz text service)
-│   ├── Platforms/Android/     (Compose/input session for Android)
-│   └── Examples/              (GalleryContent, GuavaUIDemo, PetDemo)
+├── GuavaUI/                   (external SDK checkout, ignored; src/ at the GuavaUI repository)
 ├── Platforms/Android/         (JNI/Java surface host, APK tools, launch contract)
 ├── Editor/Sources/
 │   ├── EditorApp/             (thin executable launcher)
@@ -204,10 +179,10 @@ GuavaStudio/
 │   └── GameRuntime/           (project simulation and player services)
 ├── examples/                  (HelloUI, GuavaUIStarter, portable Counter, CrystalRush)
 ├── GuavaMcp/Sources/GuavaMCP/  (MCP server exposing Guava capabilities)
-├── website/                 (Vue 3 website, docs, and community portal)
-├── docs/                     (architecture, roadmap, component & blueprint docs)
-└── .github/workflows/        (CI matrices for engine / editor / UI / MCP + release)
+└── .github/workflows/        (CI matrices for engine / editor / MCP + release)
 ```
+
+The website and documentation portal live in the independent [GuavaWebsite repository](https://github.com/AlexCat315/GuavaWebsite).
 
 ---
 
@@ -217,19 +192,21 @@ GitHub Actions workflows live under `.github/workflows/`:
 
 - `ci-engine.yml` — Engine package matrix.
 - `ci-editor.yml` — Editor package.
-- `ci-guavaui.yml` — GuavaUI package.
 - `ci-guava-mcp.yml` — MCP server package.
 - `release.yml` — release builds.
+
+The SDK's own CI lives in the [GuavaUI repository](https://github.com/AlexCat315/GuavaUI).
 
 ---
 
 ## Documentation
 
-- **Architecture (AI-Native design, in Chinese):** [`docs/architecture.md`](docs/architecture.md)
-- **Full roadmap & milestones (in Chinese):** [`docs/roadmap.md`](docs/roadmap.md)
-- **Project overview (in Chinese):** [`docs/project-overview.md`](docs/project-overview.md)
-- **UI design system (in Chinese):** [`docs/components/`](docs/components/)
-- **MCP tools (AI tools API):** [`docs/api/ai-tools.md`](docs/api/ai-tools.md)
+- **Website and documentation:** [GuavaWebsite](https://github.com/AlexCat315/GuavaWebsite)
+- **Architecture (AI-Native design, in Chinese):** [`docs/architecture.md`](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/architecture.md)
+- **Full roadmap & milestones (in Chinese):** [`docs/roadmap.md`](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/roadmap.md)
+- **Project overview (in Chinese):** [`docs/project-overview.md`](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/project-overview.md)
+- **UI design system (in Chinese):** [`docs/components/`](https://github.com/AlexCat315/GuavaWebsite/tree/main/docs/components)
+- **MCP tools (AI tools API):** [`docs/api/ai-tools.md`](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/api/ai-tools.md)
 
 ---
 
@@ -238,6 +215,6 @@ GitHub Actions workflows live under `.github/workflows/`:
 GuavaStudio is open source under the [Apache License 2.0](LICENSE). Third-party dependencies retain their upstream licenses; see [NOTICE](NOTICE) for attribution.
 
 
-The product is GuavaStudio. Runtime modules under `Engine/` remain reusable building blocks. The Editor adds independent text/code documents and a video timeline with cuts, ordering, frame preview, playback, and MP4 export. See [workstation boundaries](docs/architecture/workstation.md), [media](Engine/Media/README.md), and [component standards](docs/components/standard.md).
+The product is GuavaStudio. Runtime modules under `Engine/` remain reusable building blocks. The Editor adds independent text/code documents and a video timeline with cuts, ordering, frame preview, playback, and MP4 export. See [workstation boundaries](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/architecture/workstation.md), [media](Engine/Media/README.md), and [component standards](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/components/standard.md).
 
 New CLI applications include an iOS/iPadOS Xcode host alongside desktop and Android. `guava build MyApp --ios` builds for Simulator; `guava run MyApp --ios --simulator UDID` installs and launches. Devices require `--device ID --team TEAM_ID`. Native Metal/SDL and Wasmtime/Pulley artifacts are staged separately from desktop dependencies.

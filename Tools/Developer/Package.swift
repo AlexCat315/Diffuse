@@ -1,5 +1,12 @@
 // swift-tools-version: 6.4
+import Foundation
 import PackageDescription
+
+/// The standalone Guava SDK checkout. `./guava` and CI provision `GuavaUI/`;
+/// `GUAVA_SDK_ROOT` selects another checkout, matching the CLI.
+let sdkRoot =
+  ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+    .map { URL(fileURLWithPath: $0).standardizedFileURL.path } ?? "../../GuavaUI"
 
 let infrastructure: [Target] = [
   .target(name: "CImageDecoder", path: "Sources/Infrastructure/CImageDecoder"),
@@ -61,7 +68,7 @@ let package = Package(
   name: "GuavaDeveloper",
   platforms: [.macOS(.v13)],
   products: [.executable(name: "guava-dev", targets: ["GuavaDev"])],
-  dependencies: [.package(path: "../../GuavaUI/Tools/Support")],
+  dependencies: [.package(path: "\(sdkRoot)/Tools/Support")],
   targets: infrastructure + buildTools + checks + hostTools + [
     .executableTarget(
       name: "GuavaDev",

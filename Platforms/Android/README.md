@@ -20,7 +20,7 @@ export ANDROID_NDK_HOME=/absolute/path/to/android-ndk-r30
 git submodule update --init --recursive
 ```
 
-[Guava CLI](../../GuavaUI/Tools/Guava/README.md) 是不依赖 UI / 引擎二进制的独立 Swift 工具包。它直接调用 SwiftPM、CMake、JDK 和 Android SDK。SDK 构建 SDL3、图像解码和字体依赖；Studio 构建 Jolt 与其他引擎依赖。SDK 原生缓存位于 `GuavaUI/Runtime/build` 和 `GuavaUI/build`，Studio 缓存位于 `Engine/build`，通过各自的 artifact root 选择，保持桌面 archives 独立。Swift runtime 静态链接；FoundationNetworking 的 OpenSSL / zlib 也显式链接，并在链接阶段拒绝未解析符号。SDL 的 Java 类随应用打包，JNI 初始化由宿主转交 SDL。
+[Guava CLI](https://github.com/AlexCat315/GuavaUI/blob/main/Tools/Guava/README.md) 是不依赖 UI / 引擎二进制的独立 Swift 工具包。它直接调用 SwiftPM、CMake、JDK 和 Android SDK。SDK 构建 SDL3、图像解码和字体依赖；Studio 构建 Jolt 与其他引擎依赖。SDK 原生缓存位于 `GuavaUI/Runtime/build` 和 `GuavaUI/build`，Studio 缓存位于 `Engine/build`，通过各自的 artifact root 选择，保持桌面 archives 独立。Swift runtime 静态链接；FoundationNetworking 的 OpenSSL / zlib 也显式链接，并在链接阶段拒绝未解析符号。SDL 的 Java 类随应用打包，JNI 初始化由宿主转交 SDL。
 
 参考 [Swift Android SDK 官方说明](https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html)、[Swift 6.4 发布说明](https://www.swift.org/blog/swift-6.4-released/)、[SDL Android 宿主约定](https://wiki.libsdl.org/SDL3/README-android)。
 
@@ -31,7 +31,7 @@ git submodule update --init --recursive
 先安装统一 CLI（仓库内也可使用 `./guava`）：
 
 ```sh
-GuavaUI/Tools/Guava/install.sh
+curl -fsSL https://github.com/AlexCat315/GuavaUI/blob/main/Tools/Guava/install.sh | sh
 # 安装器维护用户 PATH；重新打开终端后：
 guava create app /absolute/path/to/MyApp --id com.example.myapp --name 'My App'
 guava run /absolute/path/to/MyApp --android --device DEVICE_SERIAL
@@ -172,7 +172,7 @@ UI / backdrop shader 与场景资源统一通过 `PackageResourceBundle` 查找�
 本轮验收：Gallery **72 页 + 6 项交互**、SharedCounter **22 项**、CrystalRush **8 项**和 NativeRHI **7 项**均通过。CrystalRush Release APK 也已安装，确认场景 / 中文 HUD、触控开始与移动、前后台恢复及禁用调试访问。主机侧 TextField 41 项、ProjectExporter 15 项、shader 工具链 11 项、UI renderer 生命周期 / backdrop 像素 15 项通过。CrystalRush 的胜负、超时、边界和重开另由主机玩法测试覆盖；Android 自动化没有穷举所有玩法路线。
 
 
-应用开发入口和新电脑工具链安装见 [GuavaUI 入门](../../docs/getting-started.md)。应用自己的 `Platforms/Android` 是标准 Gradle 工程；SDK 的 `Runtime` 是共享 Android library，`App/src` 提供宿主实现而不拥有应用身份/版本/权限。CLI 与 Gradle preBuild 共用 Swift 准备操作。
+应用开发入口和新电脑工具链安装见 [GuavaUI 入门](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/getting-started.md)。应用自己的 `Platforms/Android` 是标准 Gradle 工程；SDK 的 `Runtime` 是共享 Android library，`App/src` 提供宿主实现而不拥有应用身份/版本/权限。CLI 与 Gradle preBuild 共用 Swift 准备操作。
 
 `guava run APP --android --devtools` 通过私有启动描述配置随机端口与令牌，读取应用私有会话描述并建立 ADB forwarding；Ctrl+C 撤销 forwarding。`--profile` 使用优化的 Swift 代码与可调试 Android build type；`--release` 不接受启动诊断描述。Android 暂不提供图像镜像，时间线为 CPU 生成时间，不冒充 Vulkan GPU 时间。
 

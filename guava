@@ -8,4 +8,22 @@ if [ "${1:-}" = studio ]; then
   GUAVA_STUDIO_PRODUCTS=$("$GUAVA_STUDIO_SWIFT" build --package-path "$GUAVA_CHECKOUT/Tools/Developer" --show-bin-path)
   GUAVA_ROOT="$GUAVA_CHECKOUT" exec "$GUAVA_STUDIO_PRODUCTS/guava-dev" "$@"
 fi
-GUAVA_SDK_ROOT=${GUAVA_SDK_ROOT:-"$GUAVA_CHECKOUT/GuavaUI"} exec "$GUAVA_CHECKOUT/GuavaUI/guava" "$@"
+
+# The SDK is a standalone project. Studio builds against the checkout selected
+# by GUAVA_SDK_ROOT, or fetches the version declared in Editor/guava.json.
+if [ -z "${GUAVA_SDK_ROOT:-}" ]; then
+  GUAVA_SDK_ROOT="$GUAVA_CHECKOUT/GuavaUI"
+  if [ ! -f "$GUAVA_SDK_ROOT/Tools/Guava/Sources/GuavaCLI/SDK.json" ]; then
+    GUAVA_SDK_VERSION=$(sed -n 's/.*"sdkVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$GUAVA_CHECKOUT/Editor/guava.json")
+    if [ -z "$GUAVA_SDK_VERSION" ]; then
+      echo "Editor/guava.json must declare toolchain.sdkVersion" >&2
+      exit 1
+    fi
+    echo "Fetching Guava SDK v$GUAVA_SDK_VERSION into GuavaUI/" >&2
+    git clone --depth 1 --branch "v$GUAVA_SDK_VERSION" \
+      --recurse-submodules --shallow-submodules \
+      https://github.com/AlexCat315/GuavaUI.git "$GUAVA_SDK_ROOT"
+  fi
+fi
+
+GUAVA_SDK_ROOT="$GUAVA_SDK_ROOT" exec "$GUAVA_SDK_ROOT/guava" "$@"

@@ -7,6 +7,3 @@
 [submodule "Engine/third-party/jolt"]
 	path = Engine/third-party/jolt
 	url = https://github.com/jrouwe/JoltPhysics.git
-[submodule "GuavaUI"]
-	path = GuavaUI
-	url = https://github.com/AlexCat315/GuavaUI.git

@@ -107,8 +107,13 @@ legacy/zig-engine/sdk/csharp/**/**/obj/**
 
 # Swift package build artifacts
 Engine/.build/
-GuavaUI/.build/
 Editor/.build/
+
+# Standalone Guava SDK checkout fetched by `./guava` or .github/actions/fetch-sdk
+/GuavaUI
+
+# Local SDK selection written by the Guava CLI
+/.guava/
 
 # CMake build trees
 /build/
@@ -118,7 +123,6 @@ Editor/.build/
 
 # CMake-produced third-party artifacts (per-package, built locally)
 Engine/vendor/
-GuavaUI/vendor/
 
 *.o
 
@@ -134,16 +138,9 @@ examples/*/.guava/edit_log.jsonl
 examples/*/.guava/context-memory/
 examples/*/Scripts/.guava/
 
-# Versioned local Wasm development builds
-GuavaUI/Browser/.dev-builds/
-
-# Local visual/evidence records — generated per verification run, not versioned
-/docs/guava-ui/
-
 # Guava CLI generated application outputs
 **/.guava/build/
 
 # Independent media dependency artifacts
 Engine/Media/vendor/
-GuavaUI/Examples/.guava/validation/
 .workbuddy-ai/

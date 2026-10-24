@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
+      - name: Fetch pinned Guava SDK
+        uses: ./.github/actions/fetch-sdk
       - uses: ./.github/actions/setup-toolchains
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
