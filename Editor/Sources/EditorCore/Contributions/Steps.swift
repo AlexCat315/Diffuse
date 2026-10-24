@@ -1,5 +1,6 @@
 import Foundation
 import PluginRuntime
+private import StudioDocuments
 
 /// What an operation produced: the plugin's JSON result, or the standard
 /// output of a command whose output is the result.
@@ -126,16 +127,7 @@ extension StepPlugin {
     /// Workspace-relative paths go to the Trash, so removing them can be undone.
     static func trash(_ paths: [String], in root: URL) throws {
         for path in paths {
-            guard !path.isEmpty, !path.hasPrefix("/"), !path.split(separator: "/").contains("..") else {
-                throw StepError.protocolViolation("Refusing to remove a path outside the workspace: \(path)")
-            }
-            let url = root.appendingPathComponent(path)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            #if os(macOS) || os(Windows)
-            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-            #else
-            try FileManager.default.removeItem(at: url)
-            #endif
+            try WorkspaceTrash.remove(path, in: root)
         }
     }
 

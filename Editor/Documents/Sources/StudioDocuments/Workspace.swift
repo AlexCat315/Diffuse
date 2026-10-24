@@ -89,21 +89,8 @@ public final class DocumentWorkspace: @unchecked Sendable {
     /// Hosts without Foundation's Trash API retain it in `.guava/trash`.
     public func remove(_ path: String) throws {
         try withLock {
-            let url = try resolve(path)
-            #if os(macOS)
-            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-            #else
-            var trash = root
-            for component in [".guava", "trash"] {
-                trash.appendPathComponent(component)
-                guard (try? trash.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true else {
-                    throw DocumentError.invalidPath
-                }
-            }
-            let destination = trash.appendingPathComponent(UUID().uuidString).appendingPathComponent(path)
-            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try FileManager.default.moveItem(at: url, to: destination)
-            #endif
+            _ = try resolve(path)
+            try WorkspaceTrash.remove(path, in: root)
             for key in Array(storage.keys) where key == path || key.hasPrefix(path + "/") { storage.removeValue(forKey: key) }
         }
     }
@@ -123,7 +110,7 @@ public final class DocumentWorkspace: @unchecked Sendable {
                 let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 if values?.isSymbolicLink == true || excluded.contains(url.lastPathComponent) { enumerator.skipDescendants(); continue }
                 if values?.isDirectory == false {
-                    let path = url.resolvingSymlinksInPath().standardizedFileURL.path
+                    let path = url.standardizedFileURL.path
                     let prefix = root.path + "/"
                     if path.hasPrefix(prefix) { paths.append(String(path.dropFirst(prefix.count))) }
                 }
@@ -141,9 +128,10 @@ public final class DocumentWorkspace: @unchecked Sendable {
                 throw DocumentError.invalidPath
             }
         }
-        let url = root.appendingPathComponent(path).resolvingSymlinksInPath().standardizedFileURL
-        guard url.path.hasPrefix(root.path + "/") else { throw DocumentError.invalidPath }
-        return url
+        // Components are already bounded and checked for symlinks. Resolving again
+        // on Windows changes an existing path to an extended-length path while a
+        // root that did not exist at initialization keeps its original spelling.
+        return ancestor.standardizedFileURL
     }
     private func read(_ url: URL) throws -> String? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }

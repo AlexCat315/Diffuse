@@ -1,5 +1,5 @@
 import Foundation
-import StudioDocuments
+public import StudioDocuments
 
 /// Workstation documents have independent persistence and execution lifecycles.
 public final class EditorWorkstation: @unchecked Sendable {

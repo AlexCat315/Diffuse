@@ -8,13 +8,19 @@ import StudioDocuments
     defer { try? FileManager.default.removeItem(at: root) }
     let workspace = DocumentWorkspace(root: root)
     try workspace.create("notes/设计.md", text: "Keep this content")
+    try Data("Hidden content".utf8).write(to: root.appendingPathComponent(".gitignore"))
     _ = try workspace.open("notes/设计.md")
     try workspace.remove("notes/设计.md")
+    try WorkspaceTrash.remove(".gitignore", in: root)
     #expect(workspace.documents.isEmpty && workspace.files().isEmpty)
     let trash = root.appendingPathComponent(".guava/trash")
     let entries = try FileManager.default.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil)
-    let stored = try #require(entries.first).appendingPathComponent("notes/设计.md")
+    let stored = try #require(entries.map { $0.appendingPathComponent("notes/设计.md") }
+        .first { FileManager.default.fileExists(atPath: $0.path) })
     #expect(try String(contentsOf: stored, encoding: .utf8) == "Keep this content")
+    let hidden = try #require(entries.map { $0.appendingPathComponent(".gitignore") }
+        .first { FileManager.default.fileExists(atPath: $0.path) })
+    #expect(try String(contentsOf: hidden, encoding: .utf8) == "Hidden content")
 }
 #endif
 
@@ -37,6 +43,7 @@ import StudioDocuments
     try workspace.edit("notes/设计.md", text: "# 工作站 🥭\n")
     try workspace.saveAll()
     #expect(workspace.documents.first?.isDirty == false)
+    #expect(workspace.files() == ["notes/设计.md"])
     try workspace.edit("notes/设计.md", text: "New text")
     #expect(throws: DocumentError.unsavedChanges) { try workspace.close("notes/设计.md") }
     try Data("External edit".utf8).write(to: root.appendingPathComponent("notes/设计.md"))
@@ -54,8 +61,12 @@ import StudioDocuments
     for path in ["../outside", "/tmp/file", ".git/config", "a/../../file", "C:\\file"] {
         #expect(throws: DocumentError.invalidPath) { try workspace.open(path) }
     }
+    for path in ["../outside", "/tmp/file", "a/../../file", "C:\\file", ".guava/trash"] {
+        #expect(throws: DocumentError.invalidPath) { try WorkspaceTrash.remove(path, in: root) }
+    }
     try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("outside"), withDestinationURL: root.deletingLastPathComponent())
     #expect(throws: DocumentError.invalidPath) { try workspace.open("outside/file") }
+    #expect(throws: DocumentError.invalidPath) { try WorkspaceTrash.remove("outside/file", in: root) }
     try Data([0, 1, 255]).write(to: root.appendingPathComponent("binary"))
     #expect(throws: DocumentError.unsupportedText) { try workspace.open("binary") }
 }

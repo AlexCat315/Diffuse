@@ -1,5 +1,5 @@
 import Foundation
-import StudioDocuments
+public import StudioDocuments
 import GuavaUICompose
 
 public final class EditorDocumentWorkspace: _ObservableObject, @unchecked Sendable {
