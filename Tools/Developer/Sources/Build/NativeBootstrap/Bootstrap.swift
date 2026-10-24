@@ -18,7 +18,23 @@ enum Bootstrap {
     var environment = ProcessInfo.processInfo.environment
     environment["MIMALLOC_DISABLE_REDIRECT"] = "1"
     #if os(Windows)
+      // ProcessInfo preserves the casing Windows used to store a variable.
+      // PowerShell exports "Path", while ToolSupport's PATH search reads the
+      // POSIX spelling, so mirror the values before any tool lookup.
+      func canonical(_ name: String) -> String? {
+        environment.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+      }
+      func normalizePathKeys() {
+        if environment["PATH"] == nil, let value = canonical("PATH") {
+          environment["PATH"] = value
+        }
+        if environment["PATHEXT"] == nil, let value = canonical("PATHEXT") {
+          environment["PATHEXT"] = value
+        }
+      }
+      normalizePathKeys()
       try WindowsBuildEnvironment.activate(&environment)
+      normalizePathKeys()
     #endif
 
     // Media is an independent dependency graph. Incremental desktop builds
