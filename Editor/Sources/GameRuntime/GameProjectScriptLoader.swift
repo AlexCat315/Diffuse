@@ -1,6 +1,7 @@
 import EditorCore
 import Foundation
 import ScriptRuntime
+private import GuavaFileSystem
 
 public enum GameProjectScriptLoadError: Error, CustomStringConvertible, Equatable {
     case unsupportedVersion(Int)
@@ -39,7 +40,7 @@ public final class GameProjectScriptLoader {
         guard manifest.target == ProjectCompiledScripts.currentTarget else {
             throw GameProjectScriptLoadError.incompatibleTarget(manifest.target)
         }
-        let root = projectDirectory.resolvingSymlinksInPath().standardizedFileURL
+        let root = PathIdentity.canonicalURL(projectDirectory)
         var identifiers = Set(runtime.registeredScriptIdentifiers)
         var libraries: [(ProjectCompiledScripts.Entry, URL)] = []
         for entry in manifest.entries {
@@ -52,8 +53,8 @@ public final class GameProjectScriptLoader {
                   relativePath.hasPrefix("Scripts/Compiled/") else {
                 throw GameProjectScriptLoadError.invalidLibraryPath(entry.libraryPath)
             }
-            let library = root.appendingPathComponent(relativePath).resolvingSymlinksInPath().standardizedFileURL
-            guard library.path.hasPrefix(root.path + "/") else {
+            let library = PathIdentity.canonicalURL(root.appendingPathComponent(relativePath))
+            guard PathIdentity.contains(library, in: root, includingRoot: false) else {
                 throw GameProjectScriptLoadError.invalidLibraryPath(entry.libraryPath)
             }
             guard ProjectCompiledScripts.digest(of: try Data(contentsOf: library)) == entry.sha256 else {

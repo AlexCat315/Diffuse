@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import AssetPipeline
 import Foundation
 import ScriptRuntime
@@ -274,7 +275,7 @@ public enum ProjectExporter {
     private static func writeJSON<T: Encodable>(_ value: T, to url: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(value).write(to: url, options: [.atomic])
+        try AtomicFile.write(encoder.encode(value), to: url)
     }
 
     private static func validatedAssets(_ assets: [EditorAsset]) throws -> [EditorAsset] {
@@ -375,7 +376,7 @@ public enum ProjectExporter {
         let plist = try PropertyListSerialization.data(fromPropertyList: info,
                                                        format: .xml,
                                                        options: 0)
-        try plist.write(to: contentsURL.appendingPathComponent("Info.plist"), options: [.atomic])
+        try AtomicFile.write(plist, to: contentsURL.appendingPathComponent("Info.plist"))
     }
 
     /// Creates the non-macOS runnable layout. Kept internal so the layout can be
@@ -514,13 +515,13 @@ public enum ProjectExporter {
     }
 
     private static func pathContains(_ candidate: URL, root: URL) -> Bool {
-        ProjectFilePath.contains(candidate, in: root)
+        PathIdentity.contains(candidate, in: root)
     }
 
     private static func relativePath(of candidate: URL, within root: URL) -> String? {
         guard pathContains(candidate, root: root) else { return nil }
-        let candidateComponents = ProjectFilePath.components(candidate)
-        let rootComponentCount = ProjectFilePath.components(root).count
+        let candidateComponents = PathIdentity.components(candidate)
+        let rootComponentCount = PathIdentity.components(root).count
         guard candidateComponents.count > rootComponentCount else { return nil }
         return candidateComponents.dropFirst(rootComponentCount).joined(separator: "/")
     }

@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 public import Foundation
 
 public struct SwiftToolchainPreferences: Codable, Sendable, Equatable {
@@ -28,6 +29,6 @@ public struct SwiftToolchainPreferences: Codable, Sendable, Equatable {
 
     public func save(to directory: URL = Self.directory) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try JSONEncoder().encode(self).write(to: directory.appendingPathComponent("preferences.json"), options: .atomic)
+        try AtomicFile.write(JSONEncoder().encode(self), to: directory.appendingPathComponent("preferences.json"))
     }
 }

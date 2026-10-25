@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 import GuavaUICompose
 
@@ -17,13 +18,7 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
 
     /// `plugins` runs the bundled Git and Lore plugins that drive every command.
     init(projectRoot: URL, plugins: StepPlugins) {
-#if os(Windows)
-        // GetFinalPathNameByHandle returns a \\?\ path; keep the ordinary
-        // absolute path so descendants can be appended reliably.
-        self.projectRoot = URL(fileURLWithPath: projectRoot.path).standardizedFileURL
-#else
-        self.projectRoot = projectRoot.resolvingSymlinksInPath().standardizedFileURL
-#endif
+        self.projectRoot = PathIdentity.canonicalURL(projectRoot)
         self.plugins = plugins
     }
 
@@ -151,7 +146,7 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
         var text = existing
         if !text.isEmpty, !text.hasSuffix("\n") { text += "\n" }
         text += "# Guava Studio machine-local state\n" + missing.joined(separator: "\n") + "\n"
-        try Data(text.utf8).write(to: url, options: .atomic)
+        try AtomicFile.write(Data(text.utf8), to: url)
     }
 
     // MARK: Paths

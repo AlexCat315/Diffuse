@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 #if canImport(Darwin)
 import Darwin
@@ -213,7 +214,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         if cancellation?.isCancelled == true { throw ScriptCompileError.cancelled }
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         let shimURL = outputDirectory.appendingPathComponent(".guava-entrypoint-\(UUID().uuidString).swift")
-        try Self.generatedEntryPointSource.write(to: shimURL, atomically: true, encoding: .utf8)
+        try AtomicFile.write(Data(Self.generatedEntryPointSource.utf8), to: shimURL)
         defer { try? FileManager.default.removeItem(at: shimURL) }
 
         // Emit to a unique path on every compilation. The previous generation
@@ -457,7 +458,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         // Always regenerate the .def so newly added bridge symbols are picked
         // up without a manual rebuild step.
         let defContent = buildDefFileContent()
-        try defContent.write(toFile: defPath, atomically: true, encoding: .utf8)
+        try AtomicFile.write(Data(defContent.utf8), to: URL(fileURLWithPath: defPath))
 
         let process = Process()
         process.executableURL = try Self.resolveExecutableURL(for: dlltoolPath)

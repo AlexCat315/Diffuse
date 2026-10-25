@@ -1,5 +1,6 @@
 ﻿import Foundation
 import GuavaLogging
+private import GuavaFileSystem
 import SIMDCompat
 
 public enum AssetRegistryError: Error, CustomStringConvertible {
@@ -124,7 +125,7 @@ public final class AssetRegistry: @unchecked Sendable {
     @discardableResult
     public func loadProject(at rootPath: String,
                             preferredMeshIndices: [String: Int] = [:]) throws -> [AssetRegistryEntry] {
-        let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true).resolvingSymlinksInPath()
+        let rootURL = PathIdentity.canonicalURL(URL(fileURLWithPath: rootPath, isDirectory: true))
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: rootURL.path, isDirectory: &isDirectory),
               isDirectory.boolValue else {
@@ -155,7 +156,7 @@ public final class AssetRegistry: @unchecked Sendable {
         }
 
         for candidate in candidates {
-            let assetURL = candidate.url.resolvingSymlinksInPath()
+            let assetURL = PathIdentity.canonicalURL(candidate.url)
             guard let relativePath = Self.relativePath(of: candidate.url, within: rootURL) else {
                 LogSystem.logger("com.guava.engine.assets")
                     .warning("AssetRegistry: skipping path outside project root: \(candidate.url.path)")
@@ -350,21 +351,8 @@ public final class AssetRegistry: @unchecked Sendable {
     ]
 
     private static func relativePath(of candidate: URL, within root: URL) -> String? {
-        let candidateComponents = candidate.resolvingSymlinksInPath().path.split(separator: "/").map(String.init)
-        let rootComponents = root.resolvingSymlinksInPath().path.split(separator: "/").map(String.init)
-        guard candidateComponents.count > rootComponents.count else { return nil }
-
-        #if os(Windows)
-        let comparableCandidate = candidateComponents.map { $0.lowercased() }
-        let comparableRoot = rootComponents.map { $0.lowercased() }
-        #else
-        let comparableCandidate = candidateComponents
-        let comparableRoot = rootComponents
-        #endif
-        guard comparableCandidate.prefix(comparableRoot.count).elementsEqual(comparableRoot) else {
-            return nil
-        }
-        return candidateComponents.dropFirst(rootComponents.count).joined(separator: "/")
+        guard PathIdentity.contains(candidate, in: root, includingRoot: false) else { return nil }
+        return PathIdentity.relativePath(candidate, to: root)
     }
 
     private func findImportableAssets(in rootURL: URL) throws -> [(url: URL, kind: ImportableAssetKind)] {

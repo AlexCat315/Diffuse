@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 import PluginRuntime
 
@@ -68,7 +69,7 @@ enum BundledPlugins {
         if enabled { disabled.remove(id) } else { disabled.insert(id) }
         let url = preferences(in: project)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(disabled.sorted()).write(to: url, options: .atomic)
+        try AtomicFile.write(JSONEncoder().encode(disabled.sorted()), to: url)
     }
 
     private static func preferences(in project: String) -> URL {

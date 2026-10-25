@@ -1,4 +1,5 @@
 import Foundation
+private import GuavaProcess
 
 /// A located command-line tool for a contribution and the environment it may run with.
 struct ContributionTool: Sendable {
@@ -10,22 +11,28 @@ struct ContributionTool: Sendable {
     /// `GUAVA_<COMMAND>_EXECUTABLE` names a specific build.
     static func locate(_ command: String,
                        environment: [String: String] = ProcessInfo.processInfo.environment) -> ContributionTool? {
+        #if os(Windows)
+        let separator: Character = ";"
+        let home = ProcessEnvironment.value("USERPROFILE", in: environment) ?? NSHomeDirectory()
+        let common = ["\(home)/.cargo/bin", "\(home)/.local/bin"]
+        #else
+        let separator: Character = ":"
         let home = environment["HOME"] ?? NSHomeDirectory()
-        let override = environment["GUAVA_\(command.uppercased())_EXECUTABLE"].map { [$0] } ?? []
-        let path = (environment["PATH"] ?? "").split(separator: ":").map(String.init)
         let common = ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/.local/bin", "\(home)/.cargo/bin", "/usr/bin", "/bin"]
+        #endif
+        let path = (ProcessEnvironment.value("PATH", in: environment) ?? "").split(separator: separator).map(String.init)
         var seen = Set<String>()
         let directories = (path + common).filter { seen.insert($0).inserted }
-        let candidates = override + directories.map { URL(fileURLWithPath: $0).appendingPathComponent(command).path }
-        guard let found = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
-        var inherited = environment
-        inherited["PATH"] = directories.joined(separator: ":")
-        return ContributionTool(executable: URL(fileURLWithPath: found), environment: inherited)
+        let inherited = ProcessEnvironment.setting(directories.joined(separator: String(separator)), for: "PATH", in: environment)
+        let override = ProcessEnvironment.value("GUAVA_\(command.uppercased())_EXECUTABLE", in: environment)
+        guard let executable = ToolLocator.executable(override ?? command, environment: inherited) else { return nil }
+        return ContributionTool(executable: executable, environment: inherited)
+
     }
 
     /// The editor's values for the variables a plugin's process permission
     /// allows; PATH is the search path the tool was found on.
     func environment(allowing keys: [String]) -> [String: String] {
-        environment.filter { keys.contains($0.key) }
+        Dictionary(uniqueKeysWithValues: keys.compactMap { key in ProcessEnvironment.value(key, in: environment).map { (key, $0) } })
     }
 }

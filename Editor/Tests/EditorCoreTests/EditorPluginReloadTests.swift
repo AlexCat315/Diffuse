@@ -219,42 +219,9 @@ final class EditorPluginReloadTests: XCTestCase {
     /// Most recently built `GuavaPluginHost`, matching how PluginRuntimeTests
     /// resolves its fixture executable.
     private func pluginHostExecutable() throws -> URL {
-        #if os(Windows)
-        let name = "GuavaPluginHost.exe"
-        #else
-        let name = "GuavaPluginHost"
-        #endif
-        let repositoryRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let buildRoot = repositoryRoot.appendingPathComponent("Engine/.build", isDirectory: true)
-        let directories = (try? FileManager.default.contentsOfDirectory(
-            at: buildRoot,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        )) ?? []
-        var candidates: Set<URL> = []
-        for directory in directories {
-            for candidate in [
-                directory.appendingPathComponent(name),
-                directory.appendingPathComponent("debug").appendingPathComponent(name),
-            ] where FileManager.default.isExecutableFile(atPath: candidate.path) {
-                candidates.insert(candidate.resolvingSymlinksInPath())
-            }
-        }
-        let newest = candidates.max { lhs, rhs in
-            let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate ?? .distantPast
-            let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate ?? .distantPast
-            return lhsDate < rhsDate
-        }
-        return try XCTUnwrap(
-            newest,
-            "GuavaPluginHost is not built; run `swift build --package-path Engine --product GuavaPluginHost` first."
-        )
+        try XCTUnwrap(EditorPluginHostLocator.resolve(),
+                      "GuavaPluginHost is not built; run `guava test Editor --build-only` first.")
+
     }
 
     /// Builds `safe.reloadtest.guavaplugin` from the canonical reader fixture

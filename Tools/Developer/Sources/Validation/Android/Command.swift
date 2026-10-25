@@ -1,5 +1,6 @@
 internal import Foundation
 internal import ToolSupport
+internal import GuavaProcess
 
 /// Device commands share the same finite-process IO and deadline behavior as
 /// repository checks. Only file/inherited output needs a direct streaming path.
@@ -31,13 +32,13 @@ enum Command {
   }
 
   static func attempt(_ arguments: [String], timeout: TimeInterval) throws -> ProcessOutput {
-    try ProcessRunner.run(arguments, timeout: timeout)
+    try ToolSupport.ProcessRunner.run(arguments, timeout: timeout)
   }
 
   private static func capture(_ arguments: [String], discardError: Bool = false) throws
     -> ProcessOutput
   {
-    let result = try ProcessRunner.run(arguments)
+    let result = try ToolSupport.ProcessRunner.run(arguments)
     if !discardError { FileHandle.standardError.write(result.stderr) }
     try verify(arguments, status: result.status)
     return result

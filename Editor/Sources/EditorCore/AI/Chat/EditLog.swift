@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 import IntentRuntime
 
@@ -33,7 +34,7 @@ public final class EditLog: @unchecked Sendable {
                 try handle.seekToEnd()
                 try handle.write(contentsOf: data)
             } else {
-                try data.write(to: fileURL, options: .atomic)
+                try AtomicFile.write(data, to: fileURL)
             }
         }
     }

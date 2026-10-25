@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 import GuavaUICompose
 import ScriptRuntime
@@ -178,7 +179,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
     }
 
     public func scriptFile(at url: URL) throws -> ScriptFile? {
-        try scanScriptFiles().first { ProjectFilePath.sameLocation($0.url, url) }
+        try scanScriptFiles().first { PathIdentity.sameLocation($0.url, url) }
     }
 
     public func startLanguageService(
@@ -400,7 +401,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
     /// ``compileAndLoad(scriptID:sourceURL:)`` afterwards if a hot-reload is
     /// desired.
     public func writeSource(_ source: String, at url: URL) throws {
-        try source.write(to: url, atomically: true, encoding: .utf8)
+        try AtomicFile.write(Data(source.utf8), to: url)
     }
 
     /// Creates a new script file with the given name (without extension) and
@@ -426,7 +427,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
             throw ScriptFileError.alreadyExists(normalizedName)
         }
         do {
-            try Data(source.utf8).write(to: url, options: .atomic)
+            try AtomicFile.write(Data(source.utf8), to: url)
         } catch {
             try? fm.removeItem(at: url)
             throw error

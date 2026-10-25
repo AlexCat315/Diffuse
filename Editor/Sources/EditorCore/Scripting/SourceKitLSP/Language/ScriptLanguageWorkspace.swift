@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 struct ScriptLanguageWorkspace {
@@ -162,6 +163,6 @@ struct ScriptLanguageWorkspace {
         }
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                 withIntermediateDirectories: true)
-        try Data(contents.utf8).write(to: url, options: .atomic)
+        try AtomicFile.write(Data(contents.utf8), to: url)
     }
 }

@@ -1,5 +1,5 @@
 import Foundation
-import ProcessRuntime
+internal import GuavaProcess
 import Testing
 @testable import PluginRuntime
 

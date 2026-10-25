@@ -1,7 +1,7 @@
 import Foundation
 import PluginRuntime
 import LanguageServerRuntime
-import ProcessRuntime
+internal import GuavaProcess
 
 final class PluginLanguageService: @unchecked Sendable {
     /// The plugin whose language server this session drives.
@@ -60,7 +60,7 @@ final class PluginLanguageService: @unchecked Sendable {
                     self?.lock.withLock { self?.memoryBytes = update.residentMemoryBytes }
                     for event in [update.stdout.isEmpty ? nil : ProcessEvent.stdout(update.stdout),
                                   update.stderr.isEmpty ? nil : ProcessEvent.stderr(update.stderr)].compactMap({ $0 }) {
-                        if case .dropped = continuation.yield(event) { throw ProcessRuntimeError.outputLimit }
+                        if case .dropped = continuation.yield(event) { throw ProcessError.outputLimit }
                     }
                     if let failure = update.failure { throw ScriptLanguageSupportError.unavailable(failure) }
                     if let status = update.exitStatus {

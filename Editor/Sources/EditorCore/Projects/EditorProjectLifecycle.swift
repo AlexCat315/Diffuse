@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 public enum EditorProjectTemplate: String, Codable, Sendable {
@@ -55,11 +56,11 @@ public enum EditorProjectLifecycle {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(descriptor).write(to: staging.appendingPathComponent(descriptorPath), options: .atomic)
+        try AtomicFile.write(encoder.encode(descriptor), to: staging.appendingPathComponent(descriptorPath))
         switch template {
         case .blank:
             let scene = EditorSceneManifest(revision: 0, entityCount: 0, roots: [])
-            try encoder.encode(scene).write(to: staging.appendingPathComponent(scenePath), options: .atomic)
+            try AtomicFile.write(encoder.encode(scene), to: staging.appendingPathComponent(scenePath))
         case .crystalRush:
             try copyTemplate("crystal-rush.swift", extension: "txt", to: staging.appendingPathComponent("Scripts/CrystalRush.swift"))
             try copyTemplate("crystal-rush.scene", extension: "json", to: staging.appendingPathComponent(scenePath))
@@ -126,19 +127,10 @@ public enum EditorProjectLifecycle {
         guard location.descriptor != nil else {
             throw Failure("Legacy projects can only be removed from Recents. Manage their files in the file manager.")
         }
-        #if os(macOS)
-        var trashed: NSURL?
-        try FileManager.default.trashItem(at: root, resultingItemURL: &trashed)
-        return (trashed as URL?) ?? root
-        #else
-        // A recoverable application trash is used where Foundation has no native trash API.
-        let trash = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let recovery = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Guava/DeletedProjects", isDirectory: true)
-        try FileManager.default.createDirectory(at: trash, withIntermediateDirectories: true)
-        let destination = trash.appendingPathComponent("\(root.lastPathComponent)-\(UUID().uuidString)")
-        try FileManager.default.moveItem(at: root, to: destination)
-        return destination
-        #endif
+        return try FileTrash.move(root, recoveryDirectory: recovery)
+
     }
 
     public static func validatedName(_ proposed: String) throws -> String {

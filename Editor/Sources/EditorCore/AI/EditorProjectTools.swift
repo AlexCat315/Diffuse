@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import AIRuntime
 import CapabilityRuntime
 import Foundation
@@ -146,7 +147,7 @@ extension EditorApplication {
             let source = args["source"] as? String ?? ""
             guard source.utf8.count <= 262_144 else { throw EditorProjectToolError("Source exceeds 256 KiB.") }
             if FileManager.default.fileExists(atPath: url.path) {
-                guard workstation.scripts.snapshot.documents.first(where: { ProjectFilePath.sameLocation($0.file.url, url) })?.isDirty != true else {
+                guard workstation.scripts.snapshot.documents.first(where: { PathIdentity.sameLocation($0.file.url, url) })?.isDirty != true else {
                     throw EditorProjectToolError("The editor has unsaved changes for \(url.lastPathComponent). Save or resolve them first.")
                 }
                 let current = CapabilityDigest.sha256(try boundedScriptData(at: url))
@@ -222,7 +223,7 @@ extension EditorApplication {
     private func validateProjectScriptsDirectory() throws {
         let root = URL(fileURLWithPath: projectDirectory).resolvingSymlinksInPath().standardizedFileURL
         let scripts = dynamicScriptManager.scriptsDirectoryURL.resolvingSymlinksInPath().standardizedFileURL
-        guard ProjectFilePath.contains(scripts, in: root, includingRoot: false) else {
+        guard PathIdentity.contains(scripts, in: root, includingRoot: false) else {
             throw EditorProjectToolError("Scripts directory escapes the project.")
         }
     }
@@ -234,7 +235,7 @@ extension EditorApplication {
         try validateProjectScriptsDirectory()
         let scripts = dynamicScriptManager.scriptsDirectoryURL.resolvingSymlinksInPath().standardizedFileURL
         let url = scripts.appendingPathComponent(filename).resolvingSymlinksInPath().standardizedFileURL
-        guard ProjectFilePath.sameLocation(url.deletingLastPathComponent(), scripts) else {
+        guard PathIdentity.sameLocation(url.deletingLastPathComponent(), scripts) else {
             throw EditorProjectToolError("Script escapes the project.")
         }
         return url

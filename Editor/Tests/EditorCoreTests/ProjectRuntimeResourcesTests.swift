@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 @testable import EditorCore
 import Foundation
 import Testing
@@ -17,8 +18,8 @@ struct ProjectRuntimeResourcesTests {
         try Data([2]).write(to: generated.appendingPathComponent("stale.wav"))
 
         let directories = ProjectRuntimeResources.discoverAudioSearchPaths(at: root.path)
-        #expect(directories.contains { ProjectFilePath.sameLocation($0, root) })
-        #expect(directories.contains { ProjectFilePath.sameLocation($0, audio) })
-        #expect(!directories.contains { ProjectFilePath.sameLocation($0, generated) })
+        #expect(directories.contains { PathIdentity.sameLocation($0, root) })
+        #expect(directories.contains { PathIdentity.sameLocation($0, audio) })
+        #expect(!directories.contains { PathIdentity.sameLocation($0, generated) })
     }
 }

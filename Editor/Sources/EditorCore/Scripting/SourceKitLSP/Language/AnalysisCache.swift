@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 private struct ScriptAnalysisCacheIdentity: Codable, Equatable {
@@ -49,16 +50,15 @@ extension ScriptLanguageWorkspace {
         let previous = (try? Data(contentsOf: identityURL)).flatMap { try? JSONDecoder().decode(ScriptAnalysisCacheIdentity.self, from: $0) }
         if previous != identity, manager.fileExists(atPath: scratch.path) { try manager.removeItem(at: scratch) }
         try manager.createDirectory(at: scratch, withIntermediateDirectories: true)
-        try JSONEncoder().encode(identity).write(to: identityURL, options: .atomic)
+        try AtomicFile.write(JSONEncoder().encode(identity), to: identityURL)
         // The server also serves the project folder, so the scratch path is this
         // package's own setting rather than a command-line flag for every package.
         let configuration = rootURL.appendingPathComponent(".sourcekit-lsp/config.json")
         try validateGeneratedLocation(configuration)
         try manager.createDirectory(at: configuration.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONSerialization.data(withJSONObject: ["swiftPM": ["scratchPath": scratch.path]], options: [.sortedKeys])
-            .write(to: configuration, options: .atomic)
+        try AtomicFile.write(JSONSerialization.data(withJSONObject: ["swiftPM": ["scratchPath": scratch.path]], options: [.sortedKeys]), to: configuration)
         // Generated and machine-local: keep it out of the project's version control.
-        try Data("*\n".utf8).write(to: rootURL.appendingPathComponent(".gitignore"), options: .atomic)
+        try AtomicFile.write(Data("*\n".utf8), to: rootURL.appendingPathComponent(".gitignore"))
         return scratch
     }
 }

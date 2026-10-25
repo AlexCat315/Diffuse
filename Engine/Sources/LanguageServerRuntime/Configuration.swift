@@ -1,5 +1,5 @@
 public import Foundation
-public import ProcessRuntime
+public import GuavaProcess
 
 public struct LanguageServerConfiguration: Sendable {
     public var command: ProcessCommand

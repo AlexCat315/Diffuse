@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import GuavaLogging
 import EditorCore
 import GuavaUI
@@ -290,7 +291,7 @@ enum EditorRootViewFactory {
         do {
             let data = try encoder.encode(shell)
             let path = layoutDir.appendingPathComponent(shellStatePersistenceKey + ".json")
-            try data.write(to: path, options: .atomic)
+            try AtomicFile.write(data, to: path)
         } catch {
             LogSystem.logger("com.guava.editor.persistence").error("[EditorRootViewFactory] failed to save shell state: \(error)")
         }
@@ -520,7 +521,7 @@ enum EditorRootViewFactory {
             let path = layoutDir.appendingPathComponent(
                 workspaceLayoutPersistenceKey + ".json"
             )
-            try data.write(to: path, options: .atomic)
+            try AtomicFile.write(data, to: path)
         } catch {
             LogSystem.logger("com.guava.editor.persistence").error("[EditorRootViewFactory] failed to save workspace layout: \(error)")
         }

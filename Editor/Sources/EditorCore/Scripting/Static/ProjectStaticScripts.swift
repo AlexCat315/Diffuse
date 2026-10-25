@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 /// Host build input for APKs. The sources are compiled into the player and are not shipped as assets.
@@ -22,7 +23,7 @@ public struct ProjectStaticScripts: Codable, Sendable {
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(Self(entries: entries)).write(to: directory.appendingPathComponent(relativePath), options: .atomic)
+        try AtomicFile.write(encoder.encode(Self(entries: entries)), to: directory.appendingPathComponent(relativePath))
         return Set(entries.map(\.identifier))
     }
 }

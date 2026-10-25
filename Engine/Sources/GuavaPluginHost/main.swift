@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 import GuavaLogging
 private var loggingConfiguration = LoggingConfiguration()
@@ -11,18 +12,7 @@ import PluginWasmtimeRuntime
 
 private func createSecureDirectory(at url: URL,
                                    withIntermediateDirectories: Bool) throws {
-    #if os(Windows)
-    try FileManager.default.createDirectory(
-        at: url,
-        withIntermediateDirectories: withIntermediateDirectories
-    )
-    #else
-    try FileManager.default.createDirectory(
-        at: url,
-        withIntermediateDirectories: withIntermediateDirectories,
-        attributes: [.posixPermissions: 0o700]
-    )
-    #endif
+    try FilePermissions.createPrivateDirectory(at: url, withIntermediateDirectories: withIntermediateDirectories)
 }
 
 let processService = PluginProcessService()
@@ -36,8 +26,7 @@ let limits = PluginResourceLimits.secureDefault
 if CommandLine.arguments.count > 1 {
     if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--compile-component" {
         let source = try String(contentsOfFile: CommandLine.arguments[2], encoding: .utf8)
-        try EmbeddedWasmtimeComponentRuntime.compileComponentWAT(source)
-            .write(to: URL(fileURLWithPath: CommandLine.arguments[3]), options: .atomic)
+        try AtomicFile.write(EmbeddedWasmtimeComponentRuntime.compileComponentWAT(source), to: URL(fileURLWithPath: CommandLine.arguments[3]))
         exit(0)
     }
     // `guava plugin build`: the shell and guest bindings for a WIT contract,
@@ -47,16 +36,15 @@ if CommandLine.arguments.count > 1 {
                                                    grantedImports: Set(PluginImportPermission.allCases))
         let shell = try PluginComponentBuild.shell(for: contract)
         let directory = URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true)
-        try Data(shell.wat.utf8).write(to: directory.appendingPathComponent("shell.wat"), options: .atomic)
-        try Data(shell.bindings.utf8).write(to: directory.appendingPathComponent("Exports.swift"), options: .atomic)
+        try AtomicFile.write(Data(shell.wat.utf8), to: directory.appendingPathComponent("shell.wat"))
+        try AtomicFile.write(Data(shell.bindings.utf8), to: directory.appendingPathComponent("Exports.swift"))
         exit(0)
     }
     if CommandLine.arguments.count == 5, CommandLine.arguments[1] == "--link-component" {
         let shell = try EmbeddedWasmtimeComponentRuntime.compileComponentWAT(
             String(contentsOfFile: CommandLine.arguments[2], encoding: .utf8))
         let core = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[3]))
-        try PluginComponentBuild.link(shell: shell, core: core)
-            .write(to: URL(fileURLWithPath: CommandLine.arguments[4]), options: .atomic)
+        try AtomicFile.write(PluginComponentBuild.link(shell: shell, core: core), to: URL(fileURLWithPath: CommandLine.arguments[4]))
         exit(0)
     }
     guard CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--export-web" else {

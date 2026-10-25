@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 import IntentRuntime
 
@@ -120,14 +121,7 @@ public actor ContextMemoryStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(all)
-#if os(Windows)
-        // A scanner can hold Foundation's temporary file long enough for the
-        // atomic rename to fail with a sharing violation.
-        do { try data.write(to: url, options: .atomic) }
-        catch { try data.write(to: url) }
-#else
-        try data.write(to: url, options: .atomic)
-#endif
+        try AtomicFile.write(data, to: url)
     }
 
     // MARK: - Private helpers

@@ -48,7 +48,7 @@ public enum EditorPluginHostLocator {
         for _ in 0..<5 {
             repositoryRoot.deleteLastPathComponent()
         }
-        for products in ["Editor/.guava/build/swift/out/Products/Debug", "Editor/.guava/build/swift/debug"] {
+        for products in ["Editor/.guava/build/swift/out/Products/Debug", "Editor/.guava/build/swift/debug", "Editor/.build/debug", "Editor/.build/out/Products/Debug"] {
             candidates.append(repositoryRoot.appendingPathComponent(products, isDirectory: true)
                 .appendingPathComponent(name, isDirectory: false))
         }

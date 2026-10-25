@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 /// Project-stable identity for a Swift script asset.
@@ -184,7 +185,7 @@ final class ScriptAssetRegistry: @unchecked Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(Document(version: 1, assets: records))
-        try data.write(to: storageURL, options: .atomic)
+        try AtomicFile.write(data, to: storageURL)
     }
 
     private func relativePath(for url: URL) -> String {

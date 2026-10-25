@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 import PluginRuntime
 
@@ -47,21 +48,16 @@ struct VersionControlProvider: Sendable {
                            excluding disabled: Set<VersionControlSystem> = [], among available: [VersionControlProvider] = bundled) -> VersionControlRepository? {
         let fileManager = FileManager.default
         let providers = available.filter { !disabled.contains($0.system) }
-#if os(Windows)
-        var current = directory.standardizedFileURL
-#else
-        var current = directory.resolvingSymlinksInPath().standardizedFileURL
-#endif
-        while true {
+        let current = PathIdentity.canonicalURL(directory)
+        for current in PathIdentity.ancestors(of: current) {
             // `.git` is a file inside worktrees and submodules.
             for provider in providers
             where fileManager.fileExists(atPath: current.appendingPathComponent(provider.contribution.marker).path) {
                 return VersionControlRepository(system: provider.system, root: current.standardizedFileURL)
             }
-            let parent = current.deletingLastPathComponent().standardizedFileURL
-            guard parent.path != current.path, !parent.path.isEmpty else { return nil }
-            current = parent
+
         }
+        return nil
     }
 }
 

@@ -4,7 +4,7 @@
     "name": "GuavaStudio"
   },
   "toolchain": {
-    "sdkVersion": "0.1.4"
+    "sdkVersion": "0.1.7"
   },
   "targets": {
     "platforms": [

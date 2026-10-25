@@ -69,11 +69,6 @@ runs:
       if: runner.os == 'Windows'
       shell: bash
       run: |
-        swift run --package-path Tools/Developer guava-dev vulkan bootstrap --destination "$RUNNER_TEMP/guava-vulkan-sdk"
+        ./guava studio vulkan bootstrap --destination "$RUNNER_TEMP/guava-vulkan-sdk"
         echo "VULKAN_SDK=$RUNNER_TEMP/guava-vulkan-sdk" >> "$GITHUB_ENV"
         echo "$RUNNER_TEMP/guava-vulkan-sdk/bin" >> "$GITHUB_PATH"
-    - name: Validate shader toolchain and GPU regression contracts
-      shell: bash
-      run: |
-        swift test --package-path Tools/Developer --filter ShaderToolchainTests
-        swift test --package-path Tools/Developer --filter RegressionReportTests

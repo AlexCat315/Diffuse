@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 /// Project-contained file operations with reference rewrites and rollback.
@@ -27,7 +28,7 @@ public enum EditorAssetFileWorkflow {
     public static func restoreMissing(from replacement: URL, to target: URL, within root: URL,
                                       validate: () throws -> Void = {}) throws {
         let fm = FileManager.default
-        guard ProjectFilePath.isDescendant(target, of: root),
+        guard PathIdentity.contains(target, in: root, includingRoot: false),
               !fm.fileExists(atPath: target.path), fm.fileExists(atPath: replacement.path),
               replacement.pathExtension.lowercased() == target.pathExtension.lowercased() else {
             throw Failure("Select a replacement of the same format for a missing project file.")
@@ -36,7 +37,7 @@ public enum EditorAssetFileWorkflow {
             ($0.source, target.deletingLastPathComponent().appendingPathComponent($0.relativePath))
         }
         for (source, destination) in files {
-            guard ProjectFilePath.isDescendant(destination, of: root), fm.fileExists(atPath: source.path) else {
+            guard PathIdentity.contains(destination, in: root, includingRoot: false), fm.fileExists(atPath: source.path) else {
                 throw Failure("The replacement has missing dependencies or paths outside the project.")
             }
             if fm.fileExists(atPath: destination.path),
@@ -70,10 +71,10 @@ public enum EditorAssetFileWorkflow {
     @discardableResult
     public static func relocate(from source: URL, to destination: URL, within root: URL) throws -> [URL] {
         let fm = FileManager.default
-        guard ProjectFilePath.isDescendant(source, of: root), ProjectFilePath.isDescendant(destination, of: root) else {
+        guard PathIdentity.contains(source, in: root, includingRoot: false), PathIdentity.contains(destination, in: root, includingRoot: false) else {
             throw Failure("The source and destination must stay inside the project.")
         }
-        guard !ProjectFilePath.sameLocation(source, destination) else { return [] }
+        guard !PathIdentity.sameLocation(source, destination) else { return [] }
         guard source.pathExtension.lowercased() == destination.pathExtension.lowercased() else {
             throw Failure("Keep the asset's file extension when renaming or moving it.")
         }
@@ -82,9 +83,9 @@ public enum EditorAssetFileWorkflow {
         }
         let dependencies = AssetImportResolver.resolve(source, projectRoot: root).dropFirst().map { dependency in
             (dependency.source, destination.deletingLastPathComponent().appendingPathComponent(dependency.relativePath))
-        }.filter { !ProjectFilePath.sameLocation($0.0, $0.1) }
+        }.filter { !PathIdentity.sameLocation($0.0, $0.1) }
         for (original, target) in dependencies {
-            guard ProjectFilePath.isDescendant(target, of: root), fm.fileExists(atPath: original.path) else {
+            guard PathIdentity.contains(target, in: root, includingRoot: false), fm.fileExists(atPath: original.path) else {
                 throw Failure("Repair missing model dependencies before moving this asset.")
             }
             if fm.fileExists(atPath: target.path),
@@ -111,15 +112,15 @@ public enum EditorAssetFileWorkflow {
             try fm.moveItem(at: source, to: destination)
             moved = true
             for item in rewrites {
-                let target = ProjectFilePath.sameLocation(item.url, source) ? destination : item.url
-                try item.replacement.write(to: target, options: .atomic)
+                let target = PathIdentity.sameLocation(item.url, source) ? destination : item.url
+                try AtomicFile.write(item.replacement, to: target)
                 written.append(item)
             }
         } catch {
             var rollbackFailures: [String] = []
             for item in written.reversed() {
-                let target = ProjectFilePath.sameLocation(item.url, source) ? destination : item.url
-                do { try item.original.write(to: target, options: .atomic) }
+                let target = PathIdentity.sameLocation(item.url, source) ? destination : item.url
+                do { try AtomicFile.write(item.original, to: target) }
                 catch { rollbackFailures.append(target.path) }
             }
             if moved {
@@ -139,16 +140,12 @@ public enum EditorAssetFileWorkflow {
     }
 
     public static func relativePath(_ url: URL, from directory: URL) -> String {
-        let target = url.standardizedFileURL.pathComponents
-        let base = directory.standardizedFileURL.pathComponents
-        var shared = 0
-        while shared < min(target.count, base.count), target[shared] == base[shared] { shared += 1 }
-        return (Array(repeating: "..", count: base.count - shared) + Array(target.dropFirst(shared))).joined(separator: "/")
+        PathIdentity.relativePath(url, to: directory)
     }
 
     public static func projectRelativePath(_ url: URL, within root: URL) -> String? {
-        guard ProjectFilePath.sameLocation(url, root) || ProjectFilePath.isDescendant(url, of: root) else { return nil }
-        return relativePath(ProjectFilePath.canonicalURL(url), from: ProjectFilePath.canonicalURL(root))
+        guard PathIdentity.sameLocation(url, root) || PathIdentity.contains(url, in: root, includingRoot: false) else { return nil }
+        return relativePath(PathIdentity.canonicalURL(url), from: PathIdentity.canonicalURL(root))
     }
 
     private static func textFiles(in root: URL) -> [URL] {
@@ -162,7 +159,7 @@ public enum EditorAssetFileWorkflow {
             if values.isDirectory == true {
                 if excluded.contains(url.lastPathComponent) { enumerator.skipDescendants() }
             } else if values.isRegularFile == true, extensions.contains(url.pathExtension.lowercased()),
-                      (values.fileSize ?? 0) < 8_000_000, ProjectFilePath.isDescendant(url, of: root) {
+                      (values.fileSize ?? 0) < 8_000_000, PathIdentity.contains(url, in: root, includingRoot: false) {
                 result.append(url)
             }
         }
@@ -187,7 +184,7 @@ public enum EditorAssetFileWorkflow {
                 if key == "uri" {
                     guard let decoded = string.removingPercentEncoding,
                           !decoded.contains("://"), !decoded.hasPrefix("data:"),
-                          ProjectFilePath.sameLocation(owner.deletingLastPathComponent().appendingPathComponent(decoded), source)
+                          PathIdentity.sameLocation(owner.deletingLastPathComponent().appendingPathComponent(decoded), source)
                     else { return value }
                     matched = true
                     return newRelative.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? newRelative

@@ -1,4 +1,4 @@
-import ProcessRuntime
+internal import GuavaProcess
 import LanguageServerRuntime
 import Foundation
 import ScriptRuntime

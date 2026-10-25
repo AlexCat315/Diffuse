@@ -1,5 +1,5 @@
 internal import Foundation
-internal import ProcessRuntime
+internal import GuavaProcess
 
 final class ProcessEntry: @unchecked Sendable {
     /// Output returned by one poll. Only editor entry points reach processes,

@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import CapabilityRuntime
 import Foundation
 import PluginRuntime
@@ -13,12 +14,7 @@ final class ExecutionPackage: @unchecked Sendable {
         let original = try loader.load(at: source)
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("GuavaPlugin-\(UUID().uuidString).guavaplugin", isDirectory: true)
-        #if os(Windows)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        #else
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
-                                                attributes: [.posixPermissions: 0o700])
-        #endif
+        try FilePermissions.createPrivateDirectory(at: directory, withIntermediateDirectories: false)
         do {
             for name in ["plugin.json", "capabilities.wit", "component.wasm"] + (original.resourceHashes.isEmpty ? [] : ["resources"]) {
                 try FileManager.default.copyItem(at: source.appendingPathComponent(name),

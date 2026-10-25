@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 /// A point-in-time snapshot of the runtime scene, suitable for game progress saves.
@@ -44,7 +45,7 @@ extension GameSaveDocument {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(self)
-        try data.write(to: url, options: [.atomic])
+        try AtomicFile.write(data, to: url)
     }
 
     /// Reads and decodes a `GameSaveDocument` from `url`, or returns nil if the file

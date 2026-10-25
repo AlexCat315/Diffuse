@@ -3,7 +3,7 @@ description: Clone the pinned standalone GuavaUI SDK checkout this repository bu
 runs:
   using: composite
   steps:
-    - name: Clone pinned SDK checkout
+    - name: Fetch and validate pinned SDK checkout
       shell: bash
       run: |
         set -euo pipefail
@@ -12,10 +12,33 @@ runs:
           echo "Editor/guava.json must declare toolchain.sdkVersion" >&2
           exit 1
         fi
+        revision=
+        if [ -f .github/sdk-revision ]; then
+          revision=$(tr -d '\r\n' < .github/sdk-revision)
+          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+            echo ".github/sdk-revision must contain a full SDK commit SHA" >&2
+            exit 1
+          fi
+        fi
         if [ -f GuavaUI/Tools/Guava/Sources/GuavaCLI/SDK.json ]; then
           echo "Guava SDK checkout already present"
-          exit 0
+        elif [ -n "$revision" ]; then
+          git init GuavaUI
+          git -C GuavaUI remote add origin https://github.com/AlexCat315/GuavaUI.git
+          git -C GuavaUI fetch --depth 1 origin "$revision"
+          git -C GuavaUI checkout --detach FETCH_HEAD
+          git -C GuavaUI submodule update --init --recursive --depth 1
+        else
+          git clone --depth 1 --branch "v$version" \
+            --recurse-submodules --shallow-submodules \
+            https://github.com/AlexCat315/GuavaUI.git GuavaUI
         fi
-        git clone --depth 1 --branch "v$version" \
-          --recurse-submodules --shallow-submodules \
-          https://github.com/AlexCat315/GuavaUI.git GuavaUI
+        actual=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' GuavaUI/Tools/Guava/Sources/GuavaCLI/SDK.json)
+        if [ "$actual" != "$version" ]; then
+          echo "SDK checkout version $actual does not match Editor SDK $version" >&2
+          exit 1
+        fi
+        if [ -n "$revision" ] && [ "$(git -C GuavaUI rev-parse HEAD)" != "$revision" ]; then
+          echo "SDK checkout does not match .github/sdk-revision" >&2
+          exit 1
+        fi

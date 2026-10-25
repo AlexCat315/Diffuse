@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 public import Foundation
 
 /// How Swift files are edited, for every project on this machine.
@@ -25,6 +26,6 @@ public struct SwiftEditingPreferences: Codable, Sendable, Equatable {
 
     public func save() throws {
         try FileManager.default.createDirectory(at: Self.url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(self).write(to: Self.url, options: .atomic)
+        try AtomicFile.write(JSONEncoder().encode(self), to: Self.url)
     }
 }

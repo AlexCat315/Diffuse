@@ -1,5 +1,5 @@
 import LanguageServerRuntime
-import ProcessRuntime
+public import GuavaProcess
 import GuavaLogging
 import Foundation
 import GuavaUICompose

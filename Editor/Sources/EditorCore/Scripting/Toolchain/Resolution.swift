@@ -1,5 +1,5 @@
 public import Foundation
-import ProcessRuntime
+internal import GuavaProcess
 import ScriptRuntime
 
 public struct SwiftToolchain: Sendable, Equatable {

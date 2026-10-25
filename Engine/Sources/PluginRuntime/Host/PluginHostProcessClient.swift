@@ -1,13 +1,7 @@
 #if os(macOS) || os(Linux) || os(Windows)
-import Foundation
-import GuavaLogging
-#if canImport(Darwin)
-import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#elseif canImport(Android)
-import Android
-#endif
+public import Foundation
+private import GuavaProcess
+private import GuavaLogging
 
 public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConvertible {
     case launchFailed(String)
@@ -29,9 +23,7 @@ public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConve
     }
 }
 
-/// Editor-side owner of the isolated host process. A crash triggers one restart,
-/// increments `generation`, and fails the interrupted request so every pending
-/// plugin draft can be invalidated by the caller.
+/// Owns the host lifetime. Framing consumes the shared process stream with one request deadline.
 public final class PluginHostProcessClient: @unchecked Sendable {
     public let executableURL: URL
     public let launchArguments: [String]
@@ -39,15 +31,13 @@ public final class PluginHostProcessClient: @unchecked Sendable {
     public var onInvalidation: (@Sendable (UInt64) -> Void)?
 
     private let lock = NSLock()
-    private var process: Process?
-    private var input: FileHandle?
-    private var output: FileHandle?
-    private var diagnostics: PluginHostDiagnostics?
+    private var session: ProcessSession?
+    private var pending = Data()
+    private var diagnostics = PluginHostDiagnostics()
     private var didRestart = false
     private var _generation: UInt64 = 0
 
-    public init(executableURL: URL,
-                launchArguments: [String] = [],
+    public init(executableURL: URL, launchArguments: [String] = [],
                 onInvalidation: (@Sendable (UInt64) -> Void)? = nil) {
         self.executableURL = executableURL
         self.launchArguments = launchArguments
@@ -62,241 +52,82 @@ public final class PluginHostProcessClient: @unchecked Sendable {
         do {
             return try lock.withLock {
                 do {
-                    if let process, !process.isRunning {
-                        throw PluginHostClientError.communicationFailed
-                    }
-                    if process == nil { try launch() }
-                    guard let input, let output else { throw PluginHostClientError.communicationFailed }
-                    let deadline = makeDeadline(timeoutMilliseconds: timeoutMilliseconds)
-                    #if os(Windows)
-                    let response = try exchangeOnWindows(
-                        request,
-                        input: input,
-                        output: output,
-                        deadline: deadline
-                    )
-                    #else
-                    try writeExactly(PluginHostFrameCodec.encode(request),
-                                     to: input,
-                                     deadline: deadline)
-                    let header = try readExactly(4, from: output, deadline: deadline)
+                    if let session, !session.isRunning { throw PluginHostClientError.communicationFailed }
+                    if session == nil { try launch() }
+                    guard let session else { throw PluginHostClientError.communicationFailed }
+                    let deadline = Date().addingTimeInterval(Double(timeoutMilliseconds) / 1000)
+                    try session.write(PluginHostFrameCodec.encode(request))
+                    let header = try readExactly(4, until: deadline)
                     let length = header.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
                     guard length <= PluginHostFrameCodec.maximumFrameBytes else {
                         throw PluginHostClientError.communicationFailed
                     }
-                    let payload = try readExactly(Int(length), from: output, deadline: deadline)
                     var frame = header
-                    frame.append(payload)
+                    frame.append(try readExactly(Int(length), until: deadline))
                     let response = try PluginHostFrameCodec.decode(PluginHostResponse.self, from: frame)
-                    #endif
                     guard response.id == request.id else { throw PluginHostClientError.mismatchedResponse }
                     return response
                 } catch {
                     stopLocked()
                     _generation &+= 1
-                    if !didRestart {
-                        didRestart = true
-                        try? launch()
-                    }
-                    if let onInvalidation {
-                        invalidation = (onInvalidation, _generation)
-                    }
+                    if !didRestart { didRestart = true; try? launch() }
+                    if let onInvalidation { invalidation = (onInvalidation, _generation) }
                     throw PluginHostClientError.hostRestarted(generation: _generation)
                 }
             }
         } catch {
-            if let (callback, generation) = invalidation {
-                callback(generation)
-            }
+            if let (callback, generation) = invalidation { callback(generation) }
             throw error
         }
     }
 
     public func stop() {
         lock.withLock {
-            if process != nil { _generation &+= 1 }
+            if session != nil { _generation &+= 1 }
             stopLocked()
         }
     }
 
     private func launch() throws {
-        let process = Process()
-        let stdin = Pipe()
-        let stdout = Pipe()
-        let diagnostics = PluginHostDiagnostics()
-        process.executableURL = executableURL
-        process.arguments = launchArguments
-        process.standardInput = stdin
-        process.standardOutput = stdout
-        process.standardError = diagnostics.pipe
-        var environment = ProcessInfo.processInfo.environment
-        environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
-        process.environment = environment
-        do { try process.run() } catch {
-            throw PluginHostClientError.launchFailed(String(describing: error))
-        }
-        self.process = process
-        self.diagnostics = diagnostics
-        diagnostics.start(pid: process.processIdentifier)
-        input = stdin.fileHandleForWriting
-        output = stdout.fileHandleForReading
-#if canImport(Darwin)
-        // A dead host must become a recoverable pipe error, never SIGPIPE the
-        // Editor process while it is sending an RPC frame.
-        _ = fcntl(input?.fileDescriptor ?? -1, F_SETNOSIGPIPE, 1)
-#endif
+        var command = ProcessCommand(executable: executableURL,
+            directory: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        command.arguments = launchArguments
+        command.environment = ProcessInfo.processInfo.environment
+        command.environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
+        var budget = ProcessBudget()
+        budget.outputBytes = 33_554_432
+        budget.pendingInputBytes = 33_554_432
+        budget.lifetimeMilliseconds = nil
+        do { session = try ProcessSession(command: command, budget: budget) }
+        catch { throw PluginHostClientError.launchFailed(String(describing: error)) }
     }
 
     private func stopLocked() {
-        // A synchronous Windows pipe read can keep CloseHandle waiting until
-        // the peer exits. Terminate the host before closing its pipe handles.
-        if process?.isRunning == true { process?.terminate() }
-        diagnostics?.stop(); diagnostics = nil
-        try? input?.close()
-        try? output?.close()
-        process = nil
-        input = nil
-        output = nil
+        session?.cancel()
+        session = nil
+        pending.removeAll(keepingCapacity: true)
+        diagnostics.finish()
     }
 
-    private func makeDeadline(timeoutMilliseconds: UInt64) -> UInt64 {
-        let now = DispatchTime.now().uptimeNanoseconds
-        let (delta, multiplicationOverflow) = timeoutMilliseconds
-            .multipliedReportingOverflow(by: 1_000_000)
-        guard !multiplicationOverflow else { return UInt64.max }
-        let (deadline, additionOverflow) = now.addingReportingOverflow(delta)
-        return additionOverflow ? UInt64.max : deadline
-    }
-
-    #if os(Windows)
-    /// Windows anonymous pipes are HANDLE-backed and cannot be waited on with
-    /// POSIX `poll`. Run the blocking Foundation exchange on a worker and close
-    /// the handles/process from the caller when the shared deadline expires.
-    private func exchangeOnWindows(_ request: PluginHostRequest,
-                                   input: FileHandle,
-                                   output: FileHandle,
-                                   deadline: UInt64) throws -> PluginHostResponse {
-        final class ResultBox: @unchecked Sendable {
-            var result: Result<PluginHostResponse, Error>?
-        }
-        let resultBox = ResultBox()
-        let finished = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                try input.write(contentsOf: PluginHostFrameCodec.encode(request))
-                let header = try self.readBlockingExactly(4, from: output)
-                let length = header.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
-                guard length <= PluginHostFrameCodec.maximumFrameBytes else {
-                    throw PluginHostClientError.communicationFailed
-                }
-                var frame = header
-                frame.append(try self.readBlockingExactly(Int(length), from: output))
-                resultBox.result = .success(
-                    try PluginHostFrameCodec.decode(PluginHostResponse.self, from: frame)
-                )
-            } catch {
-                resultBox.result = .failure(error)
+    private func readExactly(_ count: Int, until deadline: Date) throws -> Data {
+        guard let session else { throw PluginHostClientError.communicationFailed }
+        while pending.count < count {
+            guard Date() < deadline else { throw PluginHostClientError.timedOut }
+            let event: ProcessEvent?
+            do { event = try session.nextEvent(until: deadline) }
+            catch ProcessError.timedOut { throw PluginHostClientError.timedOut }
+            guard let event else { throw PluginHostClientError.communicationFailed }
+            switch event {
+            case let .stdout(data): pending.append(data)
+            case let .stderr(data): diagnostics.consume(data, pid: session.processIdentifier)
+            case .stderrClosed: diagnostics.finish()
+            case .stdoutClosed, .exited: throw PluginHostClientError.communicationFailed
             }
-            finished.signal()
         }
-        let waitDeadline = DispatchTime(uptimeNanoseconds: deadline)
-        guard finished.wait(timeout: waitDeadline) == .success else {
-            throw PluginHostClientError.timedOut
-        }
-        guard let result = resultBox.result else {
-            throw PluginHostClientError.communicationFailed
-        }
-        return try result.get()
-    }
-
-    private func readBlockingExactly(_ count: Int,
-                                     from handle: FileHandle) throws -> Data {
-        guard count > 0 else { return Data() }
-        var result = Data()
-        while result.count < count {
-            let chunk = try handle.read(upToCount: count - result.count) ?? Data()
-            guard !chunk.isEmpty else { throw PluginHostClientError.communicationFailed }
-            result.append(chunk)
-        }
+        let result = Data(pending.prefix(count))
+        pending.removeFirst(count)
         return result
     }
-    #else
-
-    private func writeExactly(_ data: Data,
-                              to handle: FileHandle,
-                              deadline: UInt64) throws {
-        try data.withUnsafeBytes { rawBytes in
-            guard let baseAddress = rawBytes.baseAddress else { return }
-            var offset = 0
-            while offset < rawBytes.count {
-                try waitForDescriptor(handle.fileDescriptor,
-                                      events: Int16(POLLOUT),
-                                      deadline: deadline)
-                let written = guavaSystemWrite(
-                    handle.fileDescriptor,
-                    baseAddress.advanced(by: offset),
-                    min(rawBytes.count - offset, 16 * 1_024)
-                )
-                if written < 0 {
-                    if errno == EINTR { continue }
-                    throw PluginHostClientError.communicationFailed
-                }
-                guard written > 0 else { throw PluginHostClientError.communicationFailed }
-                offset += written
-            }
-        }
-    }
-
-    private func readExactly(_ count: Int,
-                             from handle: FileHandle,
-                             deadline: UInt64) throws -> Data {
-        guard count > 0 else { return Data() }
-        var result = Data()
-        while result.count < count {
-            try waitForDescriptor(handle.fileDescriptor,
-                                  events: Int16(POLLIN),
-                                  deadline: deadline)
-            var buffer = [UInt8](repeating: 0,
-                                 count: min(count - result.count, 16 * 1_024))
-            let received = buffer.withUnsafeMutableBytes { bytes in
-                guavaSystemRead(handle.fileDescriptor,
-                                bytes.baseAddress,
-                                bytes.count)
-            }
-            if received < 0 {
-                if errno == EINTR { continue }
-                throw PluginHostClientError.communicationFailed
-            }
-            guard received > 0 else { throw PluginHostClientError.communicationFailed }
-            result.append(contentsOf: buffer.prefix(received))
-        }
-        return result
-    }
-
-    private func waitForDescriptor(_ fileDescriptor: Int32,
-                                   events: Int16,
-                                   deadline: UInt64) throws {
-        while true {
-            let now = DispatchTime.now().uptimeNanoseconds
-            guard now < deadline else { throw PluginHostClientError.timedOut }
-            let remainingNanoseconds = deadline - now
-            let roundedMilliseconds = ((remainingNanoseconds - 1) / 1_000_000) + 1
-            let timeout = Int32(min(roundedMilliseconds, UInt64(Int32.max)))
-            var descriptor = pollfd(fd: fileDescriptor, events: events, revents: 0)
-            let result = guavaSystemPoll(&descriptor, timeout)
-            if result == 0 { throw PluginHostClientError.timedOut }
-            if result < 0 {
-                if errno == EINTR { continue }
-                throw PluginHostClientError.communicationFailed
-            }
-            if descriptor.revents & events != 0 { return }
-            let failures = Int16(POLLERR | POLLHUP | POLLNVAL)
-            if descriptor.revents & failures != 0 {
-                throw PluginHostClientError.communicationFailed
-            }
-        }
-    }
-    #endif
 }
 
 extension PluginHostProcessClient: PluginCapabilityInvoking {
@@ -366,45 +197,5 @@ extension PluginHostProcessClient: PluginCapabilityInvoking {
         return payload
     }
 }
-
-#if !os(Windows)
-@inline(__always)
-private func guavaSystemPoll(_ descriptor: UnsafeMutablePointer<pollfd>,
-                             _ timeout: Int32) -> Int32 {
-#if canImport(Darwin)
-    Darwin.poll(descriptor, 1, timeout)
-#elseif canImport(Glibc)
-    Glibc.poll(descriptor, 1, timeout)
-#elseif canImport(Android)
-    Android.poll(descriptor, 1, timeout)
-#endif
-}
-
-@inline(__always)
-private func guavaSystemRead(_ fileDescriptor: Int32,
-                             _ buffer: UnsafeMutableRawPointer?,
-                             _ count: Int) -> Int {
-#if canImport(Darwin)
-    Darwin.read(fileDescriptor, buffer, count)
-#elseif canImport(Glibc)
-    Glibc.read(fileDescriptor, buffer, count)
-#elseif canImport(Android)
-    Android.read(fileDescriptor, buffer, count)
-#endif
-}
-
-@inline(__always)
-private func guavaSystemWrite(_ fileDescriptor: Int32,
-                              _ buffer: UnsafeRawPointer?,
-                              _ count: Int) -> Int {
-#if canImport(Darwin)
-    Darwin.write(fileDescriptor, buffer, count)
-#elseif canImport(Glibc)
-    Glibc.write(fileDescriptor, buffer, count)
-#elseif canImport(Android)
-    Android.write(fileDescriptor, buffer, count)
-#endif
-}
-#endif
 
 #endif

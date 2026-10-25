@@ -68,8 +68,8 @@ struct BoundaryChecks {
 
     let core = try portable.target(named: "GuavaUIAgentCore")
     try require(
-      core.dependencyCount == 0,
-      "Generic agent contracts, MCP and skills must not depend on UI or Engine domains")
+      core.dependencyCount == 1 && core.products == ["GuavaFileSystem"],
+      "Agent skills may use GuavaFileSystem, but must not depend on UI or Engine domains")
     try require(
       !portable.localDependencies.contains(path("Engine")),
       "GuavaUI/Portable must not depend on Engine")
@@ -201,13 +201,14 @@ struct BoundaryChecks {
       tools.productNames == ["guava"],
       "GuavaUI/Tools/Guava must vend exactly the guava product")
     try require(
-      developer.localDependencies.isSubset(of: [sdkRoot.appendingPathComponent("Tools/Support")]),
+      developer.localDependencies.isSubset(of: [sdkRoot.appendingPathComponent("Tools/Support"), sdkRoot.appendingPathComponent("System")]),
       "Repository tools must build independently of application and engine packages: "
         + developer.localDependencies.map(\.path).sorted().joined(separator: ", "))
     try require(
       tools.localDependencies == [
         sdkRoot.appendingPathComponent("Hosts/Android/Contract"), sdkRoot.appendingPathComponent("Portable"), sdkRoot.appendingPathComponent("Logging"),
         sdkRoot.appendingPathComponent("Tools/Support"),
+        sdkRoot.appendingPathComponent("System"),
       ],
       "The shipped CLI must depend only on SDK packages: "
         + tools.localDependencies.map(\.path).sorted().joined(separator: ", "))

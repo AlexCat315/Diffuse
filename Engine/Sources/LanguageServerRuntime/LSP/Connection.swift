@@ -1,5 +1,5 @@
 import Foundation
-import ProcessRuntime
+internal import GuavaProcess
 
 final class LSPConnection: @unchecked Sendable {
     let id = UUID()

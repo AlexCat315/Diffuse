@@ -1,5 +1,6 @@
 import CapabilityRuntime
 import Foundation
+private import GuavaFileSystem
 
 public struct ValidatedPluginPackage: Sendable, Equatable {
     public var rootURL: URL
@@ -145,8 +146,7 @@ public struct PluginPackageLoader: Sendable {
 
     private func fixedFile(_ name: String, beneath root: URL) throws -> URL {
         let url = root.appendingPathComponent(name, isDirectory: false).standardizedFileURL
-        let parentComponents = comparablePathComponents(url.deletingLastPathComponent())
-        guard parentComponents == comparablePathComponents(root) else {
+        guard PathIdentity.sameLocation(url.deletingLastPathComponent(), root) else {
             throw PluginPackageError.missingFile(name)
         }
         let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
@@ -155,12 +155,4 @@ public struct PluginPackageLoader: Sendable {
         return url
     }
 
-    private func comparablePathComponents(_ url: URL) -> [String] {
-        let components = url.standardizedFileURL.pathComponents
-        #if os(Windows)
-        return components.map { $0.lowercased() }
-        #else
-        return components
-        #endif
-    }
 }
