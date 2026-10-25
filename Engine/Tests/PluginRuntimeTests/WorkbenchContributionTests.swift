@@ -194,6 +194,37 @@ struct WorkbenchContributionTests {
         }
     }
 
+    @Test("a harness runs an agent's turns, is called with whole turns and never reaches the model")
+    func harnessIsValidated() throws {
+        let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
+            {"guava.ai.harness/v1": [{"id": "careful", "title": "Careful", "entryPoint": "harness"}],
+             "guava.ai.agent/v1": [{"id": "careful", "title": "Careful", "harness": "careful"}],
+             "guava.ai.tool/v1": [{"entryPoint": "harness", "title": "Harness", "description": "Not a tool."}]}
+            """))
+        #expect(try valid.contributes.decode(AgentContributionPoint.self).first?.harness == "careful")
+        #expect(!valid.exposesToAI(entryPoint: "harness"))
+        let package = ValidatedPluginPackage(rootURL: URL(fileURLWithPath: "/careful.guavaplugin"), manifest: valid, runtime: nil)
+        #expect(package.isHostEntryPoint("harness"))
+        #expect(!package.isHostEntryPoint("other"))
+
+        let runtime = try contract("""
+            record harness-input { turn: string }
+            harness: func(input: harness-input) -> string;
+            record other-input { text: string }
+            other: func(input: other-input) -> string;
+            """)
+        try AIHarnessContributionPoint.validateRuntime(AIHarnessContribution(id: "careful", title: "Careful", entryPoint: "harness"),
+                                                       contract: runtime)
+        #expect(throws: PluginManifestValidationError.invalidContribution(AIHarnessContributionPoint.id)) {
+            try AIHarnessContributionPoint.validateRuntime(AIHarnessContribution(id: "careful", title: "Careful", entryPoint: "other"),
+                                                           contract: runtime)
+        }
+        for invalid in [#"{"guava.ai.harness/v1": [{"id": "Careful", "title": "Careful", "entryPoint": "harness"}]}"#,
+                        #"{"guava.ai.agent/v1": [{"id": "careful", "title": "Careful", "harness": "Not An Id"}]}"#] {
+            #expect(throws: PluginManifestValidationError.self) { try PluginManifestValidator.decodeAndValidate(manifest(invalid)) }
+        }
+    }
+
     @Test("events carry the action, the raising control's value and every control value")
     func eventEncodes() throws {
         let event = UIEvent(action: "add", arguments: .object(["list": .string("today")]), value: .string("Ship"),

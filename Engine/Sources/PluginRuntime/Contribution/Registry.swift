@@ -131,6 +131,7 @@ public struct ContributionPointRegistry: Sendable {
         try! registry.register(DocumentViewContributionPoint.self)
         try! registry.register(AIToolContributionPoint.self)
         try! registry.register(AIContextContributionPoint.self)
+        try! registry.register(AIHarnessContributionPoint.self)
         return registry
     }()
 }

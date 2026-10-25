@@ -121,7 +121,7 @@ struct ThemeVariant: Decodable, Sendable {
     let inputs: ThemeInputTokens?
     let textEmphasis: [String: ThemeColor]?
     let shadow: ThemeShadow?
-    let harness: ThemeColor?
+    let assistant: ThemeColor?
     let syntax: [String: ThemeColor]?
 
     func make(dark: Bool) throws -> Theme {
@@ -144,7 +144,7 @@ struct ThemeVariant: Decodable, Sendable {
             }
         }
         if let shadow { theme.elevation.low = try shadow.token() }
-        if let harness { theme.extensions[EditorThemeTokens.self].harness = harness.value }
+        if let assistant { theme.extensions[EditorThemeTokens.self].assistant = assistant.value }
         for (name, color) in syntax ?? [:] {
             guard SyntaxToken(rawValue: name) != nil else { throw ThemeResourceError.invalidToken(name) }
             theme.extensions[EditorThemeTokens.self].syntax[name] = color.value

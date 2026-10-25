@@ -9,17 +9,21 @@ extension GuavaPluginManifest {
     }
 
     public func aiTool(entryPoint: String) -> AIToolContribution? {
-        guard entryPoint != "components", !host.entryPoints.contains(entryPoint) else { return nil }
+        let harnesses = (try? contributes.decode(AIHarnessContributionPoint.self)) ?? []
+        guard entryPoint != "components", !host.entryPoints.contains(entryPoint),
+              !harnesses.contains(where: { $0.entryPoint == entryPoint }) else { return nil }
         return ((try? contributes.decode(AIToolContributionPoint.self)) ?? []).first { $0.entryPoint == entryPoint }
     }
 }
 
 /// Capabilities named by `host.processes[].entryPoints` are called by the
-/// editor with whole tool output and never by the model. Their inputs are
-/// checked for shape but not length, under `PluginResourceLimits.hostEntryPoint`.
+/// editor with whole tool output and never by the model, and so are harness
+/// entry points, which get whole turns. Their inputs are checked for shape but
+/// not length, under `PluginResourceLimits.hostEntryPoint`.
 extension ValidatedPluginPackage {
     public func isHostEntryPoint(_ capability: String) -> Bool {
         manifest.host.entryPoints.contains(capability)
+            || ((try? manifest.contributes.decode(AIHarnessContributionPoint.self)) ?? []).contains { $0.entryPoint == capability }
     }
 
     public func inputSchema(for capability: WITCapabilityInput) -> JSONSchema {

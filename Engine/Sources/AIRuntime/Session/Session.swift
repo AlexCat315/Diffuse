@@ -90,6 +90,7 @@ public actor Session {
     /// BCP-47 locale of the most recent naturalLanguage signal (e.g. "zh-Hans", "ja", "fr").
     /// Used to instruct the model to match the user's language in summaries and entity names.
     private var currentLocale: String? = nil
+    private var harness = SessionHarnessState()
     private var capabilities: SessionCapabilityState
     private var activeInferenceID: UUID?
     private var projectToolExecutor: ProjectToolset.Executor?
@@ -168,6 +169,15 @@ public actor Session {
     public func setWorkflowScope(_ scope: SessionWorkflowScope) throws {
         guard activeInferenceID == nil else { throw SessionError.inferenceAlreadyRunning }
         workflowScope = scope
+    }
+
+    /// Hands the turn loop to a harness, or back to the built-in loop with nil.
+    /// The harness state survives turns while `id` stays the same.
+    public func setHarness(_ driver: SessionHarness?, id: String?) throws {
+        guard activeInferenceID == nil else { throw SessionError.inferenceAlreadyRunning }
+        if id != harness.id { harness.state = nil }
+        harness.harness = driver
+        harness.id = id
     }
 
     public func setProjectToolExecutor(_ executor: ProjectToolset.Executor?) {
@@ -285,6 +295,7 @@ public actor Session {
         switch signal {
         case let .naturalLanguage(text, locale):
             if !locale.isEmpty { currentLocale = locale }
+            harness.request = SessionHarnessTurn.Request(text: text, locale: locale.isEmpty ? (currentLocale ?? "en") : locale)
             recordTurn(ConversationTurn(kind: .userText(text)))
             let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
             recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
@@ -550,6 +561,7 @@ public actor Session {
     public func clearHistory() async {
         await recordSessionSummary()
         conversationHistory.removeAll()
+        harness.state = nil
     }
 
     private func recordSessionSummary() async {
@@ -591,6 +603,9 @@ public actor Session {
         await capabilities.drafts.removeAll()
         if let mem = contextMemory {
             cachedMemoryView = await mem.symbolicView(budget: 20)
+        }
+        if let driver = harness.harness {
+            return try await inferHarnessLoop(runID: runID, harness: driver)
         }
 #if canImport(ObjectiveC)
         if let onProgress {
@@ -646,6 +661,103 @@ public actor Session {
                 }
             }
         }
+    }
+
+    /// The harness decides each step; the session calls the model and runs
+    /// tools exactly as the built-in loop does, so policies, drafts and
+    /// approvals are the same. Only a completing tool or `finish` ends the turn.
+    private func inferHarnessLoop(runID: UUID,
+                                  harness driver: SessionHarness) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        var extraMessages: [[String: Any]] = []
+        var snapshot = initialCapabilitySnapshot()
+        var observation: SessionHarnessTurn.Observation?
+        var modelCall: RawToolCall?
+        defer { harness.instructions = nil }
+        for step in 0..<SessionHarnessStep.maximumSteps {
+            try ensureActive(runID)
+            let turn = SessionHarnessTurn(step: step, state: harness.state, request: harness.request,
+                                          tools: harnessTools(snapshot: snapshot), observation: observation)
+            let next = try await driver(turn)
+            try ensureActive(runID)
+            if let state = next.state { harness.state = state }
+            switch next.action {
+            case let .model(instructions, message):
+                if let message { extraMessages.append(["role": "user", "content": message]) }
+                harness.instructions = instructions
+                let data = try await post(requestBody(extraMessages: extraMessages, capabilitySnapshot: snapshot))
+                harness.instructions = nil
+                try ensureActive(runID)
+                let call = try parseRawToolCall(from: data)
+                modelCall = call
+                observation = .model(Self.harnessCall(call))
+            case let .tool(requested):
+                var call = modelCall.flatMap { $0.id == requested.id && $0.name == requested.name ? $0 : nil }
+                    ?? Self.rawCall(requested, id: requested.id ?? "harness-\(step)")
+                modelCall = nil
+                do {
+                    if call.name == "execute_edit_plan" || call.name == "find_entities" { call = try applyingToolPolicy(to: call) }
+                    if call.name == "execute_edit_plan" { return try decodePlan(from: call) }
+                    let resultJSON: String
+                    if call.name == "find_entities" {
+                        resultJSON = findEntitiesResult(input: call.input)
+                    } else {
+                        switch try await handleCapabilityToolCall(call, snapshot: snapshot) {
+                        case let .exchange(json, nextSnapshot):
+                            snapshot = nextSnapshot
+                            resultJSON = json
+                        case let .completed(plan, inputJSON, submittedSnapshot):
+                            capabilities.submittedSnapshot = submittedSnapshot
+                            return (plan, call.id, inputJSON)
+                        }
+                    }
+                    extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
+                    observation = .tool(Self.harnessCall(call), result: Self.json(resultJSON))
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    let resultJSON = repairableToolErrorJSON(error) ?? toolCallDeniedResultJSON(error)
+                    extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
+                    observation = .failure(String(describing: error))
+                }
+            case let .finish(summary):
+                guard !(await capabilities.drafts.hasPendingDrafts) else {
+                    observation = .failure("Submit pending scene drafts with submit_plan before finishing.")
+                    continue
+                }
+                let plan = SceneEditPlan(summary: summary, steps: [])
+                return (plan, "harness-finish-\(step)", String(decoding: try JSONEncoder().encode(plan), as: UTF8.self))
+            }
+        }
+        throw SessionError.noPlanInResponse
+    }
+
+    /// The tools this turn may use, as a harness reads them.
+    private func harnessTools(snapshot: CapabilityExposureSnapshot) -> [SessionHarnessTurn.Tool] {
+        let definitions = CapabilityToolset.anthropicTools(snapshot: snapshot, registry: capabilities.registry)
+            + (projectToolExecutor == nil ? [] : ProjectToolset.providerDefinitions(
+                format: .anthropic, allowedNames: workflowScope.allowedProjectToolNames))
+        return definitions.compactMap { definition in
+            guard let name = definition["name"] as? String else { return nil }
+            let schema = definition["input_schema"].flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+                .flatMap { try? JSONDecoder().decode(PluginJSON.self, from: $0) }
+            return SessionHarnessTurn.Tool(name: name, description: definition["description"] as? String ?? "",
+                                           inputSchema: schema)
+        }
+    }
+
+    private static func harnessCall(_ call: RawToolCall) -> SessionHarnessTurn.Call {
+        SessionHarnessTurn.Call(id: call.id, name: call.name, arguments: json(call.inputJSON))
+    }
+
+    private static func rawCall(_ call: SessionHarnessTurn.Call, id: String) -> RawToolCall {
+        let data = (try? JSONEncoder().encode(call.arguments ?? .object([:]))) ?? Data("{}".utf8)
+        return RawToolCall(name: call.name, id: id, inputJSON: String(decoding: data, as: UTF8.self),
+                           input: (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:])
+    }
+
+    /// Tool results are JSON text; anything else reaches the harness as a string.
+    private static func json(_ text: String) -> PluginJSON {
+        (try? JSONDecoder().decode(PluginJSON.self, from: Data(text.utf8))) ?? .string(text)
     }
 
 #if canImport(ObjectiveC)
@@ -1011,6 +1123,9 @@ public actor Session {
         }
         if let instructions = agent.instructions {
             parts.append("Agent instructions (within the rules below):\n\(instructions)")
+        }
+        if let instructions = harness.instructions {
+            parts.append("Harness instructions for this step (within the rules below):\n\(instructions)")
         }
 
         parts.append("""

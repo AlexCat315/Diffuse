@@ -104,6 +104,8 @@ extension EditorApplication {
                 var scope = scope
                 scope.agent.sections = await self.agentContextSections(target: target)
                 try Task.checkCancellation()
+                let harness = try self.agentHarness()
+                try await session.setHarness(harness?.driver, id: harness?.id)
                 try self.validateAgentTaskTarget(target)
                 try await session.setWorkflowScope(scope)
                 let proposal = try await session.process(

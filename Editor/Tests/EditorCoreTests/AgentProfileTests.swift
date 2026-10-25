@@ -41,6 +41,19 @@ struct AgentProfileTests {
         #expect(app.makeAgentWorkflowScope(target: target).agent.instructions == "Only review.")
     }
 
+    @Test func theAgentsHarnessMustBeEnabled() throws {
+        let project = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false,
+                                        trustedPluginHostExecutableURL: nil)
+        defer { app.shutdown() }
+        #expect(try app.agentHarness() == nil)
+        app.pluginSession.agents = AgentCatalog(agents: [AgentDescriptor(pluginID: "fixture.agents",
+            contribution: AgentContribution(id: "careful", title: "Careful", harness: "careful"))])
+        #expect(throws: AgentHarnessError.unavailable("careful")) { try app.agentHarness() }
+    }
+
     @Test func agentContextSplitsHostSourcesFromPackageContext() {
         let agent = AgentDescriptor(pluginID: "fixture.agents", contribution: AgentContribution(
             id: "a", title: "A", context: ["scene", "memory", "git-summary"]))

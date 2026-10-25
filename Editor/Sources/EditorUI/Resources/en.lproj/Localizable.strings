@@ -125,7 +125,7 @@
 "About Guava" = "About Guava";
 "Version" = "Version";
 "Development Build" = "Development Build";
-"An AI harness driven workstation for code, games, animation and video." = "An AI harness driven workstation for code, games, animation and video.";
+"An AI-assisted workstation for code, games, animation and video." = "An AI-assisted workstation for code, games, animation and video.";
 "Workspace: Level" = "Workspace: Level";
 "Workspace: Modeling" = "Workspace: Modeling";
 "Workspace: Animation" = "Workspace: Animation";
@@ -787,7 +787,7 @@
 "Video" = "Video";
 "Outline" = "Outline";
 "Properties" = "Properties";
-"Harness" = "Harness";
+"Assistant" = "Assistant";
 "Review" = "Review";
 "Journal" = "Journal";
 "Session Journal" = "Session Journal";
@@ -802,7 +802,7 @@
 "What shall we make?" = "What shall we make?";
 "One workspace. A shared scene. Tell Guava what you want to create, change, or understand." = "One workspace. A shared scene. Tell Guava what you want to create, change, or understand.";
 "Connect an AI provider to start working together." = "Connect an AI provider to start working together.";
-"Set up Harness" = "Set up Harness";
+"Set up Assistant" = "Set up Assistant";
 "TRY A STARTING POINT" = "TRY A STARTING POINT";
 "Explain the current selection" = "Explain the current selection";
 "Help me plan the next step" = "Help me plan the next step";
@@ -810,8 +810,8 @@
 "Review before applying" = "Review before applying";
 "Context" = "Context";
 "Ask Guava" = "Ask Guava";
-"Open Harness" = "Open Harness";
-"Work with Harness in this context" = "Work with Harness in this context";
+"Open Assistant" = "Open Assistant";
+"Work with the assistant in this context" = "Work with the assistant in this context";
 
 "Import Assets" = "Import Assets";
 "Content Browser" = "Content Browser";
@@ -839,8 +839,8 @@
 "Hide Others" = "Hide Others";
 "Quit %@" = "Quit %@";
 "Guava is working" = "Guava is working";
-"Harness ready" = "Harness ready";
-"Harness offline" = "Harness offline";
+"Assistant ready" = "Assistant ready";
+"Assistant offline" = "Assistant offline";
 "Select" = "Select";
 "Select All" = "Select All";
 "Deselect" = "Deselect";
@@ -872,7 +872,7 @@
 "Keyboard Shortcuts" = "Keyboard Shortcuts";
 "Make this workspace feel like yours." = "Make this workspace feel like yours.";
 "Fine-tune how you work with the scene." = "Fine-tune how you work with the scene.";
-"Connect your model provider and choose how the harness works with you." = "Connect your model provider and choose how the harness works with you.";
+"Connect your model provider and choose how the assistant works with you." = "Connect your model provider and choose how the assistant works with you.";
 "Inspect, authorize, and manage your AI extensions." = "Inspect, authorize, and manage your AI extensions.";
 "The shortcuts available in your current Space." = "The shortcuts available in your current Space.";
 "Your workspace, application, and support information." = "Your workspace, application, and support information.";
@@ -881,7 +881,7 @@
 "Execution & Review" = "Execution & Review";
 "Workspace Information" = "Workspace Information";
 "WORKSPACE" = "WORKSPACE";
-"TOOLS & HARNESS" = "TOOLS & HARNESS";
+"TOOLS & ASSISTANT" = "TOOLS & ASSISTANT";
 "Settings categories" = "Settings categories";
 "A calm canvas, in your preferred light." = "A calm canvas, in your preferred light.";
 "Display language" = "Display language";
@@ -891,7 +891,7 @@
 "Synchronize presentation with the display to reduce tearing." = "Synchronize presentation with the display to reduce tearing.";
 "Bring your provider. Keep control of your credentials." = "Bring your provider. Keep control of your credentials.";
 "Use a model supported by the selected provider." = "Use a model supported by the selected provider.";
-"Harness is disabled. Choose a provider to configure it." = "Harness is disabled. Choose a provider to configure it.";
+"The assistant is disabled. Choose a provider to configure it." = "The assistant is disabled. Choose a provider to configure it.";
 "Available capabilities" = "Available capabilities";
 "Stable keeps the default capability set. Beta and Experimental expose earlier-stage tools." = "Stable keeps the default capability set. Beta and Experimental expose earlier-stage tools.";
 "Review a package and its capabilities before enabling it." = "Review a package and its capabilities before enabling it.";
@@ -911,7 +911,7 @@
 "No settings found" = "No settings found";
 "Try a provider name, a feature, or a different keyword." = "Try a provider name, a feature, or a different keyword.";
 "Clear search" = "Clear search";
-"Unapplied Harness changes" = "Unapplied Harness changes";
+"Unapplied assistant changes" = "Unapplied assistant changes";
 "Preferences are saved on this computer." = "Preferences are saved on this computer.";
 "Discard changes" = "Discard changes";
 

@@ -99,7 +99,7 @@
       ],
       "success": "#5faf82"
     },
-    "harness": "#f07d96",
+    "assistant": "#f07d96",
     "textEmphasis": {
       "placeholder": "#8b948f",
       "disabled": "#505653"
@@ -263,7 +263,7 @@
       "focusRing": "#277b50",
       "stateLayerSelected": "#e9edea"
     },
-    "harness": "#c8435f",
+    "assistant": "#c8435f",
     "syntax": {
       "keyword": "#7b35ae",
       "type": "#006483",

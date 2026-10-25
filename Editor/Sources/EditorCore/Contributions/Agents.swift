@@ -15,6 +15,8 @@ public struct AgentDescriptor: Sendable, Equatable, Identifiable {
     /// Nil means every host source and no package context.
     public let context: Set<String>?
     public let canAutoApprove: Bool
+    /// The `guava.ai.harness/v1` running this agent's turns; nil for the built-in loop.
+    public let harness: String?
 
     public init(pluginID: String, contribution: AgentContribution) {
         self.pluginID = pluginID
@@ -26,6 +28,7 @@ public struct AgentDescriptor: Sendable, Equatable, Identifiable {
         tools = contribution.tools.map(Set.init)
         context = contribution.context.map(Set.init)
         canAutoApprove = contribution.canAutoApprove ?? true
+        harness = contribution.harness
     }
 
     /// The host sources the agent keeps; a name that is no host source is a package context.

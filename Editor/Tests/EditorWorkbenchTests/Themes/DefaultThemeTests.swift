@@ -22,7 +22,7 @@ struct DefaultThemeTests {
         for (_, key) in ThemeTokenMaps.radius { #expect(actual.radius[keyPath: key] == expected.radius[keyPath: key]) }
         for (_, key) in ThemeTokenMaps.inputColors { #expect(actual.inputs[keyPath: key] == expected.inputs[keyPath: key]) }
         for (_, key) in ThemeTokenMaps.inputMetrics { #expect(actual.inputs[keyPath: key] == expected.inputs[keyPath: key]) }
-        #expect(actual.extensions[EditorThemeTokens.self].harness == expected.extensions[EditorThemeTokens.self].harness)
+        #expect(actual.extensions[EditorThemeTokens.self].assistant == expected.extensions[EditorThemeTokens.self].assistant)
         #expect(actual.textEmphasis.placeholder == expected.textEmphasis.placeholder)
         #expect(actual.textEmphasis.disabled == expected.textEmphasis.disabled)
         #expect(actual.motion.fast == expected.motion.fast)

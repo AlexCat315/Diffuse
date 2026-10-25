@@ -43,7 +43,7 @@ struct SettingsWorkflowTests {
     func search() {
         #expect(SettingsSectionID.visible(category: .general, query: "密钥") == [.provider])
         #expect(SettingsSectionID.visible(category: .editor, query: "openai model") == [.provider])
-        #expect(SettingsSectionID.visible(category: .harness, query: "vsync") == [.display])
+        #expect(SettingsSectionID.visible(category: .assistant, query: "vsync") == [.display])
         #expect(SettingsSectionID.visible(category: .general, query: " ") == [.appearance, .language])
         #expect(SettingsSectionID.visible(category: .general, query: "no-such-preference").isEmpty)
         #expect(Set(SettingsSectionID.allCases.map(\.category)) == Set(SettingsCategory.allCases))
@@ -71,7 +71,7 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = category
-            if category == .harness { session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled) }
+            if category == .assistant { session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled) }
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: SettingsPanel(app: app, session: session).theme(EditorVisualTheme.make(dark: true)))
             for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 740) }
@@ -92,19 +92,19 @@ struct SettingsWorkflowTests {
     func agentEditing() throws {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
-            let editor = HarnessSettingsEditor(app: app, state: Binding(get: { session.harness }, set: { session.harness = $0 }), onChange: {})
+            let editor = AssistantSettingsEditor(app: app, state: Binding(get: { session.assistant }, set: { session.assistant = $0 }), onChange: {})
             editor.select(AIProviderCatalog.bundled.provider(id: "openai"))
             editor.update { $0.draft.credentials["api-key"] = "uncommitted-test-secret"; $0.draft.model = "" }
             #expect(app.store.aiSettings.providerID.isEmpty)
             editor.apply()
-            #expect(session.harness.feedback?.isError == true)
+            #expect(session.assistant.feedback?.isError == true)
             #expect(app.store.aiSettings.providerID.isEmpty)
             editor.select(AIProviderCatalog.bundled.provider(id: "deepseek"))
-            #expect(session.harness.draft.credentials.isEmpty)
+            #expect(session.assistant.draft.credentials.isEmpty)
             #expect(editor.isDirty)
             editor.reset()
             #expect(!editor.isDirty)
-            #expect(session.harness.feedback == nil)
+            #expect(session.assistant.feedback == nil)
         }
     }
 
@@ -112,9 +112,9 @@ struct SettingsWorkflowTests {
     func providerResize() throws {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
-            session.navigation.category = .harness
-            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
-            session.harness.draft.model = "retained-model"
+            session.navigation.category = .assistant
+            session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
+            session.assistant.draft.model = "retained-model"
             let harness = ResizingPreferences(app: app, session: session)
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: harness)
@@ -128,17 +128,17 @@ struct SettingsWorkflowTests {
                     $0.accessibility?.role == .textField && $0.accessibility?.label == EditorUI.L("Model")
                 })
                 if let originalField { #expect(field === originalField) } else { originalField = field }
-                #expect(session.harness.draft.model.stringValue == "retained-model")
+                #expect(session.assistant.draft.model.stringValue == "retained-model")
             }
         }
     }
 
-    @Test("Harness settings adapt to touch, mixed input, RTL and large text", arguments: [Float(390), 720, 1280])
-    func adaptiveHarness(width: Float) throws {
+    @Test("Assistant settings adapt to touch, mixed input, RTL and large text", arguments: [Float(390), 720, 1280])
+    func adaptiveAssistant(width: Float) throws {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
-            session.navigation.category = .harness
-            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
+            session.navigation.category = .assistant
+            session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
             var surface = UIEnvironment()
             surface.viewport.width = width
             surface.input = width == 390 ? [.touch] : width == 720 ? [.pointer, .touch, .keyboard] : [.pointer, .keyboard]
@@ -158,14 +158,14 @@ struct SettingsWorkflowTests {
         }
     }
 
-    @Test("Navigation and presentation remounts preserve the Harness draft and search state")
+    @Test("Navigation and presentation remounts preserve the assistant draft and search state")
     func retainedSession() throws {
         try withApp { app, interactions in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
-            session.navigation.category = .harness
-            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
-            session.harness.draft.model = "my-model"
-            session.harness.draft.credentials["api-key"] = "uncommitted-test-secret"
+            session.navigation.category = .assistant
+            session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
+            session.assistant.draft.model = "my-model"
+            session.assistant.draft.credentials["api-key"] = "uncommitted-test-secret"
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             func settle() {
                 for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 1040, height: 740) }
@@ -173,12 +173,12 @@ struct SettingsWorkflowTests {
             graph.install(root: SettingsPanel(app: app, session: session)); settle()
             try WorkbenchUITestSupport.activate("settings-category-general", in: graph.tree.root, registry: interactions); settle()
             #expect(session.navigation.category == .general)
-            #expect(session.harness.draft.model.stringValue == "my-model")
+            #expect(session.assistant.draft.model.stringValue == "my-model")
             graph.install(root: EmptyView())
             session.navigation.query = "模型"
             graph.install(root: SettingsPanel(app: app, session: session).theme(EditorVisualTheme.make(dark: false))); settle()
-            #expect(graph.layoutSnapshot().contains { $0.debugName == "settings-harness-model" })
-            #expect(session.harness.draft.credentials["api-key"]?.stringValue == "uncommitted-test-secret")
+            #expect(graph.layoutSnapshot().contains { $0.debugName == "settings-assistant-model" })
+            #expect(session.assistant.draft.credentials["api-key"]?.stringValue == "uncommitted-test-secret")
             #expect(session.navigation.query.stringValue == "模型")
         }
     }
@@ -187,14 +187,14 @@ struct SettingsWorkflowTests {
     func keyboardSearch() throws {
         try withApp { app, interactions in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
-            session.navigation.category = .harness
-            session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
+            session.navigation.category = .assistant
+            session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: SettingsPanel(app: app, session: session))
             func settle() { for _ in 0..<5 { graph.recomposer.commitAll(); graph.computeLayout(width: 1040, height: 740) } }
             settle()
             let focus = try #require(FocusChainHolder.current)
-            let action = try WorkbenchUITestSupport.named("settings-harness-reset", in: graph.tree.root)
+            let action = try WorkbenchUITestSupport.named("settings-assistant-reset", in: graph.tree.root)
             focus.focus(try #require(WorkbenchUITestSupport.firstNode(action) { $0.isFocusable }))
             let input = EventDispatcher(tree: graph.tree, interactions: interactions, capture: PointerCapture(), focusChain: focus)
             input.dispatch(.keyDown(.init(scancode: Scancode.f, keycode: 0, modifiers: .lgui, isRepeat: false)))
@@ -246,11 +246,11 @@ struct AgentSurfaceTests {
         }
     }
 
-    @Test("Without an agent package the Harness settings section is not offered")
-    func harnessSettingsHideWithoutAgent() {
-        let hidden = SettingsSectionID.visible(category: .harness, query: "", agentEnabled: false)
+    @Test("Without an agent package the assistant settings section is not offered")
+    func assistantSettingsHideWithoutAgent() {
+        let hidden = SettingsSectionID.visible(category: .assistant, query: "", agentEnabled: false)
         #expect(hidden.isEmpty)
-        #expect(SettingsSectionID.visible(category: .harness, query: "", agentEnabled: true) == [.provider, .execution, .capabilities])
-        #expect(SettingsSectionID.visible(category: .general, query: "harness", agentEnabled: false).isEmpty)
+        #expect(SettingsSectionID.visible(category: .assistant, query: "", agentEnabled: true) == [.provider, .execution, .capabilities])
+        #expect(SettingsSectionID.visible(category: .general, query: "assistant", agentEnabled: false).isEmpty)
     }
 }

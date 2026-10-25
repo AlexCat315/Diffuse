@@ -3,6 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 import IntentRuntime
+import PluginRuntime
 import XCTest
 @testable import AIRuntime
 
@@ -140,6 +141,140 @@ final class ProjectToolSessionTests: XCTestCase {
                 XCTAssertFalse((parameters["required"] as? [String] ?? []).contains("expected_sha256"))
             }
         }
+    }
+}
+
+final class HarnessSessionTests: XCTestCase {
+    private final class Recorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: [SessionHarnessTurn] = []
+        private var bodies: [[String: Any]] = []
+        var turns: [SessionHarnessTurn] { lock.withLock { stored } }
+        var requests: [[String: Any]] { lock.withLock { bodies } }
+        func record(_ turn: SessionHarnessTurn) { lock.withLock { stored.append(turn) } }
+        func record(body: [String: Any]) { lock.withLock { bodies.append(body) } }
+    }
+
+    private func session(replies: [(name: String, input: [String: Any])], recorder: Recorder) -> Session {
+        var queue = replies
+        let lock = NSLock()
+        ProjectURLProtocol.handler = { request in
+            let data = request.httpBody ?? ProjectURLProtocol.readBody(request.httpBodyStream)
+            recorder.record(body: (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:])
+            let reply = lock.withLock { queue.isEmpty ? (name: "respond", input: ["message": "fallback"]) : queue.removeFirst() }
+            return try JSONSerialization.data(withJSONObject: [
+                "content": [["type": "tool_use", "id": "toolu_\(recorder.requests.count)", "name": reply.name, "input": reply.input]],
+                "stop_reason": "tool_use"])
+        }
+        let transport = URLSessionConfiguration.ephemeral
+        transport.protocolClasses = [ProjectURLProtocol.self]
+        let config = SessionConfig(apiKey: "fixture", model: "fixture", baseURL: URL(string: "https://guava.invalid")!, apiFormat: .anthropic)
+        return Session(config: config, urlSession: URLSession(configuration: transport))
+    }
+
+    func testHarnessDecidesEachStepWhileTheSessionCallsTheModelAndRunsTools() async throws {
+        let recorder = Recorder()
+        defer { ProjectURLProtocol.handler = nil }
+        let session = session(replies: [(name: "export_project", input: [:]), (name: "respond", input: ["message": "Done"])],
+                              recorder: recorder)
+        await session.setProjectToolExecutor { _, _ in Data(#"{"ok": true}"#.utf8) }
+        try await session.setHarness({ turn in
+            recorder.record(turn)
+            switch turn.observation {
+            case nil:
+                return SessionHarnessStep(.model(instructions: "Inspect first.", message: nil), state: .object(["turns": .number(1)]))
+            case let .model(call) where call.name == "export_project":
+                return SessionHarnessStep(.model(instructions: nil, message: "Do not export."))
+            case let .model(call):
+                return SessionHarnessStep(.tool(call))
+            default:
+                return SessionHarnessStep(.finish(summary: "unexpected"))
+            }
+        }, id: "fixture.careful")
+        let proposal = try await session.process(.naturalLanguage(text: "Ship it", locale: "en"))
+
+        XCTAssertEqual(proposal.plan.summary, "Done")
+        XCTAssertEqual(recorder.requests.count, 2)
+        XCTAssertTrue((recorder.requests[0]["system"] as? String ?? "").contains("Harness instructions for this step (within the rules below):\nInspect first."))
+        XCTAssertFalse((recorder.requests[1]["system"] as? String ?? "").contains("Inspect first."))
+        let messages = recorder.requests[1]["messages"] as? [[String: Any]] ?? []
+        XCTAssertEqual(messages.last?["content"] as? String, "Do not export.")
+        let turns = recorder.turns
+        XCTAssertEqual(turns.map(\.step), [0, 1, 2])
+        XCTAssertEqual(turns[0].request, .init(text: "Ship it", locale: "en"))
+        XCTAssertTrue(turns[0].tools.contains { $0.name == "respond" })
+        XCTAssertEqual(turns[1].state, .object(["turns": .number(1)]))
+        XCTAssertEqual(turns[2].observation, .model(.init(id: "toolu_2", name: "respond", arguments: .object(["message": .string("Done")]))))
+    }
+
+    func testHarnessCanRunToolsAndFinishWithoutTheModel() async throws {
+        let recorder = Recorder()
+        defer { ProjectURLProtocol.handler = nil }
+        let session = session(replies: [], recorder: recorder)
+        await session.setProjectToolExecutor { name, _ in Data(#"{"tool": "\#(name)"}"#.utf8) }
+        try await session.setWorkflowScope(SessionWorkflowScope { $0.allowedProjectToolNames = ["respond", "get_project_info"] })
+        try await session.setHarness({ turn in
+            recorder.record(turn)
+            if turn.observation == nil { return SessionHarnessStep(.tool(.init(name: "get_project_info"))) }
+            if case let .tool(_, result) = turn.observation { return SessionHarnessStep(.finish(summary: "Read \(result)")) }
+            return SessionHarnessStep(.finish(summary: "unexpected"))
+        }, id: "fixture.direct")
+        let proposal = try await session.process(.naturalLanguage(text: "Describe", locale: "en"))
+        XCTAssertTrue(recorder.requests.isEmpty)
+        XCTAssertTrue(proposal.plan.summary.contains("get_project_info"))
+        XCTAssertTrue(proposal.plan.steps.isEmpty)
+    }
+
+    func testDeniedToolsComeBackAsFailuresAndTheStepBudgetEndsARunawayHarness() async throws {
+        let recorder = Recorder()
+        defer { ProjectURLProtocol.handler = nil }
+        let session = session(replies: [], recorder: recorder)
+        await session.setProjectToolExecutor { _, _ in Data("{}".utf8) }
+        try await session.setWorkflowScope(SessionWorkflowScope { $0.allowedProjectToolNames = ["respond"] })
+        try await session.setHarness({ turn in
+            recorder.record(turn)
+            return SessionHarnessStep(.tool(.init(name: "write_file", arguments: .object(["path": .string("x")]))))
+        }, id: "fixture.runaway")
+        do {
+            _ = try await session.process(.naturalLanguage(text: "Loop", locale: "en"))
+            XCTFail("a harness that never finishes must not run forever")
+        } catch SessionError.noPlanInResponse {}
+        XCTAssertEqual(recorder.turns.count, SessionHarnessStep.maximumSteps)
+        guard case .failure? = recorder.turns[1].observation else { return XCTFail("the denied tool is not reported") }
+    }
+
+    func testHarnessStateLastsAcrossTurnsUntilTheHarnessChanges() async throws {
+        let recorder = Recorder()
+        defer { ProjectURLProtocol.handler = nil }
+        let session = session(replies: [], recorder: recorder)
+        let harness: SessionHarness = { turn in
+            recorder.record(turn)
+            let count: Double = if case let .object(object)? = turn.state, case let .number(n)? = object["count"] { n } else { 0 }
+            return SessionHarnessStep(.finish(summary: "\(Int(count))"), state: .object(["count": .number(count + 1)]))
+        }
+        try await session.setHarness(harness, id: "fixture.counter")
+        let first = try await session.process(.naturalLanguage(text: "One", locale: "en"))
+        try await session.setHarness(harness, id: "fixture.counter")
+        let second = try await session.process(.naturalLanguage(text: "Two", locale: "en"))
+        try await session.setHarness(harness, id: "fixture.other")
+        let third = try await session.process(.naturalLanguage(text: "Three", locale: "en"))
+        XCTAssertEqual([first, second, third].map(\.plan.summary), ["0", "1", "0"])
+    }
+
+    func testStepsDecodeFromThePluginWireFormat() throws {
+        func step(_ json: String) throws -> SessionHarnessStep { try JSONDecoder().decode(SessionHarnessStep.self, from: Data(json.utf8)) }
+        XCTAssertEqual(try step(#"{"step": "model", "instructions": "Plan", "state": {"a": 1}}"#),
+                       SessionHarnessStep(.model(instructions: "Plan", message: nil), state: .object(["a": .number(1)])))
+        XCTAssertEqual(try step(#"{"step": "tool", "call": {"id": "toolu_1", "name": "respond", "arguments": {"message": "Hi"}}}"#),
+                       SessionHarnessStep(.tool(.init(id: "toolu_1", name: "respond", arguments: .object(["message": .string("Hi")])))))
+        XCTAssertEqual(try step(#"{"step": "finish", "summary": "Done"}"#), SessionHarnessStep(.finish(summary: "Done")))
+        XCTAssertThrowsError(try step(#"{"step": "shell", "command": "rm"}"#))
+        let turn = SessionHarnessTurn(step: 1, state: nil, request: .init(text: "Hi", locale: "en"), tools: [],
+                                      observation: .tool(.init(name: "get_project_info"), result: .object(["ok": .bool(true)])))
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: JSONEncoder().encode(turn)) as? [String: Any])
+        let observation = try XCTUnwrap(object["observation"] as? [String: Any])
+        XCTAssertEqual(observation["type"] as? String, "tool")
+        XCTAssertEqual((observation["result"] as? [String: Any])?["ok"] as? Bool, true)
     }
 }
 

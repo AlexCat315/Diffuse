@@ -15,7 +15,7 @@ enum SettingsFeedback {
     var isError: Bool { if case .failure = self { true } else { false } }
 }
 
-struct HarnessSettingsState {
+struct AssistantSettingsState {
     var draft: EditorAISettingsDraft
     var feedback: SettingsFeedback?
     var confirmsKeyRemoval = false
@@ -26,8 +26,8 @@ struct HarnessSettingsState {
 /// Window-owned, transient state survives presentation changes and page unmounts.
 final class EditorSettingsSession {
     var navigation = SettingsNavigation()
-    var harness: HarnessSettingsState
-    init(settings: EditorAISettings) { harness = HarnessSettingsState(settings: settings) }
+    var assistant: AssistantSettingsState
+    init(settings: EditorAISettings) { assistant = AssistantSettingsState(settings: settings) }
 }
 
 struct EditorSettingsPersistence {

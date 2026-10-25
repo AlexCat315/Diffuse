@@ -2,8 +2,8 @@ internal import EditorCore
 internal import GuavaUI
 internal import GuavaUIRuntime
 
-struct HarnessProviderSettings: View {
-    let editor: HarnessSettingsEditor
+struct AssistantProviderSettings: View {
+    let editor: AssistantSettingsEditor
 
     var body: some View {
         // One credential lookup per render; each reads the credential file.
@@ -26,7 +26,7 @@ struct HarnessProviderSettings: View {
                     TextField(L("Model"), text: Binding(get: { editor.draft.model }, set: { value in
                         editor.update { $0.draft.model = value; $0.feedback = nil }
                     })) { input in input.behavior.clearable = true; input.events.onSubmit = editor.apply }
-                        .frame(width: .percent(100), minWidth: 0).debugName("settings-harness-model")
+                        .frame(width: .percent(100), minWidth: 0).debugName("settings-assistant-model")
                     Text(L("Use a model supported by the selected provider.")).font(.caption).foregroundColor(.onSurfaceMuted)
                 }.frame(width: .percent(100))
                 // One input per auth field the provider declares.
@@ -34,7 +34,7 @@ struct HarnessProviderSettings: View {
                     AnyView(credentialField(field))
                 }
             } else {
-                Text(L("Harness is disabled. Choose a provider to configure it."))
+                Text(L("The assistant is disabled. Choose a provider to configure it."))
                     .font(.body).foregroundColor(.onSurfaceMuted)
             }
             if editor.draft.providerID == active, !active.isEmpty, activeSource == .credentialFile {
@@ -45,7 +45,7 @@ struct HarnessProviderSettings: View {
                     }
                 } else {
                     Button(L("Remove Stored Key")) { editor.update { $0.confirmsKeyRemoval = true } }
-                        .buttonStyle(.ghost).debugName("settings-harness-remove-key")
+                        .buttonStyle(.ghost).debugName("settings-assistant-remove-key")
                 }
             }
         }
@@ -59,7 +59,7 @@ struct HarnessProviderSettings: View {
                 editor.update { $0.draft.credentials[field.id] = value; $0.feedback = nil }
             })) { input in
                 input.behavior.secure = field.isSecret; input.behavior.clearable = true; input.events.onSubmit = editor.apply
-            }.frame(width: .percent(100), minWidth: 0).debugName("settings-harness-credential-" + field.id)
+            }.frame(width: .percent(100), minWidth: 0).debugName("settings-assistant-credential-" + field.id)
             Row(alignment: .center, spacing: 6) {
                 Icon(UIIcons.Status.shieldCheck, size: 12, color: .onSurfaceMuted)
                 Text(editor.credentialStatus(source)).font(.caption).foregroundColor(.onSurfaceMuted).flex().frame(minWidth: 0)
@@ -90,8 +90,8 @@ struct HarnessProviderSettings: View {
     }
 }
 
-struct HarnessExecutionSettings: View {
-    let editor: HarnessSettingsEditor
+struct AssistantExecutionSettings: View {
+    let editor: AssistantSettingsEditor
 
     var body: some View {
         SettingsCard(L("Execution & Review")) {
@@ -101,13 +101,13 @@ struct HarnessExecutionSettings: View {
                     Select(selection: Binding(get: { editor.app.agentCatalog.agent(id: editor.draft.agentID)?.id ?? "" }, set: { id in
                         editor.update { $0.draft.agentID = id; $0.feedback = nil }
                     }), options: agents.map { .init(value: $0.id, label: $0.title) }, width: 200).frame(width: 200)
-                        .debugName("settings-harness-agent")
+                        .debugName("settings-assistant-agent")
                 }
             }
             SettingsField(L("Automatically apply safe AI changes"), help: L("Operations that require confirmation will still wait for approval.")) {
                 Toggle(isOn: Binding(get: { editor.draft.autoApprove }, set: { value in
                     editor.update { $0.draft.autoApprove = value; $0.feedback = nil }
-                })).accessibility { $0.label = L("Automatically apply safe AI changes") }.debugName("settings-harness-auto-approve")
+                })).accessibility { $0.label = L("Automatically apply safe AI changes") }.debugName("settings-assistant-auto-approve")
             }
         }
     }

@@ -2,7 +2,7 @@
   "id": "studio.ai",
   "version": 1,
   "name": "AI",
-  "description": "Model providers for the harness. Credentials and transport stay with the host.",
+  "description": "Model providers and the assistant agent. Credentials and transport stay with the host.",
   "access": "read",
   "imports": [],
   "composable_host_capabilities": [],
@@ -16,7 +16,7 @@
     "guava.ui.panel/v1": [
       {
         "id": "intent-input",
-        "title": "Harness",
+        "title": "Assistant",
         "slot": "trailing",
         "icon": "ai-intent",
         "view": "agent"

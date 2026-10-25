@@ -27,11 +27,11 @@ struct WritingAssistantButton: View, @unchecked Sendable {
         Popover(isPresented: $isPresented, width: 360, placement: .bottomTrailing, surface: .content, overflow: .flip) {
             Row(alignment: .center, spacing: 4) {
                 if running != nil { Spinner(size: 10) } else {
-                    Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.harnessColor)
+                    Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.assistantColor)
                 }
-                Text(L("AI")).font(.label).foregroundColor(EditorThemeTokens.harnessColor)
+                Text(L("AI")).font(.label).foregroundColor(EditorThemeTokens.assistantColor)
             }.padding(horizontal: 7).frame(height: 22)
-                .background(EditorThemeTokens.harnessColor.opacity(0.10)).cornerRadius(6)
+                .background(EditorThemeTokens.assistantColor.opacity(0.10)).cornerRadius(6)
                 .accessibility { $0.label = L("AI Writing Assistant") }
         } content: {
             Column(alignment: .leading, spacing: 0) {
@@ -57,7 +57,7 @@ struct WritingAssistantButton: View, @unchecked Sendable {
             if !app.isAIAvailable {
                 Column(alignment: .leading, spacing: 8) {
                     Text(L("Set an AI provider in Settings to enable.")).font(.caption).foregroundColor(.onSurfaceMuted)
-                    Button(L("Set up Harness")) { isPresented = false; app.openSettingsWindow() }.buttonStyle(.secondary)
+                    Button(L("Set up Assistant")) { isPresented = false; app.openSettingsWindow() }.buttonStyle(.secondary)
                 }.padding(horizontal: 12)
             }
             Row(alignment: .center, spacing: 6) {
@@ -116,7 +116,7 @@ struct WritingAssistantButton: View, @unchecked Sendable {
     private func review(_ result: WritingResult) -> some View {
         Column(alignment: .leading, spacing: 8) {
             Row(alignment: .center, spacing: 6) {
-                Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.harnessColor)
+                Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.assistantColor)
                 Text(L(result.action.title)).font(.bodyStrong)
             }
             ScrollView(.vertical, scrollbarGutter: .stable) {

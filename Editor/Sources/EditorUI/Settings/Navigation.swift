@@ -23,7 +23,7 @@ struct SettingsSidebar: View {
             for item in [SettingsCategory.general, .editor] { AnyView(destination(item)) }
             Text(L("TOOLS & HARNESS")).font(.caption).foregroundColor(.onSurfaceMuted)
                 .padding(EdgeInsets(top: 24, leading: 20, bottom: 8, trailing: 20))
-            for item in [SettingsCategory.harness, .plugins, .shortcuts] where item != .harness || app.isAgentEnabled {
+            for item in [SettingsCategory.assistant, .plugins, .shortcuts] where item != .assistant || app.isAgentEnabled {
                 AnyView(destination(item))
             }
             Spacer(minLength: 24)
@@ -39,7 +39,7 @@ struct SettingsSidebar: View {
     private func destination(_ item: SettingsCategory) -> some View {
         Button(isSelected: !isSearching && category == item, action: { onSelect(item) }) {
             Row(alignment: .center, spacing: 10) {
-                Icon(item.icon, size: 16, color: item == .harness ? EditorThemeTokens.harnessColor : .onSurfaceVariant)
+                Icon(item.icon, size: 16, color: item == .assistant ? EditorThemeTokens.assistantColor : .onSurfaceVariant)
                 Text(item.title, lineLimit: 1).font(.label).flex().frame(minWidth: 0)
             }.padding(horizontal: 12, vertical: 11).frame(width: .percent(100), minWidth: 0)
         }.buttonStyle(SettingsNavigationStyle()).padding(horizontal: 10, vertical: 2)
@@ -50,7 +50,7 @@ struct SettingsSidebar: View {
 
 struct SettingsCategoryMenu: View {
     let category: SettingsCategory
-    let showsHarness: Bool
+    let showsAssistant: Bool
     let onSelect: (SettingsCategory) -> Void
     @State private var isPresented = false
 
@@ -62,7 +62,7 @@ struct SettingsCategoryMenu: View {
             }.frame(width: 44, height: 32).background(.surfaceVariant).cornerRadius(6)
                 .accessibility { $0.label = L("Settings categories"); $0.value = category.title }
         } content: {
-            Menu(SettingsCategory.allCases.filter { $0 != .harness || showsHarness }.map { item in
+            Menu(SettingsCategory.allCases.filter { $0 != .assistant || showsAssistant }.map { item in
                 .item(MenuItem(id: item.rawValue, title: item.title, isSelected: item == category, action: {
                     onSelect(item); isPresented = false
                 }))

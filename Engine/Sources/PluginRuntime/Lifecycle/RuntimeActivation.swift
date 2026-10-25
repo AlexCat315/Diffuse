@@ -34,6 +34,8 @@ extension PluginManager {
         for view in (try? manifest.contributes.decode(DocumentViewContributionPoint.self)) ?? [] {
             result.insert("onView:" + view.id)
         }
+        // A harness serves chat turns.
+        if !((try? manifest.contributes.decode(AIHarnessContributionPoint.self)) ?? []).isEmpty { result.insert("onAIChat") }
         for contract in entry.inspection.contracts {
             let name = String(contract.id.dropFirst(manifest.id.count + 1))
             if name == "components" { result.insert("onStartup") }

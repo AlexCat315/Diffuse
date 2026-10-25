@@ -43,7 +43,7 @@
 
 - [x] 4.1 默认 AI agent 迁移为随包 `guava.ai.agent/v1` 插件。
 - [x] 4.2 宿主 `Session` 消费 agent profile：instructions / model policy / tool allowlist / context allowlist（宿主来源与 `guava.ai.context/v1`）。
-- [ ] 4.3 定义 `guava.ai.harness/v1` 输入输出；宿主执行 tool calls 与审批，harness 只返回建议。
+- [x] 4.3 定义 `guava.ai.harness/v1` 输入输出；宿主执行 tool calls 与审批，harness 只返回建议。agent 用 `harness` 指定；示例 `examples/Plugins/CarefulAgent`。界面上的助手由 "Harness" 改名为 "Assistant"（助手）。
 - [x] 4.4 默认 AI 面板迁移到 `guava.ui.panel/v1`（宿主视图 `agent`）；宿主渲染外壳，插件提供内容配置。
 - [ ] 4.5 测试：agent profile 生效、工具白名单、harness 不能绕过审批、面板启用/停用。
 
@@ -68,6 +68,7 @@
 - [x] `./guava test Engine --filter WorkbenchContributionTests`
 - [x] `./guava test Editor --filter "WorkbenchContributionsTests|PluginPanelTests"`
 - [x] 端到端：`GUAVA_CHECKLIST_PLUGIN=<Checklist.guavaplugin> ./guava test Editor --filter PluginViewEndToEndTests`
+- [x] 端到端：`GUAVA_CAREFUL_AGENT_PLUGIN=<CarefulAgent.guavaplugin> ./guava test Editor --filter HarnessEndToEndTests`
 - [ ] 手动：纯资源主题安装/切换/停用/重载；AI provider 切换；`.tex` 着色/提纲/格式化不回退。
 
 ## 本轮落地

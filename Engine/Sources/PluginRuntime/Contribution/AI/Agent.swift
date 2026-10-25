@@ -29,9 +29,11 @@ public struct AgentContribution: Codable, Sendable, Equatable {
     public var context: [String]?
     /// False keeps writes on review even when the user turned automatic approval on.
     public var canAutoApprove: Bool?
+    /// A `guava.ai.harness/v1` that runs the agent's turns; the host's loop when absent.
+    public var harness: String?
 
     public init(id: String, title: String, instructions: String? = nil, model: ModelPolicy? = nil,
-                tools: [String]? = nil, context: [String]? = nil, canAutoApprove: Bool? = nil) {
+                tools: [String]? = nil, context: [String]? = nil, canAutoApprove: Bool? = nil, harness: String? = nil) {
         self.id = id
         self.title = title
         self.instructions = instructions
@@ -39,6 +41,7 @@ public struct AgentContribution: Codable, Sendable, Equatable {
         self.tools = tools
         self.context = context
         self.canAutoApprove = canAutoApprove
+        self.harness = harness
     }
 }
 
@@ -57,7 +60,8 @@ public enum AgentContributionPoint: ContributionPointSpec {
               agent.context.map({ sources in
                   sources.count <= 32 && Set(sources).count == sources.count
                       && sources.allSatisfy(ContributionValidation.identifier)
-              }) ?? true else {
+              }) ?? true,
+              agent.harness.map(ContributionValidation.identifier) ?? true else {
             throw PluginManifestValidationError.invalidContribution(id)
         }
     }

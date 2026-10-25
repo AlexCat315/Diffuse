@@ -1,0 +1,11 @@
+package example:careful-agent;
+
+interface capabilities {
+  /// Decides each step of the Careful agent's turns.
+  record harness-input { turn: string }
+  harness: func(input: harness-input) -> string;
+}
+
+world plugin {
+  export capabilities;
+}

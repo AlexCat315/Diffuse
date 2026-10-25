@@ -3,15 +3,15 @@ internal import GuavaUI
 private import Foundation
 
 /// Editing a provider is explicit; the active client only changes on Apply.
-struct HarnessSettingsEditor {
+struct AssistantSettingsEditor {
     let app: EditorApplication
-    let state: Binding<HarnessSettingsState>
+    let state: Binding<AssistantSettingsState>
     let onChange: () -> Void
 
     var draft: EditorAISettingsDraft { state.wrappedValue.draft }
     var isDirty: Bool { draft.differs(from: app.store.aiSettings) }
 
-    func update(_ change: (inout HarnessSettingsState) -> Void) {
+    func update(_ change: (inout AssistantSettingsState) -> Void) {
         var next = state.wrappedValue; change(&next); state.wrappedValue = next
     }
 
@@ -19,7 +19,7 @@ struct HarnessSettingsEditor {
         update { $0.draft.select(provider, in: app.aiProviderCatalog); $0.feedback = nil; $0.confirmsKeyRemoval = false }
     }
 
-    func reset() { state.wrappedValue = HarnessSettingsState(settings: app.store.aiSettings) }
+    func reset() { state.wrappedValue = AssistantSettingsState(settings: app.store.aiSettings) }
 
     func apply() {
         let model = draft.model.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -51,7 +51,7 @@ struct HarnessSettingsEditor {
         guard app.clearAIKey() else {
             update { $0.feedback = .failure(L("Stored credential could not be removed. See Console for details.")) }; return
         }
-        state.wrappedValue = HarnessSettingsState(settings: app.store.aiSettings)
+        state.wrappedValue = AssistantSettingsState(settings: app.store.aiSettings)
         update { $0.feedback = .success(L("Stored credential removed and AI Assistant disabled.")) }
         onChange()
     }

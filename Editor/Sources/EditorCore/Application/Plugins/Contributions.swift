@@ -14,6 +14,7 @@ final class PluginContributions: Sendable {
     let toolbar = ContributionCatalog<ValidatedPluginPackage>()
     let documentViews = ContributionCatalog<ValidatedPluginPackage>()
     let contexts = ContributionCatalog<ValidatedPluginPackage>()
+    let harnesses = ContributionCatalog<ValidatedPluginPackage>()
 
     /// Every catalog the workbench reads, in a fixed order.
     var workbench: [ContributionCatalog<ValidatedPluginPackage>] { [commands, panels, menus, toolbar, documentViews] }
@@ -79,6 +80,13 @@ final class PluginContributions: Sendable {
                 throw PluginManifestValidationError.invalidContribution(AIContextContributionPoint.id)
             }
             return try contexts.install(values, package: package, point: AIContextContributionPoint.self, id: { $0.id })
+        }
+        // A harness only decides steps; it needs no write access.
+        try registrar.register(AIHarnessContributionPoint.self) { [harnesses] values, package in
+            guard package.manifest.access == .read else {
+                throw PluginManifestValidationError.invalidContribution(AIHarnessContributionPoint.id)
+            }
+            return try harnesses.install(values, package: package, point: AIHarnessContributionPoint.self, id: { $0.id })
         }
         // Tools reach the model through the capability registry, which reads them
         // from the manifest; nothing else holds them.

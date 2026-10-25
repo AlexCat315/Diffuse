@@ -176,9 +176,9 @@ struct EditorStatusBar: View {
         let available = app.isAIAvailable
         let title = reviews > 0 ? "\(reviews) \(L("Awaiting Review"))"
             : working ? L("Guava is working")
-            : available ? L("Harness ready") : L("Harness offline")
+            : available ? L("Assistant ready") : L("Assistant offline")
         let emphasized = reviews > 0 || working
-        return Button(tooltip: available ? (store.aiStatusMessage ?? L("Harness"))
+        return Button(tooltip: available ? (store.aiStatusMessage ?? L("Assistant"))
                                          : L("Set an AI provider in Settings to enable.")) {
             if let id = app.agentPanelID { onCommand(.showPanel(id)) }
         } label: {
@@ -187,14 +187,14 @@ struct EditorStatusBar: View {
                     Spinner(size: 10)
                 } else {
                     Icon(UIIcons.Status.sparkles, size: 11,
-                         color: available ? EditorThemeTokens.harnessColor : .onSurfaceMuted)
+                         color: available ? EditorThemeTokens.assistantColor : .onSurfaceMuted)
                 }
                 Text(title, lineLimit: 1).font(emphasized ? .label : .caption)
-                    .foregroundColor(emphasized ? EditorThemeTokens.harnessColor : .onSurfaceMuted)
+                    .foregroundColor(emphasized ? EditorThemeTokens.assistantColor : .onSurfaceMuted)
             }
         }
         .buttonStyle(EditorChromeButtonStyle(height: 20))
-        .accessibility { $0.label = L("Harness") + ": " + title }
+        .accessibility { $0.label = L("Assistant") + ": " + title }
         .debugName("editor-status-agent")
     }
 }

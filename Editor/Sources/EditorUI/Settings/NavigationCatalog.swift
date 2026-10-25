@@ -3,13 +3,13 @@ internal import GuavaUIRuntime
 private import Foundation
 
 enum SettingsCategory: String, CaseIterable, Sendable {
-    case general, editor, harness, plugins, shortcuts, about
+    case general, editor, assistant, plugins, shortcuts, about
 
     var title: String {
         let key = switch self {
         case .general: "General"
         case .editor: "Editor"
-        case .harness: "Harness"
+        case .assistant: "Assistant"
         case .plugins: "Extensions"
         case .shortcuts: "Keyboard Shortcuts"
         case .about: "About Guava"
@@ -21,7 +21,7 @@ enum SettingsCategory: String, CaseIterable, Sendable {
         let key = switch self {
         case .general: "Make this workspace feel like yours."
         case .editor: "Fine-tune how you work with the scene."
-        case .harness: "Connect your model provider and choose how the harness works with you."
+        case .assistant: "Connect your model provider and choose how the assistant works with you."
         case .plugins: "Manage built-in and added plugins and the access they get."
         case .shortcuts: "The shortcuts available in your current Space."
         case .about: "Your workspace, application, and support information."
@@ -33,7 +33,7 @@ enum SettingsCategory: String, CaseIterable, Sendable {
         switch self {
         case .general: UIIcons.Action.settings
         case .editor: UIIcons.Editor.box
-        case .harness: UIIcons.Status.sparkles
+        case .assistant: UIIcons.Status.sparkles
         case .plugins: UIIcons.File.package
         case .shortcuts: UIIcons.Editor.code
         case .about: UIIcons.Status.info
@@ -48,7 +48,7 @@ enum SettingsSectionID: String, CaseIterable, Sendable {
         switch self {
         case .appearance, .language: .general
         case .selection, .display, .swift: .editor
-        case .provider, .execution, .capabilities: .harness
+        case .provider, .execution, .capabilities: .assistant
         case .plugins: .plugins
         case .shortcuts: .shortcuts
         case .about: .about
@@ -79,8 +79,8 @@ enum SettingsSectionID: String, CaseIterable, Sendable {
         case .selection: "selection subtract toggle command control modifier 选择 减选 切换 修饰键"
         case .display: "display performance vertical sync vsync fps refresh 显示 性能 垂直 同步 刷新"
         case .swift: "swift format save formatting language service 格式化 保存 语言服务"
-        case .provider: "harness ai provider model api key credential anthropic openai deepseek 模型 密钥 凭据 服务商"
-        case .execution: "harness approval auto approve safe review 自动 确认 审阅 执行"
+        case .provider: "assistant ai provider model api key credential anthropic openai deepseek 模型 密钥 凭据 服务商"
+        case .execution: "assistant approval auto approve safe review 自动 确认 审阅 执行"
         case .capabilities: "capability gate stable beta experimental permissions 能力 稳定 测试 实验 权限"
         case .plugins: "plugin extension authorize revoke reload disable 插件 扩展 授权 撤销 重载 禁用"
         case .shortcuts: "keyboard shortcut key binding 快捷键 键盘 按键"
@@ -99,7 +99,7 @@ enum SettingsSectionID: String, CaseIterable, Sendable {
                         agentEnabled: Bool = true) -> [Self] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return allCases.filter { section in
-            agentEnabled || section.category != .harness
+            agentEnabled || section.category != .assistant
         }.filter { query.isEmpty ? $0.category == category : $0.matches(query) }
     }
 }

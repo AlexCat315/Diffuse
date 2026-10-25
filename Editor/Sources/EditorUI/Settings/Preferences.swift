@@ -8,13 +8,13 @@ struct SettingsPanel: View {
     let app: EditorApplication
     let session: EditorSettingsSession
     @State private var navigation: SettingsNavigation
-    @State private var harness: HarnessSettingsState
+    @State private var assistant: AssistantSettingsState
     @State private var searchFocus: UInt64 = 0
 
     init(app: EditorApplication, session: EditorSettingsSession) {
         self.app = app; self.session = session
         _navigation = State(wrappedValue: session.navigation)
-        _harness = State(wrappedValue: session.harness)
+        _assistant = State(wrappedValue: session.assistant)
     }
 
     var body: some View {
@@ -23,8 +23,8 @@ struct SettingsPanel: View {
             let sections = SettingsSectionID.visible(category: navigation.category,
                                                      query: navigation.query.stringValue,
                                                      agentEnabled: app.isAgentEnabled)
-            let editor = HarnessSettingsEditor(app: app, state: Binding(get: { harness }, set: {
-                harness = $0; session.harness = $0
+            let editor = AssistantSettingsEditor(app: app, state: Binding(get: { assistant }, set: {
+                assistant = $0; session.assistant = $0
             }), onChange: EditorSettingsPersistence(app: app).didChange)
             Box(direction: .row, alignItems: .stretch, spacing: 0) {
                 ShortcutHost { event in
@@ -57,7 +57,7 @@ struct SettingsPanel: View {
                             }.frame(width: .percent(100), minWidth: 0, maxWidth: 760)
                         }.padding(wide ? 28 : 18).frame(width: .percent(100), minWidth: 0)
                     }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0).debugName("settings-content-scroll")
-                    footer(editor: editor, showsHarness: sections.contains { $0.category == .harness }, compact: !wide)
+                    footer(editor: editor, showsAssistant: sections.contains { $0.category == .assistant }, compact: !wide)
                 }.flex(1, shrink: 1, basis: 0).frame(minWidth: 0, minHeight: 0)
             }.frame(width: .percent(100), height: .percent(100), minWidth: 0, minHeight: 0).background(.background)
         }.flex().frame(minWidth: 0, minHeight: 0).debugName("editor-settings")
@@ -78,7 +78,7 @@ struct SettingsPanel: View {
                 Box(direction: .row, alignItems: .center, justifyContent: .center) {
                     Row(alignment: .center, spacing: 10) {
                         if !wide { SettingsCategoryMenu(category: navigation.category,
-                                                           showsHarness: app.isAgentEnabled, onSelect: select) }
+                                                           showsAssistant: app.isAgentEnabled, onSelect: select) }
                         Row(alignment: .center, spacing: 10) {
                             Icon(UIIcons.Action.search, size: 15, color: .onSurfaceMuted)
                             TextField(L("Search all settings…"), text: Binding(get: { navigation.query }, set: {
@@ -115,7 +115,7 @@ struct SettingsPanel: View {
     }
 
     @ViewBuilder
-    private func content(_ section: SettingsSectionID, editor: HarnessSettingsEditor) -> some View {
+    private func content(_ section: SettingsSectionID, editor: AssistantSettingsEditor) -> some View {
         let persist = EditorSettingsPersistence(app: app).didChange
         switch section {
         case .appearance: AppearanceSettings(app: app, onChange: persist)
@@ -123,8 +123,8 @@ struct SettingsPanel: View {
         case .selection: SelectionSettings(app: app, onChange: persist)
         case .display: DisplaySettings(app: app, onChange: persist)
         case .swift: SwiftSettings()
-        case .provider: HarnessProviderSettings(editor: editor)
-        case .execution: HarnessExecutionSettings(editor: editor)
+        case .provider: AssistantProviderSettings(editor: editor)
+        case .execution: AssistantExecutionSettings(editor: editor)
         case .capabilities: CapabilitySettings(app: app, onChange: persist)
         case .plugins: PluginSettings(app: app)
         case .shortcuts: ShortcutSettings(app: app)
@@ -132,21 +132,21 @@ struct SettingsPanel: View {
         }
     }
 
-    private func footer(editor: HarnessSettingsEditor, showsHarness: Bool, compact: Bool) -> some View {
-        let feedback = showsHarness || editor.isDirty ? harness.feedback : nil
-        return Box(direction: compact && (showsHarness || editor.isDirty) ? .column : .row, alignItems: compact ? .stretch : .center, spacing: 10) {
+    private func footer(editor: AssistantSettingsEditor, showsAssistant: Bool, compact: Bool) -> some View {
+        let feedback = showsAssistant || editor.isDirty ? assistant.feedback : nil
+        return Box(direction: compact && (showsAssistant || editor.isDirty) ? .column : .row, alignItems: compact ? .stretch : .center, spacing: 10) {
             Row(alignment: .center, spacing: 6) {
                 Box {}.frame(width: 5, height: 5).background(feedback?.isError == true ? .error : editor.isDirty ? .warning : .accent).cornerRadius(3)
-                Text(feedback?.message ?? (editor.isDirty ? L("Unapplied Harness changes") : L("Preferences are saved on this computer.")))
+                Text(feedback?.message ?? (editor.isDirty ? L("Unapplied assistant changes") : L("Preferences are saved on this computer.")))
                     .font(.caption).foregroundColor(feedback?.isError == true ? .error : .onSurfaceMuted)
                     .flex().frame(minWidth: 0)
             }.flex(compact ? 0 : 1, shrink: 1, basis: compact ? nil : 0).frame(minWidth: 0)
-            if showsHarness || editor.isDirty {
+            if showsAssistant || editor.isDirty {
                 Box(direction: .row, alignItems: .center, justifyContent: .flexEnd, wrap: .wrap, spacing: 8) {
                     Button(L("Discard changes"), isEnabled: editor.isDirty, action: editor.reset)
-                        .buttonStyle(.secondary).debugName("settings-harness-reset")
+                        .buttonStyle(.secondary).debugName("settings-assistant-reset")
                     Button(L("Apply AI Settings"), isEnabled: editor.isDirty, action: editor.apply)
-                        .buttonStyle(.primary).debugName("settings-harness-apply")
+                        .buttonStyle(.primary).debugName("settings-assistant-apply")
                 }.frame(minWidth: 0)
             }
         }.padding(horizontal: compact ? 18 : 28, vertical: 12).debugName("settings-footer")

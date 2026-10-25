@@ -286,20 +286,52 @@ AI 不是单一插件类型，而是一组贡献点。
 - `tools`：只能收窄工作区允许的工具（宿主工具名、capability ID）；缺省为全部，`respond` 始终保留。
 - `context`：宿主来源 `scene` / `selection` / `edits` / `memory` / `transactions` / `workflow` / `assets`，加上 `guava.ai.context/v1` 的 ID；缺省为全部宿主来源、不含插件上下文。
 - `canAutoApprove: false` 时即使用户开启自动应用也保持审阅。
+- `harness` 指定接管流程的 `guava.ai.harness/v1`；缺省用宿主内置流程。
 - 设置里的 `agent_id` 选择 agent，空值或已停用时取第一个。随包 AI 插件提供默认 agent。
 
 ### `guava.ai.harness/v1`
 
-可选行为贡献：
+助手每一轮的流程（问模型 → 执行工具 → 把结果喂回 → 决定继续或结束）默认由宿主内置。harness 让插件接管**流程决策**，宿主仍掌握所有执行能力：
+
+- 调用模型、执行工具（含工具策略、草案、审批、事务与撤销）都只能由宿主完成；harness 只返回「下一步做什么」。
+- 写操作仍然只产生草案，必须经 `submit_plan` 提交、用户审阅后才应用，harness 绕不过审批。
+- 不用 harness 时行为与内置流程完全一致。
 
 ```json
-{ "id": "studio.agent.loop", "entryPoint": "agent-turn" }
+"guava.ai.harness/v1": [ { "id": "careful", "title": "Careful", "entryPoint": "harness" } ],
+"guava.ai.agent/v1": [ { "id": "careful", "title": "Careful", "harness": "careful" } ]
 ```
 
-输入：受限的对话、上下文摘要、可用工具列表。  
-输出：助手消息 + 建议的 tool calls + 上下文请求。
+- agent 用 `harness` 指定流程；harness 的 `id` 在已启用插件间唯一，只接受 `access: "read"` 的包。
+- 入口签名：`func(input: record { turn: string }) -> string`。宿主每一步调用一次，插件实例不保留内存，状态随每步往返。
 
-宿主负责执行 tool calls、审批、事务和撤销。Harness 不能直接执行工具或访问文件系统。
+每一步的输入（`turn`）：
+
+```json
+{
+  "step": 2,
+  "state": { "phase": "act" },
+  "request": { "text": "Make the lamp brighter", "locale": "en" },
+  "tools": [ { "name": "scene.set_light_intensity", "description": "…", "inputSchema": { … } } ],
+  "observation": { "type": "model", "call": { "id": "toolu_1", "name": "search_capabilities", "arguments": { … } } }
+}
+```
+
+- `observation` 是上一步的结果：`model`（模型想调用的工具，尚未执行）、`tool`（工具已执行，带 `result`）或 `failure`（带 `message`）；第一步为空。
+- `state` 是 harness 上次返回的状态，在同一会话的各轮之间保留，清空对话时丢弃。
+
+插件返回一步：
+
+| `step` | 字段 | 宿主做什么 |
+| --- | --- | --- |
+| `model` | `instructions?`、`message?` | 用宿主的系统提示词（追加 `instructions`）和对话记录调用模型；`message` 作为一条用户消息加入记录。返回模型想调用的工具。 |
+| `tool` | `call: {id?, name, arguments}` | 按内置流程执行这个工具。`id` 与上一步模型调用相同时沿用它，否则由宿主生成。`submit_plan` / `respond` 等结束工具会结束本轮。 |
+| `finish` | `summary` | 以 `summary` 结束本轮；仍有未提交的草案时拒绝。 |
+
+- 每步都可带 `state`，省略表示不变。
+- 每轮最多 32 步；工具调用仍受 agent 的工具白名单、工作区范围和工具策略约束。
+
+`GuavaPluginKit` 的 `HarnessTurn` / `HarnessStep` 负责解析与构造，示例见 `examples/Plugins/CarefulAgent`。
 
 ### `guava.ai.tool/v1`
 

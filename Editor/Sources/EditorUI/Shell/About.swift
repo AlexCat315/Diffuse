@@ -28,7 +28,7 @@ struct EditorAboutView: View {
                 .font(.body)
                 .foregroundColor(.onSurfaceVariant)
 
-            Text(L("An AI harness driven workstation for code, games, animation and video."))
+            Text(L("An AI-assisted workstation for code, games, animation and video."))
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
