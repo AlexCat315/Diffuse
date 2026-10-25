@@ -3,6 +3,8 @@ internal import Foundation
 private import Darwin
 #elseif canImport(Glibc)
 private import Glibc
+#elseif canImport(WinSDK)
+private import WinSDK
 #endif
 
 #if os(macOS) || os(Linux) || os(Windows)
@@ -23,7 +25,20 @@ enum ProcessPlatform {
             return Data(buffer.prefix(count))
         }
         #else
-        return try handle.read(upToCount: 65_536) ?? Data()
+        // FileHandle.read(upToCount:) keeps reading until the requested byte
+        // count or EOF. A long-lived child that writes small messages would
+        // never be observed, so read one Win32 chunk instead.
+        var buffer = [UInt8](repeating: 0, count: 65_536)
+        var count: DWORD = 0
+        let succeeded = buffer.withUnsafeMutableBytes { bytes in
+            ReadFile(handle._handle, bytes.baseAddress, DWORD(bytes.count), &count, nil)
+        }
+        guard succeeded else {
+            let code = GetLastError()
+            if code == ERROR_BROKEN_PIPE || code == ERROR_HANDLE_EOF { return Data() }
+            throw NSError(domain: "NSWin32ErrorDomain", code: Int(code))
+        }
+        return Data(buffer.prefix(Int(count)))
         #endif
     }
 

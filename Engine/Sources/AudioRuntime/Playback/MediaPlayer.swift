@@ -44,11 +44,15 @@ public actor MediaPlayer {
             let played = sink != nil && (!audioEnded || sink!.queuedSeconds > 0)
                 ? max(0, submitted - sink!.queuedSeconds) : wallTime
             let position = start + played
-            if position >= end { break }
-            if let pending = frame, pending.time < end, pending.time <= position + 0.005 {
+            // Deliver every frame that belongs to the requested range before
+            // stopping: a slow decode must not drop the range's remaining
+            // frames just because wall time crossed the end.
+            while let pending = frame, pending.time < end, pending.time <= position + 0.005 {
+                try Task.checkCancellation()
                 await onVideo(pending)
                 frame = try await video.nextFrame()
             }
+            if position >= end { break }
             try await clock.sleep(for: .milliseconds(5))
         }
     }

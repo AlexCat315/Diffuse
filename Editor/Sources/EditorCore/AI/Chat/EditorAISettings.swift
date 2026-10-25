@@ -148,7 +148,7 @@ public enum AICredentialStore {
             try handle.write(contentsOf: data)
             try handle.close()
             if FileManager.default.fileExists(atPath: url.path) {
-                _ = try FileManager.default.replaceItemAt(url, withItemAt: staging)
+                try AtomicFileReplacement.replace(url, with: staging)
             } else {
                 try FileManager.default.moveItem(at: staging, to: url)
             }

@@ -152,6 +152,14 @@ let package = Package(
                 "SceneRuntime",
                 .product(name: "ImageDecodeBridge", package: "GuavaUI"),
                 .product(name: "GuavaLogging", package: "GuavaUI"),
+            ],
+            linkerSettings: [
+                // GNU ld resolves static archives in one pass, while the native
+                // build system emits artifact-bundle libraries in no dependency
+                // order. Link the libraries lunasvg and webp reference again so
+                // the command line is order-independent.
+                .linkedLibrary("plutovg", .when(platforms: [.linux])),
+                .linkedLibrary("sharpyuv", .when(platforms: [.linux])),
             ]
         ),
         .target(name: "SequenceRuntime"),

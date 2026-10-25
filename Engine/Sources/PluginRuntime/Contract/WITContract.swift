@@ -252,7 +252,8 @@ public enum WITContractParser {
             let character = source[index]
             let next = source.index(after: index)
             if inLineComment {
-                if character == "\n" || character == "\r" { inLineComment = false }
+                // Windows checkouts use CRLF, which Swift reads as one Character.
+                if character.isNewline { inLineComment = false }
                 index = next
                 continue
             }
@@ -347,7 +348,7 @@ private struct CapabilityTypeLexer {
                     let third = source.index(after: second)
                     let isDocumentation = third < source.endIndex && source[third] == "/"
                     var end = isDocumentation ? source.index(after: third) : third
-                    while end < source.endIndex, source[end] != "\n", source[end] != "\r" {
+                    while end < source.endIndex, !source[end].isNewline {
                         end = source.index(after: end)
                     }
                     if isDocumentation {

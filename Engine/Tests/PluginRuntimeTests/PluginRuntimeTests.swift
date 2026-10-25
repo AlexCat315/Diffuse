@@ -108,6 +108,26 @@ struct PluginRuntimeTests {
         }
     }
 
+    @Test("WIT accepts CRLF checkouts with documentation comments")
+    func witAcceptsCRLF() throws {
+        let wit = """
+        package example:windows;
+        interface capabilities {
+          /// Inspect the scene.
+          record inspect-input { enabled: bool }
+          inspect: func(input: inspect-input) -> string;
+        }
+        world plugin {
+          export capabilities;
+        }
+        """
+        let contract = try WITContractParser.parse(
+            Data(wit.replacingOccurrences(of: "\n", with: "\r\n").utf8),
+            grantedImports: []
+        )
+        #expect(contract.capabilityInputs.map(\.name) == ["inspect"])
+    }
+
     @Test("WIT records are the only source of strict capability schemas")
     func witDerivesCapabilitySchema() throws {
         let wit = """
