@@ -279,6 +279,7 @@ extension VersionControlTests {
             try await Task.sleep(for: .milliseconds(50))
             await model.refresh()
         }
-        #expect(model.snapshot.repository?.system == .git)
+        #expect(model.snapshot.repository?.system == .git,
+                "status=\(app.pluginSession.manager.statuses.first { $0.inspection.manifest.id == bundledGit.id }.map { "\($0.phase):\($0.failure ?? "none")" } ?? "missing") providers=\(app.pluginSession.runtime.versionControlProviders.map(\.system.rawValue)) disabled=\(model.snapshot.disabledSystems) error=\(model.snapshot.error ?? "none")")
     }
 }
