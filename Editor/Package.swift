@@ -41,6 +41,13 @@ let guavaScriptExportLinkerSettings: [LinkerSetting] = [
     ),
 ]
 
+/// Test bundles that dlopen compiled scripts must export the host runtime
+/// symbols those libraries reference. Linux needs this because the native
+/// build system does not add `--export-dynamic` on its own.
+let guavaTestDlopenLinkerSettings: [LinkerSetting] = [
+    .unsafeFlags(["-Xlinker", "--export-dynamic"], .when(platforms: [.linux])),
+]
+
 let package = Package(
     name: "GuavaStudioEditor",
     defaultLocalization: "en",
@@ -213,7 +220,8 @@ let package = Package(
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
-            ]
+            ],
+            linkerSettings: guavaTestDlopenLinkerSettings
         ),
 
         .testTarget(
@@ -223,7 +231,8 @@ let package = Package(
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "NativeRHI", package: "GuavaUI"),
                 .product(name: "RenderBackend", package: "Engine"),
-            ]
+            ],
+            linkerSettings: guavaTestDlopenLinkerSettings
         ),
     ],
     cxxLanguageStandard: .cxx17

@@ -127,7 +127,7 @@ struct BundledSwiftSupportTests {
         let adapter = PluginLanguageService()
         adapter.bind(binding, client: client)
         var command = ProcessCommand(executable: fixture.executable, directory: fixture.root)
-        command.environment = fixture.environment
+        command.environment = ProcessInfo.processInfo.environment.merging(fixture.environment) { _, value in value }
         var configuration = LanguageServerConfiguration(command: command, workspace: fixture.root)
         configuration.connect = { try adapter.connect($0) }
         let language = LSPClient(configuration: configuration)

@@ -273,6 +273,12 @@ extension VersionControlTests {
         #expect(model.snapshot.availability == .noRepository)
         await app.setBundledPlugin(bundledGit, enabled: true)
         #expect(model.snapshot.disabledSystems.isEmpty)
+        var attempts = 0
+        while model.snapshot.repository?.system != .git, attempts < 100 {
+            attempts += 1
+            try await Task.sleep(for: .milliseconds(50))
+            await model.refresh()
+        }
         #expect(model.snapshot.repository?.system == .git)
     }
 }
