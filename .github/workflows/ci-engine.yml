@@ -40,6 +40,8 @@ jobs:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 60
+    env:
+      GUAVA_NATIVE_LINK_ORDER: '1'
     strategy:
       fail-fast: false
       matrix:

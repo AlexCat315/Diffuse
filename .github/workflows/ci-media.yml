@@ -27,8 +27,12 @@ jobs:
         run: |
           ./guava studio media
           ./guava studio media --check
-          swift test --package-path Engine/Media
-          swift test --package-path Editor/Documents
+          # Swift Build's planner crashes on this package on Linux; use the
+          # native build system there, as the Engine and Editor jobs do.
+          build_system=""
+          if [ "$RUNNER_OS" = "Linux" ]; then build_system="--build-system native"; fi
+          swift test --package-path Engine/Media $build_system
+          swift test --package-path Editor/Documents $build_system
       - name: Compile iOS library
         if: runner.os == 'macOS'
         shell: bash

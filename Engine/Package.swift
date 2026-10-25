@@ -9,6 +9,18 @@ let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
 // Cross builds stage target archives separately from the host's vendor directory.
 let nativeArtifactRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ARTIFACT_ROOT"] ?? "vendor"
 
+// GNU ld resolves static archives in one pass, while SwiftPM's native build
+// system emits artifact-bundle libraries in no dependency order. CI enables
+// this only for native builds; Swift Build already passes the artifacts as
+// ordered absolute paths and would reject the bare -l flags.
+let nativeLinkOrderSettings: [LinkerSetting] =
+    ProcessInfo.processInfo.environment["GUAVA_NATIVE_LINK_ORDER"] == "1"
+        ? [
+            .linkedLibrary("plutovg", .when(platforms: [.linux])),
+            .linkedLibrary("sharpyuv", .when(platforms: [.linux])),
+        ]
+        : []
+
 let wasmtimeProducts: [Product] = [
     .library(name: "PluginWasmtimeRuntime", targets: ["PluginWasmtimeRuntime"]),
     .executable(name: "PluginRuntimeProbe", targets: ["PluginRuntimeProbe"]),
@@ -153,14 +165,7 @@ let package = Package(
                 .product(name: "ImageDecodeBridge", package: "GuavaUI"),
                 .product(name: "GuavaLogging", package: "GuavaUI"),
             ],
-            linkerSettings: [
-                // GNU ld resolves static archives in one pass, while the native
-                // build system emits artifact-bundle libraries in no dependency
-                // order. Link the libraries lunasvg and webp reference again so
-                // the command line is order-independent.
-                .linkedLibrary("plutovg", .when(platforms: [.linux])),
-                .linkedLibrary("sharpyuv", .when(platforms: [.linux])),
-            ]
+            linkerSettings: nativeLinkOrderSettings
         ),
         .target(name: "SequenceRuntime"),
         .target(
@@ -386,6 +391,11 @@ let package = Package(
                 "SceneRuntime",
                 "AssetPipeline",
                 .product(name: "ImageDecodeBridge", package: "GuavaUI"),
+            ],
+            // The test loads compiled Swift scripts with dlopen; the host
+            // executable must export the runtime symbols they reference.
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "--export-dynamic"], .when(platforms: [.linux])),
             ]
         ),
         .testTarget(
