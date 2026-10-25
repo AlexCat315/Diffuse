@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 /// Content-addressed store for large binary artifacts (embeddings, masks, depth maps).
@@ -29,7 +30,7 @@ public actor LocalArtifactStore {
         let ext = fileExtension(for: mediaType)
         let fileURL = baseURL.appendingPathComponent("\(hash).\(ext)")
         if !FileManager.default.fileExists(atPath: fileURL.path) {
-            try data.write(to: fileURL, options: .atomic)
+            try AtomicFile.write(data, to: fileURL)
         }
         index[hash] = fileURL
         return ArtifactRef(uri: "artifacts://\(hash)",

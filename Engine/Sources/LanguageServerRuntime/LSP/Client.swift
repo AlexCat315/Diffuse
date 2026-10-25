@@ -1,6 +1,6 @@
 import Foundation
 import GuavaLogging
-import ProcessRuntime
+internal import GuavaProcess
 
 /// Owns one `sourcekit-lsp` child process and speaks JSON-RPC over its pipes.
 ///

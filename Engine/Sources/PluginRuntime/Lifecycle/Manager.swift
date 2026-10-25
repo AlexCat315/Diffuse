@@ -43,6 +43,13 @@ public final class PluginManager: @unchecked Sendable {
 
     public var isBusy: Bool { lock.withLock { pendingCount > 0 } }
 
+    /// Runs `body` between queued operations, so it never observes a reload or
+    /// withdrawal half done.
+    @MainActor
+    public func readSettled<T: Sendable>(_ body: @escaping @MainActor @Sendable () throws -> T) async throws -> T {
+        try await enqueue(body)
+    }
+
     public var statuses: [PluginStatus] {
         lock.withLock {
             entries.keys.sorted().compactMap { id in

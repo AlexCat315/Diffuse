@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 internal import EditorCore
 
@@ -17,7 +18,7 @@ enum AssetImportFileCopier {
         try fileManager.copyItem(at: source, to: staging)
 
         if fileManager.fileExists(atPath: destination.path) {
-            try AtomicFileReplacement.replace(destination, with: staging)
+            try FileReplacement.replace(destination, with: staging)
         } else {
             try fileManager.moveItem(at: staging, to: destination)
         }

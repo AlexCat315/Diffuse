@@ -4,7 +4,7 @@ import PluginRuntime
 import PluginWasmtimeRuntime
 import CapabilityRuntime
 import LanguageServerRuntime
-import ProcessRuntime
+internal import GuavaProcess
 import GuavaUICompose
 @testable import EditorCore
 

@@ -197,8 +197,13 @@ extension EditorApplication {
     private func projectPluginState() async throws {
         pluginSession.components.apply(to: &scene.scene)
         do {
-            refreshContributionSnapshots()
-            await activatePluginExecutor(try rebuildPluginExecutor())
+            // A concurrent reload may have withdrawn a provider while its
+            // dependent is still bound; read only between manager operations.
+            let executor = try await pluginSession.manager.readSettled { [self] in
+                refreshContributionSnapshots()
+                return try rebuildPluginExecutor()
+            }
+            await activatePluginExecutor(executor)
         }
         catch {
             await pluginSession.manager.invalidateRuntime()

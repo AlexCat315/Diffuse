@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import AIRuntime
 import ContextMemory
 import AssetPipeline
@@ -86,7 +87,7 @@ extension EditorApplication {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(manifest)
-            try data.write(to: physicsPlaySnapshotURL, options: [.atomic])
+            try AtomicFile.write(data, to: physicsPlaySnapshotURL)
         } catch {
             logConsole("Failed to persist physics play snapshot",
                        severity: .warning,

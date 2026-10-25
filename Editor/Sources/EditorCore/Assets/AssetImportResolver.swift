@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 /// Resolves the complete set of files an asset import must copy into the
@@ -39,15 +40,15 @@ public enum AssetImportResolver {
     /// never throws. For an existing project asset, `projectRoot` also allows
     /// parent-relative dependencies that remain inside that project.
     public static func resolve(_ source: URL, projectRoot: URL? = nil) -> [ResolvedFile] {
-        let projectRoot = projectRoot.flatMap { ProjectFilePath.isDescendant(source, of: $0) ? $0 : nil }
+        let projectRoot = projectRoot.flatMap { PathIdentity.contains(source, in: $0, includingRoot: false) ? $0 : nil }
         var files: [ResolvedFile] = []
         var seenSources = Set<String>()
 
         @discardableResult
         func add(source: URL, relativePath: String) -> Bool {
             guard let rel = normalizedRelativePath(relativePath, allowParents: projectRoot != nil) else { return false }
-            if let projectRoot, !ProjectFilePath.isDescendant(source, of: projectRoot) { return false }
-            guard seenSources.insert(source.resolvingSymlinksInPath().path).inserted else { return false }
+            if let projectRoot, !PathIdentity.contains(source, in: projectRoot, includingRoot: false) { return false }
+            guard seenSources.insert(PathIdentity.canonicalURL(source).path).inserted else { return false }
             files.append(ResolvedFile(source: source, relativePath: rel))
             return true
         }
@@ -111,7 +112,7 @@ public enum AssetImportResolver {
                                      "map_bump", "bump", "disp", "decal", "refl", "norm"]
         guard let text = readText(mtl) else { return [] }
         var names: [String] = []
-        for rawLine in text.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+        for rawLine in text.split(whereSeparator: { $0.isNewline }) {
             let tokens = rawLine.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
             guard tokens.count >= 2, keywords.contains(tokens[0].lowercased()),
                   let last = tokens.last else { continue }
@@ -124,7 +125,7 @@ public enum AssetImportResolver {
     private static func directiveTails(in file: URL, keyword: String) -> [String] {
         guard let text = readText(file) else { return [] }
         var values: [String] = []
-        for rawLine in text.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+        for rawLine in text.split(whereSeparator: { $0.isNewline }) {
             let tokens = rawLine.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
             guard tokens.count >= 2, tokens[0].lowercased() == keyword else { continue }
             values.append(contentsOf: tokens.dropFirst())
@@ -158,7 +159,7 @@ public enum AssetImportResolver {
         guard let relativeToReferencer = normalizedRelativePath(decoded, allowParents: projectRoot != nil) else { return nil }
         let source = referencingFile.deletingLastPathComponent()
             .appendingPathComponent(relativeToReferencer).standardizedFileURL
-        if let projectRoot, !ProjectFilePath.isDescendant(source, of: projectRoot) { return nil }
+        if let projectRoot, !PathIdentity.contains(source, in: projectRoot, includingRoot: false) { return nil }
         let destination = destinationDir.isEmpty
             ? relativeToReferencer
             : destinationDir + "/" + relativeToReferencer

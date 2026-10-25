@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 public enum ScriptProjectTrustState: Sendable, Equatable {
@@ -61,7 +62,7 @@ final class ScriptProjectTrustStore: @unchecked Sendable {
         let document = Document(version: 1, trustedProjectPaths: trustedPaths.sorted())
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(document).write(to: storageURL, options: .atomic)
+        try AtomicFile.write(encoder.encode(document), to: storageURL)
     }
 
     private static func projectKey(_ projectDirectory: String) -> String {

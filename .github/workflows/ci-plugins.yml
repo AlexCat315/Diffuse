@@ -2,9 +2,9 @@ name: Plugin runtimes
 on:
   push:
     branches: [main]
-    paths: ['Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Build/**', 'Tools/Developer/Sources/Validation/IOS/**', 'Engine/Sources/ProcessRuntime/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-plugins.yml']
+    paths: ['.github/sdk-revision', 'Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Build/**', 'Tools/Developer/Sources/Validation/IOS/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-plugins.yml']
   pull_request:
-    paths: ['Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Build/**', 'Tools/Developer/Sources/Validation/IOS/**', 'Engine/Sources/ProcessRuntime/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-plugins.yml']
+    paths: ['.github/sdk-revision', 'Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Build/**', 'Tools/Developer/Sources/Validation/IOS/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-plugins.yml']
   workflow_dispatch:
 
 concurrency:

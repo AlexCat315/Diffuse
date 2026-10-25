@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import AIRuntime
 import ContextMemory
 import AssetPipeline
@@ -36,7 +37,7 @@ extension EditorApplication {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(authoredOutput.manifest)
-            try data.write(to: sceneManifestURL, options: [.atomic])
+            try AtomicFile.write(data, to: sceneManifestURL)
             store.dispatch(.setSceneRevision(authoredOutput.revision))
             if authoredOutput.usedPlaySnapshot {
                 physicsPlayAuthoringRevision = authoredOutput.revision

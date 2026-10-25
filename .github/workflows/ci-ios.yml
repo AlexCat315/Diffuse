@@ -2,9 +2,9 @@ name: iOS application host
 on:
   push:
     branches: [main]
-    paths: ['Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
+    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
   pull_request:
-    paths: ['Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
+    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

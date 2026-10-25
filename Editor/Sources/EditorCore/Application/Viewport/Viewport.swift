@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import AIRuntime
 import ContextMemory
 import AssetPipeline
@@ -219,7 +220,7 @@ extension EditorApplication {
             guard let self, next != previous else { return }
             previous = next
             do {
-                try JSONEncoder().encode(next).write(to: url, options: .atomic)
+                try AtomicFile.write(JSONEncoder().encode(next), to: url)
             } catch {
                 self.logConsole("Could not save viewport snap settings", severity: .warning,
                                 detail: error.localizedDescription)

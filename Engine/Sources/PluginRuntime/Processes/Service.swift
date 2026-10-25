@@ -1,5 +1,5 @@
 public import Foundation
-private import ProcessRuntime
+private import GuavaProcess
 
 /// Stores native resources outside short-lived WASM Stores. Every operation is
 /// scoped to an approved mount generation; unload invalidates all its handles.

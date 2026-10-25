@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 import PluginRuntime
 
@@ -132,10 +133,6 @@ public final class EditorPluginAuthorizationStore: @unchecked Sendable {
             at: storageURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try data.write(to: storageURL, options: [.atomic])
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: storageURL.path
-        )
+        try AtomicFile.write(data, to: storageURL, access: .ownerOnly)
     }
 }

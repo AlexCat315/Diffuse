@@ -47,7 +47,7 @@ let wasmtimeTargets: [Target] = [
             .linkedLibrary("bcrypt", .when(platforms: [.windows])),
         ]
     ),
-    .target(name: "PluginWasmtimeRuntime", dependencies: ["CWasmtimeBridge", "PluginRuntime"]),
+    .target(name: "PluginWasmtimeRuntime", dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), "CWasmtimeBridge", "PluginRuntime"]),
     .executableTarget(name: "PluginRuntimeProbe", dependencies: ["PluginWasmtimeRuntime", "PluginRuntime"],
                       path: "Validation/Plugins/Swift"),
 ]
@@ -74,7 +74,6 @@ let package = Package(
         .library(name: "AudioRuntime", targets: ["AudioRuntime"]),
         .library(name: "CapabilityRuntime", targets: ["CapabilityRuntime"]),
         .library(name: "PluginRuntime", targets: ["PluginRuntime"]),
-        .library(name: "ProcessRuntime", targets: ["ProcessRuntime"]),
         .library(name: "LanguageServerRuntime", targets: ["LanguageServerRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "PerceptionRuntime", targets: ["PerceptionRuntime"]),
@@ -160,6 +159,7 @@ let package = Package(
         .target(
             name: "AssetPipeline",
             dependencies: [
+                .product(name: "GuavaFileSystem", package: "GuavaUI"),
                 "SIMDCompat",
                 "SceneRuntime",
                 .product(name: "ImageDecodeBridge", package: "GuavaUI"),
@@ -217,11 +217,9 @@ let package = Package(
         ),
         .target(
             name: "PluginRuntime",
-            dependencies: ["CapabilityRuntime", "ProcessRuntime", .product(name: "GuavaLogging", package: "GuavaUI")]
+            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), "CapabilityRuntime", .product(name: "GuavaProcess", package: "GuavaUI"), .product(name: "GuavaLogging", package: "GuavaUI")]
         ),
-        .target(name: "ProcessRuntime"),
-        .target(name: "LanguageServerRuntime", dependencies: ["ProcessRuntime", .product(name: "GuavaLogging", package: "GuavaUI")]),
-        .testTarget(name: "ProcessRuntimeTests", dependencies: ["ProcessRuntime"]),
+        .target(name: "LanguageServerRuntime", dependencies: [.product(name: "GuavaProcess", package: "GuavaUI"), .product(name: "GuavaLogging", package: "GuavaUI")]),
         .target(
             name: "IntentRuntime",
             dependencies: [
@@ -236,11 +234,11 @@ let package = Package(
         ),
         .target(
             name: "ContextMemory",
-            dependencies: ["IntentRuntime"]
+            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), "IntentRuntime"]
         ),
         .target(
             name: "PerceptionRuntime",
-            dependencies: [
+            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"),
                 "IntentRuntime",
             ],
             linkerSettings: [
@@ -250,14 +248,14 @@ let package = Package(
         ),
         .target(
             name: "ScriptRuntime",
-            dependencies: [
+            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"),
                 "SIMDCompat",
                 "EngineKernel",
                 "AssetPipeline",
                 "SceneRuntime",
             ]
         ),
-        .target(name: "SemanticPipeline", dependencies: ["IntentRuntime", "PerceptionRuntime"],
+        .target(name: "SemanticPipeline", dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), "IntentRuntime", "PerceptionRuntime"],
                 linkerSettings: [
                     .linkedFramework("Vision", .when(platforms: [.macOS])),
                     .linkedFramework("CoreImage", .when(platforms: [.macOS])),
@@ -340,7 +338,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "GuavaPluginHost",
-            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
+            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), .product(name: "GuavaLogging", package: "GuavaUI"),
                 "CapabilityRuntime",
                 "IntentRuntime",
                 "PluginRuntime",
@@ -442,7 +440,7 @@ let package = Package(
                 .product(name: "GuavaLogging", package: "GuavaUI"),
                 "CapabilityRuntime",
                 "PluginRuntime",
-                "ProcessRuntime",
+                .product(name: "GuavaProcess", package: "GuavaUI"),
             ],
             resources: [.copy("Fixtures")]
         ),

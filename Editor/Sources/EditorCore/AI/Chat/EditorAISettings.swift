@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import AIRuntime
 import CapabilityRuntime
 import Foundation
@@ -134,24 +135,9 @@ public enum AICredentialStore {
         stored[providerID] = fields.isEmpty ? nil : fields
         do {
             let directory = url.deletingLastPathComponent()
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
-                                                    attributes: [.posixPermissions: 0o700])
-            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-            let data = try JSONEncoder().encode(stored)
-            // Created owner-only before the values are written, then swapped in whole.
-            let staging = directory.appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString)")
-            guard FileManager.default.createFile(atPath: staging.path, contents: nil,
-                                                 attributes: [.posixPermissions: 0o600]) else {
-                throw CocoaError(.fileWriteNoPermission)
-            }
-            let handle = try FileHandle(forWritingTo: staging)
-            try handle.write(contentsOf: data)
-            try handle.close()
-            if FileManager.default.fileExists(atPath: url.path) {
-                try AtomicFileReplacement.replace(url, with: staging)
-            } else {
-                try FileManager.default.moveItem(at: staging, to: url)
-            }
+            try FilePermissions.createPrivateDirectory(at: directory)
+            try AtomicFile.write(JSONEncoder().encode(stored), to: url, access: .ownerOnly)
+
         } catch {
             throw AICredentialStoreError.writeFailed(error.localizedDescription)
         }

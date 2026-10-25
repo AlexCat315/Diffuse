@@ -1,4 +1,4 @@
-import ProcessRuntime
+internal import GuavaProcess
 import Foundation
 
 /// Optional command-line flags supported by a particular `sourcekit-lsp` build.

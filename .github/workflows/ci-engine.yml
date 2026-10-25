@@ -10,6 +10,8 @@ on:
       - '.github/actions/setup-toolchains/**'
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
+      - '.github/actions/build-cache/**'
+      - '.github/sdk-revision'
       - 'Editor/guava.json'
       - 'guava'
       - 'guava.cmd'
@@ -24,6 +26,8 @@ on:
       - '.github/actions/setup-toolchains/**'
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
+      - '.github/actions/build-cache/**'
+      - '.github/sdk-revision'
       - 'Editor/guava.json'
       - 'guava'
       - 'guava.cmd'
@@ -62,6 +66,9 @@ jobs:
       - name: Fetch pinned Guava SDK
         uses: ./.github/actions/fetch-sdk
 
+      - uses: ./.github/actions/build-cache
+        id: build-cache
+
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
 
@@ -89,36 +96,59 @@ jobs:
             libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
             mesa-common-dev ninja-build vulkan-validationlayers
 
+      - name: Test shared system contracts
+        timeout-minutes: 5
+        shell: bash
+        run: ./guava test GuavaUI/System --no-parallel --timeout 120
+
       - name: Prepare cached native dependencies
         uses: ./.github/actions/native-dependencies
 
-      # The Engine package depends on the local Media package, whose FFmpeg
-      # binaryTarget needs the bundle that `guava-dev media` just staged into
-      # Engine/Media/vendor. Resolving before that build reports
-      # "does not contain a binary artifact", so resolve only after staging.
-      - name: Resolve packages
-        shell: bash
-        working-directory: Engine
-        run: swift package resolve
 
       - name: Build runtime products and tests
         timeout-minutes: 25
         shell: bash
-        working-directory: Engine
-        # Build every product and test target in one plan, including native
-        # audio/renderer bridges and the Plugin Host used by integration tests.
-        run: swift build --build-system '${{ matrix.build-system }}' --build-tests
+        run: ./guava test Engine --build-only
 
-      - name: Run tests
-        timeout-minutes: 15
+      - uses: actions/cache/save@v5
+        if: steps.build-cache.outputs.hit != 'true'
+        with:
+          key: ${{ steps.build-cache.outputs.key }}
+          path: |
+            Tools/Developer/.build
+            GuavaUI/Tools/Guava/.build
+            GuavaUI/System/.build
+            Editor/.guava/build/swift
+            Engine/.build
+
+      - name: Run XCTest
+        if: runner.os != 'Windows'
         shell: bash
-        working-directory: Engine
-        # Run the package as a whole so every current and future test target is
-        # exercised. Real GPU and host Vision smoke cases remain opt-in via
-        # GUAVA_RUN_GPU_SMOKE_TESTS / GUAVA_RUN_VISION_SMOKE_TESTS and are
-        # skipped on ordinary CI runners. Dedicated Metal regressions run in
-        # ci-gpu.yml once GUAVA_GPU_CI_ENABLED and its runner are configured.
-        run: swift test --build-system '${{ matrix.build-system }}' --skip-build
+        run: ./guava test Engine --skip-build --no-parallel --testing-library xctest --timeout 300
+
+      - name: Run XCTest with hang diagnostics
+        if: runner.os == 'Windows'
+        timeout-minutes: 6
+        shell: pwsh
+        run: ./GuavaUI/Tools/Testing/Windows.ps1 -Package Engine -Library xctest -Timeout 300 -SkipBuild -Output test-results/xctest
+
+      - name: Run Swift Testing
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./guava test Engine --skip-build --no-parallel --testing-library swift-testing --timeout 600 --event-output test-results/events.jsonl
+
+      - name: Run Swift Testing with hang diagnostics
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./GuavaUI/Tools/Testing/Windows.ps1 -Package Engine -SkipBuild -Output test-results
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: engine-test-diagnostics-${{ matrix.name }}
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Verify browser plugin execution
         if: runner.os == 'macOS'

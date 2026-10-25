@@ -1,5 +1,5 @@
 public import Foundation
-import ProcessRuntime
+internal import GuavaProcess
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif

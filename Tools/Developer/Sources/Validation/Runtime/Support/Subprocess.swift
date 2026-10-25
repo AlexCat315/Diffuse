@@ -1,5 +1,6 @@
 internal import Foundation
 internal import ToolSupport
+internal import GuavaProcess
 
 /// The validation boundary supplies a deadline and inspects nonzero statuses.
 enum Subprocess {
@@ -9,7 +10,7 @@ enum Subprocess {
     environment: [String: String] = ProcessInfo.processInfo.environment,
     input: Data? = nil, timeout: TimeInterval
   ) throws -> ProcessOutput {
-    try ProcessRunner.run(
+    try ToolSupport.ProcessRunner.run(
       [executable.path] + arguments, environment: environment, input: input, timeout: timeout)
   }
 
@@ -18,6 +19,6 @@ enum Subprocess {
     _ command: [String], environment: [String: String] = ProcessInfo.processInfo.environment,
     timeout: TimeInterval
   ) throws -> ProcessOutput {
-    try ProcessRunner.run(command, environment: environment, timeout: timeout)
+    try ToolSupport.ProcessRunner.run(command, environment: environment, timeout: timeout)
   }
 }

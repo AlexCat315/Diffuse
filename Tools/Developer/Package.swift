@@ -53,9 +53,9 @@ let checks: [Target] = [
 #else
   let hostTools: [Target] = [
     .target(
-      name: "RuntimeValidation", dependencies: [.product(name: "ToolSupport", package: "Support")], path: "Sources/Validation/Runtime"),
+      name: "RuntimeValidation", dependencies: [.product(name: "ToolSupport", package: "Support"), .product(name: "GuavaProcess", package: "System")], path: "Sources/Validation/Runtime"),
     .target(
-      name: "AndroidValidation", dependencies: [.product(name: "ToolSupport", package: "Support"), "ImageCodec"],
+      name: "AndroidValidation", dependencies: [.product(name: "ToolSupport", package: "Support"), .product(name: "GuavaProcess", package: "System"), "ImageCodec"],
       path: "Sources/Validation/Android"),
     .target(
       name: "Browser", dependencies: [.product(name: "ToolSupport", package: "Support"), "ImageCodec",
@@ -74,7 +74,7 @@ let package = Package(
   name: "GuavaDeveloper",
   platforms: [.macOS(.v26), .iOS(.v26)],
   products: [.executable(name: "guava-dev", targets: ["GuavaDev"])],
-  dependencies: [.package(path: "\(sdkRoot)/Tools/Support"),
+  dependencies: [.package(path: "\(sdkRoot)/Tools/Support"), .package(path: "\(sdkRoot)/System"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.104.0")],
   targets: infrastructure + buildTools + checks + hostTools + [
     .executableTarget(

@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 
 // MARK: - FileBackedSemanticMemoryStore
@@ -83,7 +84,7 @@ public actor FileBackedSemanticMemoryStore: SemanticMemoryStore {
         }
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(all)
-        try data.write(to: storageURL, options: .atomic)
+        try AtomicFile.write(data, to: storageURL)
     }
 
     private func hashKey(_ fp: GeometryFingerprint) -> String {

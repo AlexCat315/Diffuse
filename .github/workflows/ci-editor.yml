@@ -10,6 +10,8 @@ on:
       - '.github/actions/setup-toolchains/**'
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
+      - '.github/actions/build-cache/**'
+      - '.github/sdk-revision'
       - 'Editor/guava.json'
       - 'guava'
       - 'guava.cmd'
@@ -24,6 +26,8 @@ on:
       - '.github/actions/setup-toolchains/**'
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
+      - '.github/actions/build-cache/**'
+      - '.github/sdk-revision'
       - 'Editor/guava.json'
       - 'guava'
       - 'guava.cmd'
@@ -76,32 +80,65 @@ jobs:
             libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
             mesa-common-dev ninja-build vulkan-validationlayers
 
+      - uses: ./.github/actions/build-cache
+        id: build-cache
+
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
+
+      - name: Test shared system contracts
+        timeout-minutes: 5
+        shell: bash
+        run: ./guava test GuavaUI/System --no-parallel --timeout 120
 
       - name: Prepare cached native dependencies
         uses: ./.github/actions/native-dependencies
 
-      - name: Resolve packages
-        shell: bash
-        working-directory: Editor
-        run: swift package resolve
 
-      - name: Build Editor, Player and tests
+      - name: Build Editor, Player, Plugin Host and tests
         timeout-minutes: 25
         shell: bash
-        working-directory: Editor
-        run: swift build --build-system '${{ matrix.build-system }}' --build-tests
+        run: ./guava test Editor --build-only
 
-      - name: Build Plugin Host
-        timeout-minutes: 15
-        shell: bash
-        run: swift build --build-system '${{ matrix.build-system }}' --package-path Engine --product GuavaPluginHost
+      - uses: actions/cache/save@v5
+        if: steps.build-cache.outputs.hit != 'true'
+        with:
+          key: ${{ steps.build-cache.outputs.key }}
+          path: |
+            Tools/Developer/.build
+            GuavaUI/Tools/Guava/.build
+            GuavaUI/System/.build
+            Editor/.guava/build/swift
+            Engine/.build
 
-      - name: Run tests
-        timeout-minutes: 15
+      - name: Run XCTest
+        if: runner.os != 'Windows'
+        timeout-minutes: 6
         shell: bash
-        working-directory: Editor
-        # Run the package as a whole so GameRuntimeTests and any future test
-        # targets cannot be added without being exercised by CI.
-        run: swift test --build-system '${{ matrix.build-system }}' --skip-build --no-parallel
+        run: ./guava test Editor --skip-build --no-parallel --testing-library xctest --timeout 300
+
+      - name: Run XCTest with hang diagnostics
+        if: runner.os == 'Windows'
+        timeout-minutes: 6
+        shell: pwsh
+        run: ./GuavaUI/Tools/Testing/Windows.ps1 -Package Editor -Library xctest -Timeout 300 -SkipBuild -Output test-results/xctest
+
+      - name: Run Swift Testing
+        if: runner.os != 'Windows'
+        timeout-minutes: 11
+        shell: bash
+        run: ./guava test Editor --skip-build --no-parallel --testing-library swift-testing --timeout 600 --event-output test-results/events.jsonl
+
+      - name: Run Swift Testing with hang diagnostics
+        if: runner.os == 'Windows'
+        timeout-minutes: 11
+        shell: pwsh
+        run: ./GuavaUI/Tools/Testing/Windows.ps1 -Package Editor -SkipBuild -Output test-results
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: editor-test-diagnostics-${{ matrix.name }}
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7

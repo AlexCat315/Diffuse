@@ -1,5 +1,7 @@
 import Foundation
 import PluginRuntime
+private import GuavaFileSystem
+private import GuavaProcess
 
 extension EditorApplication {
     /// The host resolves tools from its launch environment, never a package's
@@ -7,44 +9,42 @@ extension EditorApplication {
     /// restricts command, arguments and environment on every invocation.
     func pluginProcessContext(for authorization: PluginAuthorizationRecord) throws -> PluginProcessContext {
         let permissions = authorization.host
-        let root = URL(fileURLWithPath: projectDirectory).resolvingSymlinksInPath()
+        let root = PathIdentity.canonicalURL(URL(fileURLWithPath: projectDirectory))
         var context = PluginProcessContext(workspace: root)
         let providers = pluginSession.runtime.versionControlProviders.filter { $0.pluginID == authorization.pluginID }
         if permissions.entryPoints.contains(VersionControlContribution.entryPoint),
            let repository = VersionControlProvider.repository(containing: root, among: providers) {
             context.workspace = repository.root
         }
-        let separator: Character = ProcessInfo.processInfo.operatingSystemVersionString.contains("Windows") ? ";" : ":"
-        let directories = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: separator).compactMap { item -> URL? in
+        #if os(Windows)
+        let separator: Character = ";"
+        #else
+        let separator: Character = ":"
+        #endif
+        let environment = ProcessInfo.processInfo.environment
+        let directories = (ProcessEnvironment.value("PATH", in: environment) ?? "").split(separator: separator).compactMap { item -> URL? in
             let path = String(item)
             guard NSString(string: path).isAbsolutePath else { return nil }
-            let url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
-            guard url.path != root.path, !url.path.hasPrefix(root.path + "/") else { return nil }
+            let url = PathIdentity.canonicalURL(URL(fileURLWithPath: path))
+            guard !PathIdentity.contains(url, in: root) else { return nil }
             return url
         }
         for rule in permissions.processes {
             if rule.command == "sourcekit-lsp" {
                 let executable = try dynamicScriptManager.swiftToolchain?.languageServerURL
                     ?? SwiftToolchainResolver.resolve().languageServerURL
-                let resolved = executable.resolvingSymlinksInPath()
-                guard resolved.path != root.path, !resolved.path.hasPrefix(root.path + "/") else {
+                guard !PathIdentity.contains(executable, in: root) else {
                     throw PluginProcessError.commandNotBound(rule.command)
                 }
                 context.executables[rule.command] = executable
                 continue
             }
-            #if os(Windows)
-            let names = [rule.command + ".exe", rule.command]
-            #else
-            let names = [rule.command]
-            #endif
-            let executable = directories.lazy.flatMap { directory in names.map { directory.appendingPathComponent($0) } }
-                .first {
-                    let resolved = $0.resolvingSymlinksInPath()
-                    return FileManager.default.isExecutableFile(atPath: $0.path)
-                        && resolved.path != root.path && !resolved.path.hasPrefix(root.path + "/")
-                }
-            guard let executable else { throw PluginProcessError.commandNotBound(rule.command) }
+            let search = ProcessEnvironment.setting(directories.map(\.path).joined(separator: String(separator)),
+                                                     for: "PATH", in: environment)
+            guard let executable = ToolLocator.executable(rule.command, environment: search),
+                  !PathIdentity.contains(executable, in: root) else {
+                throw PluginProcessError.commandNotBound(rule.command)
+            }
             context.executables[rule.command] = executable
         }
         return context

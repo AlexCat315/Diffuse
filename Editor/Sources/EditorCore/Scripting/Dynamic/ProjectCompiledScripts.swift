@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import CapabilityRuntime
 import Foundation
 import ScriptRuntime
@@ -176,8 +177,7 @@ public struct ProjectCompiledScripts: Codable, Sendable, Equatable {
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(ProjectCompiledScripts(entries: entries))
-            .write(to: outputDirectory.appendingPathComponent(relativePath), options: .atomic)
+        try AtomicFile.write(encoder.encode(ProjectCompiledScripts(entries: entries)), to: outputDirectory.appendingPathComponent(relativePath))
         return Set(entries.flatMap { [$0.identifier] + $0.legacyIdentifiers })
         #endif
     }

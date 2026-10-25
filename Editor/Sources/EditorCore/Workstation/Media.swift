@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import Foundation
 import AudioRuntime
 import MediaRuntime
@@ -54,7 +55,7 @@ public final class EditorMediaWorkspace: _ObservableObject, @unchecked Sendable 
             let current = FileManager.default.fileExists(atPath: documentURL.path) ? try Data(contentsOf: documentURL) : nil
             guard current == savedData else { throw MediaError.invalid("The media timeline changed on disk; reopen the project before saving") }
             let data = try encoder.encode(composition)
-            try data.write(to: documentURL, options: .atomic)
+            try AtomicFile.write(data, to: documentURL)
             savedData = data
             isDirty = false; error = nil
         } catch { self.error = error.localizedDescription }

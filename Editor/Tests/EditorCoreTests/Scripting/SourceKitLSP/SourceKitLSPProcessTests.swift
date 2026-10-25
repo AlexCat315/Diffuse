@@ -1,5 +1,5 @@
 import LanguageServerRuntime
-import ProcessRuntime
+internal import GuavaProcess
 import Foundation
 import GuavaUICompose
 import Testing
@@ -230,240 +230,19 @@ struct LSPProcessFixture {
     }
 }
 
-/// Compiles the in-repo Swift language-server fixture once per test process.
-///
-/// The fixture speaks the same subset of LSP the production client exercises:
-/// framed JSON-RPC on stdio, deliberate crash modes, and byte-fragmented bursts.
+/// Built with the package so test execution never launches a compiler or inherits its pipes.
 private enum LSPFixtureServer {
-    private static let compiled = Result { try build() }
-
-    static func executable() throws -> URL { try compiled.get() }
-
-    private static func build() throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-lsp-fixture-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let source = directory.appendingPathComponent("main.swift")
+    static func executable() throws -> URL {
         #if os(Windows)
-        let binary = directory.appendingPathComponent("sourcekit-fixture.exe")
+        let name = "LanguageServerFixture.exe"
         #else
-        let binary = directory.appendingPathComponent("sourcekit-fixture")
+        let name = "LanguageServerFixture"
         #endif
-        try script.write(to: source, atomically: true, encoding: .utf8)
-
-        let process = Process()
-        process.executableURL = try compiler()
-        var arguments = [source.path, "-o", binary.path]
-        #if os(macOS)
-        // A standalone Swift toolchain does not infer the platform SDK when it
-        // is invoked directly, so pass the selected Xcode SDK explicitly.
-        arguments += ["-sdk", try sdkPath()]
-        #endif
-        process.arguments = arguments
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = output
-        try process.run()
-        let log = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            throw LSPFixtureError("failed to compile the language-server fixture:\n\(String(decoding: log, as: UTF8.self))")
-        }
-        return binary
-    }
-
-    private static func compiler() throws -> URL {
-        let environment = ProcessInfo.processInfo.environment
-        if let override = environment["GUAVA_SWIFTC"], !override.isEmpty,
-           FileManager.default.isExecutableFile(atPath: override) {
-            return URL(fileURLWithPath: override)
-        }
-        #if os(Windows)
-        let name = "swiftc.exe"
-        let separator: Character = ";"
-        #else
-        let name = "swiftc"
-        let separator: Character = ":"
-        #endif
-        for directory in (environment["PATH"] ?? "").split(separator: separator) {
-            let candidate = URL(fileURLWithPath: String(directory)).appendingPathComponent(name)
-            if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
-        }
-        throw LSPFixtureError("swiftc is not on PATH; set GUAVA_SWIFTC to a Swift compiler")
-    }
-
-    #if os(macOS)
-    private static func sdkPath() throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        process.arguments = ["--sdk", "macosx", "--show-sdk-path"]
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = Pipe()
-        try process.run()
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let path = String(decoding: data, as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard process.terminationStatus == 0, !path.isEmpty else {
-            throw LSPFixtureError("xcrun could not resolve the macOS SDK")
-        }
-        return path
-    }
-    #endif
-
-    private struct LSPFixtureError: Error, CustomStringConvertible {
-        let description: String
-        init(_ description: String) { self.description = description }
-    }
-
-    private static let script = #"""
-import Dispatch
-import Foundation
-
-#if canImport(Glibc)
-import Glibc
-#elseif canImport(Darwin)
-import Darwin
-#endif
-
-func crash(_ status: Int32) -> Never {
-    FileHandle.standardError.write(Data("fixture unexpected exit\n".utf8))
-    exit(status)
-}
-
-if CommandLine.arguments.contains("--help") {
-    FileHandle.standardOutput.write(Data("test language server\n".utf8))
-    exit(0)
-}
-
-let environment = ProcessInfo.processInfo.environment
-let root = environment["GUAVA_TEST_LSP_ROOT"] ?? ""
-let mode = environment["GUAVA_TEST_LSP_MODE"] ?? "normal"
-
-func rootFile(_ name: String) -> URL {
-    URL(fileURLWithPath: root).appendingPathComponent(name)
-}
-
-let countFile = rootFile("count")
-var count = 1
-if let existing = try? String(contentsOf: countFile, encoding: .utf8), let previous = Int(existing) {
-    count = previous + 1
-}
-try? String(count).write(to: countFile, atomically: true, encoding: .utf8)
-
-let openedFile = rootFile("opened.jsonl")
-FileManager.default.createFile(atPath: openedFile.path, contents: nil)
-let opened = try? FileHandle(forWritingTo: openedFile)
-
-var buffer: [UInt8] = []
-
-func readByte() -> UInt8? {
-    // FileHandle.read(upToCount:) may wait for the full count or EOF; read(2)
-    // returns whatever the client has written so far.
-    var chunk = [UInt8](repeating: 0, count: 4096)
-    while buffer.isEmpty {
-        let count = Int(read(STDIN_FILENO, &chunk, .init(chunk.count)))
-        if count < 0 && errno == EINTR { continue }
-        guard count > 0 else { return nil }
-        buffer.append(contentsOf: chunk[..<count])
-    }
-    return buffer.removeFirst()
-}
-
-func readLine() -> [UInt8]? {
-    var line: [UInt8] = []
-    while let byte = readByte() {
-        if byte == 0x0A {
-            if line.last == 0x0D { line.removeLast() }
-            return line
-        }
-        line.append(byte)
-    }
-    return nil
-}
-
-func send(_ message: Any, fragmented: Bool = false) {
-    guard let body = try? JSONSerialization.data(withJSONObject: message, options: [.sortedKeys]) else { return }
-    let packet = Array("Content-Length: \(body.count)\r\n\r\n".utf8) + [UInt8](body)
-    if fragmented {
-        for byte in packet { FileHandle.standardOutput.write(Data([byte])) }
-    } else {
-        FileHandle.standardOutput.write(Data(packet))
+        let binaryDirectory = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
+        let candidates = [binaryDirectory.appendingPathComponent(name),
+            Bundle(for: LSPFixtureBundle.self).bundleURL.deletingLastPathComponent().appendingPathComponent(name)]
+        return try #require(candidates.first { FileManager.default.isExecutableFile(atPath: $0.path) })
     }
 }
 
-while true {
-    var length = 0
-    while true {
-        guard let header = readLine() else { exit(0) }
-        if header.isEmpty { break }
-        let text = String(decoding: header, as: UTF8.self).lowercased()
-        if text.hasPrefix("content-length:") {
-            length = Int(text.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)) ?? 0
-        }
-    }
-    var body: [UInt8] = []
-    while body.count < length {
-        guard let byte = readByte() else { exit(0) }
-        body.append(byte)
-    }
-    let message = (try? JSONSerialization.jsonObject(with: Data(body), options: [.fragmentsAllowed])) as? [String: Any] ?? [:]
-    let method = message["method"] as? String
-
-    if method == "test/crash" || (method == "textDocument/hover" && count == 1 && ["crash-first-hover", "environment-first-connection"].contains(mode)) {
-        crash(31)
-    }
-    if method == "textDocument/didOpen" {
-        let document = (message["params"] as? [String: Any])?["textDocument"] as? [String: Any]
-        let text = document?["text"] as? String ?? ""
-        if let handle = opened, let encoded = try? JSONSerialization.data(withJSONObject: text, options: [.fragmentsAllowed]) {
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: encoded + Data([0x0A]))
-        }
-        if mode == "crash-after-open" {
-            DispatchQueue.global().asyncAfter(deadline: .now() + 0.15) { exit(32) }
-        }
-        if mode == "environment-first-connection" {
-            let diagnostics: [[String: Any]] = count == 1 ? [[
-                "range": ["start": ["line": 0, "character": 0], "end": ["line": 0, "character": 1]],
-                "severity": 1, "message": "Loading the standard library failed",
-            ]] : []
-            if count == 1 {
-                send(["jsonrpc": "2.0", "method": "window/logMessage", "params": ["type": 1, "message": "Loading the standard library failed"]])
-            }
-            send(["jsonrpc": "2.0", "method": "textDocument/publishDiagnostics",
-                  "params": ["uri": document?["uri"] as? String ?? "", "version": 1, "diagnostics": diagnostics]])
-        }
-    }
-    if method == "exit" { exit(0) }
-    if let id = message["id"] {
-        var result: Any = NSNull()
-        if method == "initialize" {
-            if mode == "slow-initialize" {
-                FileManager.default.createFile(atPath: rootFile("initializing").path, contents: nil)
-                Thread.sleep(forTimeInterval: 5)
-            }
-            result = ["capabilities": [String: Any]()]
-        }
-        if method == "textDocument/hover" {
-            result = ["contents": ["kind": "markdown", "value": "recovered symbol"]]
-        }
-        if method == "textDocument/documentSymbol" {
-            result = [["name": "value", "kind": 13,
-                       "range": ["start": ["line": 0, "character": 4], "end": ["line": 0, "character": 9]]]]
-        }
-        if method == "textDocument/formatting" { result = [Any]() }
-        if method == "textDocument/completion" { result = ["items": [Any](), "isIncomplete": false] }
-        if method == "test/burst" {
-            for index in 0..<200 {
-                send(["jsonrpc": "2.0", "method": "test/notification", "params": index], fragmented: true)
-            }
-            result = 200
-        }
-        if method == "test/large" { result = String(repeating: "Swift 🥭\n", count: 80_000) }
-        send(["jsonrpc": "2.0", "id": id, "result": result])
-    }
-}
-"""#
-}
+private final class LSPFixtureBundle: NSObject {}

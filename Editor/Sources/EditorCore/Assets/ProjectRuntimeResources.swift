@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 import AudioRuntime
 import AssetPipeline
 import Foundation
@@ -26,7 +27,7 @@ public enum ProjectRuntimeResources {
     /// tests without mutating the process-wide audio engine.
     static func discoverAudioSearchPaths(at rootPath: String) -> [URL] {
         let fileManager = FileManager.default
-        let root = ProjectFilePath.canonicalURL(URL(fileURLWithPath: rootPath, isDirectory: true))
+        let root = PathIdentity.canonicalURL(URL(fileURLWithPath: rootPath, isDirectory: true))
         var directories: [URL] = [root]
         var seen = Set([pathKey(root)])
         if let files = try? ProjectResourceWalker.files(in: root, fileManager: fileManager,
@@ -46,6 +47,6 @@ public enum ProjectRuntimeResources {
     }
 
     private static func pathKey(_ url: URL) -> String {
-        ProjectFilePath.comparableComponents(url).joined(separator: "/")
+        PathIdentity.comparableComponents(url).joined(separator: "/")
     }
 }

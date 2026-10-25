@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/sdk-revision'
       - 'GuavaMcp/**'
       - 'Tools/Developer/Sources/Validation/Runtime/**'
       - 'Engine/**'
@@ -19,6 +20,7 @@ on:
       - 'cmake/**'
   pull_request:
     paths:
+      - '.github/sdk-revision'
       - 'GuavaMcp/**'
       - 'Tools/Developer/Sources/Validation/Runtime/**'
       - 'Engine/**'

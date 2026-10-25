@@ -1,5 +1,5 @@
 public import Foundation
-import ProcessRuntime
+internal import GuavaProcess
 
 extension SwiftToolchain {
     public func validateAnalysis(engineModulePaths: [String], clangModuleMapPaths: [String],

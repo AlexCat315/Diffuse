@@ -1,3 +1,4 @@
+private import GuavaFileSystem
 @testable import EditorCore
 import Foundation
 import Testing
@@ -120,7 +121,7 @@ struct AssetImportResolverTests {
         #else
         #expect(files.map(\.relativePath) == ["ship.gltf", "../Shared/ship.bin", "../Shared/missing.png", "linked/secret.png"])
         #endif
-        #expect(ProjectFilePath.sameLocation(files[1].source, project.appendingPathComponent("Shared/ship.bin")))
+        #expect(PathIdentity.sameLocation(files[1].source, project.appendingPathComponent("Shared/ship.bin")))
         #expect(!FileManager.default.fileExists(atPath: files[2].source.path))
         #expect(!AssetImportResolver.resolve(model).contains { $0.relativePath.hasPrefix("..") })
 
