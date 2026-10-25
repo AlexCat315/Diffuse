@@ -29,6 +29,7 @@ struct DocumentWritingBar: View {
             Button(icon: .resource(UIIcons.Text.wrapText), size: 12, isSelected: state.wrapsLines, tooltip: L("Wrap Lines")) {
                 session.update { $0.wrapsLines.toggle() }
             }.buttonStyle(ToggleButtonStyle(height: 22)).debugName("document-wrap")
+            if let app { documentViews(app, active: state.documentView) }
             if let app {
                 separator
                 WritingAssistantButton(app: app, path: path, session: session)
@@ -43,6 +44,20 @@ struct DocumentWritingBar: View {
         .padding(horizontal: 10)
         .frame(height: 32)
         .debugName("document-path-bar")
+    }
+
+    /// One toggle per package view of this document; the text returns when none is on.
+    @ViewBuilder
+    private func documentViews(_ app: EditorApplication, active: String?) -> some View {
+        for view in app.workbenchCatalog.documentViews(forPath: path) {
+            AnyView(Button(icon: .resource(UIIcons.Layout.columns2), size: 12, isSelected: active == view.id,
+                           tooltip: view.title) {
+                let showing = active == view.id
+                session.update { $0.documentView = showing ? nil : view.id }
+                let path = self.path
+                if !showing { MainActor.assumeIsolated { app.documentViewState(for: view, path: path).refresh() } }
+            }.buttonStyle(ToggleButtonStyle(height: 22)).debugName("document-view-" + view.id))
+        }
     }
 
     /// Padding and background share a node, so the gap needs its own wrapper.

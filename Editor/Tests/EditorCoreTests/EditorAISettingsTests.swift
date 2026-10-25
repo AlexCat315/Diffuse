@@ -44,14 +44,17 @@ final class EditorAISettingsTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString).appendingPathComponent("Credentials/ai-providers.json")
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent().deletingLastPathComponent()) }
-        try AICredentialStore.save(key: "sk-one", providerID: "anthropic", at: url)
-        try AICredentialStore.save(key: "sk-two", providerID: "openai", at: url)
-        XCTAssertEqual(AICredentialStore.stored(at: url), ["anthropic": "sk-one", "openai": "sk-two"])
+        try AICredentialStore.save(["api-key": "sk-one", "organization": "org-1"], providerID: "anthropic", at: url)
+        try AICredentialStore.save(["api-key": "sk-two"], providerID: "openai", at: url)
+        XCTAssertEqual(AICredentialStore.stored(at: url), ["anthropic": ["api-key": "sk-one", "organization": "org-1"],
+                                                          "openai": ["api-key": "sk-two"]])
         let file = try FileManager.default.attributesOfItem(atPath: url.path)
         let folder = try FileManager.default.attributesOfItem(atPath: url.deletingLastPathComponent().path)
         XCTAssertEqual((file[.posixPermissions] as? NSNumber)?.intValue, 0o600)
         XCTAssertEqual((folder[.posixPermissions] as? NSNumber)?.intValue, 0o700)
-        try AICredentialStore.save(key: "", providerID: "anthropic", at: url)
-        XCTAssertEqual(AICredentialStore.stored(at: url), ["openai": "sk-two"])
+        try AICredentialStore.save(["organization": ""], providerID: "anthropic", at: url)
+        XCTAssertEqual(AICredentialStore.stored(at: url)["anthropic"], ["api-key": "sk-one"])
+        try AICredentialStore.save(["api-key": ""], providerID: "anthropic", at: url)
+        XCTAssertEqual(AICredentialStore.stored(at: url), ["openai": ["api-key": "sk-two"]])
     }
 }

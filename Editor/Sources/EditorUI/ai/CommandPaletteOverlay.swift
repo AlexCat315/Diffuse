@@ -209,8 +209,10 @@ struct CommandPaletteOverlay: View {
             let intent = ResultItem(id: "agent.intent", title: text.isEmpty ? L("Open Harness") : L("Ask Guava") + ": " + text,
                 detail: app.isAIAvailable ? L("Work with Harness in this context") : L("Set an AI provider in Settings to enable."),
                 shortcut: "↵", enabled: true, searchText: "", perform: {
-                    EditorCommandDispatcher.handle(.showPanel("intent-input"), app: app, controller: controller,
-                                                   registry: registry, fromCommandPalette: true)
+                    if let id = app.agentPanelID {
+                        EditorCommandDispatcher.handle(.showPanel(id), app: app, controller: controller,
+                                                       registry: registry, fromCommandPalette: true)
+                    }
                     if !text.isEmpty {
                         if app.isAIAvailable { _ = app.submitNaturalLanguageIntent(text) }
                         else { app.openSettingsWindow() }

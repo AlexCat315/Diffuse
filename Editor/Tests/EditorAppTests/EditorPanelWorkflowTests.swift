@@ -220,19 +220,19 @@ struct EditorPanelWorkflowTests {
         #expect(draft.providerID.isEmpty)
         #expect(draft.model.isEmpty)
 
-        draft.apiKey = "secret-for-openai"
+        draft.credentials["api-key"] = "secret-for-openai"
         draft.select(openai, in: .bundled)
         #expect(draft.model.stringValue == openai.defaultModel)
-        #expect(draft.apiKey.isEmpty)
+        #expect(draft.credentials.isEmpty)
 
-        draft.apiKey = "openai-secret"
+        draft.credentials["api-key"] = "openai-secret"
         draft.select(openai, in: .bundled)
-        #expect(draft.apiKey.stringValue == "openai-secret")
+        #expect(draft.enteredCredentials == ["api-key": "openai-secret"])
 
         draft.model = "custom-compatible-model"
         draft.select(deepseek, in: .bundled)
         #expect(draft.model.stringValue == "custom-compatible-model")
-        #expect(draft.apiKey.isEmpty)
+        #expect(draft.credentials.isEmpty)
 
         draft.model = TextBuffer(deepseek.defaultModel)
         draft.select(anthropic, in: .bundled)

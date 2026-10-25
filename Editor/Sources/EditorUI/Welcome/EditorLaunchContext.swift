@@ -103,6 +103,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         subscribeShellPreferences(app: app, controller: controller, registry: registry)
         subscribeWorkspacePersistence(app: app, controller: controller)
         subscribeNativeMenu(app: app, controller: controller, registry: registry)
+        subscribeWorkbench(app: app, controller: controller, registry: registry)
         bundle = EditorLaunchBundle(app: app, controller: controller, registry: registry)
         shouldExpandEditorWindow = !EditorAppLaunchOptions.settingsRequested
 
@@ -302,6 +303,24 @@ final class EditorLaunchContext: @unchecked Sendable {
                       let display = self.display else { return }
                 self.refreshNativeMenu(app: app, controller: controller, registry: registry, display: display)
             }
+        }
+    }
+
+    /// Packages start after the workbench is built and may come and go while it
+    /// runs, so their panels and commands join and leave the live layout.
+    @MainActor
+    private func subscribeWorkbench(app: EditorApplication,
+                                    controller: WorkspaceController,
+                                    registry: WorkspacePanelRegistry) {
+        app.setWorkbenchChangeHandler { [weak self, weak app, weak controller, weak registry] in
+            guard let self, let app, let controller, let registry else { return }
+            EditorRootViewFactory.syncContributedPanels(app: app, registry: registry)
+            let visible = EditorWorkspacePanelPolicy.registry(for: app.store.state.workspace.mode, from: registry)
+            controller.replace(EditorRootViewFactory.reconciledWorkspaceDocument(controller.document, registry: visible))
+            if let display = self.display {
+                self.refreshNativeMenu(app: app, controller: controller, registry: registry, display: display)
+            }
+            app.requestDisplayRefresh()
         }
     }
 

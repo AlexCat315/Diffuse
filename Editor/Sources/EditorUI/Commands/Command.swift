@@ -49,6 +49,8 @@ enum EditorCommand {
     case buildAndRun
     /// The project's build or test task, from the plugin that contributes tasks for it.
     case runTask(TaskKind)
+    /// A command an enabled package contributes, by its name within the package.
+    case plugin(pluginID: String, name: String)
     case openDocumentation
     case about
 }

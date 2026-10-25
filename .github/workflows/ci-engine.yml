@@ -39,6 +39,7 @@ jobs:
   build:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -95,28 +96,16 @@ jobs:
         working-directory: Engine
         run: swift package resolve
 
-      - name: Build pure-Swift targets
+      - name: Build runtime products and tests
+        timeout-minutes: 25
         shell: bash
         working-directory: Engine
-        run: |
-          swift build --target EngineKernel
-          swift build --target EngineMath
-          swift build --target ObservationBus
-          swift build --target SceneRuntime
-          swift build --target AssetPipeline
-          swift build --target SequenceRuntime
-          swift build --target CardBattleRuntime
-          swift build --target AIRuntime
-          swift build --product GuavaPluginHost
-          swift build --target PluginWasmtimeRuntime
-          swift build --target PluginRuntime
-          swift build --target IntentRuntime
-          swift build --target ScriptRuntime
-          # AudioRuntime pulls CSDL3; on Linux/Windows this compiles the SDL3
-          # audio backend and FFmpeg decoder on every platform.
-          swift build --target AudioRuntime
+        # Build every product and test target in one plan, including native
+        # audio/renderer bridges and the Plugin Host used by integration tests.
+        run: swift build --build-tests
 
       - name: Run tests
+        timeout-minutes: 15
         shell: bash
         working-directory: Engine
         # Run the package as a whole so every current and future test target is
@@ -124,7 +113,7 @@ jobs:
         # GUAVA_RUN_GPU_SMOKE_TESTS / GUAVA_RUN_VISION_SMOKE_TESTS and are
         # skipped on ordinary CI runners. Dedicated Metal regressions run in
         # ci-gpu.yml once GUAVA_GPU_CI_ENABLED and its runner are configured.
-        run: swift test
+        run: swift test --skip-build
 
       - name: Verify browser plugin execution
         if: runner.os == 'macOS'

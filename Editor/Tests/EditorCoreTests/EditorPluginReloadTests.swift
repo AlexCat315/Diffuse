@@ -211,12 +211,16 @@ final class EditorPluginReloadTests: XCTestCase {
         let root = parent.appendingPathComponent(id + ".guavaplugin", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
-        let manifest = GuavaPluginManifest(id: id,
+        var manifest = GuavaPluginManifest(id: id,
                                            version: 1,
                                            name: "Reload Test",
                                            description: "Editor reload integration fixture",
                                            access: .read,
                                            requires: requires)
+        // The capability is offered to the model, so MCP sessions activate the plugin.
+        try manifest.contributes.set(AIToolContributionPoint.self, descriptors: [
+            AIToolContribution(entryPoint: "inspect", title: "Inspect", description: "Execute one bounded capability.")
+        ])
         try JSONEncoder().encode(manifest)
             .write(to: root.appendingPathComponent("plugin.json"))
         try EmbeddedWasmtimeComponentRuntime.compileComponentWAT(wat)

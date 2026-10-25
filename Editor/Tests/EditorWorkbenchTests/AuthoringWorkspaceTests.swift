@@ -18,6 +18,7 @@ struct AuthoringWorkspaceTests {
         let package = try PluginPackageLoader().load(at: plugin.package)
         app.pluginSession.providers = AIProviderCatalog(packages: [package])
         app.pluginSession.agents = AgentCatalog(packages: [package])
+        app.pluginSession.workbench.replace(WorkbenchCatalog(packages: [package]))
     }
 
     private final class ResizingTitle: View {
@@ -76,6 +77,7 @@ struct AuthoringWorkspaceTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path)
         defer { app.shutdown() }
+        try Self.enableAgent(in: app)
         app.store.dispatch(.setWorkspaceMode(.modeling))
         let commands = EditorCommandSearch.commands(app: app)
         #expect(!commands.contains { $0.id == "scripts.show" || $0.id == "project.build" || $0.id.hasPrefix("playback.") })
@@ -112,7 +114,7 @@ struct AuthoringWorkspaceTests {
         }
         settle()
         let frames = graph.layoutSnapshot()
-        #expect(controller.document.groups["trailing"]?.panels == ["inspector", "intent-input", "journal"])
+        #expect(controller.document.groups["trailing"]?.panels == ["inspector", "journal", "intent-input"])
         let tabs = try #require(frames.first { $0.debugName == "workspace-tabs-scroll-trailing" })
         for id in ["inspector", "intent-input", "journal"] {
             let tab = try #require(frames.first { $0.debugName == "workspace-tab-\(id)" })

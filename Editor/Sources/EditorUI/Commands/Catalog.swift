@@ -13,6 +13,10 @@ struct EditorCommandContext: Equatable {
     var hasSelection = false
     /// The editor's selected text document, when one is open.
     var document: EditorCommandDocument?
+    /// Commands and panels of the enabled packages.
+    var workbench: WorkbenchCatalog = .empty
+    /// The panel that holds the agent conversation, while an agent is enabled.
+    var agentPanelID: String?
 
     init(workspaceMode: EditorWorkspaceMode,
          layoutPreset: EditorLayoutPreset? = nil,
@@ -20,7 +24,9 @@ struct EditorCommandContext: Equatable {
          canUndo: Bool = false,
          canRedo: Bool = false,
          hasSelection: Bool = false,
-         document: EditorCommandDocument? = nil) {
+         document: EditorCommandDocument? = nil,
+         workbench: WorkbenchCatalog = .empty,
+         agentPanelID: String? = nil) {
         self.workspaceMode = workspaceMode
         self.layoutPreset = layoutPreset ?? .default(for: workspaceMode)
         self.playbackState = playbackState
@@ -28,6 +34,8 @@ struct EditorCommandContext: Equatable {
         self.canRedo = canRedo
         self.hasSelection = hasSelection
         self.document = document
+        self.workbench = workbench
+        self.agentPanelID = agentPanelID
     }
 
     init(app: EditorApplication) {
@@ -38,7 +46,9 @@ struct EditorCommandContext: Equatable {
                   canUndo: app.canUndo,
                   canRedo: app.canRedo,
                   hasSelection: !state.selection.selectedEntityIDs.isEmpty,
-                  document: EditorCommandDocument(app.workstation.documents))
+                  document: EditorCommandDocument(app.workstation.documents),
+                  workbench: app.workbenchCatalog,
+                  agentPanelID: app.agentPanelID)
     }
 }
 
@@ -85,11 +95,14 @@ struct EditorCommandCatalog {
     /// presentations fold them into Help and Edit.
     let applicationItems: [EditorCommandItem]
     let menus: [EditorCommandMenu]
+    /// Package commands. They have no menu placement, so only the palette lists them.
+    let contributed: [EditorCommandEntry]
 
     static func make(_ context: EditorCommandContext) -> Self {
         let builder = Builder(context: context)
         return Self(applicationItems: builder.applicationItems,
-                    menus: builder.menus.compactMap { $0.filtered(for: context.workspaceMode) })
+                    menus: builder.menus.compactMap { $0.filtered(for: context.workspaceMode) },
+                    contributed: builder.contributed)
     }
 
     /// Menus for a presentation without an application menu.
@@ -109,7 +122,7 @@ struct EditorCommandCatalog {
 
     /// Every entry in menu order, including nested submenus.
     var entries: [EditorCommandEntry] {
-        (applicationItems + menus.map { .submenu($0) }).flatMap(\.entries)
+        (applicationItems + menus.map { .submenu($0) }).flatMap(\.entries) + contributed
     }
 
     func entry(matching event: KeyEvent) -> EditorCommandEntry? {
@@ -190,7 +203,28 @@ private struct Builder {
     }
 
     var menus: [EditorCommandMenu] {
-        [file, edit, select, world, view, agent, run, window, help]
+        [file, edit, select, world, view, agent, run, window, help].map(placingContributions)
+    }
+
+    /// Package commands no menu holds; the menus already feed the palette the rest.
+    var contributed: [EditorCommandEntry] {
+        let placed = Set(context.workbench.menuItems.map(\.command.id))
+        return context.workbench.commands.filter { !placed.contains($0.id) }.map(pluginEntry)
+    }
+
+    /// Package commands a menu holds follow the host's items.
+    private func placingContributions(_ menu: EditorCommandMenu) -> EditorCommandMenu {
+        let items = context.workbench.menuItems.filter { $0.menu == menu.id }
+        guard !items.isEmpty else { return menu }
+        var menu = menu
+        menu.items += [.separator] + items.map { .entry(pluginEntry($0.command)) }
+        return menu
+    }
+
+    private func pluginEntry(_ command: ContributedCommand) -> EditorCommandEntry {
+        EditorCommandEntry(id: "plugin." + command.id, title: command.title, keywords: command.keywords,
+                           command: .plugin(pluginID: command.pluginID, name: command.name),
+                           inPalette: command.showsInPalette)
     }
 
     private var file: EditorCommandMenu {
@@ -307,13 +341,16 @@ private struct Builder {
     }
 
     private var agent: EditorCommandMenu {
-        menu("agent", "Agent", [
+        // Pending reviews sit at the top of the Agent thread, so one entry serves both.
+        let conversation: [EditorCommandItem] = context.agentPanelID.map { id in
+            [entry("agent.show", "Agent", "agent assistant conversation review approval 智能体 对话 审阅",
+                   command: .showPanel(id))]
+        } ?? []
+        return menu("agent", "Agent", [
             entry("agent.intent", "Ask Guava...", "", .init(.letter("k")), command: .showCommandPalette(.intent),
                   inPalette: false),
             .separator,
-            // Pending reviews sit at the top of the Agent thread, so one entry serves both.
-            entry("agent.show", "Agent", "agent assistant conversation review approval 智能体 对话 审阅",
-                  command: .showPanel("intent-input")),
+        ] + conversation + [
             entry("journal.show", "Session Journal", "history activity journal 历史 日志", command: .showPanel("journal")),
         ])
     }
@@ -364,9 +401,20 @@ private struct Builder {
             panel("render-pipeline", keywords: "render 渲染"),
             panel("developer-tools", keywords: "profiler debugger 开发者工具"),
             .separator,
+        ] + contributedPanels + [
             entry("layout.reopen", "Reopen Closed Panel", "reopen 恢复关闭面板", .init(.letter("t"), [.primary, .shift]),
                   command: .reopenClosedPanel),
         ])
+    }
+
+    /// Panels packages describe. A panel showing a host view, such as the agent
+    /// conversation, has its own entry elsewhere.
+    private var contributedPanels: [EditorCommandItem] {
+        let panels: [EditorCommandItem] = context.workbench.panels.filter { $0.content == .model }.map { panel in
+            .entry(EditorCommandEntry(id: "panel." + panel.id, title: panel.title, keywords: "panel 面板",
+                                      command: .showPanel(panel.id)))
+        }
+        return panels.isEmpty ? [] : panels + [.separator]
     }
 
     private var help: EditorCommandMenu {

@@ -29,13 +29,14 @@ public enum PluginCapabilityValidationError: Error, Sendable, Equatable, CustomS
 public enum PluginWITContractDeriver {
     public static func contracts(for package: ValidatedPluginPackage) -> [CapabilityContract] {
         (package.runtime?.witContract.capabilityInputs ?? []).map { input in
-            CapabilityContract(
+            // A tool declaration is what the model reads; WIT docs describe the rest.
+            let tool = package.manifest.aiTool(entryPoint: input.name)
+            return CapabilityContract(
                 id: package.manifest.id + "." + input.name,
                 version: package.manifest.version,
-                title: input.title,
-                description: input.description.isEmpty
-                    ? package.manifest.description
-                    : input.description,
+                title: tool?.title ?? input.title,
+                description: tool?.description
+                    ?? (input.description.isEmpty ? package.manifest.description : input.description),
                 domain: "plugin",
                 access: package.manifest.access,
                 releasePhase: .stable,

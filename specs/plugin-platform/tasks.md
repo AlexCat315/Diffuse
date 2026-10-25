@@ -30,28 +30,29 @@
 
 ## 阶段 3：AI provider / agent 插件化
 
-- [ ] 3.1 定义 `guava.ai.provider/v1` / `guava.ai.agent/v1` / `guava.ai.tool/v1` / `guava.ai.context/v1` descriptor 与校验。
+- [x] 3.1 定义 `guava.ai.provider/v1` / `guava.ai.agent/v1` / `guava.ai.tool/v1` / `guava.ai.context/v1` descriptor 与校验；capability 只有被 `guava.ai.tool/v1` 声明才提供给模型。
 - [x] 3.2 新增 `AIProviderCatalog`，合并随包 provider 插件与已启用运行时插件，发布只读快照。
-- [ ] 3.3 删除 `EditorAIProvider` enum；`EditorAISettings` 改为 `providerID` / `modelID` / `agentID`。
-- [ ] 3.4 `AICredentialStore` 按 provider ID 与 auth field 存取；默认 provider 插件声明自己的认证字段。
+- [x] 3.3 删除 `EditorAIProvider` enum；`EditorAISettings` 改为 `providerID` / `modelID` / `agentID`。
+- [x] 3.4 `AICredentialStore` 按 provider ID 与 auth field 存取；默认 provider 插件声明自己的认证字段。
 - [x] 3.5 `makeSession` 从 provider descriptor 构造 `SessionConfig`；宿主代理 HTTP / 流式 / 超时 / 审计。
 - [x] 3.6 新增随包 AI provider 插件（Anthropic / OpenAI / DeepSeek），只含 `plugin.json` 与声明资源。
-- [ ] 3.7 设置页 provider / model / agent 列表来自 catalog，不再遍历 enum。
+- [x] 3.7 设置页 provider / model / agent 列表来自 catalog，不再遍历 enum。
 - [ ] 3.8 测试：provider 目录合并、凭据往返、SessionConfig 构造、禁用 provider 后设置页与会话行为、无网络代码路径。
 
 ## 阶段 4：AI agent / harness / 面板
 
-- [ ] 4.1 默认 AI agent 迁移为随包 `guava.ai.agent/v1` 插件。
-- [ ] 4.2 宿主 `Session` 消费 agent profile：instructions / model policy / tool allowlist / context allowlist。
+- [x] 4.1 默认 AI agent 迁移为随包 `guava.ai.agent/v1` 插件。
+- [x] 4.2 宿主 `Session` 消费 agent profile：instructions / model policy / tool allowlist / context allowlist（宿主来源与 `guava.ai.context/v1`）。
 - [ ] 4.3 定义 `guava.ai.harness/v1` 输入输出；宿主执行 tool calls 与审批，harness 只返回建议。
-- [ ] 4.4 默认 AI 面板迁移到 `guava.ui.panel/v1`；宿主渲染外壳，插件提供内容配置。
+- [x] 4.4 默认 AI 面板迁移到 `guava.ui.panel/v1`（宿主视图 `agent`）；宿主渲染外壳，插件提供内容配置。
 - [ ] 4.5 测试：agent profile 生效、工具白名单、harness 不能绕过审批、面板启用/停用。
 
 ## 阶段 5：UI 与内置功能迁移
 
-- [ ] 5.1 定义 `guava.command/v1` / `guava.ui.menu/v1` / `guava.ui.toolbar/v1` / `guava.ui.panel/v1` / `guava.ui.documentView/v1`。
+- [x] 5.1 定义 `guava.command/v1` 与 `guava.ui.panel/v1`；面板内容采用宿主渲染的声明式 view model（宿主视图或入口返回的 `PanelModel`）。
+- [x] 5.1b 定义 `guava.ui.menu/v1` / `guava.ui.toolbar/v1` / `guava.ui.documentView/v1`。
 - [x] 5.2 把 Git / Swift Support / Languages 的 manifest 迁到新贡献点键。
-- [ ] 5.3 把默认主题、默认 AI provider、默认 agent、AI 面板纳入同一 `BundledPlugins` 目录。
+- [x] 5.3 把默认主题、默认 AI provider、默认 agent、AI 面板纳入同一 `BundledPlugins` 目录。
 - [x] 5.4 移除 `EditorVisualTheme.make` 中的默认主题硬编码，只保留回退值。
 - [x] 5.5 管理面板显示插件贡献点、激活状态、资源哈希与失败原因。
 - [x] 5.6 文档：更新 `docs/architecture/plugin-execution.md` 与 `extension-lifecycle.md`。
@@ -63,6 +64,8 @@
 - [x] `./guava test Editor --filter PluginPlatformTests`
 - [x] `./guava test Editor --filter BundledLanguagesTests`
 - [x] `./guava test Editor --filter FileIconTests`
+- [x] `./guava test Engine --filter WorkbenchContributionTests`
+- [x] `./guava test Editor --filter "WorkbenchContributionsTests|PluginPanelTests"`
 - [ ] 手动：纯资源主题安装/切换/停用/重载；AI provider 切换；`.tex` 着色/提纲/格式化不回退。
 
 ## 本轮落地

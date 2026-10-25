@@ -28,6 +28,7 @@ final class PluginSession: @unchecked Sendable {
     var providers = AIProviderCatalog()
     var agents = AgentCatalog.empty
     var agentRevision: UInt64?
+    let workbench = WorkbenchSession()
     var aiProvider: AIProviderDescriptor?
     var packageMonitor: PluginPackageMonitor?
     var bundledStartup: Task<Void, Never>?

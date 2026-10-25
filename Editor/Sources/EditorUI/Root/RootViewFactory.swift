@@ -130,7 +130,8 @@ enum EditorRootViewFactory {
     static func localizeWorkspaceTitles(in controller: WorkspaceController,
                                         registry: WorkspacePanelRegistry) {
         var document = controller.document
-        for panelID in Array(document.panels.keys) {
+        // A package names its own panels; only the host's are translated here.
+        for panelID in Array(document.panels.keys) where EditorWorkspaceProfile.builtInPanelIDs.contains(panelID.rawValue) {
             guard var panel = document.panels[panelID] else { continue }
             panel.title = localizedPanelTitle(for: panelID.rawValue)
             document.panels[panelID] = panel
@@ -140,7 +141,7 @@ enum EditorRootViewFactory {
     }
 
     static func localizePanelTitles(in registry: WorkspacePanelRegistry) {
-        for id in registry.ids {
+        for id in registry.ids where EditorWorkspaceProfile.builtInPanelIDs.contains(id.rawValue) {
             registry.updateDescriptor(id: id) { descriptor in
                 descriptor.panel.title = localizedPanelTitle(for: descriptor.panel.id.rawValue)
             }
@@ -149,10 +150,9 @@ enum EditorRootViewFactory {
 
     static func makeRegistry(app: EditorApplication) -> WorkspacePanelRegistry {
         registerPanelIcons()
-        let agentDraft = AgentDraft()
         let terminal = EditorTerminal(projectDirectory: app.projectDirectory)
         terminal.follow(app.workstation.tasks) { app.showPanel("terminal") }
-        var registry = WorkspacePanelRegistry([
+        let registry = WorkspacePanelRegistry([
             WorkspacePanelDescriptor(id: "hierarchy", title: localizedPanelTitle(for: "hierarchy"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.hierarchy" }) {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
@@ -212,25 +212,42 @@ enum EditorRootViewFactory {
                 MediaTimelinePanel(model: app.workstation.media, projectRoot: URL(fileURLWithPath: app.projectDirectory))
             },
         ])
-        // The assistant surface belongs to an agent package. Without one the
-        // editor has no panel, and disabling the package reconciles it away.
-        for agent in app.agentCatalog.agents {
-            for panel in agent.panels where registry.descriptor(for: WorkspacePanelID(rawValue: panel.id)) == nil {
-                let iconKey = "panel." + panel.id
-                WorkspacePanelIconCatalog.register(iconKey,
-                    .svg(named: panel.icon ?? "ai-intent", in: EditorAppResourceBundle.bundle,
-                         subdirectory: "PanelIcons"))
-                registry.register(WorkspacePanelDescriptor(
-                    id: WorkspacePanelID(rawValue: panel.id),
-                    title: panel.title,
-                    defaultSlot: WorkspaceSlotID(rawValue: panel.slot),
-                    configure: { $0.isCollapsible = true; $0.iconAssetKey = iconKey }
-                ) {
-                    IntentInputPanel(app: app, draft: agentDraft)
-                })
-            }
-        }
+        syncContributedPanels(app: app, registry: registry)
         return registry
+    }
+
+    /// Registers the panels enabled packages contribute and drops the ones that
+    /// left. A panel whose tab is unchanged keeps its descriptor, so its view
+    /// keeps its state; the view itself follows the package's current content.
+    static func syncContributedPanels(app: EditorApplication, registry: WorkspacePanelRegistry) {
+        // The agent view exists only while an agent package is enabled.
+        let panels = app.workbenchCatalog.panels.filter { $0.content != .view(.agent) || app.isAgentEnabled }
+        for id in registry.ids where !EditorWorkspaceProfile.builtInPanelIDs.contains(id.rawValue)
+            && !panels.contains(where: { $0.id == id.rawValue }) {
+            registry.unregister(id: id)
+        }
+        for panel in panels {
+            let id = WorkspacePanelID(rawValue: panel.id)
+            let iconKey = panel.icon.map { "panel." + $0 }
+            if let iconKey, let icon = panel.icon {
+                WorkspacePanelIconCatalog.register(iconKey, .svg(named: icon, in: EditorAppResourceBundle.bundle, subdirectory: "PanelIcons"))
+            }
+            let slot = WorkspaceSlotID(rawValue: panel.slot)
+            if let existing = registry.descriptor(for: id), existing.panel.title == panel.title,
+               existing.panel.iconAssetKey == iconKey, existing.defaultSlot == slot {
+                continue
+            }
+            let draft = AgentDraft()
+            registry.register(WorkspacePanelDescriptor(id: id, title: panel.title, defaultSlot: slot,
+                                                       configure: { $0.isCollapsible = true; $0.iconAssetKey = iconKey }) {
+                if let current = app.workbenchCatalog.panel(id: panel.id) {
+                    switch current.content {
+                    case .view(.agent): IntentInputPanel(app: app, draft: draft)
+                    case .model: PluginModelPanel(app: app, state: MainActor.assumeIsolated { app.panelState(for: current) })
+                    }
+                }
+            })
+        }
     }
 
     private static func registerPanelIcons() {
@@ -244,7 +261,6 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.viewport", panelIcon("globe", subdirectory: "ToolbarIcons"))
         WorkspacePanelIconCatalog.register("panel.console", panelIcon("console"))
         WorkspacePanelIconCatalog.register("panel.assets", panelIcon("package", subdirectory: "ToolbarIcons"))
-        WorkspacePanelIconCatalog.register("panel.intent-input", panelIcon("ai-intent"))
         WorkspacePanelIconCatalog.register("panel.render-pipeline", panelIcon("render"))
         WorkspacePanelIconCatalog.register("panel.animation", panelIcon("render"))
         WorkspacePanelIconCatalog.register("panel.developer-tools", panelIcon("warning"))
@@ -337,8 +353,6 @@ enum EditorRootViewFactory {
             return L("Terminal")
         case "assets":
             return L("Assets")
-        case "intent-input":
-            return L("Harness")
         case "journal":
             return L("Journal")
         case "render-pipeline":

@@ -6,7 +6,9 @@ private import Foundation
 struct EditorAISettingsDraft: Equatable {
     private(set) var providerID: String
     var model: TextBuffer
-    var apiKey: TextBuffer
+    var agentID: String
+    /// Values typed for the provider's auth fields, by field ID; blank keeps the stored value.
+    var credentials: [String: TextBuffer] = [:]
     var autoApprove: Bool
 
     init(settings: EditorAISettings) {
@@ -14,7 +16,7 @@ struct EditorAISettingsDraft: Equatable {
         // A model has no meaning while disabled; start blank so selecting a
         // provider reliably adopts that provider's default model.
         model = TextBuffer(settings.isEnabled ? settings.model : "")
-        apiKey = ""
+        agentID = settings.agentID
         autoApprove = settings.autoApprove
     }
 
@@ -27,11 +29,12 @@ struct EditorAISettingsDraft: Equatable {
         }
         // Never carry an uncommitted secret across providers: otherwise a key
         // typed for one service could silently be stored under another.
-        apiKey = ""
+        credentials = [:]
         providerID = nextID
     }
 
-    mutating func clearCredential() {
-        apiKey = ""
+    /// Entered values, trimmed; blank fields are left out.
+    var enteredCredentials: [String: String] {
+        credentials.mapValues { $0.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.value.isEmpty }
     }
 }

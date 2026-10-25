@@ -11,6 +11,7 @@ struct EditorTitleBar: View {
     var menuPresentation: EditorMenuPresentation = .current
     let onCommand: (EditorCommand) -> Void
     private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
+    private var workbench: Observed<WorkbenchSession, WorkbenchCatalog>
 
     init(app: EditorApplication, width: Float, menuPresentation: EditorMenuPresentation = .current,
          onCommand: @escaping (EditorCommand) -> Void) {
@@ -19,6 +20,7 @@ struct EditorTitleBar: View {
         self.menuPresentation = menuPresentation
         self.onCommand = onCommand
         documents = Observed(\.snapshot, on: app.workstation.documents)
+        workbench = Observed(\.catalog, on: app.workbench)
     }
 
     var body: some View {
@@ -52,6 +54,9 @@ struct EditorTitleBar: View {
                         intent(focus).frame(width: 32).id("title-intent")
                         WindowDragRegion().flex().frame(minWidth: 8).id("title-drag-fill")
                     }
+                    if width >= 900, !workbench.wrappedValue.toolbarItems.isEmpty {
+                        PluginToolbar(items: workbench.wrappedValue.toolbarItems, onCommand: onCommand).id("title-plugins")
+                    }
                     EditorSpaceSwitcher(mode: store.workspaceMode,
                                         presentation: width < 680 ? .menu : width < 1340 ? .icons : .labels,
                                         onCommand: onCommand).id("title-spaces")
@@ -77,13 +82,9 @@ struct EditorTitleBar: View {
         let store = app.store
         let _ = store.sceneRevision
         let _ = documents.wrappedValue
-        return .make(EditorCommandContext(workspaceMode: store.workspaceMode,
-                                          layoutPreset: store.activeLayoutPreset,
-                                          playbackState: store.playbackState,
-                                          canUndo: app.canUndo,
-                                          canRedo: app.canRedo,
-                                          hasSelection: !store.selectedEntityIDs.isEmpty,
-                                          document: EditorCommandDocument(app.workstation.documents)))
+        let _ = workbench.wrappedValue
+        let _ = (store.workspaceMode, store.activeLayoutPreset, store.playbackState, store.selectedEntityIDs)
+        return .make(EditorCommandContext(app: app))
     }
 
     // MARK: Project

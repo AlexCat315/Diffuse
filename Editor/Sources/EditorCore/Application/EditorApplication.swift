@@ -477,6 +477,7 @@ public final class EditorApplication: @unchecked Sendable {
             session = Self.makeSession(
                 for: settings,
                 providers: aiProviderCatalog,
+                agent: agentCatalog.agent(id: settings.agentID),
                 pluginCapabilityExecutor: pluginCapabilityExecutor,
                 pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider(),
                 toolPolicy: toolAccess.policy

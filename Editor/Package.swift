@@ -108,6 +108,7 @@ let package = Package(
             name: "EditorUI",
             dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
                 "EditorCore",
+                .product(name: "PluginRuntime", package: "Engine"),
                 .product(name: "AudioRuntime", package: "Engine"),
                 .product(name: "StudioDocuments", package: "Documents"),
                 .product(name: "MediaRuntime", package: "Media"),

@@ -46,9 +46,9 @@ public struct AIProviderDescriptor: Sendable, Equatable, Identifiable {
     public let models: [AIModelDescriptor]
     public let authFields: [AIAuthFieldDescriptor]
 
-    /// The host-owned environment fallback for the provider's secret field.
-    public var environmentVariable: String? {
-        authFields.first { $0.isSecret }?.environmentVariable
+    /// The field whose value the session sends as the API key.
+    public var secretField: AIAuthFieldDescriptor? {
+        authFields.first { $0.isSecret }
     }
 
     public init(pluginID: String, contribution: AIProviderContribution) {

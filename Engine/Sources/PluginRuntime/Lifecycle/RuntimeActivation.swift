@@ -25,6 +25,15 @@ extension PluginManager {
         for vcs in (try? manifest.contributes.decode(VersionControlContributionPoint.self)) ?? [] {
             result.insert("onCommand:" + vcs.id)
         }
+        for command in (try? manifest.contributes.decode(CommandContributionPoint.self)) ?? [] {
+            result.insert("onCommand:" + command.id)
+        }
+        for panel in (try? manifest.contributes.decode(PanelContributionPoint.self)) ?? [] where panel.entryPoint != nil {
+            result.insert("onView:" + panel.id)
+        }
+        for view in (try? manifest.contributes.decode(DocumentViewContributionPoint.self)) ?? [] {
+            result.insert("onView:" + view.id)
+        }
         for contract in entry.inspection.contracts {
             let name = String(contract.id.dropFirst(manifest.id.count + 1))
             if name == "components" { result.insert("onStartup") }

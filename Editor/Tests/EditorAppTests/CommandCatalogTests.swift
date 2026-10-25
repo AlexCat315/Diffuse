@@ -57,6 +57,8 @@ struct CommandCatalogTests {
         #expect(ids.contains("panel.documents"))
         #expect(ids.contains("panel.files"))
         #expect(ids.contains("agent.show"))
+        // Without an agent package there is no conversation to show.
+        #expect(!make(workspace: .documents, agentPanelID: nil).entries.contains { $0.id == "agent.show" })
         // ⌘S saves the open file here; scene, selection and world commands are absent.
         for absent in ["scene.save", "scene.new", "scene.open", "edit.duplicate", "edit.delete", "select.all", "world.frame"] {
             #expect(!ids.contains(absent), "\(absent) leaked into the Write Space")
@@ -338,8 +340,10 @@ struct CommandCatalogTests {
 
     private func make(_ playback: PlaybackState = .stopped,
                       workspace: EditorWorkspaceMode = .level,
-                      preset: EditorLayoutPreset? = nil) -> EditorCommandCatalog {
-        .make(EditorCommandContext(workspaceMode: workspace, layoutPreset: preset, playbackState: playback))
+                      preset: EditorLayoutPreset? = nil,
+                      agentPanelID: String? = "intent-input") -> EditorCommandCatalog {
+        .make(EditorCommandContext(workspaceMode: workspace, layoutPreset: preset, playbackState: playback,
+                                   agentPanelID: agentPanelID))
     }
 
     private func full() -> EditorCommandCatalog {

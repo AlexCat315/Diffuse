@@ -101,6 +101,9 @@ extension EditorApplication {
                 await self.pendingAISetupTask?.value
                 await self.pendingWorldObservationTask?.value
                 try Task.checkCancellation()
+                var scope = scope
+                scope.agent.sections = await self.agentContextSections(target: target)
+                try Task.checkCancellation()
                 try self.validateAgentTaskTarget(target)
                 try await session.setWorkflowScope(scope)
                 let proposal = try await session.process(

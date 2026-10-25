@@ -25,19 +25,19 @@ public struct EditorWorkspaceProfile: Sendable {
     public let panelIDs: Set<String>
 
     public static let builtInPanelIDs: Set<String> = [
-        "viewport", "hierarchy", "inspector", "assets", "console", "intent-input",
+        "viewport", "hierarchy", "inspector", "assets", "console",
         "journal", "files", "documents", "media", "developer-tools", "animation", "render-pipeline", "terminal",
         "source-control", "outline", "tasks",
     ]
 
     public static func profile(for mode: EditorWorkspaceMode) -> Self {
         let shared: Set<String> = ["viewport", "hierarchy", "inspector", "assets", "console", "terminal",
-                                   "intent-input", "journal", "render-pipeline", "source-control"]
+                                   "journal", "render-pipeline", "source-control"]
         switch mode {
         case .documents:
-            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "terminal", "intent-input", "journal", "source-control", "outline", "tasks"])
+            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "terminal", "journal", "source-control", "outline", "tasks"])
         case .video:
-            return Self(domain: .media, features: [.media, .documents], panelIDs: ["files", "media", "documents", "console", "terminal", "intent-input", "journal", "source-control", "outline"])
+            return Self(domain: .media, features: [.media, .documents], panelIDs: ["files", "media", "documents", "console", "terminal", "journal", "source-control", "outline"])
         case .level, .scripting:
             return Self(domain: .game,
                         features: [.scene, .rendering, .animation, .simulation, .gameplay, .scripting, .gameBuild],
@@ -51,7 +51,7 @@ public struct EditorWorkspaceProfile: Sendable {
     }
 
     public func allowsPanel(_ id: String) -> Bool {
-        // Custom plugin panels keep their own registration and authorization.
+        // Plugin panels are not tied to one domain; their package decides whether to add them.
         !Self.builtInPanelIDs.contains(id) || panelIDs.contains(id)
     }
 

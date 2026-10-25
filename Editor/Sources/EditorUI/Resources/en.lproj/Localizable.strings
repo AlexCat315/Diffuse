@@ -1179,3 +1179,5 @@
 "Theme" = "Theme";
 
 "Contribution" = "Contribution";
+"Agent" = "Agent";
+"Instructions, tools and context the assistant uses." = "Instructions, tools and context the assistant uses.";

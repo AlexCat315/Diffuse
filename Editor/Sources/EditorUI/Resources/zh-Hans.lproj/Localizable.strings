@@ -1270,3 +1270,4 @@
 "Failed" = "失败";
 
 "Uninstall" = "卸载";
+"Instructions, tools and context the assistant uses." = "助手使用的指令、工具和上下文。";

@@ -18,14 +18,20 @@ extension EditorApplication {
 
     func makeAgentWorkflowScope(target: EditorAgentTaskTarget) -> SessionWorkflowScope {
         let profile = target.workspace.profile
+        let agent = agentCatalog.agent(id: store.state.assistant.aiSettings.agentID)
         return SessionWorkflowScope {
             $0.context = Self.workflowContext(for: target.workspace, scriptEntries: scene.scriptCatalogEntries)
             // Plugins still require their existing explicit authority binding.
             let pluginIDs = pluginCapabilityExecutor?.registry.allVerbs().filter {
                 pluginCapabilityExecutor?.registry.descriptor(for: $0)?.source.kind == .plugin
             } ?? []
-            $0.allowedCapabilityIDs = profile.capabilityIDs.union(pluginIDs)
-            $0.allowedProjectToolNames = profile.projectToolNames
+            // An agent can narrow what the workspace allows, never widen it; `respond`
+            // stays so a turn can always finish.
+            let capabilities = profile.capabilityIDs.union(pluginIDs)
+            $0.allowedCapabilityIDs = agent?.tools.map { capabilities.intersection($0) } ?? capabilities
+            $0.allowedProjectToolNames = agent?.tools.map { profile.projectToolNames.intersection($0.union(["respond"])) }
+                ?? profile.projectToolNames
+            $0.agent = SessionAgentContext(instructions: agent?.instructions, sources: agent?.hostSources)
             $0.selectedEntityRefs = target.selectedEntityIDs.sorted().map { "scene:\($0)" }
         }
     }

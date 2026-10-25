@@ -33,6 +33,7 @@ struct SettingsWorkflowTests {
             let app = try EditorApplication(projectDirectory: directory.path)
             app.pluginSession.providers = AIProviderCatalog(packages: [providers])
             app.pluginSession.agents = AgentCatalog(packages: [providers])
+            app.pluginSession.workbench.replace(WorkbenchCatalog(packages: [providers]))
             defer { app.shutdown() }
             try work(app, interactions)
         }
@@ -93,13 +94,13 @@ struct SettingsWorkflowTests {
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             let editor = HarnessSettingsEditor(app: app, state: Binding(get: { session.harness }, set: { session.harness = $0 }), onChange: {})
             editor.select(AIProviderCatalog.bundled.provider(id: "openai"))
-            editor.update { $0.draft.apiKey = "uncommitted-test-secret"; $0.draft.model = "" }
+            editor.update { $0.draft.credentials["api-key"] = "uncommitted-test-secret"; $0.draft.model = "" }
             #expect(app.store.aiSettings.providerID.isEmpty)
             editor.apply()
             #expect(session.harness.feedback?.isError == true)
             #expect(app.store.aiSettings.providerID.isEmpty)
             editor.select(AIProviderCatalog.bundled.provider(id: "deepseek"))
-            #expect(session.harness.draft.apiKey.isEmpty)
+            #expect(session.harness.draft.credentials.isEmpty)
             #expect(editor.isDirty)
             editor.reset()
             #expect(!editor.isDirty)
@@ -164,7 +165,7 @@ struct SettingsWorkflowTests {
             session.navigation.category = .harness
             session.harness.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
             session.harness.draft.model = "my-model"
-            session.harness.draft.apiKey = "uncommitted-test-secret"
+            session.harness.draft.credentials["api-key"] = "uncommitted-test-secret"
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             func settle() {
                 for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: 1040, height: 740) }
@@ -177,7 +178,7 @@ struct SettingsWorkflowTests {
             session.navigation.query = "模型"
             graph.install(root: SettingsPanel(app: app, session: session).theme(EditorVisualTheme.make(dark: false))); settle()
             #expect(graph.layoutSnapshot().contains { $0.debugName == "settings-harness-model" })
-            #expect(session.harness.draft.apiKey.stringValue == "uncommitted-test-secret")
+            #expect(session.harness.draft.credentials["api-key"]?.stringValue == "uncommitted-test-secret")
             #expect(session.navigation.query.stringValue == "模型")
         }
     }
@@ -231,6 +232,7 @@ struct AgentSurfaceTests {
             let plugin = try #require(BundledPlugins.plugin(id: "studio.ai"))
             let package = try PluginPackageLoader().load(at: plugin.package)
             app.pluginSession.agents = AgentCatalog(packages: [package])
+            app.pluginSession.workbench.replace(WorkbenchCatalog(packages: [package]))
             #expect(app.isAgentEnabled)
 
             let enabled = EditorRootViewFactory.makeRegistry(app: app)

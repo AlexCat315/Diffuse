@@ -21,21 +21,21 @@ import SIMDCompat
 extension EditorApplication {
     // MARK: - AI settings
 
-    /// Applies new AI settings: persists provider/model, writes the key to the credential file,
-    /// and hot-swaps the Session without restart.
+    /// Applies new AI settings: persists provider/model/agent, writes the entered auth
+    /// field values to the credential file, and hot-swaps the Session without restart.
     @discardableResult
-    public func applyAISettings(_ settings: EditorAISettings, apiKey: String) -> Bool {
+    public func applyAISettings(_ settings: EditorAISettings, credentials: [String: String] = [:]) -> Bool {
         let provider = aiProviderCatalog.provider(id: settings.providerID)
         do {
-            if settings.isEnabled, !apiKey.isEmpty {
-                try AICredentialStore.save(key: apiKey, providerID: settings.providerID)
+            let entered = credentials.filter { !$0.value.isEmpty }
+            if settings.isEnabled, !entered.isEmpty {
+                try AICredentialStore.save(entered, providerID: settings.providerID)
             }
             // Read the secret once here, on the user's Apply, so a key the
             // session cannot use fails now instead of leaving AI silently off.
             if settings.isEnabled {
-                guard let provider,
-                      AICredentialStore.load(providerID: settings.providerID,
-                                             environmentVariable: provider.environmentVariable) != nil else {
+                guard let provider, let field = provider.secretField,
+                      AICredentialStore.load(field, providerID: settings.providerID) != nil else {
                     logConsole("AI settings were not applied",
                                severity: .error,
                                detail: "Enter an API key for \(provider?.title ?? settings.providerID).")
@@ -56,6 +56,7 @@ extension EditorApplication {
         let newSession = Self.makeSession(
             for: settings,
             providers: aiProviderCatalog,
+            agent: agentCatalog.agent(id: settings.agentID),
             pluginCapabilityExecutor: pluginCapabilityExecutor,
             pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider(),
             toolPolicy: toolAccess.policy
@@ -139,14 +140,16 @@ extension EditorApplication {
     public func hasStoredAIKey(for providerID: String? = nil) -> Bool {
         let id = providerID ?? store.state.assistant.aiSettings.providerID
         guard let provider = aiProviderCatalog.provider(id: id) else { return false }
-        return AICredentialStore.hasKey(for: id, environmentVariable: provider.environmentVariable)
+        return provider.secretField.flatMap { AICredentialStore.credentialSource(for: $0, providerID: id) } != nil
     }
 
-    public func aiCredentialSource(for providerID: String? = nil) -> AICredentialSource? {
+    /// Where an auth field's value comes from; the secret field when `field` is nil.
+    public func aiCredentialSource(for providerID: String? = nil, field fieldID: String? = nil) -> AICredentialSource? {
         let id = providerID ?? store.state.assistant.aiSettings.providerID
-        guard let provider = aiProviderCatalog.provider(id: id) else { return nil }
-        return AICredentialStore.credentialSource(for: id,
-                                                  environmentVariable: provider.environmentVariable)
+        guard let provider = aiProviderCatalog.provider(id: id),
+              let field = fieldID.map({ fieldID in provider.authFields.first { $0.id == fieldID } }) ?? provider.secretField
+        else { return nil }
+        return AICredentialStore.credentialSource(for: field, providerID: id)
     }
 
     static func workflowContext(
@@ -199,6 +202,7 @@ extension EditorApplication {
 
     static func makeSession(for settings: EditorAISettings,
                             providers: AIProviderCatalog = .bundled,
+                            agent: AgentDescriptor? = nil,
                             initialWorldView: WorldView = WorldView(),
                             pluginCapabilityExecutor: PluginCapabilityExecutor? = nil,
                             pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil,
@@ -207,19 +211,21 @@ extension EditorApplication {
               let provider = providers.provider(id: settings.providerID),
               let apiFormat = apiFormat(for: provider),
               let baseURL = provider.baseURL.flatMap(URL.init(string:)),
-              let key = AICredentialStore.load(providerID: provider.id,
-                                               environmentVariable: provider.environmentVariable) else {
+              let key = provider.secretField.flatMap({ AICredentialStore.load($0, providerID: provider.id) }) else {
             return nil
         }
+        // The user's choice wins, then the agent's preference, then the provider's default.
         let model = provider.models.first { $0.id == settings.model }
+            ?? provider.models.first { $0.id == agent?.preferredModel }
             ?? provider.models.first { $0.id == provider.defaultModel }
         guard let model else { return nil }
+        let modelLimit = model.maxOutputTokens ?? 8192
         let config = SessionConfig(apiKey: key,
                                    model: model.id,
-                                   maxTokens: model.maxOutputTokens ?? 8192,
+                                   maxTokens: agent?.maxOutputTokens.map { min($0, modelLimit) } ?? modelLimit,
                                    baseURL: baseURL,
                                    apiFormat: apiFormat,
-                                   autoApprove: settings.autoApprove)
+                                   autoApprove: settings.autoApprove && (agent?.canAutoApprove ?? true))
         return Session(config: config,
                        initialWorldView: initialWorldView,
                        pluginCapabilityExecutor: pluginCapabilityExecutor,

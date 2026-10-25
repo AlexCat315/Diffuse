@@ -958,47 +958,59 @@ public actor Session {
             """)
         }
 
-        var entitySection = "Scene entities (JSON):\n\(entityIndexJSON())"
-        if let note = entityTruncationNote() { entitySection += "\n\n" + note }
-        parts.append(entitySection)
+        let agent = workflowScope.agent
+        if agent.includes(.scene) {
+            var entitySection = "Scene entities (JSON):\n\(entityIndexJSON())"
+            if let note = entityTruncationNote() { entitySection += "\n\n" + note }
+            parts.append(entitySection)
+        }
 
-        if !worldView.recentEdits.isEmpty {
+        if agent.includes(.edits), !worldView.recentEdits.isEmpty {
             let lines = worldView.recentEdits.suffix(10)
                 .map { "- \($0.summary) (rev \($0.revision))" }
                 .joined(separator: "\n")
             parts.append("Recent edits (most recent last):\n\(lines)")
         }
 
-        if !cachedMemoryView.isEmpty,
+        if agent.includes(.memory), !cachedMemoryView.isEmpty,
            let data = try? JSONSerialization.data(withJSONObject: cachedMemoryView,
                                                   options: [.prettyPrinted, .sortedKeys]),
            let str = String(data: data, encoding: .utf8) {
             parts.append("Long-term context memory (most important first):\n\(str)")
         }
 
-        if let bus = observationBus {
+        if agent.includes(.transactions), let bus = observationBus {
             let txView = bus.symbolicView(streamID: "transaction", fromSeq: 0, maxCount: 10)
             if !txView.events.isEmpty {
                 parts.append(txView.promptText())
             }
         }
 
-        if let ctx = workflowContext {
-            parts.append(ctx.systemPromptSection)
-        } else if let mode = worldView.workflowMode {
-            parts.append("Active workflow mode: \(mode)")
+        if agent.includes(.workflow) {
+            if let ctx = workflowContext {
+                parts.append(ctx.systemPromptSection)
+            } else if let mode = worldView.workflowMode {
+                parts.append("Active workflow mode: \(mode)")
+            }
         }
 
-        if !config.assetCatalog.isEmpty {
+        if agent.includes(.assets), !config.assetCatalog.isEmpty {
             parts.append(config.assetCatalog.systemPromptSection)
         }
 
-        if !(workflowScope.selectedEntityRefs ?? worldView.selectedEntityRefs).isEmpty {
+        if agent.includes(.selection), !(workflowScope.selectedEntityRefs ?? worldView.selectedEntityRefs).isEmpty {
             parts.append("Currently selected: \((workflowScope.selectedEntityRefs ?? worldView.selectedEntityRefs).joined(separator: ", "))")
         }
 
         if let locale = currentLocale, !locale.hasPrefix("en") {
             parts.append("User locale: \(locale) — write entity names, labels, and the plan summary in the user's language where appropriate.")
+        }
+
+        for section in agent.sections {
+            parts.append("\(section.title):\n\(section.text)")
+        }
+        if let instructions = agent.instructions {
+            parts.append("Agent instructions (within the rules below):\n\(instructions)")
         }
 
         parts.append("""

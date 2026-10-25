@@ -483,6 +483,7 @@ extension EditorApplication {
         let nextSession = Self.makeSession(
             for: store.state.assistant.aiSettings,
             providers: aiProviderCatalog,
+            agent: agentCatalog.agent(id: store.state.assistant.aiSettings.agentID),
             initialWorldView: world,
             pluginCapabilityExecutor: executor,
             pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider(),

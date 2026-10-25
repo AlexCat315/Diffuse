@@ -29,19 +29,10 @@ struct HarnessProviderSettings: View {
                         .frame(width: .percent(100), minWidth: 0).debugName("settings-harness-model")
                     Text(L("Use a model supported by the selected provider.")).font(.caption).foregroundColor(.onSurfaceMuted)
                 }.frame(width: .percent(100))
-                Column(alignment: .leading, spacing: 7) {
-                    Text(L("API key")).font(.label).foregroundColor(.onSurface)
-                    TextField(draftSource == nil ? L("API key")
-                        : L("API key (leave blank to use the available credential)"), text: Binding(get: { editor.draft.apiKey }, set: { value in
-                        editor.update { $0.draft.apiKey = value; $0.feedback = nil }
-                    })) { input in
-                        input.behavior.secure = true; input.behavior.clearable = true; input.events.onSubmit = editor.apply
-                    }.frame(width: .percent(100), minWidth: 0).debugName("settings-harness-key")
-                    Row(alignment: .center, spacing: 6) {
-                        Icon(UIIcons.Status.shieldCheck, size: 12, color: .onSurfaceMuted)
-                        Text(editor.credentialStatus(draftSource)).font(.caption).foregroundColor(.onSurfaceMuted).flex().frame(minWidth: 0)
-                    }
-                }.frame(width: .percent(100))
+                // One input per auth field the provider declares.
+                for field in editor.app.aiProviderCatalog.provider(id: editor.draft.providerID)?.authFields ?? [] {
+                    AnyView(credentialField(field))
+                }
             } else {
                 Text(L("Harness is disabled. Choose a provider to configure it."))
                     .font(.body).foregroundColor(.onSurfaceMuted)
@@ -58,6 +49,22 @@ struct HarnessProviderSettings: View {
                 }
             }
         }
+    }
+
+    private func credentialField(_ field: AIAuthFieldDescriptor) -> some View {
+        let source = editor.app.aiCredentialSource(for: editor.draft.providerID, field: field.id)
+        return Column(alignment: .leading, spacing: 7) {
+            Text(L(field.title)).font(.label).foregroundColor(.onSurface)
+            TextField(L(field.title), text: Binding(get: { editor.draft.credentials[field.id] ?? "" }, set: { value in
+                editor.update { $0.draft.credentials[field.id] = value; $0.feedback = nil }
+            })) { input in
+                input.behavior.secure = field.isSecret; input.behavior.clearable = true; input.events.onSubmit = editor.apply
+            }.frame(width: .percent(100), minWidth: 0).debugName("settings-harness-credential-" + field.id)
+            Row(alignment: .center, spacing: 6) {
+                Icon(UIIcons.Status.shieldCheck, size: 12, color: .onSurfaceMuted)
+                Text(editor.credentialStatus(source)).font(.caption).foregroundColor(.onSurfaceMuted).flex().frame(minWidth: 0)
+            }
+        }.frame(width: .percent(100))
     }
 
     private func providerChoice(_ provider: AIProviderDescriptor?) -> some View {
@@ -88,6 +95,15 @@ struct HarnessExecutionSettings: View {
 
     var body: some View {
         SettingsCard(L("Execution & Review")) {
+            let agents = editor.app.agentCatalog.agents
+            if agents.count > 1 {
+                SettingsField(L("Agent"), help: L("Instructions, tools and context the assistant uses.")) {
+                    Select(selection: Binding(get: { editor.app.agentCatalog.agent(id: editor.draft.agentID)?.id ?? "" }, set: { id in
+                        editor.update { $0.draft.agentID = id; $0.feedback = nil }
+                    }), options: agents.map { .init(value: $0.id, label: $0.title) }, width: 200).frame(width: 200)
+                        .debugName("settings-harness-agent")
+                }
+            }
             SettingsField(L("Automatically apply safe AI changes"), help: L("Operations that require confirmation will still wait for approval.")) {
                 Toggle(isOn: Binding(get: { editor.draft.autoApprove }, set: { value in
                     editor.update { $0.draft.autoApprove = value; $0.feedback = nil }

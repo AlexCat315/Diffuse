@@ -180,7 +180,7 @@ struct EditorStatusBar: View {
         let emphasized = reviews > 0 || working
         return Button(tooltip: available ? (store.aiStatusMessage ?? L("Harness"))
                                          : L("Set an AI provider in Settings to enable.")) {
-            onCommand(.showPanel("intent-input"))
+            if let id = app.agentPanelID { onCommand(.showPanel(id)) }
         } label: {
             Row(alignment: .center, spacing: 5) {
                 if working && reviews == 0 {

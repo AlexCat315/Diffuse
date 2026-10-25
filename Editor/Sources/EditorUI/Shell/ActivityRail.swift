@@ -45,8 +45,8 @@ struct EditorActivityRail: View {
             if controller.document.panels["inspector"] != nil {
                 panel(UIIcons.Action.sliders, title: L("Properties"), id: "inspector")
             }
-            if app.isAgentEnabled {
-                panel(UIIcons.Status.sparkles, title: L("Harness"), id: "intent-input", agent: true)
+            if let id = app.agentPanelID {
+                panel(UIIcons.Status.sparkles, title: L("Harness"), id: WorkspacePanelID(rawValue: id), agent: true)
             }
             panel(UIIcons.Editor.gitCommit, title: L("Session Journal"), id: "journal")
             if controller.document.panels["assets"] != nil {

@@ -141,6 +141,7 @@ extension EditorApplication {
             pluginSession.agents = AgentCatalog(packages: agents.values.map(\.value))
             pluginSession.agentRevision = agents.revision
         }
+        pluginSession.workbench.update(contributions.workbench.map(\.snapshot))
         displayInvalidationHandler?()
     }
 

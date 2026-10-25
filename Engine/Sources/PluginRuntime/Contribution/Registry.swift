@@ -124,6 +124,13 @@ public struct ContributionPointRegistry: Sendable {
         try! registry.register(AIProviderContributionPoint.self)
         try! registry.register(AgentContributionPoint.self)
         try! registry.register(ThemeContributionPoint.self)
+        try! registry.register(CommandContributionPoint.self)
+        try! registry.register(PanelContributionPoint.self)
+        try! registry.register(MenuContributionPoint.self)
+        try! registry.register(ToolbarContributionPoint.self)
+        try! registry.register(DocumentViewContributionPoint.self)
+        try! registry.register(AIToolContributionPoint.self)
+        try! registry.register(AIContextContributionPoint.self)
         return registry
     }()
 }

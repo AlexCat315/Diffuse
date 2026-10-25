@@ -8,6 +8,8 @@ public struct EditorAISettings: Codable, Sendable, Equatable {
     /// The plugin-contributed provider id; empty disables the assistant.
     public var providerID: String
     public var model: String
+    /// The contributed agent id; empty picks the first enabled agent.
+    public var agentID: String
     /// Compatibility preference for read-only/legacy flows. Capability-backed
     /// AI writes always escalate to the required preview confirmation policy.
     public var autoApprove: Bool
@@ -16,14 +18,16 @@ public struct EditorAISettings: Codable, Sendable, Equatable {
 
     public static let `default` = EditorAISettings()
 
-    public init(providerID: String = "", model: String = "", autoApprove: Bool = false) {
+    public init(providerID: String = "", model: String = "", agentID: String = "", autoApprove: Bool = false) {
         self.providerID = providerID
         self.model = model
+        self.agentID = agentID
         self.autoApprove = autoApprove
     }
 
     private enum CodingKeys: String, CodingKey {
         case providerID = "provider_id"
+        case agentID = "agent_id"
         case model, autoApprove
     }
 
@@ -31,6 +35,7 @@ public struct EditorAISettings: Codable, Sendable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         providerID = try c.decodeIfPresent(String.self, forKey: .providerID) ?? ""
         model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
+        agentID = try c.decodeIfPresent(String.self, forKey: .agentID) ?? ""
         autoApprove = try c.decodeIfPresent(Bool.self, forKey: .autoApprove) ?? false
     }
 }
@@ -91,7 +96,7 @@ public enum AICredentialStoreError: Error, Sendable, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case let .writeFailed(reason): "The API key could not be saved: \(reason)"
+        case let .writeFailed(reason): "The credential could not be saved: \(reason)"
         }
     }
 }
@@ -101,32 +106,39 @@ public enum AICredentialSource: Sendable, Equatable {
     case environment(variable: String)
 }
 
-/// Provider API keys in one file only the user can read
+/// Provider credentials in one file only the user can read
 /// (`~/Library/Application Support/GuavaStudio/Credentials/ai-providers.json`,
-/// mode 0600 inside a 0700 folder). Keys are never written to project files,
-/// settings JSON, prompts, logs, or plugins; environment variables fill in
-/// providers without a stored key.
+/// mode 0600 inside a 0700 folder), one value per auth field the provider
+/// declares. Values are never written to project files, settings JSON,
+/// prompts, logs, or plugins; a field's environment variable fills in a value
+/// the file does not hold.
 public enum AICredentialStore {
+    /// Provider ID → auth field ID → value.
+    typealias Values = [String: [String: String]]
+
     static var fileURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share")
         return base.appendingPathComponent("GuavaStudio/Credentials/ai-providers.json")
     }
 
-    public static func save(key: String, providerID: String) throws {
-        try save(key: key, providerID: providerID, at: fileURL)
+    /// Stores the given fields' values; an empty value removes that field.
+    public static func save(_ values: [String: String], providerID: String) throws {
+        try save(values, providerID: providerID, at: fileURL)
     }
 
-    static func save(key: String, providerID: String, at url: URL) throws {
-        var keys = stored(at: url)
-        keys[providerID] = key.isEmpty ? nil : key
+    static func save(_ values: [String: String], providerID: String, at url: URL) throws {
+        var stored = stored(at: url)
+        var fields = stored[providerID] ?? [:]
+        for (field, value) in values { fields[field] = value.isEmpty ? nil : value }
+        stored[providerID] = fields.isEmpty ? nil : fields
         do {
             let directory = url.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                     attributes: [.posixPermissions: 0o700])
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-            let data = try JSONEncoder().encode(keys)
-            // Created owner-only before the key is written, then swapped in whole.
+            let data = try JSONEncoder().encode(stored)
+            // Created owner-only before the values are written, then swapped in whole.
             let staging = directory.appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString)")
             guard FileManager.default.createFile(atPath: staging.path, contents: nil,
                                                  attributes: [.posixPermissions: 0o600]) else {
@@ -145,32 +157,30 @@ public enum AICredentialStore {
         }
     }
 
-    public static func load(providerID: String, environmentVariable: String? = nil) -> String? {
-        stored(at: fileURL)[providerID]
-            ?? environmentCredential(variable: environmentVariable,
+    public static func load(_ field: AIAuthFieldDescriptor, providerID: String) -> String? {
+        stored(at: fileURL)[providerID]?[field.id]
+            ?? environmentCredential(variable: field.environmentVariable,
                                      environment: ProcessInfo.processInfo.environment)?.key
     }
 
-    public static func credentialSource(for providerID: String,
-                                        environmentVariable: String? = nil) -> AICredentialSource? {
-        if stored(at: fileURL)[providerID] != nil { return .credentialFile }
-        return environmentCredential(variable: environmentVariable,
+    public static func credentialSource(for field: AIAuthFieldDescriptor,
+                                        providerID: String) -> AICredentialSource? {
+        if stored(at: fileURL)[providerID]?[field.id] != nil { return .credentialFile }
+        return environmentCredential(variable: field.environmentVariable,
                                      environment: ProcessInfo.processInfo.environment)
             .map { .environment(variable: $0.variable) }
     }
 
+    /// Removes every stored field of the provider.
     public static func delete(providerID: String) throws {
-        try save(key: "", providerID: providerID)
+        let fields = stored(at: fileURL)[providerID] ?? [:]
+        try save(fields.mapValues { _ in "" }, providerID: providerID)
     }
 
-    public static func hasKey(for providerID: String, environmentVariable: String? = nil) -> Bool {
-        credentialSource(for: providerID, environmentVariable: environmentVariable) != nil
-    }
-
-    static func stored(at url: URL) -> [String: String] {
+    static func stored(at url: URL) -> Values {
         guard let data = try? Data(contentsOf: url),
-              let keys = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
-        return keys.filter { !$0.value.isEmpty }
+              let values = try? JSONDecoder().decode(Values.self, from: data) else { return [:] }
+        return values.mapValues { $0.filter { !$0.value.isEmpty } }.filter { !$0.value.isEmpty }
     }
 
     static func environmentCredential(

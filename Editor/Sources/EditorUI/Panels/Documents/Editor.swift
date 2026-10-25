@@ -52,8 +52,7 @@ struct DocumentsPanel: View {
                     let _ = writing.show(document.path)
                     DocumentWritingBar(app: app, path: document.path, session: writing)
                     errorBanner(snapshot.error)
-                    DocumentEditingSurface(model: model, app: app, path: document.path, session: writing).id(document.path).flex()
-                    DocumentWritingStatus(session: writing)
+                    DocumentContent(model: model, app: app, path: document.path, session: writing).flex()
                 }
             } else {
                 if snapshot.hasComparison { tabs(snapshot, selected: nil) }

@@ -28,12 +28,15 @@ struct HarnessSettingsEditor {
         }
         let settings = EditorAISettings(providerID: draft.providerID,
                                         model: draft.providerID.isEmpty ? "" : model,
+                                        agentID: draft.agentID,
                                         autoApprove: draft.autoApprove)
-        let key = draft.apiKey.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !settings.isEnabled || !key.isEmpty || app.aiCredentialSource(for: settings.providerID) != nil else {
+        let credentials = draft.enteredCredentials
+        let secret = app.aiProviderCatalog.provider(id: settings.providerID)?.secretField
+        guard !settings.isEnabled || secret.map({ credentials[$0.id] != nil }) == true
+                || app.aiCredentialSource(for: settings.providerID) != nil else {
             update { $0.feedback = .failure(L("Enter an API key for the selected provider.")) }; return
         }
-        guard app.applyAISettings(settings, apiKey: key) else {
+        guard app.applyAISettings(settings, credentials: credentials) else {
             update { $0.feedback = .failure(L("AI settings could not be applied. See Console for details.")) }; return
         }
         update {
@@ -64,7 +67,8 @@ struct HarnessSettingsEditor {
 
 extension EditorAISettingsDraft {
     func differs(from settings: EditorAISettings) -> Bool {
-        providerID != settings.providerID || autoApprove != settings.autoApprove || !apiKey.isEmpty
+        providerID != settings.providerID || autoApprove != settings.autoApprove || agentID != settings.agentID
+            || !enteredCredentials.isEmpty
             || (!providerID.isEmpty && model.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) != settings.model)
     }
 }

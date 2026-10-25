@@ -11,6 +11,8 @@ final class DocumentWritingSession: _ObservableObject, @unchecked Sendable {
     struct State: Equatable {
         var caret = TextFieldCaretState.initial
         var wrapsLines = true
+        /// The package view showing the document instead of its text, by view ID.
+        var documentView: String?
         /// A one-shot caret placement; the id makes repeats distinct.
         var caretRequest: CaretRequest?
     }
@@ -35,6 +37,7 @@ final class DocumentWritingSession: _ObservableObject, @unchecked Sendable {
         self.path = path
         state.caret = .initial
         state.caretRequest = nil
+        state.documentView = nil
     }
 
     func attach(buffer: TextBuffer, commit: @escaping (TextBuffer) -> Void) {

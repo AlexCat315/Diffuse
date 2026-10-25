@@ -39,6 +39,7 @@ jobs:
   build:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -81,20 +82,21 @@ jobs:
         working-directory: Editor
         run: swift package resolve
 
-      - name: Build Editor and Player
+      - name: Build Editor, Player and tests
+        timeout-minutes: 25
         shell: bash
         working-directory: Editor
-        run: |
-          swift build --product EditorApp
-          swift build --product GuavaPlayer
+        run: swift build --build-tests
 
       - name: Build Plugin Host
+        timeout-minutes: 15
         shell: bash
         run: swift build --package-path Engine --product GuavaPluginHost
 
       - name: Run tests
+        timeout-minutes: 15
         shell: bash
         working-directory: Editor
         # Run the package as a whole so GameRuntimeTests and any future test
         # targets cannot be added without being exercised by CI.
-        run: swift test --no-parallel
+        run: swift test --skip-build --no-parallel

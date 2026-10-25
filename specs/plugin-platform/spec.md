@@ -269,16 +269,24 @@ AI 不是单一插件类型，而是一组贡献点。
 
 ### `guava.ai.agent/v1`
 
-声明：
+```json
+{
+  "id": "assistant",
+  "title": "Assistant",
+  "instructions": "Prefer small, reviewable changes.",
+  "model": { "preferred": "claude-sonnet-4-6", "maxOutputTokens": 4096 },
+  "tools": ["read_file", "scene.set_name", "studio.git.status"],
+  "context": ["scene", "selection", "git-summary"],
+  "canAutoApprove": false
+}
+```
 
-- id、title
-- instructions
-- model policy：preferred / fallback / temperature / max tokens
-- tool allowlist
-- context source allowlist
-- approval defaults（宿主策略只能更严格，不能被插件放宽）
-
-Agent 是声明式配置；宿主 `Session` 消费它。
+- `instructions` 追加在宿主指令之后，不能替换宿主规则。
+- `model`：用户未选模型时用 `preferred`（须为所选 provider 的模型），`maxOutputTokens` 只能压低模型上限。
+- `tools`：只能收窄工作区允许的工具（宿主工具名、capability ID）；缺省为全部，`respond` 始终保留。
+- `context`：宿主来源 `scene` / `selection` / `edits` / `memory` / `transactions` / `workflow` / `assets`，加上 `guava.ai.context/v1` 的 ID；缺省为全部宿主来源、不含插件上下文。
+- `canAutoApprove: false` 时即使用户开启自动应用也保持审阅。
+- 设置里的 `agent_id` 选择 agent，空值或已停用时取第一个。随包 AI 插件提供默认 agent。
 
 ### `guava.ai.harness/v1`
 
@@ -296,59 +304,106 @@ Agent 是声明式配置；宿主 `Session` 消费它。
 ### `guava.ai.tool/v1`
 
 ```json
-{
-  "id": "studio.git.status",
-  "title": "Git Status",
-  "description": "Read working tree status",
-  "inputSchema": { ... },
-  "capability": "studio.git.status"
-}
+{ "entryPoint": "status", "title": "Git Status", "description": "Read working tree status" }
 ```
 
-工具元数据是声明式；调用走 capability 与现有权限/审批管线。
+- 只有被 `guava.ai.tool/v1` 声明的 capability 才会提供给模型；其余导出只由编辑器调用。宿主入口与 `components` 不能声明为工具。
+- 模型看到的标题和描述取自声明；输入 schema 仍来自 WIT，调用走 capability 的权限、草案与审批。
 
 ### `guava.ai.context/v1`
 
-上下文来源：
+```json
+{ "id": "git-summary", "title": "Working Tree", "entryPoint": "context", "maxBytes": 4096 }
+```
 
-- id、title
-- 读取范围声明：workspace / selection / git / docs / memory
-- capability 入口
-- 最大返回字节、是否允许外发
-
-宿主负责读取权限、脱敏和大小限制。
+- 入口签名：`func(input: record { workspace: string, selection: string }) -> string`，`selection` 是所选场景引用的 JSON 数组。
+- 只有在 agent 的 `context` 里列出时，宿主才在每次请求前读取并随请求发给模型；超过 `maxBytes`（默认 4 KiB，最大 16 KiB）按 UTF-8 截断；读取失败只记日志、不阻断请求。
+- `id` 在已启用插件间唯一；只接受 `access: "read"` 的包。
 
 ### AI 面板
 
-AI 聊天面板通过通用 `guava.ui.panel/v1` 贡献：
+AI 聊天面板通过通用 `guava.ui.panel/v1` 贡献，内容是宿主视图 `agent`：
 
 ```json
-{
-  "id": "studio.ai.chat",
-  "title": "AI",
-  "location": "right",
-  "contentKind": "ai.chat",
-  "icon": "sparkles"
-}
+{ "id": "intent-input", "title": "Harness", "slot": "trailing", "icon": "ai-intent", "view": "agent" }
 ```
 
-宿主拥有面板外壳、焦点、布局和消息渲染；插件只提供内容类型和配置。
+宿主拥有面板外壳、焦点、布局和消息渲染；`agent` 视图只在有已启用 agent 时出现。
 
 ## UI 贡献
 
-阶段 1 只开放窄的、宿主可渲染的描述：
+不允许插件直接持有 GuavaUI 视图树。面板内容采用**宿主渲染的声明式 view model**：插件决定显示什么，宿主用自己的样式绘制，交互回到插件命令。
 
-- `guava.command/v1`
-- `guava.ui.menu/v1`
-- `guava.ui.toolbar/v1`
-- `guava.ui.panel/v1`
-- `guava.ui.documentView/v1`
+不选另外两个方案的原因：
 
-不允许插件直接持有 SwiftUI / GuavaUI 视图树。内容视图后续从以下方案中选择：
+- 隔离 webview：`GuavaUIWebView` 只有 Apple 宿主；原生视图盖在合成内容之上，不受圆角、透明度和遮挡约束，和编辑器视觉不一致；网页还会绕过宿主的进程、网络和审批边界。
+- WASM view protocol：要先定义布局、事件和增量更新协议，成本最高；声明式 view model 不够用时再在它之上扩展。
 
-1. 宿主渲染的声明式 view model
-2. 隔离 webview
-3. 受限的 WASM view protocol
+五个 UI 贡献点均已实现。
+
+### `guava.command/v1`
+
+```json
+{ "id": "refresh", "title": "Refresh Status", "keywords": "reload", "entryPoint": "command", "palette": true }
+```
+
+- `id` 在包内唯一，宿主以 `<pluginID>.<id>` 全局区分；`palette: false` 的命令只供本包面板使用。
+- 入口签名：`func(input: record { command: string, arguments: string }) -> string`，`arguments` 是 JSON 对象文本。
+- 返回 JSON 文本 `{ "message"?, "error"?, "panel"? }`：宿主显示通知或失败，`panel` 只能是本包面板。
+- 命令执行后宿主刷新本包所有 view model 面板。隐式激活事件 `onCommand:<id>`。
+
+### `guava.ui.panel/v1`
+
+```json
+{ "id": "status", "title": "Status", "slot": "leading", "icon": "console", "entryPoint": "panel" }
+```
+
+- `view`（宿主视图，目前只有 `agent`）与 `entryPoint` 二选一；`slot` 为 `leading` / `center` / `trailing` / `bottom`，缺省 `trailing`。
+- `id` 在已启用插件间唯一，不能占用宿主内置面板 ID；布局按它持久化。插件启停时面板实时加入或离开布局。
+- 入口签名：`func(input: record { panel: string }) -> string`，返回 view model JSON 文本。首次构建面板时与本包命令执行后请求，隐式激活事件 `onView:<id>`。
+
+view model：
+
+```json
+{
+  "sections": [
+    { "title": "Changes", "items": [
+      { "title": "README.md", "detail": "modified", "badge": "M", "tone": "warning",
+        "command": "open", "arguments": { "path": "README.md" } }
+    ] }
+  ],
+  "actions": [ { "title": "Refresh", "command": "refresh" } ],
+  "empty": "Working tree clean"
+}
+```
+
+- `tone`：`normal` / `muted` / `accent` / `success` / `warning` / `danger`。
+- 行与动作只能引用本包命令；`arguments` 必须是 JSON 对象（≤ 4 KiB）。
+- 上限：32 个分组、2000 行、8 个动作、文本 512 字符、整体 512 KiB。
+
+### `guava.ui.menu/v1` 与 `guava.ui.toolbar/v1`
+
+```json
+"guava.ui.menu/v1": [ { "command": "refresh", "menu": "run" } ],
+"guava.ui.toolbar/v1": [ { "command": "refresh", "icon": "toolbar-arrow-path" } ]
+```
+
+- 只能放置本包的命令。菜单项接在宿主菜单项之后（`file` / `edit` / `select` / `world` / `view` / `agent` / `run` / `window` / `help`）；已放进菜单的命令不再单独出现在命令面板。
+- 工具栏按钮在标题栏，图标取宿主工具栏图标，提示文字是命令标题。
+
+### `guava.ui.documentView/v1`
+
+```json
+{ "id": "table", "title": "Table", "extensions": ["csv"], "entryPoint": "document" }
+```
+
+- 入口签名：`func(input: record { path: string, text: string }) -> string`，返回 view model；`text` 是当前文本（含未保存修改），超过 64 KiB 不调用。
+- 路径栏为每个适用视图提供切换按钮；打开时用 view model 代替文本编辑区，切换回来恢复文本。只接受 `access: "read"` 的包。
+
+### 约束
+
+- 命令与 view model 入口只返回读结果：带 `entryPoint` 的命令和面板只接受 `access: "read"` 的包；写操作仍走审批管线。
+- 这些入口由编辑器调用，不暴露给 AI。
 
 ## 授权与安全
 

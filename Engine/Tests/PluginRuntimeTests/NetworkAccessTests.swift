@@ -56,7 +56,7 @@ struct PluginHTTPTests {
         #expect(wildcard?.host.http.first?.allows(host: "example.com") == false)
     }
 
-    @Test("an agent contribution names panels the workbench can render")
+    @Test("an agent contribution is validated")
     func agentContributionIsValidated() throws {
         func manifest(_ contributes: String) -> Data {
             Data("""
@@ -66,15 +66,19 @@ struct PluginHTTPTests {
             """.utf8)
         }
         let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
-            {"guava.agent/v1": [{"id": "assistant", "title": "Assistant",
-              "panels": [{"id": "intent-input", "title": "Harness", "slot": "trailing", "icon": "ai-intent"}]}]}
+            {"guava.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "instructions": "Be brief.",
+              "model": {"preferred": "claude-sonnet-4-6", "maxOutputTokens": 4096},
+              "tools": ["read_file", "scene.set_name"], "context": ["scene", "git-summary"]}]}
             """))
         let agents = try valid.contributes.decode(AgentContributionPoint.self)
-        #expect(agents.first?.panels.first?.id == "intent-input")
+        #expect(agents.first?.model?.preferred == "claude-sonnet-4-6")
+        #expect(agents.first?.context == ["scene", "git-summary"])
 
-        for invalid in [#"{"guava.agent/v1": [{"id": "assistant", "title": "Assistant", "panels": [{"id": "x", "title": "X", "slot": "middle"}]}]}"#,
-                        #"{"guava.agent/v1": [{"id": "assistant", "title": "Assistant", "panels": [{"id": "x", "title": "X"}, {"id": "x", "title": "Y"}]}]}"#] {
-            #expect(throws: PluginManifestValidationError.invalidContribution("guava.agent/v1")) {
+        for invalid in [#"{"guava.ai.agent/v1": [{"id": "Assistant", "title": "Assistant"}]}"#,
+                        #"{"guava.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "model": {"preferred": ""}}]}"#,
+                        #"{"guava.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "tools": ["Read File"]}]}"#,
+                        #"{"guava.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "context": ["scene", "scene"]}]}"#] {
+            #expect(throws: PluginManifestValidationError.invalidContribution("guava.ai.agent/v1")) {
                 try PluginManifestValidator.decodeAndValidate(manifest(invalid))
             }
         }

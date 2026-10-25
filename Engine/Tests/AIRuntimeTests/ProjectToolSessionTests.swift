@@ -54,6 +54,36 @@ final class ProjectToolSessionTests: XCTestCase {
         }
     }
 
+    func testAgentContextAddsInstructionsAndSectionsAndDropsUnlistedSources() async throws {
+        ProjectURLProtocol.handler = { request in
+            let data = request.httpBody ?? ProjectURLProtocol.readBody(request.httpBodyStream)
+            let body = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let prompt = try XCTUnwrap(body["system"] as? String)
+            XCTAssertTrue(prompt.contains("Agent instructions (within the rules below):\nKeep plans short."))
+            XCTAssertTrue(prompt.contains("Working Tree:\n2 files changed"))
+            XCTAssertTrue(prompt.contains("Currently selected: scene:42"))
+            XCTAssertFalse(prompt.contains("Scene entities (JSON)"))
+            XCTAssertTrue(prompt.contains("Rules:"))
+            let output: [String: Any] = ["content": [["type": "tool_use", "id": "agent", "name": "respond",
+                                                       "input": ["message": "Done"]]], "stop_reason": "tool_use"]
+            return try JSONSerialization.data(withJSONObject: output)
+        }
+        defer { ProjectURLProtocol.handler = nil }
+        let transport = URLSessionConfiguration.ephemeral
+        transport.protocolClasses = [ProjectURLProtocol.self]
+        let config = SessionConfig(apiKey: "fixture", model: "fixture", baseURL: URL(string: "https://guava.invalid")!, apiFormat: .anthropic)
+        let session = Session(config: config, urlSession: URLSession(configuration: transport))
+        await session.setProjectToolExecutor { _, _ in Data("{}".utf8) }
+        try await session.setWorkflowScope(SessionWorkflowScope {
+            $0.allowedProjectToolNames = ["respond"]
+            $0.selectedEntityRefs = ["scene:42"]
+            $0.agent = SessionAgentContext(instructions: "Keep plans short.", sources: [.selection],
+                                           sections: [SessionContextSection(title: "Working Tree", text: "2 files changed")])
+        })
+        let proposal = try await session.process(.naturalLanguage(text: "Summarize", locale: "en"))
+        XCTAssertEqual(proposal.plan.summary, "Done")
+    }
+
     func testProjectToolFailuresReturnToModelAndFinishAsAnswerInEveryProvider() async throws {
         for format in [SessionAPIFormat.anthropic, .openAICompatible, .openAIResponses] {
             var requests: [Data] = []

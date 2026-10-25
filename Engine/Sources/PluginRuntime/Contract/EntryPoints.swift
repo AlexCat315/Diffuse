@@ -2,12 +2,15 @@ import CapabilityRuntime
 import Foundation
 
 extension GuavaPluginManifest {
-    /// Domain adapters call their declared entry points directly. They must
-    /// not cause AI discovery or chat activation just because they use WIT.
+    /// Only capabilities a `guava.ai.tool/v1` names reach the model; everything
+    /// else a package exports is called by the editor alone.
     public func exposesToAI(entryPoint: String) -> Bool {
-        guard entryPoint != "components", !host.entryPoints.contains(entryPoint) else { return false }
-        let languages = (try? contributes.decode(LanguageContributionPoint.self)) ?? []
-        return !languages.contains { $0.format?.entryPoint == entryPoint }
+        aiTool(entryPoint: entryPoint) != nil
+    }
+
+    public func aiTool(entryPoint: String) -> AIToolContribution? {
+        guard entryPoint != "components", !host.entryPoints.contains(entryPoint) else { return nil }
+        return ((try? contributes.decode(AIToolContributionPoint.self)) ?? []).first { $0.entryPoint == entryPoint }
     }
 }
 

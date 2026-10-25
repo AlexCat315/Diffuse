@@ -1192,7 +1192,7 @@ private func makePluginBinding(
     composableHostCapabilities: [String] = [],
     hostGeneration: UInt64
 ) throws -> (binding: PluginExecutionBinding, contract: CapabilityContract) {
-    let manifest = GuavaPluginManifest(
+    var manifest = GuavaPluginManifest(
         id: pluginID,
         version: 1,
         name: "Test plugin",
@@ -1200,6 +1200,10 @@ private func makePluginBinding(
         access: access,
         composableHostCapabilities: composableHostCapabilities
     )
+    // Only declared tools reach the model.
+    try manifest.contributes.set(AIToolContributionPoint.self, descriptors: [
+        AIToolContribution(entryPoint: capabilityName, title: "Test Capability", description: "Test WIT-derived capability")
+    ])
     let contract = CapabilityContract(
         id: "\(pluginID).\(capabilityName)",
         title: "Test Capability",

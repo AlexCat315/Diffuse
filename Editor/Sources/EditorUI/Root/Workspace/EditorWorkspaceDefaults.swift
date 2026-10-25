@@ -64,7 +64,7 @@ enum EditorWorkspaceDefaults {
         let definitions: [(WorkspaceTabGroupID, [WorkspacePanelID], WorkspacePanelID)] = [
             ("leading", ["hierarchy", "assets", "files", "source-control", "tasks"], preset.mode == .scripting || preset.mode == .modeling ? "assets" : "hierarchy"),
             ("center", ["viewport", "documents"], "viewport"),
-            ("trailing", ["inspector", "intent-input", "outline", "journal"], "inspector"),
+            ("trailing", ["inspector", "outline", "journal"], "inspector"),
             ("bottom", ["console", "terminal", "animation", "render-pipeline", "developer-tools"],
              defaultBottomPanelID(for: preset)),
         ]

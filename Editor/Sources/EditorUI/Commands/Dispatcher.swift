@@ -256,6 +256,8 @@ enum EditorCommandDispatcher {
             guard tasks.snapshot.isAvailable else { return }
             EditorRootViewFactory.activatePanel("tasks", in: controller)
             if kind == .test { tasks.test() } else { tasks.build() }
+        case let .plugin(pluginID, name):
+            PluginCommandRunner.run(pluginID: pluginID, name: name, app: app)
         case .openDocumentation:
             openDocumentation(app: app)
         case .about:
