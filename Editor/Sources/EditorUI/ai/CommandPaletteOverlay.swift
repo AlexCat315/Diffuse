@@ -268,6 +268,9 @@ final class EditorRecentCommands {
         return created
     }
 
+    /// A closed project's object identifier can be reused by the next project.
+    static func release(_ app: EditorApplication) { byApplication[ObjectIdentifier(app)] = nil }
+
     func record(_ id: String) {
         ids.removeAll { $0 == id }
         ids.insert(id, at: 0)

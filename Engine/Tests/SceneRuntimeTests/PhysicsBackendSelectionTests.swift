@@ -126,8 +126,8 @@ struct PhysicsBackendSelectionTests {
         #expect(report.physics.constraintCount == 0)
     }
 
-    @Test("default backendKind selects Jolt when simulation runs")
-    func defaultBackendKindSelectsJoltWhenSimulationRuns() {
+    @Test("default backendKind selects the preferred engine when simulation runs")
+    func defaultBackendKindSelectsPreferredWhenSimulationRuns() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
@@ -148,7 +148,7 @@ struct PhysicsBackendSelectionTests {
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
 
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == PhysicsBackendKind.preferred.rawValue)
         #expect(report.physics.bodyCount == 1)
     }
 

@@ -17,6 +17,9 @@ final class EditorWorkbenchLink {
         return created
     }
 
+    /// A closed project's object identifier can be reused by the next project.
+    static func release(_ app: EditorApplication) { byApplication[ObjectIdentifier(app)] = nil }
+
     var maximizedPanelID: WorkspacePanelID? { controller?.maximizedPanelID }
 
     /// Writing focus: the panel fills the window; again restores the layout.

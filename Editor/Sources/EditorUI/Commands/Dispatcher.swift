@@ -74,6 +74,15 @@ enum EditorCommandDispatcher {
             EditorRootViewFactory.saveWorkspaceLayout(controller)
             app.logConsole("Workspace layout saved")
             EditorNotifications.of(app).post(L("Workspace layout saved"), id: "layout")
+        case .openFolder:
+            MainActor.assumeIsolated { EditorLaunchContext.current?.requestOpenFolder() }
+        case let .activateProject(directory):
+            MainActor.assumeIsolated {
+                do { try EditorLaunchContext.current?.activate(directory) }
+                catch {
+                    EditorNotifications.of(app).post(error.localizedDescription, id: "open-project", tone: .danger, duration: nil)
+                }
+            }
         case .closeProject:
             app.requestCloseProject()
         case .newScene:

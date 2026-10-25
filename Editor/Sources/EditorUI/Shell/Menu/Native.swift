@@ -38,9 +38,15 @@ enum EditorNativeMenuBuilder {
             menus: catalog.menus.map { NativeMenu(title: $0.title, items: nativeItems($0.items)) })
     }
 
-    /// The menu bar while no project is open: only the platform entries.
-    static func welcome(appName: String = "GuavaStudio") -> NativeMenuBar {
-        NativeMenuBar(appName: appName, applicationTitles: applicationTitles(appName: appName), menus: [])
+    /// The menu bar while no project is open: the platform entries and Open Folder.
+    static func projectless(appName: String = "GuavaStudio",
+                            onOpenFolder: @escaping @MainActor () -> Void) -> NativeMenuBar {
+        let shortcut = EditorCommandCatalog.openFolderShortcut
+        let open = NativeMenuAction(title: L("Open Folder..."), keyEquivalent: shortcut.key.equivalent,
+                                    keyModifiers: shortcut.modifiers.native, isEnabled: true, isSelected: false,
+                                    isEnabledProvider: nil, action: onOpenFolder)
+        return NativeMenuBar(appName: appName, applicationTitles: applicationTitles(appName: appName),
+                             menus: [NativeMenu(title: L("File"), items: [.action(open)])])
     }
 
     private static func applicationTitles(appName: String) -> NativeApplicationMenuTitles {

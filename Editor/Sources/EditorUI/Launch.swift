@@ -134,9 +134,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     )
     defer { context.shutdown() }
 
-    if let dir = launchOptions.projectDirectory {
-        try context.loadProject(directory: dir)
-    }
+    try context.restoreProjects(front: launchOptions.projectDirectory)
 
     if ProcessInfo.processInfo.environment["GUAVA_EDITOR_SAMPLE_HUD"] == "1" {
         let host = inGameUIHost
@@ -178,10 +176,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
                                     ? bundle.app.scene.currentInGameCanvas() : InGameCanvas())
             }
         },
-        onDisplayReady: { display in
-            display.installNativeMenuBar(EditorNativeMenuBuilder.welcome())
-            context.wireDisplay(display)
-        },
+        onDisplayReady: { display in context.wireDisplay(display) },
         onDiagnosticsReady: { context.wireDiagnostics($0) }
     ) {
         EditorLaunchRoot(context: context)

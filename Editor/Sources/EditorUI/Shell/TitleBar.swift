@@ -12,11 +12,13 @@ struct EditorTitleBar: View {
     let onCommand: (EditorCommand) -> Void
     private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
     private var workbench: Observed<WorkbenchSession, WorkbenchCatalog>
+    private var projects: Observed<EditorLaunchContext, [EditorProjectEntry]>?
 
     init(app: EditorApplication, width: Float, menuPresentation: EditorMenuPresentation = .current,
-         onCommand: @escaping (EditorCommand) -> Void) {
+         projects: EditorLaunchContext? = nil, onCommand: @escaping (EditorCommand) -> Void) {
         self.app = app
         self.width = width
+        self.projects = projects.map { Observed(\.projects, on: $0) }
         self.menuPresentation = menuPresentation
         self.onCommand = onCommand
         documents = Observed(\.snapshot, on: app.workstation.documents)
@@ -76,26 +78,50 @@ struct EditorTitleBar: View {
 
     // MARK: Project
 
-    private var project: some View {
-        let name = URL(fileURLWithPath: app.projectDirectory).lastPathComponent
-        return Button(tooltip: L("Project commands")) {
-            onCommand(.showCommandPalette(.commands))
-        } label: {
-            Row(alignment: .center, spacing: 7) {
-                Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                    Text(Self.initials(of: name)).font(.caption).foregroundColor(Color(red: 0x10, green: 0x24, blue: 0x1A))
-                }
-                .frame(width: 22, height: 22)
-                .background(UILinearGradient(Color(red: 0x5F, green: 0xAF, blue: 0x82),
-                                             EditorThemeTokens.defaultValue.assistant, angle: 135))
-                .cornerRadius(6)
-                .debugName("editor-project-mark")
-                if width >= 800 {
-                    Text(name, lineLimit: 1).font(.bodyStrong).frame(maxWidth: 150)
-                    Icon(UIIcons.Navigation.chevronDown, size: 9, color: .onSurfaceMuted)
-                }
+    @ViewBuilder private var project: some View {
+        if let projects {
+            MenuButton(entries: projectEntries(projects.wrappedValue), width: 240,
+                       accessibilityLabel: L("Projects")) { projectLabel }
+                .buttonStyle(EditorChromeButtonStyle()).debugName("editor-project")
+        } else {
+            Button(tooltip: L("Project commands")) {
+                onCommand(.showCommandPalette(.commands))
+            } label: { projectLabel }.buttonStyle(EditorChromeButtonStyle()).debugName("editor-project")
+        }
+    }
+
+    /// The window's projects, with the one in front checked, then opening and closing.
+    private func projectEntries(_ list: [EditorProjectEntry]) -> [MenuEntry] {
+        list.map { entry in
+            .item(MenuItem(id: "project:" + entry.directory, title: entry.name,
+                           isSelected: entry.directory == app.projectDirectory,
+                           action: { onCommand(.activateProject(entry.directory)) }))
+        } + [
+            .separator("project-separator"),
+            .item(MenuItem(id: "project.open", title: L("Open Folder..."),
+                           shortcut: EditorCommandCatalog.openFolderShortcut.label,
+                           action: { onCommand(.openFolder) })),
+            .item(MenuItem(id: "project.close", title: L("Close Project"), action: { onCommand(.closeProject) })),
+        ]
+    }
+
+    private var projectLabel: some View {
+        let name = projects?.wrappedValue.first { $0.directory == app.projectDirectory }?.name
+            ?? URL(fileURLWithPath: app.projectDirectory).lastPathComponent
+        return Row(alignment: .center, spacing: 7) {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Text(Self.initials(of: name)).font(.caption).foregroundColor(Color(red: 0x10, green: 0x24, blue: 0x1A))
             }
-        }.buttonStyle(EditorChromeButtonStyle()).debugName("editor-project")
+            .frame(width: 22, height: 22)
+            .background(UILinearGradient(Color(red: 0x5F, green: 0xAF, blue: 0x82),
+                                         EditorThemeTokens.defaultValue.assistant, angle: 135))
+            .cornerRadius(6)
+            .debugName("editor-project-mark")
+            if width >= 800 {
+                Text(name, lineLimit: 1).font(.bodyStrong).frame(maxWidth: 150)
+                Icon(UIIcons.Navigation.chevronDown, size: 9, color: .onSurfaceMuted)
+            }
+        }
     }
 
     /// "CrystalRush" → "CR", "my game" → "MG", "demo" → "DE".

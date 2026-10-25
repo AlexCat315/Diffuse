@@ -149,6 +149,11 @@ struct UnsavedChangesDialog: View {
         case .close:
             let windowID = request.windowID
             MainActor.assumeIsolated {
+                // Other open projects may still have unsaved changes to ask about.
+                if let projects = EditorLaunchContext.current {
+                    projects.continueClose(windowID: windowID, after: app)
+                    return
+                }
                 guard let display = AppDisplayHandleHolder.current else { return }
                 if let windowID {
                     display.closeWindow(windowID)

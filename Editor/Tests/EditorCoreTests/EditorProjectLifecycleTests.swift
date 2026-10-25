@@ -15,6 +15,23 @@ struct EditorProjectLifecycleTests {
         return url.standardizedFileURL.resolvingSymlinksInPath()
     }
 
+    @Test("any folder opens as a project, gaining only a descriptor")
+    func adoptFolder() throws {
+        let parent = try parent()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let folder = parent.appendingPathComponent("Existing Work", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        try Data("main".utf8).write(to: folder.appendingPathComponent("main.swift"))
+        let adopted = try EditorProjectLifecycle.adopt(folder)
+        #expect(adopted.name == "Existing Work")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted() == [".guava", "main.swift"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.appendingPathComponent(".guava").path) == ["project.json"])
+        #expect(try EditorProjectLifecycle.adopt(folder).descriptor == adopted.descriptor)
+        let created = try EditorProjectLifecycle.create(name: "Made", parent: parent)
+        #expect(try EditorProjectLifecycle.adopt(created.directory).descriptor == created.descriptor)
+        #expect(throws: (any Error).self) { try EditorProjectLifecycle.adopt(parent.appendingPathComponent("missing")) }
+    }
+
     @Test("blank projects open empty and never create default scripts")
     func blankProject() throws {
         let parent = try parent()

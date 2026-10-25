@@ -130,9 +130,9 @@ struct EditorInspectorSectionsTests {
         #expect(abs(binding.wrappedValue - 1.777) < 1e-4)
     }
 
-    // MARK: - Jolt Physics
+    // MARK: - Physics
 
-    @Test("physics settings inspector authors the Jolt world configuration")
+    @Test("physics settings inspector authors the preferred world configuration")
     func physicsSettingsBindings() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
@@ -163,7 +163,7 @@ struct EditorInspectorSectionsTests {
         allowSleep.wrappedValue = false
 
         let settings = try #require(adapter.scene.resource(PhysicsSettingsResource.self))
-        #expect(settings.backendKind == .jolt)
+        #expect(settings.backendKind == .preferred)
         #expect(settings.simulationMode == .preview)
         #expect(settings.gravity == SIMD3<Float>(1, -20, 2))
         #expect(abs(settings.fixedTimeStepSeconds - (1.0 / 120.0)) < 0.000_001)
@@ -176,12 +176,20 @@ struct EditorInspectorSectionsTests {
     func physicsBackendSelection() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        #expect(field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") != nil)
+        #expect((field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") != nil)
+            == (PhysicsBackendKind.preferred == .jolt))
 
         guard case let .stringOptions(backend, _) =
                 field(adapter, id, section: "physics-settings", field: "physics-backend") else {
             Issue.record("expected physics backend options"); return
         }
+        backend.wrappedValue = PhysicsBackendKind.jolt.inspectorOptionID
+        #expect(field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") != nil)
+        #if os(macOS) || os(iOS) || os(Linux)
+        backend.wrappedValue = PhysicsBackendKind.natsel.inspectorOptionID
+        #expect(adapter.scene.physicsSettings.backendKind == .natsel)
+        #expect(field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") == nil)
+        #endif
         backend.wrappedValue = PhysicsBackendKind.none.inspectorOptionID
 
         let settings = try #require(adapter.scene.resource(PhysicsSettingsResource.self))

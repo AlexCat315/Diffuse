@@ -26,6 +26,7 @@ private struct Configuration {
     }
 
     var scenario: Scenario
+    var backend: PhysicsBackendKind
     var bodyCount: Int
     var warmupFrames: Int
     var sampleFrames: Int
@@ -39,6 +40,7 @@ private struct Configuration {
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         scenario = Scenario(rawValue: environment["GUAVA_PHYSICS_SCENARIO"] ?? "") ?? .activeGrid
+        backend = PhysicsBackendKind(rawValue: environment["GUAVA_PHYSICS_BACKEND"] ?? "") ?? .preferred
         let defaultBodyCount: Int
         switch scenario {
         case .activeGrid: defaultBodyCount = 10_000
@@ -77,7 +79,7 @@ private func makeBenchmarkScene(configuration: Configuration) -> SceneRuntime {
     runtime.setPhysicsSettings(
         PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: configuration.backend,
             gravity: configuration.scenario == .activeGrid ? .zero : SIMD3<Float>(0, -9.81, 0),
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
@@ -438,7 +440,7 @@ let windowSize = max(1, configuration.sampleFrames / 10)
 let initialResident = percentile(Array(residentSamples.prefix(windowSize)).sorted(), 0.50)
 let finalResident = percentile(Array(residentSamples.suffix(windowSize)).sorted(), 0.50)
 let residentGrowth = finalResident > initialResident ? finalResident - initialResident : 0
-print("PhysicsRuntimeBenchmarks scenario=\(configuration.scenario.rawValue) bodies=\(configuration.bodyCount) frames=\(configuration.sampleFrames)")
+print("PhysicsRuntimeBenchmarks backend=\(configuration.backend.rawValue) scenario=\(configuration.scenario.rawValue) bodies=\(configuration.bodyCount) frames=\(configuration.sampleFrames)")
 print("step_ms p50=\(milliseconds(percentile(sortedSteps, 0.50))) p95=\(milliseconds(percentile(sortedSteps, 0.95))) p99=\(milliseconds(percentile(sortedSteps, 0.99)))")
 print("sync_ms p50=\(milliseconds(percentile(sortedSync, 0.50))) p95=\(milliseconds(percentile(sortedSync, 0.95))) p99=\(milliseconds(percentile(sortedSync, 0.99)))")
 print("vertex_stream_ms p50=\(milliseconds(percentile(sortedVertexStream, 0.50))) p95=\(milliseconds(percentile(sortedVertexStream, 0.95))) p99=\(milliseconds(percentile(sortedVertexStream, 0.99))) vertices_peak=\(streamedVertexPeak) checksum=\(vertexChecksum)")

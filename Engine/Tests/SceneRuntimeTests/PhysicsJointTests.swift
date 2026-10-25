@@ -73,7 +73,7 @@ struct PhysicsJointTests {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: .zero,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
@@ -116,7 +116,7 @@ struct PhysicsJointTests {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: .zero,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
@@ -172,7 +172,7 @@ struct PhysicsJointTests {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: .zero,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,

@@ -29,6 +29,8 @@ Studio contains the Engine and Editor packages plus an MCP server; the SDK is an
 - **`Editor/`** — the desktop editor application. Hosts the engine, mounts GuavaUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
 - **`GuavaMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
 
+CI checks out the exact SDK commit in `.github/sdk-revision` and validates it against `Editor/guava.json`. For local development before that SDK version is released, set `GUAVA_SDK_ROOT` to the matching SDK checkout.
+
 ---
 
 ## Architecture at a Glance

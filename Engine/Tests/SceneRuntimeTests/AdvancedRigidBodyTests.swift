@@ -9,7 +9,7 @@ struct AdvancedRigidBodyTests {
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .preferred,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1
             )
@@ -17,7 +17,7 @@ struct AdvancedRigidBodyTests {
         return runtime
     }
 
-    @Test("axis locks and maximum velocity reach Jolt")
+    @Test("axis locks and maximum velocity reach the selected backend")
     func locksAndVelocityLimit() {
         var runtime = runtime()
         let entity = runtime.createEntity()
@@ -81,7 +81,7 @@ struct AdvancedRigidBodyTests {
         var runtime = runtime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: .zero,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
@@ -107,7 +107,7 @@ struct AdvancedRigidBodyTests {
             var runtime = SceneRuntime()
             runtime.setPhysicsSettings(PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .preferred,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
                 allowSleep: false
@@ -187,7 +187,7 @@ struct AdvancedRigidBodyTests {
             var runtime = SceneRuntime()
             runtime.setPhysicsSettings(PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .preferred,
                 gravity: .zero,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
@@ -228,7 +228,7 @@ struct AdvancedRigidBodyTests {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: .zero,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,

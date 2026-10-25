@@ -91,6 +91,7 @@ let package = Package(
     dependencies: [
         .package(name: "GuavaUI", path: sdkRoot),
         .package(path: "Media"),
+        .package(url: "https://github.com/AlexCat315/Natsel.git", revision: "45e4dfb232fdcfd6676c0c0e4a9342b7678755b0"),
     ],
     targets: [
         // MARK: - C Bridges
@@ -154,6 +155,7 @@ let package = Package(
                 "SIMDCompat",
                 "EngineKernel",
                 "CJoltBridge",
+                .product(name: "Natsel", package: "Natsel", condition: .when(platforms: [.macOS, .iOS, .linux])),
             ]
         ),
         .target(

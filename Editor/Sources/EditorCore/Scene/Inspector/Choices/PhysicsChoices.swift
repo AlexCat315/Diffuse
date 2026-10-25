@@ -76,6 +76,9 @@ extension PhysicsBackendKind: EditorInspectorEnumOption {
         switch self {
         case .none: return L("None")
         case .jolt: return "Jolt"
+        #if os(macOS) || os(iOS) || os(Linux)
+        case .natsel: return "Natsel"
+        #endif
         }
     }
 }

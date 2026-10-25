@@ -43,7 +43,7 @@ struct EditorViewSwitch: View {
 
     private func segment<Label: View>(_ target: EditorStudioView, selected: Bool,
                                       @ViewBuilder label: () -> Label) -> some View {
-        Button(isSelected: selected, tooltip: target == .make ? L("Workbench") : L("Agent")) {
+        Button(isSelected: selected) {
             EditorAssistantSurface.of(app).show(target)
         } label: {
             Row(alignment: .center, spacing: 6) { label() }.padding(horizontal: 12)

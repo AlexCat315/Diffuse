@@ -18,6 +18,9 @@ final class EditorNotifications {
         return created
     }
 
+    /// A closed project's object identifier can be reused by the next project.
+    static func release(_ app: EditorApplication) { byApplication[ObjectIdentifier(app)] = nil }
+
     /// A stable `id` replaces the previous notice of the same kind instead of stacking.
     func post(_ title: String, id: String, tone: StatusTone = .info, duration: Double? = 2,
               message: String = "", action: ToastAction? = nil) {

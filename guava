@@ -1,14 +1,28 @@
 #!/bin/sh
 set -eu
 GUAVA_CHECKOUT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-# The SDK is a standalone project. Studio builds against the checkout selected
-# by GUAVA_SDK_ROOT, or fetches the version declared in Editor/guava.json.
+# The SDK is a standalone project. Studio builds against, in order: the checkout
+# in GUAVA_SDK_ROOT, the SDK selected with `guava sdk use` (a local build), the
+# GuavaUI/ checkout here, or a fresh clone of the version in Editor/guava.json.
+# Only an SDK whose version matches Editor/guava.json is used.
+sdk_version() {
+  sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1/Tools/Guava/Sources/GuavaCLI/SDK.json" 2>/dev/null | head -n 1
+}
 if [ -z "${GUAVA_SDK_ROOT:-}" ]; then
-  GUAVA_SDK_ROOT="$GUAVA_CHECKOUT/GuavaUI"
-  if [ ! -f "$GUAVA_SDK_ROOT/Tools/Guava/Sources/GuavaCLI/SDK.json" ]; then
-    GUAVA_SDK_VERSION=$(sed -n 's/.*"sdkVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$GUAVA_CHECKOUT/Editor/guava.json")
-    if [ -z "$GUAVA_SDK_VERSION" ]; then
-      echo "Editor/guava.json must declare toolchain.sdkVersion" >&2
+  GUAVA_SDK_VERSION=$(sed -n 's/.*"sdkVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$GUAVA_CHECKOUT/Editor/guava.json")
+  if [ -z "$GUAVA_SDK_VERSION" ]; then
+    echo "Editor/guava.json must declare toolchain.sdkVersion" >&2
+    exit 1
+  fi
+  GUAVA_SELECTED_SDK=$(sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${GUAVA_HOME:-$HOME/.guava}/sdk.json" 2>/dev/null | head -n 1)
+  if [ -n "$GUAVA_SELECTED_SDK" ] && [ "$(sdk_version "$GUAVA_SELECTED_SDK")" = "$GUAVA_SDK_VERSION" ]; then
+    GUAVA_SDK_ROOT="$GUAVA_SELECTED_SDK"
+  else
+    GUAVA_SDK_ROOT="$GUAVA_CHECKOUT/GuavaUI"
+  fi
+  if [ "$(sdk_version "$GUAVA_SDK_ROOT")" != "$GUAVA_SDK_VERSION" ]; then
+    if [ -d "$GUAVA_SDK_ROOT" ]; then
+      echo "GuavaUI/ provides SDK $(sdk_version "$GUAVA_SDK_ROOT"); select a $GUAVA_SDK_VERSION checkout with: guava sdk use PATH" >&2
       exit 1
     fi
     echo "Fetching Guava SDK v$GUAVA_SDK_VERSION into GuavaUI/" >&2

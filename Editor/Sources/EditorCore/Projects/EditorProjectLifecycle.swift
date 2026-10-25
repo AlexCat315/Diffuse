@@ -73,6 +73,28 @@ public enum EditorProjectLifecycle {
         return EditorProjectLocation(directory: destination, descriptor: descriptor)
     }
 
+    /// Opens any folder as a project. A folder without `.guava` gains only a
+    /// project descriptor; its own files are left as they are.
+    public static func adopt(_ directory: URL) throws -> EditorProjectLocation {
+        let directory = directory.standardizedFileURL.resolvingSymlinksInPath()
+        let manager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard manager.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw Failure("The project folder no longer exists.")
+        }
+        let guava = directory.appendingPathComponent(".guava", isDirectory: true)
+        if !manager.fileExists(atPath: guava.path) {
+            try manager.createDirectory(at: guava, withIntermediateDirectories: false)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            let name = (try? validatedName(directory.lastPathComponent)) ?? "Project"
+            try AtomicFile.write(encoder.encode(EditorProjectDescriptor(name: name, template: .blank)),
+                                 to: directory.appendingPathComponent(descriptorPath))
+        }
+        return try inspect(directory)
+    }
+
     /// Read-only validation before EditorApplication creates caches, history, or script services.
     /// Older projects with a .guava directory remain supported, including empty legacy projects.
     public static func inspect(_ directory: URL, validateScene: Bool = true) throws -> EditorProjectLocation {

@@ -20,7 +20,8 @@ final class EditorAssistantSurface: _ObservableObject {
     }
 
     struct State: Equatable {
-        var view: EditorStudioView = .make
+        /// A window opens on the agent view, as Codex does; the workbench is one switch away.
+        var view: EditorStudioView = .agent
         var canvas: Canvas = .follow
         /// Bumped to put the caret in the composer.
         var focusRequest: UInt64 = 0
@@ -40,6 +41,9 @@ final class EditorAssistantSurface: _ObservableObject {
         byApplication[key] = created
         return created
     }
+
+    /// A closed project's object identifier can be reused by the next project.
+    static func release(_ app: EditorApplication) { byApplication[ObjectIdentifier(app)] = nil }
 
     func show(_ view: EditorStudioView) { update { $0.view = view } }
     func showCanvas(_ canvas: Canvas) { update { $0.canvas = canvas } }

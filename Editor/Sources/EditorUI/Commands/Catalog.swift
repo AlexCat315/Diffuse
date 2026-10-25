@@ -87,6 +87,9 @@ struct EditorCommandMenu {
 /// The one command tree. The macOS menu bar, the Windows/Linux title-bar menu,
 /// the command palette and keyboard shortcuts are all projections of it.
 struct EditorCommandCatalog {
+    /// ⌘O opens a scene, so folders take ⌘⇧O.
+    static let openFolderShortcut = EditorShortcut(.letter("o"), [.primary, .shift])
+
     /// About and Settings. macOS places them in the application menu; other
     /// presentations fold them into Help and Edit.
     let applicationItems: [EditorCommandItem]
@@ -240,7 +243,9 @@ private struct Builder {
             entry("assets.import", "Import Assets...", "import assets 导入资源", command: .importAssets,
                   enabled: canAuthorScene),
             .separator,
-            entry("project.close", "Close Project / Welcome", "close project welcome 关闭项目", command: .closeProject),
+            entry("project.open", "Open Folder...", "open folder project 打开 文件夹 项目", EditorCommandCatalog.openFolderShortcut,
+                  command: .openFolder, enabled: EditorLaunchContext.current != nil),
+            entry("project.close", "Close Project", "close project 关闭项目", command: .closeProject),
         ])
     }
 
