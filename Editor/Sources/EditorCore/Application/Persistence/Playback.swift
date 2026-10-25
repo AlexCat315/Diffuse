@@ -26,7 +26,6 @@ extension EditorApplication {
     public func applyPlaybackState(_ next: PlaybackState) {
         let current = store.state.timing.playbackState
         guard current.canTransition(to: next) else { return }
-        guard next == .stopped || store.workspaceMode.isGameWorkspace else { return }
         EditorViewportInputController.shared.reset()
         enqueueViewportInput(.windowFocusLost)
 

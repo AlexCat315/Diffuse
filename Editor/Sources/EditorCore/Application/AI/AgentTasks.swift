@@ -17,10 +17,10 @@ extension EditorApplication {
     }
 
     func makeAgentWorkflowScope(target: EditorAgentTaskTarget) -> SessionWorkflowScope {
-        let profile = target.workspace.profile
+        let profile = target.content.profile
         let agent = agentCatalog.agent(id: store.state.assistant.aiSettings.agentID)
         return SessionWorkflowScope {
-            $0.context = Self.workflowContext(for: target.workspace, scriptEntries: scene.scriptCatalogEntries)
+            $0.context = Self.workflowContext(for: target.content, scriptEntries: scene.scriptCatalogEntries)
             // Plugins still require their existing explicit authority binding.
             let pluginIDs = pluginCapabilityExecutor?.registry.allVerbs().filter {
                 pluginCapabilityExecutor?.registry.descriptor(for: $0)?.source.kind == .plugin

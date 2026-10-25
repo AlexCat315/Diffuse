@@ -21,7 +21,7 @@ struct SettingsSidebar: View {
             Text(L("WORKSPACE")).font(.caption).foregroundColor(.onSurfaceMuted)
                 .padding(horizontal: 20, vertical: 8)
             for item in [SettingsCategory.general, .editor] { AnyView(destination(item)) }
-            Text(L("TOOLS & HARNESS")).font(.caption).foregroundColor(.onSurfaceMuted)
+            Text(L("TOOLS & ASSISTANT")).font(.caption).foregroundColor(.onSurfaceMuted)
                 .padding(EdgeInsets(top: 24, leading: 20, bottom: 8, trailing: 20))
             for item in [SettingsCategory.assistant, .plugins, .shortcuts] where item != .assistant || app.isAgentEnabled {
                 AnyView(destination(item))

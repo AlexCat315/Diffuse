@@ -14,7 +14,7 @@ struct ShortcutHandlerTests {
     @discardableResult
     private func fire(_ key: KeyEvent,
                       into r: Recorder,
-                      context: EditorCommandContext = EditorCommandContext(workspaceMode: .level, canUndo: true,
+                      context: EditorCommandContext = EditorCommandContext(content: .scene, canUndo: true,
                                                                            canRedo: true, hasSelection: true),
                       paletteVisible: Bool = false) -> Bool {
         let catalog = EditorCommandCatalog.make(context)
@@ -73,14 +73,14 @@ struct ShortcutHandlerTests {
         #expect(r.performed == ["layout.reopen"])
     }
 
-    @Test("Space and palette chords open their destinations")
-    func spacesAndPalette() {
+    @Test("Content and palette chords open their destinations")
+    func contentAndPalette() {
         let r = Recorder()
         #expect(fire(key(Scancode.digit1, [.lgui]), into: r))
-        #expect(fire(key(Scancode.digit5, [.lgui]), into: r))
+        #expect(fire(key(Scancode.digit3, [.lgui]), into: r))
         #expect(fire(key(Scancode.p, [.lgui]), into: r))
         #expect(fire(key(Scancode.p, [.lgui, .lshift]), into: r))
-        #expect(r.performed == ["workspace.documents", "workspace.modeling", "search.resources", "palette.commands"])
+        #expect(r.performed == ["content.scene", "content.timeline", "search.resources", "palette.commands"])
     }
 
     @Test("Unmodified keys and key repeats fall through")
@@ -94,18 +94,18 @@ struct ShortcutHandlerTests {
     @Test("Disabled commands consume their chord without running")
     func disabledCommandsDoNotRun() {
         let r = Recorder()
-        let empty = EditorCommandContext(workspaceMode: .level)
+        let empty = EditorCommandContext(content: .scene)
         #expect(fire(key(Scancode.delete, []), into: r, context: empty))
         #expect(fire(key(Scancode.d, [.lgui]), into: r, context: empty))
         #expect(r.performed.isEmpty)
     }
 
-    @Test("Commands outside the workspace never match")
+    @Test("Commands outside the content never match")
     func workspaceScopedChords() {
         let r = Recorder()
-        let film = EditorCommandContext(workspaceMode: .modeling)
-        #expect(!fire(key(Scancode.b, [.lgui]), into: r, context: film))
-        #expect(!fire(key(Scancode.return, [.lgui]), into: r, context: film))
+        let files = EditorCommandContext(content: .files)
+        #expect(!fire(key(Scancode.n, [.lgui]), into: r, context: files))
+        #expect(!fire(key(Scancode.o, [.lgui]), into: r, context: files))
         #expect(r.performed.isEmpty)
     }
 

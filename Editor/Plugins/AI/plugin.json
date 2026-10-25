@@ -10,7 +10,8 @@
     "guava.ai.agent/v1": [
       {
         "id": "assistant",
-        "title": "Assistant"
+        "title": "Assistant",
+        "context": ["scene", "selection", "edits", "memory", "transactions", "workflow", "assets", "git", "lore"]
       }
     ],
     "guava.ui.panel/v1": [

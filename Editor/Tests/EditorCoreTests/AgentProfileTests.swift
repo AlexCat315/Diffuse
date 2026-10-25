@@ -15,10 +15,10 @@ struct AgentProfileTests {
                                         trustedPluginHostExecutableURL: nil)
         defer { app.shutdown() }
         let target = EditorAgentTaskTarget(documentID: app.store.state.document.identity, sceneRevision: app.store.sceneRevision,
-                                           workspace: .level, selectedEntityIDs: [], primaryEntityID: nil)
+                                           content: .scene, selectedEntityIDs: [], primaryEntityID: nil)
         let open = app.makeAgentWorkflowScope(target: target)
         #expect(open.agent == SessionAgentContext())
-        #expect(open.allowedProjectToolNames == EditorWorkspaceMode.level.profile.projectToolNames)
+        #expect(open.allowedProjectToolNames == EditorContent.scene.profile.projectToolNames)
 
         app.pluginSession.agents = AgentCatalog(agents: [
             AgentDescriptor(pluginID: "fixture.agents", contribution: AgentContribution(

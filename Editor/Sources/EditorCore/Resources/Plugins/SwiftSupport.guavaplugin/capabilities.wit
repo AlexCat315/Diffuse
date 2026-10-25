@@ -7,6 +7,9 @@ interface capabilities {
   /// previous command's standard output.
   record tasks-input { request: string, stdout: string }
   tasks: func(input: tasks-input) -> string;
+  /// Shows a Package.resolved as the packages it pins.
+  record view-input { view: string, state: string, event: string, context: string }
+  view: func(input: view-input) -> string;
 }
 
 world plugin {

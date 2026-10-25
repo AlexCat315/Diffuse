@@ -46,7 +46,7 @@ struct EditorDiagnosticsTests {
         #expect(reads == 0)
         _ = try await call(app, "query_ui_state", ["ids": [id]])
         #expect(reads == 1)
-        #expect(UIDiagnosticTools.tools.allSatisfy { app.store.workspaceMode.profile.projectToolNames.contains($0.name) })
+        #expect(UIDiagnosticTools.tools.allSatisfy { app.store.content.profile.projectToolNames.contains($0.name) })
         #expect(ProjectToolset.tools.contains { $0.name == "capture_ui_trace" && $0.readOnly })
         app.setUIDiagnostics(nil)
         await #expect(throws: EditorProjectToolError.self) { _ = try await call(app, "capture_ui_trace", ["duration_ms": 50]) }

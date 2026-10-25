@@ -32,7 +32,13 @@ struct DocumentWritingBar: View {
             if let app { documentViews(app, active: state.documentView) }
             if let app {
                 separator
-                WritingAssistantButton(app: app, path: path, session: session)
+                if app.isAgentEnabled {
+                    // The assistant already sees the open file; this opens it with the caret in its composer.
+                    Button(icon: .resource(UIIcons.Status.sparkles), size: 12, tooltip: L("Ask about this file")) {
+                        EditorAssistantSurface.of(app).open()
+                        EditorAssistantSurface.of(app).focus()
+                    }.buttonStyle(ToggleButtonStyle(height: 22)).debugName("document-ask")
+                }
                 let link = EditorWorkbenchLink.of(app)
                 let focused = link.maximizedPanelID == "documents"
                 Button(icon: .resource(focused ? UIIcons.Navigation.minimize : UIIcons.Navigation.maximize), size: 12,

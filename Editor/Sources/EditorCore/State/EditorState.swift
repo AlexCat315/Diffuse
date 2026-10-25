@@ -21,105 +21,6 @@ public enum PlaybackState: String, Codable, Sendable, Hashable {
     }
 }
 
-public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {
-    case documents
-    case video
-    case level
-    case scripting
-    case modeling
-    case animation
-
-    public var isGameWorkspace: Bool { self == .level || self == .scripting }
-    public var title: String {
-        switch self {
-        case .documents: "Text and Code"
-        case .video: "Video Editing"
-        case .level: "Level Editing"
-        case .scripting: "Script Development"
-        case .modeling: "Models and Rendering"
-        case .animation: "Animation Editing"
-        }
-    }
-}
-
-public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
-    case documentsDefault
-    case videoDefault
-    case scriptingDefault
-    case levelWorkbench
-    case levelDefault
-    case levelCinematics
-    case modelingDefault
-    case modelingSculpt
-    case animationDefault
-    case animationSequencer
-
-    public var mode: EditorWorkspaceMode {
-        switch self {
-        case .documentsDefault: return .documents
-        case .videoDefault: return .video
-        case .scriptingDefault: return .scripting
-        case .levelWorkbench, .levelDefault, .levelCinematics:
-            return .level
-        case .modelingDefault, .modelingSculpt:
-            return .modeling
-        case .animationDefault, .animationSequencer:
-            return .animation
-        }
-    }
-
-    public var title: String {
-        switch self {
-        case .documentsDefault: return "Documents and Agent"
-        case .videoDefault: return "Video Timeline"
-        case .scriptingDefault: return "Code and Console"
-        case .levelWorkbench:
-            return "Scene and Scripts"
-        case .levelDefault:
-            return "Scene and Assets"
-        case .levelCinematics:
-            return "Animation and Rendering"
-        case .modelingDefault:
-            return "Assets and Rendering"
-        case .modelingSculpt:
-            return "Viewport Focus"
-        case .animationDefault:
-            return "Viewport and Animation"
-        case .animationSequencer:
-            return "Animation Details"
-        }
-    }
-
-    public static func `default`(for mode: EditorWorkspaceMode) -> EditorLayoutPreset {
-        switch mode {
-        case .documents: return .documentsDefault
-        case .video: return .videoDefault
-        case .level:
-            return .levelDefault
-        case .scripting:
-            return .scriptingDefault
-        case .modeling:
-            return .modelingDefault
-        case .animation:
-            return .animationDefault
-        }
-    }
-
-    public static func presets(for mode: EditorWorkspaceMode) -> [EditorLayoutPreset] {
-        switch mode {
-        case .documents: return [.documentsDefault]
-        case .video: return [.videoDefault]
-        case .scripting: return [.scriptingDefault]
-        case .level:
-            return [.levelDefault, .levelWorkbench, .levelCinematics]
-        case .modeling:
-            return [.modelingDefault, .modelingSculpt]
-        case .animation:
-            return [.animationDefault, .animationSequencer]
-        }
-    }
-}
-
 public enum EditorGizmoMode: String, Codable, Sendable, Hashable {
     case none
     case boxSelect
@@ -296,7 +197,8 @@ public struct EditorState: Codable, Sendable {
     public var selection = EditorSelectionState()
     public var document = EditorDocumentState()
     public var timing = EditorTimingState()
-    public var workspace = EditorWorkspaceState()
+    /// Follows the window's active center tab; the layout persists, this does not.
+    public var content: EditorContent = .scene
     public var window = EditorWindowState()
     public var viewport = EditorViewportState()
     public var shadows = EditorShadowsState()
@@ -330,7 +232,6 @@ public struct EditorState: Codable, Sendable {
         case selection
         case document
         case timing
-        case workspace
         case window
         case viewport
         case shadows
@@ -346,7 +247,6 @@ public struct EditorState: Codable, Sendable {
         selection = try container.decodeIfPresent(EditorSelectionState.self, forKey: .selection) ?? selection
         document = try container.decodeIfPresent(EditorDocumentState.self, forKey: .document) ?? document
         timing = try container.decodeIfPresent(EditorTimingState.self, forKey: .timing) ?? timing
-        workspace = try container.decodeIfPresent(EditorWorkspaceState.self, forKey: .workspace) ?? workspace
         window = try container.decodeIfPresent(EditorWindowState.self, forKey: .window) ?? window
         viewport = try container.decodeIfPresent(EditorViewportState.self, forKey: .viewport) ?? viewport
         shadows = try container.decodeIfPresent(EditorShadowsState.self, forKey: .shadows) ?? shadows
@@ -364,7 +264,6 @@ public struct EditorState: Codable, Sendable {
         try container.encode(selection, forKey: .selection)
         try container.encode(document, forKey: .document)
         try container.encode(timing, forKey: .timing)
-        try container.encode(workspace, forKey: .workspace)
         try container.encode(window, forKey: .window)
         try container.encode(viewport, forKey: .viewport)
         try container.encode(shadows, forKey: .shadows)

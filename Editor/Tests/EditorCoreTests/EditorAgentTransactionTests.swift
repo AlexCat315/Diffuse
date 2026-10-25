@@ -15,7 +15,7 @@ struct EditorAgentTransactionTests {
 
     private func begin(_ app: EditorApplication, entityID: UInt64, plan: SceneEditPlan) throws {
         let target = EditorAgentTaskTarget(documentID: app.store.state.document.identity,
-            sceneRevision: app.store.sceneRevision, workspace: .modeling,
+            sceneRevision: app.store.sceneRevision, content: .scene,
             selectedEntityIDs: [entityID], primaryEntityID: entityID)
         _ = try #require(app.agentTaskService.begin(prompt: "Rename target", target: target))
         app.agentExecution.proposal = Proposal(sessionID: "fixture", semanticIntent: "Rename target", plan: plan)
@@ -33,7 +33,7 @@ struct EditorAgentTransactionTests {
         let plan = try plan(entityID: entityID)
         try begin(app, entityID: entityID, plan: plan)
         app.store.dispatch(.setSelectedEntity(nil))
-        app.store.dispatch(.setWorkspaceMode(.scripting))
+        app.store.dispatch(.setContent(.files))
         let context = app.makeCapabilityInvocationContext(defaultSource: .ai)
         #expect(context.selectedEntityID == entityID)
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: app.scene.scene,

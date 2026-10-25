@@ -2,57 +2,31 @@ import CapabilityRuntime
 import GuavaUIAgent
 import Foundation
 
-public enum EditorAuthoringDomain: String, Codable, Sendable {
-    case documents
-    case media
-    case game
-    case creation
-
-    public var title: String {
-        switch self { case .documents: "Text and Code"; case .media: "Video Editing"; case .game: "Game Development"; case .creation: "3D Creation" }
-    }
-}
-
 public enum EditorWorkflowFeature: String, Sendable, Hashable {
     case documents, media, scene, rendering, animation, simulation, gameplay, scripting, gameBuild
 }
 
-/// Functional definition shared by the shell, inspector and assistant. A
-/// layout may arrange these tools, but cannot introduce another domain's tools.
+/// The tools one kind of content offers, shared by the inspector, commands and
+/// assistant. Panels are not gated: every panel stays reachable from any content.
 public struct EditorWorkspaceProfile: Sendable {
-    public let domain: EditorAuthoringDomain
     public let features: Set<EditorWorkflowFeature>
-    public let panelIDs: Set<String>
 
     public static let builtInPanelIDs: Set<String> = [
-        "viewport", "hierarchy", "inspector", "assets", "console",
-        "journal", "files", "documents", "media", "developer-tools", "animation", "render-pipeline", "terminal",
-        "source-control", "outline", "tasks",
+        "sidebar", "details", "viewport", "hierarchy", "assets", "console",
+        "files", "documents", "media", "developer-tools", "animation", "render-pipeline", "terminal",
+        "source-control", "tasks",
     ]
 
-    public static func profile(for mode: EditorWorkspaceMode) -> Self {
-        let shared: Set<String> = ["viewport", "hierarchy", "inspector", "assets", "console", "terminal",
-                                   "journal", "render-pipeline", "source-control"]
-        switch mode {
-        case .documents:
-            return Self(domain: .documents, features: [.documents], panelIDs: ["files", "documents", "console", "terminal", "journal", "source-control", "outline", "tasks"])
-        case .video:
-            return Self(domain: .media, features: [.media, .documents], panelIDs: ["files", "media", "documents", "console", "terminal", "journal", "source-control", "outline"])
-        case .level, .scripting:
-            return Self(domain: .game,
-                        features: [.scene, .rendering, .animation, .simulation, .gameplay, .scripting, .gameBuild],
-                        panelIDs: shared.union(["files", "documents", "developer-tools", "animation", "tasks"]))
-        case .modeling:
-            return Self(domain: .creation, features: [.scene, .rendering], panelIDs: shared)
-        case .animation:
-            return Self(domain: .creation, features: [.scene, .rendering, .animation, .simulation],
-                        panelIDs: shared.union(["animation"]))
+    public static func profile(for content: EditorContent) -> Self {
+        switch content {
+        case .scene:
+            Self(features: [.scene, .rendering, .animation, .simulation, .gameplay, .scripting, .gameBuild])
+        case .files:
+            // Scripts are files, so their tools come along.
+            Self(features: [.documents, .scripting])
+        case .timeline:
+            Self(features: [.media, .documents])
         }
-    }
-
-    public func allowsPanel(_ id: String) -> Bool {
-        // Plugin panels are not tied to one domain; their package decides whether to add them.
-        !Self.builtInPanelIDs.contains(id) || panelIDs.contains(id)
     }
 
     public var capabilityIDs: Set<String> {
@@ -92,20 +66,4 @@ public struct EditorWorkspaceProfile: Sendable {
         if features.contains(.gameBuild) { names.insert("export_project") }
         return names
     }
-
-    public func allowsInspectorSection(_ id: String) -> Bool {
-        switch id {
-        case "scripts": return features.contains(.scripting)
-        case "character-controller", "vehicle", "vehicle-controller": return features.contains(.gameplay)
-        case "physics-settings", "rigid-body", "collider", "constraint", "destructible", "soft-body",
-             "cloth", "soft-body-mesh", "ragdoll": return features.contains(.simulation)
-        case "animation-player", "animation-graph-player", "audio-source", "audio-listener":
-            return features.contains(.animation)
-        default: return true
-        }
-    }
-}
-
-extension EditorWorkspaceMode {
-    public var profile: EditorWorkspaceProfile { .profile(for: self) }
 }

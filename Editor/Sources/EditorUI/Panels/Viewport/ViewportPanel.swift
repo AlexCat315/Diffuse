@@ -33,8 +33,7 @@ struct ViewportPanel: View {
             let renderScalePercent = store.viewportRenderScalePercent
             let interactionDownscaleEnabled = store.viewportInteractionDownscaleEnabled
             let realtimeEnabled = store.viewportRealtimeEnabled
-            let physicsDebugOptions: EditorPhysicsDebugOverlayOptions = store.workspaceMode.profile.features.contains(.simulation)
-                ? store.physicsDebugOverlayOptions : []
+            let physicsDebugOptions: EditorPhysicsDebugOverlayOptions = store.physicsDebugOverlayOptions
             let physicsDebugScope = store.physicsDebugOverlayScope
             let playbackState = store.playbackState
             let selectionContainsLockedEntity = selectedEntityIDs.contains {
@@ -93,8 +92,7 @@ struct ViewportPanel: View {
                             renderScalePercent: renderScalePercent,
                             interactionDownscale: interactionDownscaleEnabled,
                             realtime: realtimeEnabled,
-                            physics: store.workspaceMode.profile.features.contains(.simulation)
-                                ? (physicsDebugOptions, physicsDebugScope) : nil),
+                            physics: (physicsDebugOptions, physicsDebugScope)),
                         actions: ViewportDisplayActions(
                             selectShading: { app.setViewportShadingMode($0) },
                             toggleGrid: { app.setViewportGridEnabled(!gridEnabled) },

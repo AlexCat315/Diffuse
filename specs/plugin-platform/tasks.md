@@ -43,7 +43,7 @@
 
 - [x] 4.1 默认 AI agent 迁移为随包 `guava.ai.agent/v1` 插件。
 - [x] 4.2 宿主 `Session` 消费 agent profile：instructions / model policy / tool allowlist / context allowlist（宿主来源与 `guava.ai.context/v1`）。
-- [x] 4.3 定义 `guava.ai.harness/v1` 输入输出；宿主执行 tool calls 与审批，harness 只返回建议。agent 用 `harness` 指定；示例 `examples/Plugins/CarefulAgent`。界面上的助手由 "Harness" 改名为 "Assistant"（助手）。
+- [x] 4.3 定义 `guava.ai.harness/v1` 输入输出；宿主执行 tool calls 与审批，harness 只返回建议。agent 用 `harness` 指定。界面上的助手由 "Harness" 改名为 "Assistant"（助手）。
 - [x] 4.4 默认 AI 面板迁移到 `guava.ui.panel/v1`（宿主视图 `agent`）；宿主渲染外壳，插件提供内容配置。
 - [ ] 4.5 测试：agent profile 生效、工具白名单、harness 不能绕过审批、面板启用/停用。
 
@@ -56,7 +56,7 @@
 - [x] 5.4 移除 `EditorVisualTheme.make` 中的默认主题硬编码，只保留回退值。
 - [x] 5.5 管理面板显示插件贡献点、激活状态、资源哈希与失败原因。
 - [x] 5.6 文档：更新 `docs/architecture/plugin-execution.md` 与 `extension-lifecycle.md`。
-- [x] 5.7 插件界面改为通用组件树 + 状态往返的视图协议（面板与文档视图共用），命令改为返回效果；`GuavaPluginKit` 提供 `UI` 构造与事件解析；示例 `examples/Plugins/Checklist`。
+- [x] 5.7 插件界面改为通用组件树 + 状态往返的视图协议（面板与文档视图共用），命令改为返回效果；`GuavaPluginKit` 提供 `UI` 构造与事件解析；真实用法：Swift Support 的 `Package.resolved` 依赖视图、Git 与 Lore 的助手上下文。
 
 ## 验证
 
@@ -67,8 +67,7 @@
 - [x] `./guava test Editor --filter FileIconTests`
 - [x] `./guava test Engine --filter WorkbenchContributionTests`
 - [x] `./guava test Editor --filter "WorkbenchContributionsTests|PluginPanelTests"`
-- [x] 端到端：`GUAVA_CHECKLIST_PLUGIN=<Checklist.guavaplugin> ./guava test Editor --filter PluginViewEndToEndTests`
-- [x] 端到端：`GUAVA_CAREFUL_AGENT_PLUGIN=<CarefulAgent.guavaplugin> ./guava test Editor --filter HarnessEndToEndTests`
+- [x] 随包插件：`./guava test Editor --filter BundledContributionsTests`（真实 Git 仓库与本仓库的 Package.resolved）
 - [ ] 手动：纯资源主题安装/切换/停用/重载；AI provider 切换；`.tex` 着色/提纲/格式化不回退。
 
 ## 本轮落地

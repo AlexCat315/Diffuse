@@ -21,8 +21,7 @@ public final class EditorStore: @unchecked Sendable {
         case selectedEntityIDs
         case playbackState
         case agentTasks
-        case workspaceMode
-        case activeLayoutPreset
+        case content
         case sceneRevision
         case lastSavedSceneRevision
         case sceneRecoveryPending
@@ -179,11 +178,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.agentTasks, old.assistant.agentTasks, new.assistant.agentTasks)
         case .beginSceneDocument:
             keys.insert(.state)
-        case .setWorkspaceMode:
-            mark(.workspaceMode, old.workspace.mode, new.workspace.mode)
-            mark(.activeLayoutPreset, old.workspace.layoutPreset, new.workspace.layoutPreset)
-        case .setActiveLayoutPreset:
-            mark(.activeLayoutPreset, old.workspace.layoutPreset, new.workspace.layoutPreset)
+        case .setContent:
+            mark(.content, old.content, new.content)
         case .setSceneRevision:
             mark(.sceneRevision, old.document.sceneRevision, new.document.sceneRevision)
         case .markSceneSaved, .markSceneUnsaved:
@@ -365,13 +361,7 @@ extension EditorStore {
     public var latestConsoleEntry: EditorConsoleEntry? { read(.consoleEntries, storage.output.consoleEntries.last) }
     public var playbackState: PlaybackState { read(.playbackState, storage.timing.playbackState) }
     public var agentTasks: [EditorAgentTask] { read(.agentTasks, storage.assistant.agentTasks) }
-    public var workspaceMode: EditorWorkspaceMode { read(.workspaceMode, storage.workspace.mode) }
-    public var activeLayoutPreset: EditorLayoutPreset { read(.activeLayoutPreset, storage.workspace.layoutPreset) }
-    public var workspace: EditorWorkspaceState {
-        registrar.access(AnyHashable(ObservationKey.workspaceMode))
-        registrar.access(AnyHashable(ObservationKey.activeLayoutPreset))
-        return storage.workspace
-    }
+    public var content: EditorContent { read(.content, storage.content) }
     public var gizmoMode: EditorGizmoMode { read(.gizmoMode, storage.viewport.gizmoMode) }
     public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.viewport.gizmoSpace) }
     public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewport.shadingMode) }

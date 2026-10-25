@@ -52,7 +52,7 @@ extension EditorApplication {
     @MainActor
     public func viewSession(for panel: ContributedPanel) -> PluginViewSession {
         viewSession(.panel(panel), entryPoint: panel.entryPoint, viewID: panel.id) { [weak self] in
-            ["workspace": .string(self?.store.state.workspace.mode.rawValue ?? "")]
+            ["content": .string(self?.store.state.content.rawValue ?? "")]
         }
     }
 

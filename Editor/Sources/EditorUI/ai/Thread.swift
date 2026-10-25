@@ -3,33 +3,42 @@ private import Foundation
 internal import GuavaUI
 internal import GuavaUIRuntime
 
-/// Owned by the registry for this project; switching context tabs keeps a draft.
-final class AgentDraft {
-    var text: TextBuffer = ""
-}
+/// The conversation with the agent: the floating sheet and the pinned column
+/// show the same thread and share one draft.
+struct AssistantThread: View {
+    enum Placement { case sheet, pinned }
 
-struct IntentInputPanel: View {
     let app: EditorApplication
-    private let draft: AgentDraft
+    let placement: Placement
     @State private var inputText: TextBuffer
     private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
+    private var surface: Observed<EditorAssistantSurface, EditorAssistantSurface.State>
 
-    init(app: EditorApplication, draft: AgentDraft) {
+    init(app: EditorApplication, placement: Placement) {
         self.app = app
-        self.draft = draft
+        self.placement = placement
         documents = Observed(\.snapshot, on: app.workstation.documents)
-        _inputText = State(wrappedValue: draft.text)
+        surface = Observed(\.state, on: EditorAssistantSurface.of(app))
+        _inputText = State(wrappedValue: EditorAssistantSurface.of(app).draft)
+    }
+
+    static func isActive(_ message: AIChatMessage) -> Bool {
+        switch message.assistantState {
+        case .thinking, .streaming, .pendingConfirmation: true
+        case .replied, .applied, .discarded, .failed, .none: false
+        }
     }
 
     var body: some View {
         StoreScope(app.store) { store in
             let busy = store.pendingConfirmationRequest != nil
-                || store.chatMessages.contains(where: isActiveAssistantMessage)
+                || store.chatMessages.contains(where: Self.isActive)
             Column(alignment: .leading, spacing: 0) {
                 EditorPanelToolbar {
                     Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.assistantColor)
                     Text(store.agentTasks.first.map { L($0.phase.title) } ?? L("New Task"))
-                        .font(.label).flex()
+                        .font(.label)
+                    Spacer(minLength: 0)
                     if store.agentTasks.first?.phase == .planning {
                         Button(L("Cancel")) { app.cancelAgentTask() }
                             .buttonStyle(EditorChromeButtonStyle(height: 22))
@@ -39,6 +48,15 @@ struct IntentInputPanel: View {
                            tooltip: L("Clear conversation"),
                            action: { store.dispatch(.clearChatHistory) })
                         .buttonStyle(EditorChromeButtonStyle(height: 22))
+                    Button(icon: .resource(placement == .pinned ? UIIcons.Shape.pinOff : UIIcons.Shape.pin), size: 12,
+                           tooltip: placement == .pinned ? L("Unpin") : L("Pin to the right")) {
+                        EditorAssistantSurface.of(app).setPinned(placement == .sheet)
+                    }.buttonStyle(EditorChromeButtonStyle(height: 22)).debugName("editor-agent-pin")
+                    if placement == .sheet {
+                        Button(icon: .resource(UIIcons.Navigation.chevronDown), size: 12, tooltip: L("Close")) {
+                            EditorAssistantSurface.of(app).close()
+                        }.buttonStyle(EditorChromeButtonStyle(height: 22)).debugName("editor-agent-fold")
+                    }
                 }
                 ScrollView(.vertical, scrollbarGutter: .stable) {
                     Column(alignment: .leading, spacing: 12) {
@@ -46,6 +64,7 @@ struct IntentInputPanel: View {
                             AgentReview(app: app, request: request).id(request.batchID)
                         }
                         if store.chatMessages.isEmpty && store.pendingConfirmationRequest == nil { introduction }
+                        for task in store.agentTasks where !task.summary.isEmpty { AnyView(taskRow(task)) }
                         for message in store.chatMessages { ChatBubble(msg: message) }
                         if store.aiStatusMessage != nil || !store.aiWarnings.isEmpty {
                             AIStatusFeedback(status: store.aiStatusMessage, warnings: store.aiWarnings)
@@ -56,6 +75,19 @@ struct IntentInputPanel: View {
             }.flex().frame(minWidth: 0, minHeight: 0).background(.surface)
                 .debugName("editor-agent-thread")
         }
+    }
+
+    /// What each task of this session settled on; the session never becomes project content.
+    private func taskRow(_ task: EditorAgentTask) -> some View {
+        Column(alignment: .leading, spacing: 4) {
+            Row(alignment: .center, spacing: 6) {
+                Text(L(task.phase.title)).font(.caption).foregroundColor(EditorThemeTokens.assistantColor)
+                Spacer(minLength: 0)
+                Text("r\(task.target.sceneRevision)").font(.mono).foregroundColor(.onSurfaceMuted)
+            }
+            Text(task.summary, lineLimit: 4).font(.caption).foregroundColor(.onSurfaceVariant)
+        }.padding(horizontal: 12, vertical: 10).frame(width: .percent(100), minWidth: 0)
+            .background(.surfaceRaised).cornerRadius(10)
     }
 
     private var introduction: some View {
@@ -76,7 +108,7 @@ struct IntentInputPanel: View {
                 }.padding(vertical: 4)
             }
             Text(L("TRY A STARTING POINT")).font(.caption).foregroundColor(.onSurfaceMuted).padding(EdgeInsets(top: 12))
-            if app.store.workspaceMode.profile.features.contains(.scene) {
+            if app.store.content == .scene {
                 suggestion(L("Explain the current selection"))
                 suggestion(L("Help me plan the next step"))
             } else {
@@ -113,6 +145,9 @@ struct IntentInputPanel: View {
                     input.layout.axis = .vertical
                     input.layout.maxVisibleLines = 5
                     input.events.onSubmit = submitInput
+                    let focus = surface.wrappedValue.focusRequest
+                    if focus > 0 { input.navigation.focusRequestID = "assistant-thread-\(focus)" }
+                    if placement == .sheet { input.events.onCancel = { EditorAssistantSurface.of(app).close() } }
                 }.font(.body).textFieldStyle(AgentComposerFieldStyle())
                     .frame(width: .percent(100), minHeight: 48).debugName("editor-agent-composer")
                 Row(alignment: .center, spacing: 5) {
@@ -141,19 +176,12 @@ struct IntentInputPanel: View {
         return L("Review before applying")
     }
 
-    private func updateDraft(_ text: TextBuffer) { draft.text = text; inputText = text }
+    private func updateDraft(_ text: TextBuffer) { EditorAssistantSurface.of(app).draft = text; inputText = text }
 
     private func submitInput() {
         let trimmed = inputText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         if app.submitNaturalLanguageIntent(trimmed) { updateDraft("") }
-    }
-
-    private func isActiveAssistantMessage(_ message: AIChatMessage) -> Bool {
-        switch message.assistantState {
-        case .thinking, .streaming, .pendingConfirmation: true
-        case .replied, .applied, .discarded, .failed, .none: false
-        }
     }
 }
 

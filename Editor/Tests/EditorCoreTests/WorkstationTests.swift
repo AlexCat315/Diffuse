@@ -3,17 +3,13 @@ import Foundation
 import GuavaUICompose
 import Testing
 
-@Test func documentsAndMediaOwnIndependentWorkflowTools() {
-    let documents = EditorWorkspaceMode.documents.profile
-    #expect(documents.capabilityIDs.isEmpty)
-    #expect(documents.projectToolNames.contains("write_file"))
-    #expect(!documents.projectToolNames.contains("compile_scripts"))
-    let media = EditorWorkspaceMode.video.profile
-    #expect(media.capabilityIDs.isEmpty)
-    #expect(media.allowsPanel("media"))
-    #expect(!media.allowsPanel("viewport"))
-    #expect(media.projectToolNames.contains("export_media"))
-    #expect(EditorLayoutPreset.default(for: .video) == .videoDefault)
+@Test func filesAndTimelineOwnIndependentWorkflowTools() {
+    let files = EditorContent.files.profile
+    #expect(files.capabilityIDs.isEmpty)
+    #expect(files.projectToolNames.contains("write_file"))
+    let timeline = EditorContent.timeline.profile
+    #expect(timeline.capabilityIDs.isEmpty)
+    #expect(timeline.projectToolNames.contains("export_media"))
 }
 
 @Test @MainActor func ordinaryDocumentToolsProtectUnsavedBuffers() async throws {
@@ -22,7 +18,7 @@ import Testing
     defer { try? FileManager.default.removeItem(at: root) }
     let app = try EditorApplication(projectDirectory: root.path)
     defer { app.shutdown() }
-    app.store.dispatch(.setWorkspaceMode(.documents))
+    app.store.dispatch(.setContent(.files))
     _ = try await app.executeProjectTool(name: "write_file", input: Data(#"{"path":"Notes.md","text":"First"}"#.utf8), origin: .mcp)
     app.workstation.documents.open("Notes.md")
     app.workstation.documents.edit("Notes.md", text: "Unsaved")

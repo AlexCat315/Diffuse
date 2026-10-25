@@ -29,7 +29,7 @@ struct AuthoringWorkspaceTests {
         func resize(to width: Float) { self.width = width }
     }
 
-    @Test("Title controls retain their order when switching between menu, icon and labeled navigation")
+    @Test("Title controls keep their order as the window narrows and widens")
     func titleResizeOrder() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -43,34 +43,25 @@ struct AuthoringWorkspaceTests {
             harness.resize(to: width)
             for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 40) }
             let frames = graph.layoutSnapshot()
-            let intent = try #require(frames.first { $0.debugName == "editor-intent-bar" })
-            let spaces = try #require(frames.first { $0.debugName == (width < 680 ? "editor-spaces-menu" : "editor-spaces") })
+            let project = try #require(frames.first { $0.debugName == "editor-project" })
             let playback = try #require(frames.first { $0.debugName == "editor-playback-toolbar" })
-            #expect(intent.absoluteFrame.maxX <= spaces.absoluteFrame.minX)
-            #expect(spaces.absoluteFrame.maxX <= playback.absoluteFrame.minX)
+            #expect(project.absoluteFrame.maxX <= playback.absoluteFrame.minX)
+            #expect(!frames.contains { $0.debugName == "editor-intent-bar" || $0.debugName == "editor-presence" })
         }
     } }
 
-    @Test("Shell persistence round-trips authoring groups and defaults without interaction modes")
+    @Test("Shell persistence holds preferences, not what the window centers on")
     func shellPersistence() throws {
-        let workspace = EditorWorkspaceState {
-            $0.mode = .animation
-            $0.layoutPreset = .animationDefault
-        }
-        let data = try JSONEncoder().encode(EditorRootViewFactory.EditorShellState(workspace: workspace))
-        let restored = try JSONDecoder().decode(EditorRootViewFactory.EditorShellState.self, from: data)
-        #expect(restored.workspace == workspace)
+        let data = try JSONEncoder().encode(EditorRootViewFactory.EditorShellState(themeMode: .light))
         let fields = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let authored = try #require(fields["workspace"] as? [String: Any])
-        #expect(Set(authored.keys) == ["mode", "layoutPreset"])
+        #expect(fields["workspace"] == nil)
+        let restored = try JSONDecoder().decode(EditorRootViewFactory.EditorShellState.self, from: data)
+        #expect(restored.themeMode == .light)
         let defaults = try JSONDecoder().decode(EditorRootViewFactory.EditorShellState.self, from: Data("{}".utf8))
-        #expect(defaults.workspace == EditorWorkspaceState())
-        let partial = Data(#"{"workspace":{"mode":"modeling"}}"#.utf8)
-        let normalized = try JSONDecoder().decode(EditorRootViewFactory.EditorShellState.self, from: partial)
-        #expect(normalized.workspace.layoutPreset == .modelingDefault)
+        #expect(defaults.themeMode == .dark)
     }
 
-    @Test("Creation commands keep Agent reachable and exclude unavailable gameplay tools")
+    @Test("Files keep Agent, playback and builds reachable without scene editing")
     func creationCommands() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -78,21 +69,18 @@ struct AuthoringWorkspaceTests {
         let app = try EditorApplication(projectDirectory: directory.path)
         defer { app.shutdown() }
         try Self.enableAgent(in: app)
-        app.store.dispatch(.setWorkspaceMode(.modeling))
+        app.store.dispatch(.setContent(.files))
         let commands = EditorCommandSearch.commands(app: app)
-        #expect(!commands.contains { $0.id == "scripts.show" || $0.id == "project.build" || $0.id.hasPrefix("playback.") })
+        #expect(commands.contains { $0.id == "project.build" })
+        #expect(!commands.contains { $0.id == "scene.save" })
         #expect(commands.contains { $0.id == "agent.show" })
         #expect(commands.first { $0.id == "agent.show" }?.keywords.contains("审阅") == true)
         let catalog = EditorCommandCatalog.make(EditorCommandContext(app: app))
-        #expect(!catalog.menus.contains { $0.id == "run" })
-        #expect(catalog.entries.contains { $0.id == "layout.modelingSculpt" })
-        var registry = ComponentRegistry.builtIn
-        registry.registerScriptCodec()
-        #expect(!InspectorWorkspacePolicy.allows(registry["script"]!, in: .modeling))
-        #expect(InspectorWorkspacePolicy.allows(registry["cloth"]!, in: .animation))
+        #expect(catalog.menus.contains { $0.id == "run" })
+        #expect(!catalog.menus.contains { $0.id == "world" })
     } }
 
-    @Test("Agent and properties share the scene, selection and existing custom docking")
+    @Test("The assistant floats on the scene, pins to the right, and leaves the scene untouched")
     func contextSwitchAndFrames() throws { try WorkbenchUITestSupport.withEnvironment { interactions, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -101,7 +89,7 @@ struct AuthoringWorkspaceTests {
         defer { app.shutdown() }
         try Self.enableAgent(in: app)
         let registry = EditorRootViewFactory.makeRegistry(app: app)
-        let document = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelDefault, registry: registry)
+        let document = EditorWorkspaceDefaults.makeDocument(registry: registry)
         let controller = WorkspaceController(document: document)
         let selected = app.store.selectedEntityIDs
         let identity = app.store.state.document.identity
@@ -114,36 +102,53 @@ struct AuthoringWorkspaceTests {
         }
         settle()
         let frames = graph.layoutSnapshot()
-        #expect(controller.document.groups["trailing"]?.panels == ["inspector", "journal", "intent-input"])
-        let tabs = try #require(frames.first { $0.debugName == "workspace-tabs-scroll-trailing" })
-        for id in ["inspector", "intent-input", "journal"] {
-            let tab = try #require(frames.first { $0.debugName == "workspace-tab-\(id)" })
-            #expect(tab.absoluteFrame.minX >= tabs.absoluteFrame.minX)
-            #expect(tab.absoluteFrame.maxX <= tabs.absoluteFrame.maxX)
-        }
+        #expect(controller.document.groups["leading"]?.panels == ["sidebar"])
+        #expect(controller.document.groups["trailing"]?.panels == ["details"])
+        // One pane per side: no tab strips there.
+        #expect(!frames.contains { $0.debugName == "workspace-tabs-scroll-trailing" || $0.debugName == "workspace-tabs-scroll-leading" })
         #expect(frames.contains { $0.debugName == "editor-title-menu" } == (EditorMenuPresentation.current == .titleBar))
         #expect(frames.contains { $0.debugName == "editor-status-problems" })
-        #expect(frames.contains { $0.debugName == "editor-status-agent" })
+        #expect(!frames.contains { $0.debugName == "editor-status-agent" })
         let title = try #require(frames.first { $0.debugName == "editor-title-bar" })
         #expect(title.absoluteFrame.height == 40)
         let rail = try #require(frames.first { $0.debugName == "editor-activity-rail" })
         #expect(rail.absoluteFrame.width == 44)
         #expect(rail.absoluteFrame.minY == 40)
-        for name in ["workspace-panel-hierarchy", "workspace-panel-viewport", "workspace-panel-inspector", "workspace-panel-console"] {
+        for name in ["workspace-panel-sidebar", "workspace-panel-viewport", "workspace-panel-details", "workspace-panel-console"] {
             let frame = try #require(frames.first { $0.debugName == name })
             #expect(frame.absoluteFrame.width >= 220)
             #expect(frame.absoluteFrame.height >= 140)
         }
-        try WorkbenchUITestSupport.activate("editor-rail-intent-input", in: graph.tree.root, registry: interactions)
+        // The composer rests on the scene, inside it.
+        let viewport = try #require(frames.first { $0.debugName == "workspace-panel-viewport" })
+        let composer = try #require(frames.first { $0.debugName == "editor-assistant" })
+        #expect(composer.absoluteFrame.minX >= viewport.absoluteFrame.minX && composer.absoluteFrame.maxX <= viewport.absoluteFrame.maxX)
+        #expect(composer.absoluteFrame.maxY <= viewport.absoluteFrame.maxY)
+        try WorkbenchUITestSupport.activate("editor-assistant-open", in: graph.tree.root, registry: interactions)
         settle()
-        #expect(controller.document.groups["trailing"]?.activePanelID == "intent-input")
-        #expect(controller.document.groups["leading"] == document.groups["leading"])
-        #expect(controller.document.slots == document.slots)
+        #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-assistant-sheet" })
+        #expect(controller.document == document)
+
+        // Pinned, the thread docks on the right in front; unpinned, it floats again.
+        let surface = EditorAssistantSurface.of(app)
+        surface.relayout = {
+            EditorRootViewFactory.syncContributedPanels(app: app, registry: registry)
+            controller.replace(EditorRootViewFactory.reconciledWorkspaceDocument(controller.document, registry: registry))
+        }
+        defer { surface.relayout = nil; surface.setPinned(false) }
+        surface.setPinned(true)
+        EditorCommandDispatcher.handle(.showAssistant, app: app, controller: controller, registry: registry, fromCommandPalette: true)
+        settle()
+        #expect(controller.document.groups["trailing"]?.panels == ["details", "intent-input"])
         #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-agent-thread" })
+        #expect(!graph.layoutSnapshot().contains { $0.debugName == "editor-assistant" })
+        surface.setPinned(false)
+        settle()
+        #expect(controller.document.groups["trailing"]?.panels == ["details"])
         EditorCommandDispatcher.handle(.showPanel("inspector"), app: app, controller: controller,
                                        registry: registry, fromCommandPalette: true)
         settle()
-        #expect(controller.document == document)
+        #expect(controller.document.groups["trailing"]?.activePanelID == "details")
         #expect(app.store.selectedEntityIDs == selected)
         #expect(app.store.state.document.identity == identity)
         #expect(app.scene.revision == revision)
@@ -162,8 +167,7 @@ struct AuthoringWorkspaceTests {
             .theme(EditorVisualTheme.make(dark: true)))
         for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 40) }
         let frames = graph.layoutSnapshot()
-        for name in ["editor-title-menu", "editor-project", "editor-intent-bar", "editor-spaces", "editor-spaces-menu",
-                     "editor-playback-toolbar"] {
+        for name in ["editor-title-menu", "editor-project", "editor-playback-toolbar"] {
             if let frame = frames.first(where: { $0.debugName == name })?.absoluteFrame {
                 #expect(frame.minX >= 0 && frame.maxX <= CGFloat(width) + 1, "\(name) overflow at \(width)")
                 #expect(frame.minY >= 0 && frame.maxY <= 40)
@@ -171,8 +175,7 @@ struct AuthoringWorkspaceTests {
         }
         // Include the custom window buttons on platforms that draw them in the title bar.
         // The complete trailing cluster must reach the window edge.
-        let trailing = frames.filter { ["editor-spaces", "editor-spaces-menu", "editor-presence",
-                                        "editor-playback-toolbar", "window-control-close"].contains($0.debugName) }
+        let trailing = frames.filter { ["editor-playback-toolbar", "window-control-close"].contains($0.debugName) }
             .map(\.absoluteFrame.maxX).max() ?? 0
         #expect(trailing >= CGFloat(width) - 12, "trailing controls end at \(trailing) in \(width)")
         let titleMenu = frames.first { $0.debugName == "editor-title-menu" }
@@ -187,7 +190,7 @@ struct AuthoringWorkspaceTests {
         #expect(title.absoluteFrame.height == 40)
     } }
 
-    @Test("The activity rail follows Space switches and panel activation")
+    @Test("The rail picks the sidebar view and folds the sidebar on a second click")
     func railFollowsLayout() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -196,10 +199,12 @@ struct AuthoringWorkspaceTests {
         defer { app.shutdown() }
         try Self.enableAgent(in: app)
         let registry = EditorRootViewFactory.makeRegistry(app: app)
-        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
-            mode: .documents, preset: .documentsDefault, registry: registry))
+        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(registry: registry))
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: EditorActivityRail(app: app, controller: controller, onCommand: { _ in }))
+        graph.install(root: EditorActivityRail(app: app, controller: controller, onCommand: { command in
+            EditorCommandDispatcher.handle(command, app: app, controller: controller, registry: registry,
+                                           fromCommandPalette: true)
+        }))
         func rail() -> [String: Bool] {
             for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: 44, height: 600) }
             var result: [String: Bool] = [:]
@@ -212,18 +217,26 @@ struct AuthoringWorkspaceTests {
             if let root = graph.tree.root { visit(root) }
             return result
         }
-        #expect(rail()["editor-rail-files"] != nil)
-        #expect(rail()["editor-rail-hierarchy"] == nil)
-
-        app.store.dispatch(.setWorkspaceMode(.level))
-        EditorRootViewFactory.resetLayout(into: controller, for: .level, preset: .levelDefault, registry: registry)
-        let level = rail()
-        #expect(level["editor-rail-files"] != nil)
-        #expect(level["editor-rail-hierarchy"] != nil)
-
-        EditorRootViewFactory.activatePanel("journal", in: controller)
-        #expect(rail()["editor-rail-journal"] == true)
-        #expect(rail()["editor-rail-intent-input"] == false)
+        let entries = rail()
+        #expect(entries["editor-rail-hierarchy"] == true)
+        #expect(entries["editor-rail-files"] == false)
+        // Properties, output and the assistant have their own places; the rail only switches the sidebar.
+        for absent in ["inspector", "console", "terminal", "journal", "intent-input"] {
+            #expect(entries["editor-rail-" + absent] == nil, "\(absent) is on the rail")
+        }
+        func handle(_ command: EditorCommand) {
+            EditorCommandDispatcher.handle(command, app: app, controller: controller, registry: registry,
+                                           fromCommandPalette: true)
+        }
+        handle(.togglePanel("files"))
+        #expect(EditorSidebar.of(controller).selection == "files")
+        #expect(rail()["editor-rail-files"] == true)
+        handle(.togglePanel("files"))
+        #expect(controller.document.groups["leading"]?.isCollapsed == true)
+        #expect(rail()["editor-rail-files"] == false)
+        EditorRootViewFactory.activatePanel("source-control", in: controller)
+        #expect(controller.document.groups["leading"]?.isCollapsed == false)
+        #expect(rail()["editor-rail-source-control"] == true)
     } }
 
     @Test("Scoped palette opens with its prefix, and closing removes the card and its modal scope")
@@ -234,8 +247,7 @@ struct AuthoringWorkspaceTests {
         let app = try EditorApplication(projectDirectory: directory.path)
         defer { app.shutdown() }
         let registry = EditorRootViewFactory.makeRegistry(app: app)
-        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
-            mode: .level, preset: .levelDefault, registry: registry))
+        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(registry: registry))
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: EditorRootView(app: app, controller: controller, registry: registry))
         func settle() {
@@ -255,24 +267,24 @@ struct AuthoringWorkspaceTests {
         #expect(!focus.hasModalScope)
     } }
 
-    @Test("Agent draft survives context tab unmount and failed submission")
+    @Test("The assistant draft survives moving between the sheet and the pinned column, and a failed submission")
     func agentDraftRetention() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path)
         defer { app.shutdown() }
-        let draft = AgentDraft()
-        draft.text = "Keep this thought"
+        let draft = EditorAssistantSurface.of(app)
+        draft.draft = "Keep this thought"
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: IntentInputPanel(app: app, draft: draft))
+        graph.install(root: AssistantThread(app: app, placement: .sheet))
         graph.computeLayout(width: 324, height: 720)
         graph.install(root: Text("Properties"))
-        graph.install(root: IntentInputPanel(app: app, draft: draft))
+        graph.install(root: AssistantThread(app: app, placement: .pinned))
         graph.computeLayout(width: 324, height: 720)
-        #expect(draft.text.stringValue == "Keep this thought")
-        #expect(!app.submitNaturalLanguageIntent(draft.text.stringValue))
-        #expect(draft.text.stringValue == "Keep this thought")
+        #expect(draft.draft.stringValue == "Keep this thought")
+        #expect(!app.submitNaturalLanguageIntent(draft.draft.stringValue))
+        #expect(draft.draft.stringValue == "Keep this thought")
     } }
 
     @Test("Pending review stays inside Agent and can be discarded without losing the draft")
@@ -285,17 +297,17 @@ struct AuthoringWorkspaceTests {
         let entityID = try #require(app.store.selectedEntityID)
         app.submitDeleteSelectedEntityIntent()
         #expect(app.store.pendingConfirmationRequest != nil)
-        let draft = AgentDraft()
-        draft.text = "Next thought"
+        let draft = EditorAssistantSurface.of(app)
+        draft.draft = "Next thought"
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: IntentInputPanel(app: app, draft: draft))
+        graph.install(root: AssistantThread(app: app, placement: .pinned))
         graph.computeLayout(width: 324, height: 720)
         #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-agent-review" })
         try WorkbenchUITestSupport.activate("editor-agent-discard-review", in: graph.tree.root, registry: interactions)
         for _ in 0..<3 { graph.recomposer.commitAll() }
         #expect(app.store.pendingConfirmationRequest == nil)
         #expect(app.scene.entitySummary(id: entityID) != nil)
-        #expect(draft.text.stringValue == "Next thought")
+        #expect(draft.draft.stringValue == "Next thought")
         #expect(!graph.layoutSnapshot().contains { $0.debugName == "editor-agent-review" })
     } }
 }

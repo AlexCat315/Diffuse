@@ -21,8 +21,7 @@ struct ProductivityRegressionTests {
         let app = try EditorApplication(projectDirectory: project.path)
         defer { app.shutdown() }
         let registry = EditorRootViewFactory.makeRegistry(app: app)
-        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
-            mode: .level, preset: .levelDefault, registry: registry))
+        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(registry: registry))
         app.store.dispatch(.setCommandPaletteVisible(true))
         try WorkbenchUITestSupport.withEnvironment { _, _ in
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())

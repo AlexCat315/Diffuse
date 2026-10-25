@@ -60,7 +60,7 @@ extension EditorApplication {
             throw EditorProjectToolError("Unknown project tool: \(name)")
         }
         let task = agentTaskService.activeTask
-        let profile = (task?.target.workspace ?? store.workspaceMode).profile
+        let profile = (task?.target.content ?? store.content).profile
         guard profile.projectToolNames.contains(name) else {
             throw EditorProjectToolError("This tool is unavailable in the active authoring workflow.")
         }

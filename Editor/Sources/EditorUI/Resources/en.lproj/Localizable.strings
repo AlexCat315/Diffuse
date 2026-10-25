@@ -657,7 +657,6 @@
 "3D Film Engine · Modeling and Rendering" = "3D Film Engine · Modeling and Rendering";
 "3D Film Engine · Animation" = "3D Film Engine · Animation";
 "Game: Scripting" = "Game: Scripting";
-"Script Development" = "Script Development";
 "Save Layout" = "Save Layout";
 "Maximize Viewport" = "Maximize Viewport";
 "Maximize Editor" = "Maximize Editor";
@@ -715,22 +714,8 @@
 /* Workspace menus and layout arrangements */
 "Workspace" = "Workspace";
 "Layout" = "Layout";
-"Level Editing" = "Level Editing";
-"Script Development" = "Script Development";
-"Models and Rendering" = "Models and Rendering";
-"Animation Editing" = "Animation Editing";
-"Code and Console" = "Code and Console";
-"Scene and Scripts" = "Scene and Scripts";
-"Scene and Assets" = "Scene and Assets";
-"Animation and Rendering" = "Animation and Rendering";
-"Assets and Rendering" = "Assets and Rendering";
-"Viewport Focus" = "Viewport Focus";
-"Viewport and Animation" = "Viewport and Animation";
-"Animation Details" = "Animation Details";
 
-"Game Development" = "Game Development";
 
-"3D Creation" = "3D Creation";
 
 "Manual Editing" = "Manual Editing";
 
@@ -781,8 +766,6 @@
 "Files" = "Files";
 "Document" = "Document";
 
-"Write" = "Write";
-"Gameplay" = "Gameplay";
 "Animate" = "Animate";
 "Video" = "Video";
 "Outline" = "Outline";
@@ -815,7 +798,6 @@
 
 "Import Assets" = "Import Assets";
 "Content Browser" = "Content Browser";
-"Text and Code" = "Text and Code";
 "Video Editing" = "Video Editing";
 
 "Project-relative file path" = "Project-relative file path";
@@ -902,7 +884,6 @@
 "Development" = "Development";
 "Project directory" = "Project directory";
 "Operating system" = "Operating system";
-"Current Space" = "Current Space";
 "Copy application and workspace information for a support request. Credentials are excluded." = "Copy application and workspace information for a support request. Credentials are excluded.";
 "Copy diagnostics" = "Copy diagnostics";
 "Search all settings…" = "Search all settings…";
@@ -928,8 +909,6 @@
 "Could not save the scene" = "Could not save the scene";
 "Show Problems" = "Show Problems";
 "Saved" = "Saved";
-"Game stopped" = "Game stopped";
-"This Space does not run the game." = "This Space does not run the game.";
 "Layout reset" = "Layout reset";
 "No closed panel to reopen" = "No closed panel to reopen";
 "Stop the game to send a request" = "Stop the game to send a request";

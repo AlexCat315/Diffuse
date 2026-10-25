@@ -28,8 +28,9 @@ struct EditorRootView: View {
                         }
                         Box(direction: .row, alignItems: .stretch, spacing: 0) {
                             EditorActivityRail(app: app, controller: controller, onCommand: cb.handleMenuCommand)
-                            WorkspaceView(controller: controller,
-                                           registry: registry, compact: windowWidth < 1000)
+                            WorkspaceView(controller: controller, compact: windowWidth < 1000) {
+                                EditorRootViewFactory.content(for: $0, controller: controller, registry: registry)
+                            }
                                 .flex()
                                 .frame(minWidth: 0, minHeight: 0)
                                 .padding(EdgeInsets(trailing: 6))
@@ -50,10 +51,14 @@ struct EditorRootView: View {
                 } portals: {
                     PortalHost()
                     EditorNotificationHost(notifications: .of(app))
+                    AssistantLayer(app: app, availableHeight: windowHeight)
                     CommandPalettePresentation(app: app, controller: controller, registry: registry,
                                                availableHeight: windowHeight)
                     if let pendingClose = store.pendingCloseRequest {
                         UnsavedChangesDialog(app: app, request: pendingClose)
+                    }
+                    if EditorAppLaunchOptions.reviewPluginPath != nil {
+                        LaunchPluginReview(app: app, management: store.pluginManagement)
                     }
                 }
             }

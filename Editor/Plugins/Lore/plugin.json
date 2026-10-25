@@ -49,6 +49,14 @@
         "ignoreFile": ".loreignore",
         "priority": 1
       }
+    ],
+    "guava.ai.context/v1": [
+      {
+        "id": "lore",
+        "title": "Lore Workspace",
+        "entryPoint": "provider",
+        "maxBytes": 4096
+      }
     ]
   },
   "runtime": {

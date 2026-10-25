@@ -47,7 +47,6 @@ struct InspectorPanel: View {
             let globalIDs: Set<String> = ["physics-settings", "particle-scalability"]
             let sections = allSections.filter {
                 globalIDs.contains($0.id) == showingSceneSettings
-                    && InspectorWorkspacePolicy.allows($0, scene: scene, in: store.workspaceMode)
                     && (sectionFilter?.contains($0.id) ?? true)
             }.map { scene.inspectorRenderers.presentedSection($0) }.sorted {
                 Self.sectionPriority($0.id) < Self.sectionPriority($1.id)
@@ -873,11 +872,9 @@ private struct ComponentActionsBar: View {
     var body: some View {
         // A bare Script component means nothing; scripts are added by choosing one.
         let addableKinds = scene.addableComponentSchemas(on: entityIDs).filter {
-            InspectorWorkspacePolicy.allows($0, in: store.workspaceMode)
-                && scene.inspectorRenderers.layout(forComponentTypeID: $0.typeID) != .scriptBindings
+            scene.inspectorRenderers.layout(forComponentTypeID: $0.typeID) != .scriptBindings
         }
-        let scripts = entityIDs.count == 1 && store.workspaceMode.profile.features.contains(.scripting)
-            ? scene.availableScriptOptions : []
+        let scripts = entityIDs.count == 1 ? scene.availableScriptOptions : []
         let containsLockedEntity = entityIDs.contains { scene.isEntityLocked($0) }
         let canAdd = isAuthoringEnabled && !containsLockedEntity && !entityIDs.isEmpty
             && !(addableKinds.isEmpty && scripts.isEmpty)

@@ -7,7 +7,6 @@ import Foundation
 
 enum EditorRootViewFactory {
     struct EditorShellState: Codable, Sendable {
-        var workspace = EditorWorkspaceState()
         var themeID = EditorThemeCatalog.defaultThemeID
         var themeMode: EditorThemeMode
         var language: EditorLanguage
@@ -16,15 +15,13 @@ enum EditorRootViewFactory {
         var aiSettings: EditorAISettings
         var capabilitySettings: EditorCapabilitySettings
 
-        init(workspace: EditorWorkspaceState,
-             themeMode: EditorThemeMode = .dark,
+        init(themeMode: EditorThemeMode = .dark,
              themeID: String = EditorThemeCatalog.defaultThemeID,
              language: EditorLanguage = .system,
              vsyncMode: EditorVSyncMode = .enabled,
              primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
              aiSettings: EditorAISettings = .default,
              capabilitySettings: EditorCapabilitySettings = .default) {
-            self.workspace = workspace
             self.themeMode = themeMode
             self.themeID = themeID
             self.language = language
@@ -35,7 +32,6 @@ enum EditorRootViewFactory {
         }
 
         enum CodingKeys: String, CodingKey {
-            case workspace
             case themeMode, themeID
             case language
             case vsyncMode
@@ -46,7 +42,6 @@ enum EditorRootViewFactory {
 
         func encode(to encoder: Encoder) throws {
             var values = encoder.container(keyedBy: CodingKeys.self)
-            try values.encode(workspace, forKey: .workspace)
             try values.encode(themeMode, forKey: .themeMode)
             try values.encode(themeID, forKey: .themeID)
             try values.encode(language, forKey: .language)
@@ -58,7 +53,6 @@ enum EditorRootViewFactory {
 
         init(from decoder: Decoder) throws {
             let values = try decoder.container(keyedBy: CodingKeys.self)
-            workspace = try values.decodeIfPresent(EditorWorkspaceState.self, forKey: .workspace) ?? workspace
             themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
             themeID = try values.decodeIfPresent(String.self, forKey: .themeID) ?? themeID
             language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
@@ -75,47 +69,28 @@ enum EditorRootViewFactory {
         }
     }
 
-    static func makeController(for mode: EditorWorkspaceMode,
-                               preset: EditorLayoutPreset,
-                               registry: WorkspacePanelRegistry) -> WorkspaceController {
-        if let saved = loadSavedWorkspaceDocument(for: mode, preset: preset) {
-            let document = reconciledWorkspaceDocument(saved, registry: EditorWorkspacePanelPolicy.registry(for: mode, from: registry))
-            if document != saved {
-                saveWorkspaceDocument(document, for: mode, preset: preset)
-            }
+    static func makeController(registry: WorkspacePanelRegistry) -> WorkspaceController {
+        if let saved = loadSavedWorkspaceDocument() {
+            let document = reconciledWorkspaceDocument(saved, registry: registry)
+            if document != saved { saveWorkspaceDocument(document) }
             return WorkspaceController(document: document)
         }
-        let document = EditorWorkspaceDefaults.makeDocument(mode: mode,
-                                                            preset: preset,
-                                                            registry: registry)
-        saveWorkspaceDocument(document, for: mode, preset: preset)
+        let document = EditorWorkspaceDefaults.makeDocument(registry: registry)
+        saveWorkspaceDocument(document)
         return WorkspaceController(document: document)
     }
 
-    static func loadLayoutPreset(into controller: WorkspaceController,
-                                 for mode: EditorWorkspaceMode,
-                                 preset: EditorLayoutPreset,
-                                 registry: WorkspacePanelRegistry) {
-        let document: WorkspaceDocument
-        if let saved = loadSavedWorkspaceDocument(for: mode, preset: preset) {
-            document = reconciledWorkspaceDocument(saved, registry: EditorWorkspacePanelPolicy.registry(for: mode, from: registry))
-        } else {
-            document = EditorWorkspaceDefaults.makeDocument(mode: mode, preset: preset, registry: registry)
-        }
+    static func resetLayout(into controller: WorkspaceController, registry: WorkspacePanelRegistry) {
+        let document = EditorWorkspaceDefaults.makeDocument(registry: registry)
         controller.replace(document)
-        saveWorkspaceDocument(controller.document, for: mode, preset: preset)
+        saveWorkspaceDocument(document)
     }
 
-    static func resetLayout(into controller: WorkspaceController,
-                            for mode: EditorWorkspaceMode,
-                            preset: EditorLayoutPreset,
-                            registry: WorkspacePanelRegistry) {
-        let document = EditorWorkspaceDefaults.makeDocument(mode: mode, preset: preset, registry: registry)
-        controller.replace(document)
-        saveWorkspaceDocument(document, for: mode, preset: preset)
-    }
-
-    static func activatePanel(_ id: WorkspacePanelID, in controller: WorkspaceController) {
+    /// A sidebar view opens in the sidebar pane; the inspector and the outline
+    /// live in the details pane.
+    static func activatePanel(_ requested: WorkspacePanelID, in controller: WorkspaceController) {
+        let id = dockedPanel(for: requested, in: controller)
+        if id == EditorSidebar.panelID, requested != id { EditorSidebar.of(controller).select(requested) }
         if let maximized = controller.maximizedPanelID, maximized != id {
             _ = controller.dispatch(.restoreMaximized)
         }
@@ -125,6 +100,23 @@ enum EditorRootViewFactory {
         guard let group = controller.document.groupContaining(panelID: id) else { return }
         if group.isCollapsed { _ = controller.dispatch(.expand(group.id)) }
         _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: id))
+    }
+
+    /// The docked panel that shows `id`: itself, the details pane for the
+    /// inspector and outline, or the sidebar pane for a sidebar view.
+    static func dockedPanel(for id: WorkspacePanelID, in controller: WorkspaceController) -> WorkspacePanelID {
+        let panels = controller.document.panels
+        guard panels[id] == nil else { return id }
+        if id == "inspector" || id == "outline", panels["details"] != nil { return "details" }
+        return panels[EditorSidebar.panelID] != nil ? EditorSidebar.panelID : id
+    }
+
+    /// What the window shows for a docked panel. The sidebar pane renders the
+    /// view the rail picked.
+    static func content(for id: WorkspacePanelID, controller: WorkspaceController,
+                        registry: WorkspacePanelRegistry) -> AnyView {
+        guard id == EditorSidebar.panelID else { return registry.make(id) }
+        return AnyView(EditorSidebarPane(sidebar: .of(controller), registry: registry))
     }
 
     static func localizeWorkspaceTitles(in controller: WorkspaceController,
@@ -156,12 +148,20 @@ enum EditorRootViewFactory {
             WorkspacePanelDescriptor(id: "hierarchy", title: localizedPanelTitle(for: "hierarchy"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.hierarchy" }) {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
-            WorkspacePanelDescriptor(id: "inspector", title: localizedPanelTitle(for: "inspector"), defaultSlot: .trailing, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.inspector" }) {
-                InspectorPanel(store: app.store, scene: app.scene, scriptWorkspace: app.workstation.scripts) { identifier in
-                    guard let file = app.workstation.scripts.snapshot.documents.first(where: {
-                        $0.file.identifier == identifier || $0.file.legacyIdentifiers.contains(identifier)
-                    })?.file else { return }
-                    app.navigateToIssue(.script(id: file.identifier, line: 1, column: 1))
+            WorkspacePanelDescriptor(id: EditorSidebar.panelID, title: localizedPanelTitle(for: "sidebar"), defaultSlot: .leading,
+                                     configure: { $0.isCollapsible = true; $0.isClosable = false; $0.hidesTabBarWhenAlone = true }) {
+                // The window renders the sidebar itself; see `EditorRootViewFactory.content`.
+                EmptyView()
+            },
+            WorkspacePanelDescriptor(id: "details", title: localizedPanelTitle(for: "details"), defaultSlot: .trailing,
+                                     configure: { $0.isCollapsible = true; $0.isClosable = false; $0.hidesTabBarWhenAlone = true; $0.iconAssetKey = "panel.inspector" }) {
+                EditorDetailsPanel(app: app) {
+                    AnyView(InspectorPanel(store: app.store, scene: app.scene, scriptWorkspace: app.workstation.scripts) { identifier in
+                        guard let file = app.workstation.scripts.snapshot.documents.first(where: {
+                            $0.file.identifier == identifier || $0.file.legacyIdentifiers.contains(identifier)
+                        })?.file else { return }
+                        app.navigateToIssue(.script(id: file.identifier, line: 1, column: 1))
+                    })
                 }
             },
             WorkspacePanelDescriptor(id: "viewport", title: localizedPanelTitle(for: "viewport"), defaultSlot: .center, configure: { $0.isCollapsible = false; $0.isClosable = false; $0.iconAssetKey = "panel.viewport" }) {
@@ -173,12 +173,8 @@ enum EditorRootViewFactory {
             WorkspacePanelDescriptor(id: "terminal", title: localizedPanelTitle(for: "terminal"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.terminal" }) {
                 EditorTerminalPanel(terminal: terminal)
             },
-            WorkspacePanelDescriptor(id: "assets", title: localizedPanelTitle(for: "assets"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.assets" }) {
+            WorkspacePanelDescriptor(id: "assets", title: localizedPanelTitle(for: "assets"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.assets" }) {
                 AssetBrowserPanel(app: app)
-            },
-            WorkspacePanelDescriptor(id: "journal", title: localizedPanelTitle(for: "journal"), defaultSlot: .trailing,
-                                     configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.journal" }) {
-                SessionJournal(app: app)
             },
             WorkspacePanelDescriptor(id: "render-pipeline", title: localizedPanelTitle(for: "render-pipeline"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.render-pipeline" }) {
                 RenderPipelinePanel(app: app)
@@ -199,9 +195,6 @@ enum EditorRootViewFactory {
             WorkspacePanelDescriptor(id: "tasks", title: localizedPanelTitle(for: "tasks"), defaultSlot: .leading, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.tasks" }) {
                 TasksPanel(app: app)
             },
-            WorkspacePanelDescriptor(id: "outline", title: localizedPanelTitle(for: "outline"), defaultSlot: .trailing, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.outline" }) {
-                DocumentOutlinePanel(app: app)
-            },
             WorkspacePanelDescriptor(id: "documents", title: localizedPanelTitle(for: "documents"), defaultSlot: .center, configure: { $0.iconAssetKey = "panel.documents"; $0.hidesTabBarWhenAlone = true }) {
                 DocumentsPanel(model: app.workstation.documents, app: app, onOpenFile: {
                     app.store.dispatch(.setCommandPaletteQuery(TextBuffer(EditorPaletteScope.resources.prefix)))
@@ -220,8 +213,9 @@ enum EditorRootViewFactory {
     /// left. A panel whose tab is unchanged keeps its descriptor, so its view
     /// keeps its state; the view itself follows the package's current content.
     static func syncContributedPanels(app: EditorApplication, registry: WorkspacePanelRegistry) {
-        // The agent view exists only while an agent package is enabled.
-        let panels = app.workbenchCatalog.panels.filter { $0.content != .view(.agent) || app.isAgentEnabled }
+        // The agent view docks only while its thread is pinned; otherwise it floats under the content.
+        let pinned = app.isAgentEnabled && EditorAssistantSurface.of(app).state.isPinned
+        let panels = app.workbenchCatalog.panels.filter { $0.content != .view(.agent) || pinned }
         for id in registry.ids where !EditorWorkspaceProfile.builtInPanelIDs.contains(id.rawValue)
             && !panels.contains(where: { $0.id == id.rawValue }) {
             registry.unregister(id: id)
@@ -233,16 +227,17 @@ enum EditorRootViewFactory {
                 WorkspacePanelIconCatalog.register(iconKey, .svg(named: icon, in: EditorAppResourceBundle.bundle, subdirectory: "PanelIcons"))
             }
             let slot = WorkspaceSlotID(rawValue: panel.slot)
-            if let existing = registry.descriptor(for: id), existing.panel.title == panel.title,
+            // A host view's title is the host's, so it reads in the UI language; a package's own stays as written.
+            let title = panel.content == .model ? panel.title : L(panel.title)
+            if let existing = registry.descriptor(for: id), existing.panel.title == title,
                existing.panel.iconAssetKey == iconKey, existing.defaultSlot == slot {
                 continue
             }
-            let draft = AgentDraft()
-            registry.register(WorkspacePanelDescriptor(id: id, title: panel.title, defaultSlot: slot,
+            registry.register(WorkspacePanelDescriptor(id: id, title: title, defaultSlot: slot,
                                                        configure: { $0.isCollapsible = true; $0.iconAssetKey = iconKey }) {
                 if let current = app.workbenchCatalog.panel(id: panel.id) {
                     switch current.content {
-                    case .view(.agent): IntentInputPanel(app: app, draft: draft)
+                    case .view(.agent): AssistantThread(app: app, placement: .pinned)
                     case .model: PluginView(session: MainActor.assumeIsolated { app.viewSession(for: current) })
                     }
                 }
@@ -265,7 +260,6 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.animation", panelIcon("render"))
         WorkspacePanelIconCatalog.register("panel.developer-tools", panelIcon("warning"))
         WorkspacePanelIconCatalog.register("panel.profiler", panelIcon("profiler"))
-        WorkspacePanelIconCatalog.register("panel.journal", UIIcons.Editor.gitCommit)
         WorkspacePanelIconCatalog.register("panel.files", UIIcons.File.folder)
         WorkspacePanelIconCatalog.register("panel.terminal", UIIcons.Editor.terminal)
         WorkspacePanelIconCatalog.register("panel.documents", UIIcons.File.fileCode)
@@ -274,20 +268,11 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.tasks", UIIcons.Editor.box)
     }
 
-    static func saveWorkspaceLayout(_ controller: WorkspaceController,
-                                    for mode: EditorWorkspaceMode,
-                                    preset: EditorLayoutPreset) {
-        saveWorkspaceDocument(controller.document, for: mode, preset: preset)
-    }
-
     static func saveWorkspaceLayout(_ controller: WorkspaceController) {
-        saveWorkspaceLayout(controller,
-                            for: .level,
-                            preset: .levelDefault)
+        saveWorkspaceDocument(controller.document)
     }
 
-    static func saveShellState(workspace: EditorWorkspaceState,
-                               themeMode: EditorThemeMode,
+    static func saveShellState(themeMode: EditorThemeMode,
                                themeID: String = EditorThemeCatalog.defaultThemeID,
                                language: EditorLanguage,
                                vsyncMode: EditorVSyncMode,
@@ -295,8 +280,7 @@ enum EditorRootViewFactory {
                                aiSettings: EditorAISettings = .default,
                                capabilitySettings: EditorCapabilitySettings = .default) {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
-        let shell = EditorShellState(workspace: workspace,
-                                     themeMode: themeMode,
+        let shell = EditorShellState(themeMode: themeMode,
                                      themeID: themeID,
                                      language: language,
                                      vsyncMode: vsyncMode,
@@ -343,7 +327,7 @@ enum EditorRootViewFactory {
         switch id {
         case "hierarchy":
             return L("Outline")
-        case "inspector":
+        case "details":
             return L("Properties")
         case "viewport":
             return L("Scene")
@@ -353,8 +337,6 @@ enum EditorRootViewFactory {
             return L("Terminal")
         case "assets":
             return L("Assets")
-        case "journal":
-            return L("Journal")
         case "render-pipeline":
             return L("Render Pipeline")
         case "developer-tools":
@@ -371,8 +353,8 @@ enum EditorRootViewFactory {
             return L("Video Editing")
         case "source-control":
             return L("Source Control")
-        case "outline":
-            return L("Document Outline")
+        case "sidebar":
+            return L("Sidebar")
         case "tasks":
             return L("Tasks")
         default:
@@ -384,7 +366,9 @@ enum EditorRootViewFactory {
                                             registry: WorkspacePanelRegistry) -> WorkspaceDocument {
         var next = document
         next.ensureStandardEditorSlotSchema()
-        let registeredIDs = Set(registry.ids)
+        // Sidebar views show through the sidebar pane, never as docked tabs.
+        let docked = registry.descriptors.filter { !EditorSidebar.isView($0) }
+        let registeredIDs = Set(docked.map(\.panel.id))
 
         // Migrate the redundant profiler tab into Developer Tools while
         // preserving the user's active panel in saved layouts.
@@ -436,7 +420,7 @@ enum EditorRootViewFactory {
             !registeredIDs.contains(closed.panelID)
         }
 
-        for descriptor in registry.descriptors {
+        for descriptor in docked {
             next.panels[descriptor.panel.id] = workspacePanel(for: descriptor)
             guard next.groupContaining(panelID: descriptor.panel.id) == nil else { continue }
             // A panel intentionally closed by the user remains represented in
@@ -478,17 +462,11 @@ enum EditorRootViewFactory {
         WorkspaceTabGroupID(rawValue: slot.rawValue)
     }
 
-    private static func layoutPersistenceKey(for mode: EditorWorkspaceMode,
-                                             preset: EditorLayoutPreset) -> String {
-        "\(workspaceLayoutPersistenceKey)_\(mode.rawValue)_\(preset.rawValue)"
-    }
-
-    private static func loadSavedWorkspaceDocument(for mode: EditorWorkspaceMode,
-                                                   preset: EditorLayoutPreset) -> WorkspaceDocument? {
+    private static func loadSavedWorkspaceDocument() -> WorkspaceDocument? {
         discardLegacyWorkspaceLayoutFiles()
         guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
         let layoutPath = layoutDir.appendingPathComponent(
-            layoutPersistenceKey(for: mode, preset: preset) + ".json"
+            workspaceLayoutPersistenceKey + ".json"
         )
 
         guard FileManager.default.fileExists(atPath: layoutPath.path) else { return nil }
@@ -511,9 +489,7 @@ enum EditorRootViewFactory {
         }
     }
 
-    private static func saveWorkspaceDocument(_ document: WorkspaceDocument,
-                                              for mode: EditorWorkspaceMode,
-                                              preset: EditorLayoutPreset) {
+    private static func saveWorkspaceDocument(_ document: WorkspaceDocument) {
         discardLegacyWorkspaceLayoutFiles()
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let encoder = JSONEncoder()
@@ -521,7 +497,7 @@ enum EditorRootViewFactory {
         do {
             let data = try encoder.encode(document)
             let path = layoutDir.appendingPathComponent(
-                layoutPersistenceKey(for: mode, preset: preset) + ".json"
+                workspaceLayoutPersistenceKey + ".json"
             )
             try data.write(to: path, options: .atomic)
         } catch {

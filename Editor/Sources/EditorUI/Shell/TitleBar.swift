@@ -3,7 +3,7 @@ private import Foundation
 internal import GuavaUI
 internal import GuavaUIRuntime
 
-/// Project, focus, intent, Space, presence and run controls on one 40pt row.
+/// Project, focus, the assistant, package tools and run controls on one 40pt row.
 /// Lower-priority items step down as the window narrows; their order never changes.
 struct EditorTitleBar: View {
     let app: EditorApplication
@@ -43,29 +43,21 @@ struct EditorTitleBar: View {
                     if width >= 1180 {
                         breadcrumb(focus).flex(0, shrink: 1).frame(minWidth: 0, maxWidth: 320).clipped().id("title-selection")
                     }
-                    WindowDragRegion().frame(width: 8).flex(0, shrink: 0).id("title-drag")
-                    // The intent field takes the room left between focus and Spaces.
-                    if width >= 1100 {
-                        // A zero basis lets the field give way when the row overflows; its
-                        // full-width frame would otherwise pin the basis to the whole row.
-                        intent(focus).frame(minWidth: 180, maxWidth: 560).flex(1, shrink: 1, basis: 0).id("title-intent")
-                        WindowDragRegion().flex(0.001, shrink: 1).frame(minWidth: 8).id("title-drag-fill")
-                    } else {
-                        intent(focus).frame(width: 32).id("title-intent")
-                        WindowDragRegion().flex().frame(minWidth: 8).id("title-drag-fill")
+                    // The assistant's entry sits centered in the room between focus and run controls.
+                    WindowDragRegion().flex().frame(minWidth: 8).id("title-drag")
+                    if app.isAgentEnabled {
+                        AssistantTitleField(app: app, compact: width < 1100,
+                                            shortcut: catalog.entries.first { $0.id == "agent.intent" }?.shortcut?.label ?? "")
+                            .frame(width: width < 1100 ? .points(32) : .percent(100), minWidth: width < 1100 ? 32 : 220, maxWidth: 520)
+                            .flex(width < 1100 ? 0 : 2, shrink: 1, basis: 0).id("title-assistant")
                     }
+                    WindowDragRegion().flex().frame(minWidth: 8).id("title-drag-fill")
                     if width >= 900, !workbench.wrappedValue.toolbarItems.isEmpty {
                         PluginToolbar(items: workbench.wrappedValue.toolbarItems, onCommand: onCommand).id("title-plugins")
                     }
-                    EditorSpaceSwitcher(mode: store.workspaceMode,
-                                        presentation: width < 680 ? .menu : width < 1340 ? .icons : .labels,
-                                        onCommand: onCommand).id("title-spaces")
-                    if width >= 1100 { presence.id("title-presence") }
-                    if store.workspaceMode.isGameWorkspace {
-                        EditorPlaybackToolbar(state: store.playbackState, compact: width < 520, showsTarget: width >= 1400,
-                                              onCommand: onCommand)
-                            .id("title-playback")
-                    }
+                    EditorPlaybackToolbar(state: store.playbackState, compact: width < 520, showsTarget: width >= 1400,
+                                          onCommand: onCommand)
+                        .id("title-playback")
                 }
                 // The shell adds its own drag region after this row, and both grow
                 // equally. A full-width basis that shrinks to fit claims all free
@@ -83,7 +75,7 @@ struct EditorTitleBar: View {
         let _ = store.sceneRevision
         let _ = documents.wrappedValue
         let _ = workbench.wrappedValue
-        let _ = (store.workspaceMode, store.activeLayoutPreset, store.playbackState, store.selectedEntityIDs)
+        let _ = (store.content, store.playbackState, store.selectedEntityIDs)
         return .make(EditorCommandContext(app: app))
     }
 
@@ -146,59 +138,6 @@ struct EditorTitleBar: View {
         }.debugName("editor-breadcrumb")
     }
 
-    // MARK: Intent
-
-    private func intent(_ focus: EditorWorkFocus) -> some View {
-        let shortcut = catalog.entries.first { $0.id == "agent.intent" }?.shortcut?.label ?? ""
-        return Button(tooltip: L("Tell Guava what you want to do…")) {
-            onCommand(.showCommandPalette(.intent))
-        } label: {
-            Row(alignment: .center, spacing: 7) {
-                Icon(UIIcons.Status.sparkles, size: 13, color: EditorThemeTokens.assistantColor)
-                if width >= 1100 {
-                    Text(L("Tell Guava what you want to do…"), lineLimit: 1)
-                        .font(.caption).foregroundColor(.onSurfaceMuted).flex(1, shrink: 1).frame(minWidth: 0)
-                    if let leaf = focus.leaf {
-                        Text("@" + leaf).truncated().font(.caption).foregroundColor(.onSurfaceVariant)
-                            .frame(maxWidth: 140)
-                            .padding(horizontal: 6).frame(height: 18)
-                            .background(.surfaceVariant).cornerRadius(4).flex(0, shrink: 1)
-                            .debugName("editor-intent-context")
-                    }
-                    Text(shortcut).font(.caption)
-                        .foregroundColor(.onSurfaceMuted).padding(horizontal: 4)
-                        .border(.borderStrong, width: 1).cornerRadius(3)
-                }
-            }.padding(EdgeInsets(leading: 9, trailing: 6)).frame(width: .percent(100), height: .points(28), minWidth: 0)
-                .background(.surfaceSunken).cornerRadius(8).border(.borderStrong, width: 1)
-        }.buttonStyle(.plain).frame(width: .percent(100)).debugName("editor-intent-bar")
-    }
-
-    // MARK: Presence
-
-    /// Who is working in this project: you, and Guava with a ring while it works.
-    private var presence: some View {
-        let working = app.store.agentTasks.contains { $0.phase == .planning }
-        // Two overlapping avatars; the surface-coloured ring separates them.
-        return ZStack(alignment: .leading) {
-            // An icon, not a word: "You" overflows a 24pt circle in longer languages.
-            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                Icon(UIIcons.User.user, size: 12, color: Color(red: 0xDD, green: 0xF2, blue: 0xE5))
-            }
-            .frame(width: 24, height: 24).background(Color(red: 0x3C, green: 0x6E, blue: 0x55)).cornerRadius(12)
-            .border(.surface, width: 2)
-            .accessibility { $0.label = L("You") }
-            // Padding a styled box would move only its content; the wrapper moves the circle.
-            Box(direction: .row, alignItems: .center, spacing: 0) {
-                Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                    Icon(UIIcons.Status.sparkles, size: 11, color: EditorThemeTokens.assistantColor)
-                }
-                .frame(width: 24, height: 24).background(Color(red: 0x5A, green: 0x29, blue: 0x34)).cornerRadius(12)
-                .border(working ? EditorThemeTokens.assistantColor : .surface, width: 2)
-                .accessibility { $0.label = working ? L("Guava is working") : "Guava" }
-            }.padding(EdgeInsets(leading: 17))
-        }.frame(width: 41, height: 24).debugName("editor-presence")
-    }
 }
 
 /// The checked-out branch of the repository containing the project, read from

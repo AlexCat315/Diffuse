@@ -7,36 +7,33 @@ import GuavaUIRuntime
 import GuavaUIWorkspace
 import Testing
 
-@Suite("Workspace preset regression", .serialized)
+@Suite("Workspace layout regression", .serialized)
 @MainActor
 struct WorkspacePresetRegressionTests {
-    @Test("the workspace and layout labels are translated by the app resource bundle")
+    @Test("the content and layout labels are translated by the app resource bundle")
     func localizedMenus() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let previous = EditorLocalizationPreferences.language
         EditorLocalizationPreferences.language = .simplifiedChinese
         defer { EditorLocalizationPreferences.language = previous }
-        let catalog = EditorCommandCatalog.make(EditorCommandContext(workspaceMode: .level))
+        let catalog = EditorCommandCatalog.make(EditorCommandContext(content: .scene))
         #expect(catalog.menus.map(\.title) == ["文件", "编辑", "选择", "世界", "视图", "Agent", "运行", "窗口", "帮助"])
         let view = try #require(catalog.menus.first { $0.id == "view" })
         let nested = view.items.compactMap { item -> String? in
             if case let .submenu(menu) = item { return menu.title }
             return nil
         }
-        #expect(nested == ["Space", "布局", "面板"])
-        #expect(catalog.entries.first { $0.id == "workspace.level" }?.title == "玩法")
-        #expect(L(EditorLayoutPreset.levelWorkbench.title) == "场景与脚本")
-        #expect(L(EditorLayoutPreset.modelingSculpt.title) == "视口优先")
-        #expect(L(EditorLayoutPreset.animationSequencer.title) == "动画属性")
+        #expect(nested == ["布局", "面板"])
+        #expect(catalog.entries.first { $0.id == "content.timeline" }?.title == "时间线")
     } }
 
     private func registry() -> WorkspacePanelRegistry {
-        let ids: [WorkspacePanelID] = ["viewport", "documents", "hierarchy", "inspector", "assets", "console",
+        let ids: [WorkspacePanelID] = ["viewport", "documents", "sidebar", "hierarchy", "inspector", "assets", "console",
                               "animation", "render-pipeline", "developer-tools", "intent-input"]
         return WorkspacePanelRegistry(ids.map { id in
             let slot: WorkspaceSlotID
             switch id.rawValue {
             case "viewport", "documents": slot = .center
-            case "hierarchy": slot = .leading
+            case "sidebar", "hierarchy", "assets": slot = .leading
             case "inspector", "intent-input": slot = .trailing
             default: slot = .bottom
             }
@@ -46,26 +43,19 @@ struct WorkspacePresetRegressionTests {
         })
     }
 
-    @Test("every preset renders its named tools with usable frames and distinct visible panel sets")
+    @Test("the default layout places every tool and renders the front ones with usable frames")
     func presetFrames() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let registry = registry()
-        let expected: [(EditorLayoutPreset, Set<String>)] = [
-            (.levelDefault, ["viewport", "hierarchy", "inspector", "console"]),
-            (.levelWorkbench, ["viewport", "documents", "hierarchy", "inspector", "developer-tools"]),
-            (.levelCinematics, ["viewport", "hierarchy", "inspector", "animation", "render-pipeline"]),
-            (.scriptingDefault, ["documents", "assets", "inspector", "console"]),
-            (.modelingDefault, ["viewport", "assets", "inspector"]),
-            (.modelingSculpt, ["viewport"]),
-            (.animationDefault, ["viewport", "hierarchy", "inspector", "animation"]),
-            (.animationSequencer, ["viewport", "hierarchy", "animation", "assets"]),
-        ]
-        for (preset, visible) in expected {
-            let document = EditorWorkspaceDefaults.makeDocument(mode: preset.mode, preset: preset, registry: registry)
+        do {
+            let preset = "default"
+            let visible: Set<String> = ["viewport", "sidebar", "inspector", "console"]
+            let document = EditorWorkspaceDefaults.makeDocument(registry: registry)
             #expect(document.hasValidLayoutReferences)
+            // Sidebar views show through the sidebar pane instead of docking.
+            let docked = registry.descriptors.filter { !EditorSidebar.isView($0) }.map(\.panel.id)
             let assigned = document.groups.values.flatMap(\.panels)
-            let allowed = Set(registry.ids.filter { preset.mode.profile.allowsPanel($0.rawValue) })
-            #expect(assigned.count == allowed.count)
-            #expect(Set(assigned) == allowed)
+            #expect(assigned.count == docked.count)
+            #expect(Set(assigned) == Set(docked))
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: WorkspaceView(controller: WorkspaceController(document: document)) { registry.make($0) })
             graph.computeLayout(width: 1280, height: 720)
@@ -84,7 +74,7 @@ struct WorkspacePresetRegressionTests {
         }
     } }
 
-    @Test("selecting an existing or saved preset applies the template, while mode switching preserves custom docking")
+    @Test("a saved layout survives content switches, and Reset Layout restores the default")
     func presetSelection() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-preset-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -96,25 +86,19 @@ struct WorkspacePresetRegressionTests {
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
         defer { app.shutdown() }
         let registry = registry()
-        app.store.dispatch(.setWorkspaceMode(.level))
-        app.store.dispatch(.setActiveLayoutPreset(.levelDefault))
-        let standard = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelDefault, registry: registry)
+        let standard = EditorWorkspaceDefaults.makeDocument(registry: registry)
         let controller = WorkspaceController(document: standard)
         _ = controller.dispatch(.collapse("trailing"))
-        let custom = controller.document
         EditorCommandDispatcher.handle(.saveLayout, app: app, controller: controller, registry: registry, fromCommandPalette: true)
-        EditorCommandDispatcher.handle(.setWorkspaceMode(.scripting), app: app, controller: controller, registry: registry, fromCommandPalette: true)
-        EditorCommandDispatcher.handle(.setWorkspaceMode(.level), app: app, controller: controller, registry: registry, fromCommandPalette: true)
-        #expect(controller.document == custom)
-        EditorCommandDispatcher.handle(.setLayoutPreset(.levelDefault), app: app, controller: controller, registry: registry, fromCommandPalette: true)
+        EditorCommandDispatcher.handle(.showContent(.files), app: app, controller: controller, registry: registry, fromCommandPalette: true)
+        #expect(app.store.content == .files)
+        #expect(controller.document.group("center")?.activePanelID == "documents")
+        #expect(controller.document.groups["trailing"]?.isCollapsed == true)
+        EditorCommandDispatcher.handle(.showContent(.scene), app: app, controller: controller, registry: registry, fromCommandPalette: true)
+        #expect(app.store.content == .scene)
+        #expect(EditorRootViewFactory.makeController(registry: registry).document.groups["trailing"]?.isCollapsed == true)
+        EditorCommandDispatcher.handle(.resetLayout, app: app, controller: controller, registry: registry, fromCommandPalette: true)
         #expect(controller.document == standard)
-        EditorRootViewFactory.saveWorkspaceLayout(WorkspaceController(document: custom), for: .level, preset: .levelCinematics)
-        EditorCommandDispatcher.handle(.setLayoutPreset(.levelCinematics), app: app, controller: controller, registry: registry, fromCommandPalette: true)
-        #expect(controller.document == EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelCinematics, registry: registry))
-        #expect(app.store.activeLayoutPreset == .levelCinematics)
-        let commands = EditorCommandSearch.commands(app: app)
-        #expect(commands.contains { $0.id == "layout.levelCinematics" })
-        #expect(!commands.contains { $0.id == "layout.modelingSculpt" })
     } }
 
     @Test("Window reveals closed and collapsed panels, Inspector exits scene settings, and Restore Panels expands docks")
@@ -125,7 +109,7 @@ struct WorkspacePresetRegressionTests {
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
         defer { app.shutdown() }
         let registry = registry()
-        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(mode: .modeling, preset: .modelingSculpt, registry: registry))
+        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(registry: registry))
         _ = controller.dispatch(.closePanel("inspector"))
         _ = controller.dispatch(.toggleMaximize("viewport"))
         app.store.dispatch(.setInspectorSceneSettingsVisible(true))
@@ -146,9 +130,16 @@ struct WorkspacePresetRegressionTests {
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
         defer { app.shutdown() }
         let registry = registry()
-        // Cinematics splits the bottom edge into two groups.
-        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
-            mode: .level, preset: .levelCinematics, registry: registry))
+        // The bottom edge split into two groups.
+        var document = EditorWorkspaceDefaults.makeDocument(registry: registry)
+        document.groups["bottom"]?.panels.removeAll { $0 == "render-pipeline" }
+        document.groups["render-tools"] = WorkspaceTabGroup(id: "render-tools", panels: ["render-pipeline"],
+                                                            activePanelID: "render-pipeline")
+        document = WorkspaceDocument(panels: document.panels, groups: document.groups,
+            slots: WorkspaceSlot.standardEditorSlots(leading: .group("leading"), center: .group("center"),
+                trailing: .group("trailing"),
+                bottom: .split(axis: .horizontal, fraction: 0.6, first: .group("bottom"), second: .group("render-tools"))))
+        let controller = WorkspaceController(document: document)
         let bottom = try #require(controller.document.slots[.bottom]?.layout?.leafGroupIDs)
         #expect(bottom.count == 2)
         func handle(_ command: EditorCommand) {
@@ -179,13 +170,13 @@ struct WorkspacePresetRegressionTests {
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
         defer { app.shutdown() }
         let registry = EditorRootViewFactory.makeRegistry(app: app)
-        var saved = EditorWorkspaceDefaults.makeDocument(mode: .documents, preset: .documentsDefault, registry: registry)
+        var saved = EditorWorkspaceDefaults.makeDocument(registry: registry)
         // A layout saved before the terminal existed: no panel, no tab.
         saved.panels.removeValue(forKey: "terminal")
         for id in Array(saved.groups.keys) { saved.groups[id]?.panels.removeAll { $0 == "terminal" } }
         saved.groups["bottom"]?.activePanelID = "console"
         let controller = WorkspaceController(document: EditorRootViewFactory.reconciledWorkspaceDocument(
-            saved, registry: EditorWorkspacePanelPolicy.registry(for: .documents, from: registry)))
+            saved, registry: registry))
         _ = controller.dispatch(.collapse("bottom"))
         EditorCommandDispatcher.handle(.togglePanel("terminal"), app: app, controller: controller, registry: registry,
                                        fromCommandPalette: true)
@@ -202,8 +193,7 @@ struct WorkspacePresetRegressionTests {
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
         defer { app.shutdown() }
         let registry = registry()
-        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(
-            mode: .level, preset: .levelDefault, registry: registry))
+        let controller = WorkspaceController(document: EditorWorkspaceDefaults.makeDocument(registry: registry))
         func handle(_ command: EditorCommand) {
             EditorCommandDispatcher.handle(command, app: app, controller: controller, registry: registry,
                                            fromCommandPalette: true)

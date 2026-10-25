@@ -55,6 +55,14 @@
         "marker": ".git",
         "ignoreFile": ".gitignore"
       }
+    ],
+    "guava.ai.context/v1": [
+      {
+        "id": "git",
+        "title": "Working Tree",
+        "entryPoint": "provider",
+        "maxBytes": 4096
+      }
     ]
   },
   "runtime": {

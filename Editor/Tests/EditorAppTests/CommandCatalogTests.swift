@@ -6,77 +6,57 @@ import Testing
 
 @Suite("EditorCommandCatalog")
 struct CommandCatalogTests {
-    @Test("Space and Layout submenus belong to View and layouts belong to the active workspace")
+    @Test("View lists each content with its chord, and Window holds only panels")
     func menuOrganization() throws {
-        for mode in [EditorWorkspaceMode.level, .modeling, .animation, .scripting] {
-            let preset = EditorLayoutPreset.default(for: mode)
-            let catalog = make(workspace: mode, preset: preset)
+        for content in EditorContent.allCases {
+            let catalog = make(content: content)
             let view = try #require(catalog.menus.first { $0.id == "view" })
-            let space = try #require(submenu("space", in: view))
-            let layout = try #require(submenu("layout", in: view))
-            let spaceEntries = entries(space.items)
-            #expect(spaceEntries.compactMap(\.shortcut?.key.equivalent) == ["1", "2", "3", "4", "5"])
-            #expect(spaceEntries.filter(\.isSelected).count == 1)
-            let presets = entries(layout.items).compactMap { entry -> EditorLayoutPreset? in
-                if case let .setLayoutPreset(preset) = entry.command { return preset }
-                return nil
-            }
-            #expect(presets == EditorLayoutPreset.presets(for: mode))
-            #expect(entries(layout.items).filter(\.isSelected).count == 1)
+            let contents = entries(view.items).filter { $0.id.hasPrefix("content.") }
+            #expect(contents.compactMap(\.shortcut?.key.equivalent) == ["1", "2", "3"])
+            #expect(contents.filter(\.isSelected).map(\.id) == ["content." + content.rawValue])
             let window = try #require(catalog.menus.first { $0.id == "window" })
-            for entry in entries(window.items) {
-                switch entry.command {
-                case .setWorkspaceMode, .setLayoutPreset: Issue.record("Window mixes workspace and panel commands")
-                default: break
-                }
-            }
+            #expect(!entries(window.items).contains { if case .showContent = $0.command { true } else { false } })
         }
     }
 
-    @Test("film workspaces omit game playback and builds instead of showing dead commands")
-    func filmTransport() {
-        for mode in [EditorWorkspaceMode.modeling, .animation] {
-            let catalog = make(workspace: mode)
-            #expect(!catalog.menus.contains { $0.id == "run" })
-            for entry in catalog.entries {
-                switch entry.command {
-                case .setPlaybackState, .togglePlayback, .buildProject, .buildAndRun:
-                    Issue.record("\(mode) exposes \(entry.id)")
-                default: break
-                }
-            }
+    @Test("playback and builds stay reachable from every content")
+    func transportEverywhere() {
+        for content in EditorContent.allCases {
+            let ids = Set(make(content: content).entries.map(\.id))
+            #expect(ids.isSuperset(of: ["playback.toggle", "project.build"]), "\(content)")
         }
     }
 
-    @Test("text workspaces hide scene-only panels and asset commands")
+    @Test("files hide scene editing but keep every panel")
     func documentsScope() {
-        let ids = Set(make(workspace: .documents).entries.map(\.id))
+        let ids = Set(make(content: .files).entries.map(\.id))
         #expect(!ids.contains("scene.settings"))
-        #expect(!ids.contains("assets.import"))
-        #expect(!ids.contains("assets.show"))
+        #expect(!ids.contains("scene.save"))
+        #expect(ids.contains("document.save"))
+        #expect(ids.contains("panel.hierarchy"))
         #expect(ids.contains("panel.documents"))
         #expect(ids.contains("panel.files"))
         #expect(ids.contains("agent.show"))
         // Without an agent package there is no conversation to show.
-        #expect(!make(workspace: .documents, agentPanelID: nil).entries.contains { $0.id == "agent.show" })
+        #expect(!make(content: .files, agentPanelID: nil).entries.contains { $0.id == "agent.show" })
         // ⌘S saves the open file here; scene, selection and world commands are absent.
         for absent in ["scene.save", "scene.new", "scene.open", "edit.duplicate", "edit.delete", "select.all", "world.frame"] {
-            #expect(!ids.contains(absent), "\(absent) leaked into the Write Space")
+            #expect(!ids.contains(absent), "\(absent) leaked into files")
         }
-        let catalog = EditorCommandCatalog.make(EditorCommandContext(workspaceMode: .documents,
+        let catalog = EditorCommandCatalog.make(EditorCommandContext(content: .files,
                                                                      document: EditorCommandDocument(isDirty: true)))
         let save = catalog.entries.first { $0.id == "document.save" }
         #expect(save?.shortcut?.key.equivalent == "s")
         #expect(save?.isEnabled == true)
         #expect(catalog.entries.first { $0.id == "document.close" }?.isEnabled == false)
         #expect(!catalog.menus.contains { $0.id == "select" || $0.id == "world" })
-        let clean = EditorCommandCatalog.make(EditorCommandContext(workspaceMode: .documents,
+        let clean = EditorCommandCatalog.make(EditorCommandContext(content: .files,
                                                                    document: EditorCommandDocument(isDirty: false)))
         #expect(clean.entries.first { $0.id == "document.save" }?.isEnabled == false)
         #expect(clean.entries.first { $0.id == "document.close" }?.isEnabled == true)
     }
 
-    @Test("scene Spaces expose Select and World menus backed by scene commands")
+    @Test("the scene exposes Select and World menus backed by scene commands")
     func selectAndWorld() throws {
         let catalog = full()
         let ids = Set(catalog.entries.map(\.id))
@@ -113,7 +93,7 @@ struct CommandCatalogTests {
     @Test("scene authoring commands are disabled while playing or paused")
     func playbackDisablesSceneAuthoringCommands() {
         for playbackState in [PlaybackState.playing, .paused] {
-            let catalog = EditorCommandCatalog.make(EditorCommandContext(workspaceMode: .level, playbackState: playbackState,
+            let catalog = EditorCommandCatalog.make(EditorCommandContext(content: .scene, playbackState: playbackState,
                                                                          canUndo: true, canRedo: true, hasSelection: true))
             for entry in catalog.entries {
                 switch entry.command {
@@ -171,13 +151,6 @@ struct CommandCatalogTests {
         }
     }
 
-    @Test("active workspace mode is marked selected")
-    func workspaceSelection() {
-        let entries = make(workspace: .modeling).entries
-        #expect(entries.first { $0.id == "workspace.modeling" }?.isSelected == true)
-        #expect(entries.first { $0.id == "workspace.level" }?.isSelected == false)
-    }
-
     @Test("undo binds to primary+Z and delete to an unmodified Delete key")
     func editShortcuts() {
         let entries = full().entries
@@ -193,8 +166,8 @@ struct CommandCatalogTests {
 
     @Test("ids and key chords are unique across the whole tree")
     func uniqueness() {
-        for mode in [EditorWorkspaceMode.documents, .video, .level, .scripting, .modeling, .animation] {
-            let entries = make(workspace: mode).entries
+        for mode in EditorContent.allCases {
+            let entries = make(content: mode).entries
             let ids = entries.map(\.id)
             #expect(Set(ids).count == ids.count, "duplicate ids in \(mode)")
             let chords = entries.compactMap(\.shortcut).map { "\($0.key.equivalent)-\($0.modifiers.rawValue)" }
@@ -215,9 +188,9 @@ struct CommandCatalogTests {
                 if case let .submenu(menu) = item { check(menu.items, path: path + "/" + menu.id) }
             }
         }
-        for mode in [EditorWorkspaceMode.documents, .video, .level, .scripting, .modeling, .animation] {
+        for mode in EditorContent.allCases {
             for playback in [PlaybackState.stopped, .playing, .paused] {
-                for menu in make(playback, workspace: mode).menusWithApplicationItems {
+                for menu in make(playback, content: mode).menusWithApplicationItems {
                     check(menu.items, path: "\(mode)/\(menu.id)")
                 }
             }
@@ -243,7 +216,7 @@ struct CommandCatalogTests {
         #expect(!palette.contains("palette.commands"))
         #expect(!palette.contains("search.resources"))
         #expect(palette.contains("scene.save"))
-        #expect(palette.contains("layout.levelDefault"))
+        #expect(palette.contains("content.files"))
     }
 
     @Test("shortcut labels follow the platform convention")
@@ -270,7 +243,7 @@ struct CommandCatalogTests {
         #expect(catalog.entry(matching: key(Scancode.z, [.lgui, .rshift]))?.id == "edit.redo")
         #expect(catalog.entry(matching: key(Scancode.p, [.lgui]))?.id == "search.resources")
         #expect(catalog.entry(matching: key(Scancode.p, [.lgui, .lshift]))?.id == "palette.commands")
-        #expect(catalog.entry(matching: key(Scancode.digit3, [.lgui]))?.id == "workspace.animation")
+        #expect(catalog.entry(matching: key(Scancode.digit3, [.lgui]))?.id == "content.timeline")
         #expect(catalog.entry(matching: key(Scancode.digit0, [.lgui]))?.id == "layout.reset")
         #expect(catalog.entry(matching: key(Scancode.keypadEnter, [.lgui]))?.id == "playback.toggle")
         #expect(catalog.entry(matching: key(Scancode.delete, []))?.id == "edit.delete")
@@ -280,10 +253,10 @@ struct CommandCatalogTests {
         #expect(catalog.entry(matching: key(Scancode.s, [.lgui, .lalt])) == nil)
     }
 
-    @Test("View → Panels toggles each docked edge in every Space")
+    @Test("View → Panels toggles each docked edge for every content")
     func panelAreas() throws {
-        for mode in [EditorWorkspaceMode.documents, .video, .level, .scripting, .modeling, .animation] {
-            let view = try #require(make(workspace: mode).menus.first { $0.id == "view" })
+        for mode in EditorContent.allCases {
+            let view = try #require(make(content: mode).menus.first { $0.id == "view" })
             let panels = try #require(submenu("panels", in: view))
             let areas = entries(panels.items).compactMap { entry -> EditorPanelArea? in
                 if case let .togglePanelArea(area) = entry.command { return area }
@@ -305,7 +278,7 @@ struct CommandCatalogTests {
 
     @Test("Only chords refused because the game runs are reported as blocked by playback")
     func blockedOnlyByPlayback() throws {
-        let playing = EditorCommandContext(workspaceMode: .level, playbackState: .playing, hasSelection: true)
+        let playing = EditorCommandContext(content: .scene, playbackState: .playing, hasSelection: true)
         let catalog = EditorCommandCatalog.make(playing)
         let duplicate = try #require(catalog.entries.first { $0.id == "edit.duplicate" })
         #expect(EditorCommandCatalog.isBlockedOnlyByPlayback(duplicate, in: playing))
@@ -313,10 +286,10 @@ struct CommandCatalogTests {
         let delete = try #require(catalog.entries.first { $0.id == "edit.delete" })
         #expect(!EditorCommandCatalog.isBlockedOnlyByPlayback(delete, in: playing))
         // Nothing selected: playback is not the only reason.
-        let empty = EditorCommandContext(workspaceMode: .level, playbackState: .playing)
+        let empty = EditorCommandContext(content: .scene, playbackState: .playing)
         let noSelection = try #require(EditorCommandCatalog.make(empty).entries.first { $0.id == "edit.duplicate" })
         #expect(!EditorCommandCatalog.isBlockedOnlyByPlayback(noSelection, in: empty))
-        let stopped = EditorCommandContext(workspaceMode: .level, hasSelection: true)
+        let stopped = EditorCommandContext(content: .scene, hasSelection: true)
         let enabled = try #require(EditorCommandCatalog.make(stopped).entries.first { $0.id == "edit.duplicate" })
         #expect(!EditorCommandCatalog.isBlockedOnlyByPlayback(enabled, in: stopped))
     }
@@ -339,14 +312,13 @@ struct CommandCatalogTests {
     }
 
     private func make(_ playback: PlaybackState = .stopped,
-                      workspace: EditorWorkspaceMode = .level,
-                      preset: EditorLayoutPreset? = nil,
+                      content: EditorContent = .scene,
                       agentPanelID: String? = "intent-input") -> EditorCommandCatalog {
-        .make(EditorCommandContext(workspaceMode: workspace, layoutPreset: preset, playbackState: playback,
+        .make(EditorCommandContext(content: content, playbackState: playback,
                                    agentPanelID: agentPanelID))
     }
 
     private func full() -> EditorCommandCatalog {
-        .make(EditorCommandContext(workspaceMode: .level, canUndo: true, canRedo: true, hasSelection: true))
+        .make(EditorCommandContext(content: .scene, canUndo: true, canRedo: true, hasSelection: true))
     }
 }

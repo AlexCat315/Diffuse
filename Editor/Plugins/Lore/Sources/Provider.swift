@@ -10,6 +10,7 @@ func provider(request: String, stdout: String) -> String {
         case "history": history(request)
         case "branches": branches(request)
         case "locks": locks(request)
+        case "context": context(request)
         case "diff": diff(request)
         case "stage": batches(request, ["stage"], strings(request["paths"]))
         case "unstage": batches(request, ["unstage"], strings(request["paths"]))

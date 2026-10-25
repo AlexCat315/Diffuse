@@ -37,8 +37,9 @@ enum EditorCommand {
     case frameSelection
     case toggleSelectionVisibility
     case toggleSelectionLock
-    case setWorkspaceMode(EditorWorkspaceMode)
-    case setLayoutPreset(EditorLayoutPreset)
+    case showContent(EditorContent)
+    case showAssistant
+    case focusAssistant
     case resetLayout
     case reopenClosedPanel
     case setPlaybackState(PlaybackState)

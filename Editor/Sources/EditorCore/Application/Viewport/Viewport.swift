@@ -20,7 +20,6 @@ import SIMDCompat
 
 extension EditorApplication {
     public func setViewportMode(_ mode: EditorViewportMode) {
-        guard mode == .scene || store.workspaceMode.isGameWorkspace else { return }
         guard mode != store.viewportMode else { return }
         EditorViewportInputController.shared.reset()
         if mode == .scene, store.playbackState != .stopped { applyPlaybackState(.stopped) }

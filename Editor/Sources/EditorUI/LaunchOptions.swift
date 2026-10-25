@@ -112,6 +112,15 @@ extension EditorAppLaunchOptions {
         CommandLine.arguments.contains("--watch-plugins")
             || ProcessInfo.processInfo.environment["GUAVA_WATCH_PLUGINS"] == "1"
     }
+
+    /// A plugin package to open for review over the editor window once the
+    /// project loads (`--review-plugin <folder>`), for plugin authors. It is the
+    /// same review as choosing the folder in Settings; nothing is enabled until approved.
+    static var reviewPluginPath: String? {
+        guard let index = CommandLine.arguments.firstIndex(of: "--review-plugin"),
+              CommandLine.arguments.indices.contains(index + 1) else { return nil }
+        return CommandLine.arguments[index + 1]
+    }
 }
 
 private struct ParsedCommandLine {

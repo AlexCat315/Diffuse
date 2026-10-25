@@ -18,6 +18,7 @@ final class EditorLaunchContext: @unchecked Sendable {
     /// availability depends on them.
     private var documentMenuToken: AnyHashable?
     private var workspaceSubscriptionToken: WorkspaceController.SubscriptionToken?
+    private var contentToken: WorkspaceController.SubscriptionToken?
     private var workspacePersistenceTask: Task<Void, Never>?
     private(set) var display: AppDisplayHandle?
     private var diagnostics: UIDiagnostics?
@@ -69,10 +70,13 @@ final class EditorLaunchContext: @unchecked Sendable {
         if EditorAppLaunchOptions.watchPluginPackagesRequested {
             app.startWatchingPluginPackages()
         }
+        if let path = EditorAppLaunchOptions.reviewPluginPath {
+            Task { @MainActor in
+                await app.inspectPluginForManagement(at: URL(fileURLWithPath: path, isDirectory: true))
+            }
+        }
 
         if let s = shellState {
-            app.store.dispatch(.setWorkspaceMode(s.workspace.mode))
-            app.store.dispatch(.setActiveLayoutPreset(s.workspace.layoutPreset))
             app.store.dispatch(.setThemeMode(s.themeMode))
             app.store.dispatch(.setThemeID(s.themeID))
             app.store.dispatch(.setLanguage(s.language))
@@ -89,11 +93,8 @@ final class EditorLaunchContext: @unchecked Sendable {
         _ = app.restoreProjectSceneAtLaunch()
 
         let registry = EditorRootViewFactory.makeRegistry(app: app)
-        let controller = EditorRootViewFactory.makeController(
-            for: app.store.state.workspace.mode,
-            preset: app.store.state.workspace.layoutPreset,
-            registry: registry
-        )
+        let controller = EditorRootViewFactory.makeController(registry: registry)
+        contentToken = EditorContentFollower.follow(controller, app: app)
 
         EditorWorkbenchLink.of(app).controller = controller
         app.setActivatePanelHandler { [weak controller] id in
@@ -170,15 +171,13 @@ final class EditorLaunchContext: @unchecked Sendable {
         guard let bundle else { return }
         let app = bundle.app
         let state = app.store.state
-        shellState = .init(workspace: state.workspace,
-                           themeMode: state.themeMode, themeID: state.presentation.themeID,
+        shellState = .init(themeMode: state.themeMode, themeID: state.presentation.themeID,
                            language: state.language,
                            vsyncMode: state.vsyncMode,
                            primarySelectBehavior: state.selection.primarySelectBehavior,
                            aiSettings: state.assistant.aiSettings,
                            capabilitySettings: state.assistant.capabilitySettings)
         EditorRootViewFactory.saveShellState(
-            workspace: state.workspace,
             themeMode: state.themeMode, themeID: state.presentation.themeID,
             language: state.language,
             vsyncMode: state.vsyncMode,
@@ -186,11 +185,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             aiSettings: state.assistant.aiSettings,
             capabilitySettings: state.assistant.capabilitySettings
         )
-        EditorRootViewFactory.saveWorkspaceLayout(
-            bundle.controller,
-            for: state.workspace.mode,
-            preset: state.workspace.layoutPreset
-        )
+        EditorRootViewFactory.saveWorkspaceLayout(bundle.controller)
         if let token = shellPreferenceToken {
             app.store.unsubscribe(token)
         }
@@ -204,6 +199,10 @@ final class EditorLaunchContext: @unchecked Sendable {
         if let token = workspaceSubscriptionToken {
             bundle.controller.unsubscribe(token)
         }
+        if let token = contentToken {
+            bundle.controller.unsubscribe(token)
+        }
+        contentToken = nil
         workspacePersistenceTask?.cancel()
         workspacePersistenceTask = nil
         app.setCloseProjectHandler(nil)
@@ -318,14 +317,26 @@ final class EditorLaunchContext: @unchecked Sendable {
                                     registry: WorkspacePanelRegistry) {
         app.setWorkbenchChangeHandler { [weak self, weak app, weak controller, weak registry] in
             guard let self, let app, let controller, let registry else { return }
-            EditorRootViewFactory.syncContributedPanels(app: app, registry: registry)
-            let visible = EditorWorkspacePanelPolicy.registry(for: app.store.state.workspace.mode, from: registry)
-            controller.replace(EditorRootViewFactory.reconciledWorkspaceDocument(controller.document, registry: visible))
-            if let display = self.display {
-                self.refreshNativeMenu(app: app, controller: controller, registry: registry, display: display)
-            }
-            app.requestDisplayRefresh()
+            self.relayoutWorkbench(app: app, controller: controller, registry: registry)
         }
+        // Pinning docks the thread beside the details, in front.
+        EditorAssistantSurface.of(app).relayout = { [weak self, weak app, weak controller, weak registry] in
+            guard let self, let app, let controller, let registry else { return }
+            self.relayoutWorkbench(app: app, controller: controller, registry: registry)
+            guard EditorAssistantSurface.of(app).state.isPinned, let id = app.agentPanelID else { return }
+            EditorRootViewFactory.activatePanel(WorkspacePanelID(rawValue: id), in: controller)
+        }
+    }
+
+    @MainActor
+    private func relayoutWorkbench(app: EditorApplication, controller: WorkspaceController,
+                                   registry: WorkspacePanelRegistry) {
+        EditorRootViewFactory.syncContributedPanels(app: app, registry: registry)
+        controller.replace(EditorRootViewFactory.reconciledWorkspaceDocument(controller.document, registry: registry))
+        if let display {
+            refreshNativeMenu(app: app, controller: controller, registry: registry, display: display)
+        }
+        app.requestDisplayRefresh()
     }
 
     @MainActor
@@ -363,15 +374,10 @@ final class EditorLaunchContext: @unchecked Sendable {
                 EditorLocalizationPreferences.language = next.language
                 EditorRootViewFactory.localizeWorkspaceTitles(in: controller, registry: registry)
                 EditorRootViewFactory.localizePanelTitles(in: registry)
-                EditorRootViewFactory.saveWorkspaceLayout(
-                    controller,
-                    for: store.state.workspace.mode,
-                    preset: store.state.workspace.layoutPreset
-                )
+                EditorRootViewFactory.saveWorkspaceLayout(controller)
             }
             lastPrefs = next
             EditorRootViewFactory.saveShellState(
-                workspace: store.state.workspace,
                 themeMode: store.state.themeMode, themeID: store.state.presentation.themeID,
                 language: store.state.language,
                 vsyncMode: store.state.vsyncMode,
@@ -401,10 +407,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         workspacePersistenceTask = Task { @MainActor [weak self, weak app, weak controller] in
             try? await Task.sleep(nanoseconds: 250_000_000)
             guard !Task.isCancelled, let self, let app, let controller else { return }
-            let state = app.store.state
-            EditorRootViewFactory.saveWorkspaceLayout(controller,
-                                                       for: state.workspace.mode,
-                                                       preset: state.workspace.layoutPreset)
+            EditorRootViewFactory.saveWorkspaceLayout(controller)
             self.workspacePersistenceTask = nil
         }
     }

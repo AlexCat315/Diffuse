@@ -31,7 +31,7 @@ enum EditorCommandDispatcher {
         if !fromCommandPalette, case .redo = command, focus?.performTextEdit(.redo) == true { return }
         guard fromCommandPalette || focus?.modalRoot == nil else { return }
         let store = app.store
-        guard EditorWorkspaceCommandPolicy.allows(command, in: store.workspaceMode) else { return }
+        guard EditorWorkspaceCommandPolicy.allows(command, in: store.content) else { return }
         switch command {
         case let .showCommandPalette(scope):
             store.dispatch(.setCommandPaletteQuery(TextBuffer(scope.prefix)))
@@ -52,8 +52,11 @@ enum EditorCommandDispatcher {
             EditorRootViewFactory.activatePanel(panelID, in: controller)
             _ = controller.dispatch(.toggleMaximize(panelID))
         case let .togglePanel(id):
-            let panelID = WorkspacePanelID(rawValue: id)
-            if let group = controller.document.groupContaining(panelID: panelID), group.activePanelID == panelID,
+            let requested = WorkspacePanelID(rawValue: id)
+            let panelID = EditorRootViewFactory.dockedPanel(for: requested, in: controller)
+            // A sidebar view is showing when the sidebar shows it.
+            if panelID != EditorSidebar.panelID || EditorSidebar.of(controller).selection == requested,
+               let group = controller.document.groupContaining(panelID: panelID), group.activePanelID == panelID,
                !group.isCollapsed, controller.maximizedPanelID == nil,
                controller.dispatch(.collapse(group.id)).didChange {
                 return
@@ -68,8 +71,7 @@ enum EditorCommandDispatcher {
                 _ = controller.dispatch(.expand(group.id))
             }
         case .saveLayout:
-            EditorRootViewFactory.saveWorkspaceLayout(controller, for: store.workspaceMode,
-                                                      preset: store.activeLayoutPreset)
+            EditorRootViewFactory.saveWorkspaceLayout(controller)
             app.logConsole("Workspace layout saved")
             EditorNotifications.of(app).post(L("Workspace layout saved"), id: "layout")
         case .closeProject:
@@ -179,48 +181,15 @@ enum EditorCommandDispatcher {
             let selected = store.state.selection.selectedEntityIDs
             guard !selected.isEmpty else { return }
             app.scene.setEntityLocked(!selected.allSatisfy { app.scene.isEntityLocked($0) }, entityIDs: selected)
-        case let .setWorkspaceMode(next):
-            guard store.state.workspace.mode != next else { return }
-            if !next.isGameWorkspace {
-                if store.playbackState != .stopped {
-                    app.applyPlaybackState(.stopped)
-                    EditorNotifications.of(app).post(L("Game stopped"), id: "playback-stopped", duration: 3,
-                                                     message: L("This Space does not run the game."))
-                }
-                app.setViewportMode(.scene)
-            }
-            let previousMode = store.state.workspace.mode
-            let previousPreset = store.state.workspace.layoutPreset
-            EditorRootViewFactory.saveWorkspaceLayout(controller, for: previousMode, preset: previousPreset)
-            store.dispatch(.setWorkspaceMode(next))
-            let nextPreset = store.state.workspace.layoutPreset
-            EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: nextPreset, registry: registry)
-            saveShellState(app)
-        case let .setLayoutPreset(nextPreset):
-            let mode = nextPreset.mode
-            let previousMode = store.state.workspace.mode
-            let previousPreset = store.state.workspace.layoutPreset
-            EditorRootViewFactory.saveWorkspaceLayout(controller,
-                                                       for: previousMode,
-                                                       preset: previousPreset)
-            if mode != previousMode {
-                if !mode.isGameWorkspace {
-                    if store.playbackState != .stopped { app.applyPlaybackState(.stopped) }
-                    app.setViewportMode(.scene)
-                }
-                store.dispatch(.setWorkspaceMode(mode))
-            }
-            store.dispatch(.setActiveLayoutPreset(nextPreset))
-            // A named preset applies its built-in arrangement. Loading the
-            // saved custom dock here could make unrelated presets identical.
-            EditorRootViewFactory.resetLayout(into: controller, for: mode, preset: nextPreset, registry: registry)
-            saveShellState(app)
+        case .showAssistant:
+            showAssistant(app: app, controller: controller)
+        case .focusAssistant:
+            showAssistant(app: app, controller: controller)
+            EditorAssistantSurface.of(app).focus()
+        case let .showContent(content):
+            EditorContentFollower.show(content, app: app, controller: controller)
         case .resetLayout:
-            let mode = store.state.workspace.mode
-            let preset = store.state.workspace.layoutPreset
-            EditorRootViewFactory.resetLayout(into: controller, for: mode, preset: preset, registry: registry)
-            EditorRootViewFactory.saveWorkspaceLayout(controller, for: mode, preset: preset)
-            saveShellState(app)
+            EditorRootViewFactory.resetLayout(into: controller, registry: registry)
             EditorNotifications.of(app).post(L("Layout reset"), id: "layout")
         case .reopenClosedPanel:
             let result = controller.dispatch(.reopenLastClosed)
@@ -229,9 +198,7 @@ enum EditorCommandDispatcher {
                 EditorNotifications.of(app).post(L("No closed panel to reopen"), id: "layout")
                 return
             }
-            EditorRootViewFactory.saveWorkspaceLayout(controller,
-                                                       for: store.state.workspace.mode,
-                                                       preset: store.state.workspace.layoutPreset)
+            EditorRootViewFactory.saveWorkspaceLayout(controller)
         case let .setPlaybackState(next):
             guard EditorPlaybackCommandPolicy.canTransition(from: store.state.timing.playbackState,
                                                             to: next) else { return }
@@ -246,10 +213,8 @@ enum EditorCommandDispatcher {
         case .toggleTheme:
             store.dispatch(.setThemeMode(store.state.themeMode == .dark ? .light : .dark))
         case .buildProject:
-            guard store.workspaceMode.isGameWorkspace else { return }
             app.requestProjectExport()
         case .buildAndRun:
-            guard store.workspaceMode.isGameWorkspace else { return }
             app.requestProjectExport(runAfterExport: true)
         case let .runTask(kind):
             let tasks = app.workstation.tasks
@@ -272,6 +237,16 @@ enum EditorCommandDispatcher {
 
     /// Collapses every group docked on the edge while any of them shows;
     /// expands them all when the edge is already hidden.
+    /// The pinned thread comes to the front; otherwise the floating one opens.
+    private static func showAssistant(app: EditorApplication, controller: WorkspaceController) {
+        let surface = EditorAssistantSurface.of(app)
+        if surface.state.isPinned, let id = app.agentPanelID {
+            EditorRootViewFactory.activatePanel(WorkspacePanelID(rawValue: id), in: controller)
+        } else {
+            surface.open()
+        }
+    }
+
     private static func togglePanelArea(_ area: EditorPanelArea, in controller: WorkspaceController) {
         let slot: WorkspaceSlotID = switch area {
         case .leading: .leading
@@ -311,16 +286,5 @@ enum EditorCommandDispatcher {
                 EditorAboutView()
             }
         }
-    }
-
-    private static func saveShellState(_ app: EditorApplication) {
-        let state = app.store.state
-        EditorRootViewFactory.saveShellState(workspace: state.workspace,
-                                             themeMode: state.themeMode, themeID: state.presentation.themeID,
-                                             language: state.language,
-                                             vsyncMode: state.vsyncMode,
-                                             primarySelectBehavior: state.selection.primarySelectBehavior,
-                                             aiSettings: state.assistant.aiSettings,
-                                             capabilitySettings: state.assistant.capabilitySettings)
     }
 }

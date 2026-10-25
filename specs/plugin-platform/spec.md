@@ -331,7 +331,7 @@ AI 不是单一插件类型，而是一组贡献点。
 - 每步都可带 `state`，省略表示不变。
 - 每轮最多 32 步；工具调用仍受 agent 的工具白名单、工作区范围和工具策略约束。
 
-`GuavaPluginKit` 的 `HarnessTurn` / `HarnessStep` 负责解析与构造，示例见 `examples/Plugins/CarefulAgent`。
+`GuavaPluginKit` 的 `HarnessTurn` / `HarnessStep` 负责解析与构造。随包插件目前都不需要自定义流程，内置流程保持默认；harness 由 AIRuntime 的会话测试覆盖。
 
 ### `guava.ai.tool/v1`
 
@@ -348,9 +348,11 @@ AI 不是单一插件类型，而是一组贡献点。
 { "id": "git-summary", "title": "Working Tree", "entryPoint": "context", "maxBytes": 4096 }
 ```
 
-- 入口签名：`func(input: record { workspace: string, selection: string }) -> string`，`selection` 是所选场景引用的 JSON 数组。返回值是一个 JSON 字符串（文本本身）。
+- 入口签名：`func(input: record { content: string, selection: string }) -> string`，`selection` 是所选场景引用的 JSON 数组。返回值是一个 JSON 字符串（文本本身）。
 - 只有在 agent 的 `context` 里列出时，宿主才在每次请求前读取并随请求发给模型；超过 `maxBytes`（默认 4 KiB，最大 16 KiB）按 UTF-8 截断；读取失败只记日志、不阻断请求。
 - `id` 在已启用插件间唯一；只接受 `access: "read"` 的包。
+- 入口也可以是带进程权限的步骤协议入口：宿主发 `{"op": "context", "content", "selection"}` 并代为运行命令。Git 与 Lore 用这种方式提供工作区摘要（分支、改动、Lore 的文件锁），不在对应仓库里时返回空。
+- 随包 AI 插件的默认 agent 列出了 `git` 与 `lore`。
 
 ### AI 面板
 
@@ -386,7 +388,7 @@ func(input: record { view: string, state: string, event: string, context: string
 - `view`：面板 ID 或文档视图 ID。
 - `state`：插件上次返回的 `state`（JSON 文本）；首次为空串。
 - `event`：空串表示只渲染；否则是事件 JSON（见下）。
-- `context`：面板为 `{"workspace": "<工作区>"}`；文档视图为 `{"path": "...", "text": "..."}`，`text` 含未保存修改，超过 48 KiB 不调用。
+- `context`：面板为 `{"content": "scene|files|timeline"}`；文档视图为 `{"path": "...", "text": "..."}`，`text` 含未保存修改，超过 48 KiB 不调用。
 
 返回一个 JSON 对象（字符串结果本身就是这段 JSON）：
 
@@ -498,7 +500,7 @@ func view(view: String, state: String, event: String, context: String) -> String
 }
 ```
 
-示例见 `examples/Plugins/Checklist`。
+真实用法：Swift Support 的 `Package.resolved` 依赖视图（文档视图）。
 
 ### 约束
 
@@ -513,6 +515,7 @@ func view(view: String, state: String, event: String, context: String) -> String
 - AI provider 的网络访问由宿主代理；自定义网络能力必须单独授权域名。
 - 工具执行、提交管线、审批、审计永远在宿主。
 - 停用/卸载必须释放该插件的所有注册；失败时 fail-closed。
+- 插件作者可用 `--review-plugin <folder>` 启动编辑器：启动后在编辑器窗口弹出同一份审核，批准后才启用。
 - 宿主重启、authority 变化、依赖失效按领域收窄失效，不全局清空无关会话。
 
 ## 迁移

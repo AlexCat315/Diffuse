@@ -18,6 +18,7 @@ func provider(request: String, stdout: String) -> String {
         case "switch-branch": switchBranch(request, create: false)
         case "create-branch": switchBranch(request, create: true)
         case "init": request.output == nil ? .run(git(["init", "--quiet"]), next: "done") : finish(request)
+        case "context": context(request)
         case "locks": .result([])
         case "set-locked": .failure("Git does not lock files.")
         default: .failure("Git cannot \(request.operation).")

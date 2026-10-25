@@ -145,13 +145,20 @@ struct EditorPersistenceTests {
             WorkspacePanelDescriptor(id: "inspector", title: "Inspector", defaultSlot: .trailing, configure: { $0.isCollapsible = true }) { EmptyView() },
             WorkspacePanelDescriptor(id: "profiler", title: "Profiler", defaultSlot: .bottom, configure: { $0.isCollapsible = true }) { EmptyView() },
         ])
-        let document = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelWorkbench,
-                                                            registry: registry)
+        let expected = WorkspaceLayoutNode.split(axis: .horizontal, fraction: 0.54,
+                                                  first: .group("center"), second: .group("script-editor"))
+        let document = WorkspaceDocument(
+            panels: Dictionary(uniqueKeysWithValues: registry.descriptors.map { ($0.panel.id, $0.panel) }),
+            groups: ["center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
+                     "script-editor": WorkspaceTabGroup(id: "script-editor", panels: ["documents"], activePanelID: "documents"),
+                     "leading": WorkspaceTabGroup(id: "leading", panels: ["hierarchy"], activePanelID: "hierarchy"),
+                     "trailing": WorkspaceTabGroup(id: "trailing", panels: ["inspector"], activePanelID: "inspector"),
+                     "bottom": WorkspaceTabGroup(id: "bottom", panels: ["profiler"], activePanelID: "profiler")],
+            slots: WorkspaceSlot.standardEditorSlots(leading: .group("leading"), center: expected,
+                                                     trailing: .group("trailing"), bottom: .group("bottom")))
         let saved = try JSONDecoder().decode(WorkspaceDocument.self,
                                             from: JSONEncoder().encode(document))
         let reconciled = EditorRootViewFactory.reconciledWorkspaceDocument(saved, registry: registry)
-        let expected = WorkspaceLayoutNode.split(axis: .horizontal, fraction: 0.54,
-                                                  first: .group("center"), second: .group("script-editor"))
         #expect(reconciled.slot(.center).layout == expected)
         #expect(reconciled.group("center")?.panels == ["viewport"])
         #expect(reconciled.group("script-editor")?.panels == ["documents"])

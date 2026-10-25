@@ -63,7 +63,7 @@ extension EditorApplication {
         }
         var policy = pluginCapabilityExecutor?.exposurePolicy ?? CapabilityExposurePolicy(allowedDomains: ["scene"])
         let target = EditorAgentTaskTarget(documentID: store.state.document.identity, sceneRevision: store.sceneRevision,
-            workspace: store.workspaceMode, selectedEntityIDs: store.selectedEntityIDs, primaryEntityID: store.selectedEntityID)
+            content: store.content, selectedEntityIDs: store.selectedEntityIDs, primaryEntityID: store.selectedEntityID)
         policy.allowedCapabilityIDs = makeAgentWorkflowScope(target: target).allowedCapabilityIDs
         let capturedPolicy = policy
         do {
@@ -403,7 +403,7 @@ extension EditorApplication {
         let snapshot = SceneSemanticEncoder().encode(
             scene.scene,
             selectedEntityID: store.state.selection.selectedEntityID,
-            workspaceMode: store.state.workspace.mode.rawValue,
+            workspaceMode: store.state.content.rawValue,
             localeIdentifier: nil
         )
         let enc = JSONEncoder()
@@ -428,7 +428,7 @@ extension EditorApplication {
         let snapshot = SceneSemanticEncoder().encode(
             scene.scene,
             selectedEntityID: store.state.selection.selectedEntityID,
-            workspaceMode: store.state.workspace.mode.rawValue,
+            workspaceMode: store.state.content.rawValue,
             localeIdentifier: nil
         )
         var matches: [(entity: SceneSemanticSnapshot.Entity, distance: Double?)] = []

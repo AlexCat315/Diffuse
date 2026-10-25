@@ -17,7 +17,7 @@ struct EditorNativeMenuTests {
     }
 
     private func catalog(_ playback: PlaybackState = .stopped) -> EditorCommandCatalog {
-        .make(EditorCommandContext(workspaceMode: .level, playbackState: playback,
+        .make(EditorCommandContext(content: .scene, playbackState: playback,
                                    canUndo: true, canRedo: true, hasSelection: true))
     }
 
@@ -53,7 +53,7 @@ struct EditorNativeMenuTests {
     }
 
     @MainActor
-    @Test("View nests Space, Layout and Panels as native submenus with their key equivalents")
+    @Test("View lists content, then nests Layout and Panels as native submenus with their key equivalents")
     func nestedSubmenus() {
         let bar = EditorNativeMenuBuilder.make(catalog: catalog()) { _ in }
         let view = bar.menus.first { $0.title == L("View") }
@@ -61,9 +61,8 @@ struct EditorNativeMenuTests {
             if case let .submenu(menu) = item { return menu }
             return nil
         } ?? []
-        #expect(submenus.map(\.title) == [L("Space"), L("Layout"), L("Panels")])
-        #expect(actions(submenus.first?.items ?? []).filter { !$0.keyEquivalent.isEmpty }.map(\.keyEquivalent)
-            == ["1", "2", "3", "4", "5"])
+        #expect(submenus.map(\.title) == [L("Layout"), L("Panels")])
+        #expect(actions(view?.items ?? []).prefix(3).map(\.keyEquivalent) == ["1", "2", "3"])
     }
 
     @MainActor
@@ -80,7 +79,7 @@ struct EditorNativeMenuTests {
     func focusedTextAvailability() {
         let focus = FocusChain()
         let bar = EditorNativeMenuBuilder.make(
-            catalog: .make(EditorCommandContext(workspaceMode: .level, playbackState: .playing)),
+            catalog: .make(EditorCommandContext(content: .scene, playbackState: .playing)),
             focusChain: { focus }) { _ in }
         let all = actions(bar.menus.flatMap(\.items))
         let undo = all.first { $0.keyEquivalent == "z" && !$0.keyModifiers.contains(.shift) }

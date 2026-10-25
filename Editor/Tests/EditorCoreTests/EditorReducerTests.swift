@@ -30,29 +30,11 @@ struct EditorReducerTests {
         #expect(state.selection.selectedEntityIDs.isEmpty)
     }
 
-    @Test("Changing workspace switches to that workspace default preset")
-    func changingWorkspaceSelectsDefaultPreset() {
-        var state = EditorState {
-            $0.workspace.mode = .level
-            $0.workspace.layoutPreset = .levelCinematics
-        }
-
-        EditorReducer.reduce(state: &state, action: .setWorkspaceMode(.animation))
-
-        #expect(state.workspace.mode == .animation)
-        #expect(state.workspace.layoutPreset == .animationDefault)
-    }
-
-    @Test("Preset changes are ignored when they do not belong to current workspace")
-    func presetMustBelongToWorkspace() {
-        var state = EditorState {
-            $0.workspace.mode = .modeling
-            $0.workspace.layoutPreset = .modelingDefault
-        }
-
-        EditorReducer.reduce(state: &state, action: .setActiveLayoutPreset(.levelDefault))
-
-        #expect(state.workspace.layoutPreset == .modelingDefault)
+    @Test("Content follows the action")
+    func settingContent() {
+        var state = EditorState()
+        EditorReducer.reduce(state: &state, action: .setContent(.timeline))
+        #expect(state.content == .timeline)
     }
 
     @Test("Appending console messages assigns stable increasing IDs")

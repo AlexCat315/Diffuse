@@ -15,7 +15,6 @@ struct EditorStatusBar: View {
     private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
     private var tasks: Observed<EditorTasks, TaskSnapshot>
     private var layout: Observed<WorkspaceController, UInt64>
-    @State private var isSpaceMenuPresented = false
 
     init(app: EditorApplication, controller: WorkspaceController, onCommand: @escaping (EditorCommand) -> Void) {
         self.app = app
@@ -30,7 +29,7 @@ struct EditorStatusBar: View {
     var body: some View {
         let store = app.store
         let snapshot = workspace.wrappedValue
-        let hasScene = store.workspaceMode.profile.features.contains(.scene)
+        let hasScene = store.content == .scene
         let _ = layout.wrappedValue
         let document = documents.wrappedValue.selected
         // Scene modes show file facts only while the editor tab is in front.
@@ -51,8 +50,6 @@ struct EditorStatusBar: View {
             }
             problems(EditorProblemSummary(documents: snapshot.documents, consoleEntries: store.consoleEntries,
                                           taskProblems: tasks.wrappedValue.problems))
-            Divider(axis: .vertical).frame(height: 12)
-            space(EditorSpace(mode: store.workspaceMode))
             SourceControlStatus(app: app) { onCommand(.showPanel("source-control")) }
             if hasScene {
                 if store.sceneDirty { unsaved }
@@ -76,9 +73,13 @@ struct EditorStatusBar: View {
                 Divider(axis: .vertical).frame(height: 12)
             }
             TaskStatus(app: app) { onCommand(.showPanel("tasks")) }
+            Button(icon: .resource(UIIcons.Editor.terminal), size: 12, tooltip: L("Terminal")) {
+                onCommand(.togglePanel("terminal"))
+            }.buttonStyle(EditorChromeButtonStyle(height: 20))
+                .accessibility { $0.label = L("Terminal") }
+                .debugName("editor-status-terminal")
             activity(snapshot)
             LanguageServerStatus(app: app, snapshot: snapshot, onCommand: onCommand)
-            if app.isAgentEnabled { agent }
         }
         .padding(horizontal: 12, vertical: 0)
         .frame(height: 24)
@@ -114,24 +115,6 @@ struct EditorStatusBar: View {
         .debugName("editor-status-problems")
     }
 
-    /// The current Space; clicking it switches Spaces like the title-bar menu.
-    private func space(_ current: EditorSpace) -> some View {
-        Popover(isPresented: $isSpaceMenuPresented, width: 200, placement: .topLeading, surface: .content, overflow: .flip) {
-            Row(alignment: .center, spacing: 5) {
-                Icon(current.icon, size: 11, color: .onSurfaceMuted)
-                Text(L(current.title)).font(.caption).foregroundColor(.onSurfaceMuted)
-            }.padding(horizontal: 6).frame(height: 20)
-                .accessibility { $0.label = L("Space") + " " + L(current.title) }
-        } content: {
-            Menu(EditorSpace.allCases.map { space in
-                .item(MenuItem(id: space.rawValue, title: L(space.title), isSelected: current == space, action: {
-                    isSpaceMenuPresented = false
-                    onCommand(.setWorkspaceMode(space.mode))
-                }))
-            }, width: 200)
-        }.debugName("editor-status-space")
-    }
-
     /// Background work in priority order: long operations, script builds, then
     /// the most recent warning or error the editor raised. Subsystem log records
     /// stay in the console: they are diagnostics, not something to act on.
@@ -165,37 +148,6 @@ struct EditorStatusBar: View {
             .buttonStyle(.plain).flex(0, shrink: 1).frame(minWidth: 0)
             .debugName("editor-status-activity")
         }
-    }
-
-    /// The Agent's state, always reachable: what needs review comes first.
-    private var agent: some View {
-        let store = app.store
-        let reviews = store.agentTasks.filter { $0.phase == .awaitingReview }.count
-            + (store.pendingConfirmationRequest == nil ? 0 : 1)
-        let working = store.agentTasks.contains { $0.phase == .planning }
-        let available = app.isAIAvailable
-        let title = reviews > 0 ? "\(reviews) \(L("Awaiting Review"))"
-            : working ? L("Guava is working")
-            : available ? L("Assistant ready") : L("Assistant offline")
-        let emphasized = reviews > 0 || working
-        return Button(tooltip: available ? (store.aiStatusMessage ?? L("Assistant"))
-                                         : L("Set an AI provider in Settings to enable.")) {
-            if let id = app.agentPanelID { onCommand(.showPanel(id)) }
-        } label: {
-            Row(alignment: .center, spacing: 5) {
-                if working && reviews == 0 {
-                    Spinner(size: 10)
-                } else {
-                    Icon(UIIcons.Status.sparkles, size: 11,
-                         color: available ? EditorThemeTokens.assistantColor : .onSurfaceMuted)
-                }
-                Text(title, lineLimit: 1).font(emphasized ? .label : .caption)
-                    .foregroundColor(emphasized ? EditorThemeTokens.assistantColor : .onSurfaceMuted)
-            }
-        }
-        .buttonStyle(EditorChromeButtonStyle(height: 20))
-        .accessibility { $0.label = L("Assistant") + ": " + title }
-        .debugName("editor-status-agent")
     }
 }
 

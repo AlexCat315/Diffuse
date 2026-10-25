@@ -105,7 +105,7 @@ extension EditorApplication {
             let report = scene.applyProjectScriptCatalog(catalog)
             store.dispatch(.forceUIRefresh)
             if let session, agentTaskService.activeTask == nil {
-                let context = Self.workflowContext(for: store.state.workspace.mode,
+                let context = Self.workflowContext(for: store.state.content,
                                                    scriptEntries: catalog.entries)
                 let previousTask = pendingAISetupTask
                 pendingAISetupTask = Task {

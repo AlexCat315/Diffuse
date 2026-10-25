@@ -239,6 +239,9 @@ extension EditorApplication {
     /// memory, never in observable/project state.
     @MainActor
     public func inspectPluginForManagement(at pluginURL: URL) async {
+        // Bundled packages publish their own management state as they start;
+        // a review opened meanwhile would be cleared.
+        await pluginSession.bundledStartup?.value
         pluginSession.pendingApproval = nil
         publishPluginManagement(phase: .inspecting,
                                 candidate: nil,
@@ -496,7 +499,7 @@ extension EditorApplication {
             await nextSession.setObservationBus(observationBus)
             await nextSession.setContextMemory(contextMemoryStore)
             await nextSession.setWorkflowContext(Self.workflowContext(
-                for: store.state.workspace.mode,
+                for: store.state.content,
                 scriptEntries: scene.scriptCatalogEntries
             ))
         }
@@ -545,7 +548,7 @@ extension EditorApplication {
             let snapshot = SceneSemanticEncoder().encode(
                 scene.scene,
                 selectedEntityID: store.state.selection.selectedEntityID,
-                workspaceMode: store.state.workspace.mode.rawValue,
+                workspaceMode: store.state.content.rawValue,
                 localeIdentifier: nil
             )
             scenePayload = try encoder.encode(snapshot)

@@ -22,15 +22,15 @@ public enum EditorAgentTaskPhase: String, Sendable, Equatable {
 public struct EditorAgentTaskTarget: Sendable, Equatable {
     public let documentID: UUID
     public let sceneRevision: UInt64
-    public let workspace: EditorWorkspaceMode
+    public let content: EditorContent
     public let selectedEntityIDs: Set<UInt64>
     public let primaryEntityID: UInt64?
 
-    public init(documentID: UUID, sceneRevision: UInt64, workspace: EditorWorkspaceMode,
+    public init(documentID: UUID, sceneRevision: UInt64, content: EditorContent,
                 selectedEntityIDs: Set<UInt64>, primaryEntityID: UInt64?) {
         self.documentID = documentID
         self.sceneRevision = sceneRevision
-        self.workspace = workspace
+        self.content = content
         self.selectedEntityIDs = selectedEntityIDs
         self.primaryEntityID = primaryEntityID
     }

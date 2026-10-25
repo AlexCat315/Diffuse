@@ -154,17 +154,15 @@ struct CommandPaletteOverlay: View {
             }
         }
         if !commandsOnly && !entitiesOnly {
-            if app.store.workspaceMode.profile.features.contains(.documents) {
-                let documents = app.workstation.documents
-                entries += documents.files().map { path in
-                    let parts = path.split(separator: "/")
-                    return ResultItem(id: "file/" + path, title: parts.last.map(String.init) ?? path,
-                        detail: parts.dropLast().joined(separator: "/"), shortcut: "", enabled: true, searchText: path,
-                        perform: {
-                            documents.open(path)
-                            EditorRootViewFactory.activatePanel("documents", in: controller)
-                        })
-                }
+            let documents = app.workstation.documents
+            entries += documents.files().map { path in
+                let parts = path.split(separator: "/")
+                return ResultItem(id: "file/" + path, title: parts.last.map(String.init) ?? path,
+                    detail: parts.dropLast().joined(separator: "/"), shortcut: "", enabled: true, searchText: path,
+                    perform: {
+                        documents.open(path)
+                        EditorRootViewFactory.activatePanel("documents", in: controller)
+                    })
             }
             entries += app.workstation.scripts.snapshot.scripts.map { document in
                 ResultItem(id: "script/" + document.file.identifier, title: document.file.displayName + ".swift",
@@ -186,7 +184,7 @@ struct CommandPaletteOverlay: View {
                     searchText: symbol.name, perform: { app.openSwiftLocation(symbol.location) })
             }
         }
-        if entitiesOnly && app.store.workspaceMode.profile.features.contains(.scene) {
+        if entitiesOnly {
             entries += HierarchyPanelModel.allEntityIDs(in: app.scene.roots).compactMap { id in
                 guard let entity = app.scene.entitySummary(id: id) else { return nil }
                 return ResultItem(id: "entity/" + String(id), title: entity.name,
@@ -209,10 +207,8 @@ struct CommandPaletteOverlay: View {
             let intent = ResultItem(id: "agent.intent", title: text.isEmpty ? L("Open Assistant") : L("Ask Guava") + ": " + text,
                 detail: app.isAIAvailable ? L("Work with the assistant in this context") : L("Set an AI provider in Settings to enable."),
                 shortcut: "↵", enabled: true, searchText: "", perform: {
-                    if let id = app.agentPanelID {
-                        EditorCommandDispatcher.handle(.showPanel(id), app: app, controller: controller,
-                                                       registry: registry, fromCommandPalette: true)
-                    }
+                    EditorCommandDispatcher.handle(.showAssistant, app: app, controller: controller,
+                                                   registry: registry, fromCommandPalette: true)
                     if !text.isEmpty {
                         if app.isAIAvailable { _ = app.submitNaturalLanguageIntent(text) }
                         else { app.openSettingsWindow() }

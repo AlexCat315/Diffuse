@@ -97,6 +97,14 @@
         "title": "Swift Package",
         "marker": "Package.swift"
       }
+    ],
+    "guava.ui.documentView/v1": [
+      {
+        "id": "dependencies",
+        "title": "Dependencies",
+        "extensions": ["resolved"],
+        "entryPoint": "view"
+      }
     ]
   },
   "runtime": {

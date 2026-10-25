@@ -26,7 +26,7 @@ struct PluginView: View, @unchecked Sendable {
     var body: some View {
         let snapshot = observed.wrappedValue
         let _ = values.wrappedValue
-        Column(alignment: .leading, spacing: 0) {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
             if let failure = snapshot.failure {
                 Row(alignment: .center, spacing: 8) {
                     Icon(UIIcons.Status.alertTriangle, size: 12, color: .error)

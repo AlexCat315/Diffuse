@@ -21,7 +21,8 @@ struct PluginNodeRenderer: @unchecked Sendable {
         case let .column(stack): stackView(stack, direction: .column)
         case let .row(stack): stackView(stack, direction: .row)
         case let .scroll(child):
-            AnyView(ScrollView(.vertical, scrollbarGutter: .stable) { render(child) }
+            // Content fills the viewport's width, so flexible children such as table cells share it.
+            AnyView(ScrollView(.vertical, scrollbarGutter: .stable) { render(child).frame(width: .percent(100), minWidth: 0) }
                 .flex().frame(minWidth: 0, minHeight: 0))
         case let .section(title, children):
             AnyView(Column(alignment: .leading, spacing: 4) {
@@ -29,7 +30,7 @@ struct PluginNodeRenderer: @unchecked Sendable {
                     Text(title.uppercased(), lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted)
                 }
                 for child in children { render(child) }
-            }.padding(vertical: 4).frame(width: .percent(100), minWidth: 0))
+            }.padding(vertical: 4).frame(minWidth: 0))
         case .spacer:
             AnyView(Spacer(minLength: 0))
         case let .text(text):
@@ -40,7 +41,7 @@ struct PluginNodeRenderer: @unchecked Sendable {
             AnyView(Icon(Self.icon(name), size: 12, color: Self.color(tone)))
         case let .progress(percent):
             if let percent {
-                AnyView(ProgressView(value: Double(percent) / 100).frame(width: .percent(100), minWidth: 0))
+                AnyView(ProgressView(value: Double(percent) / 100).frame(minWidth: 0))
             } else {
                 AnyView(Spinner(size: 12))
             }
@@ -99,7 +100,7 @@ struct PluginNodeRenderer: @unchecked Sendable {
             if let submit = field.submit {
                 input.events.onSubmit = { send(submit, value: session.values[field.id]) }
             }
-        }.frame(width: .percent(100), minWidth: 0).debugName("plugin-field-" + field.id))
+        }.frame(minWidth: 0).debugName("plugin-field-" + field.id))
     }
 
     private func toggleView(_ toggle: UINode.Toggle) -> AnyView {
@@ -136,7 +137,7 @@ struct PluginNodeRenderer: @unchecked Sendable {
                     for child in disclosure.children { render(child) }
                 }.padding(EdgeInsets(leading: 15)).frame(width: .percent(100), minWidth: 0)
             }
-        }.frame(width: .percent(100), minWidth: 0))
+        }.frame(minWidth: 0))
     }
 
     private func tableView(_ table: UINode.Table) -> AnyView {
@@ -145,7 +146,7 @@ struct PluginNodeRenderer: @unchecked Sendable {
             let color: SemanticColorRef = header ? .onSurfaceMuted : .onSurface
             return AnyView(Row(alignment: .center, spacing: 8) {
                 for value in values {
-                    AnyView(Text(value, lineLimit: 1).font(font).foregroundColor(color)
+                    AnyView(Text(value, lineLimit: 1).truncated().font(font).foregroundColor(color)
                         .flex(1, shrink: 1, basis: 0).frame(minWidth: 0))
                 }
             }.padding(horizontal: 8).frame(width: .percent(100), height: .points(24), minWidth: 0))
@@ -160,7 +161,7 @@ struct PluginNodeRenderer: @unchecked Sendable {
                     AnyView(cells(row.cells, header: false).debugName("plugin-row"))
                 }
             }
-        }.frame(width: .percent(100), minWidth: 0))
+        }.frame(minWidth: 0))
     }
 
     private func send(_ action: String, arguments: PluginJSON? = nil, value: PluginJSON? = nil) {

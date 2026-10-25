@@ -60,7 +60,7 @@ extension EditorApplication {
         store.dispatch(.appendChatMessage(AIChatMessage(role: .user, text: text)))
         let assistantID = UUID().uuidString
         let target = EditorAgentTaskTarget(documentID: store.state.document.identity,
-            sceneRevision: store.sceneRevision, workspace: store.workspaceMode,
+            sceneRevision: store.sceneRevision, content: store.content,
             selectedEntityIDs: store.selectedEntityIDs, primaryEntityID: store.selectedEntityID)
         guard let task = agentTaskService.begin(prompt: text, target: target) else { return }
         let requestID = task.id

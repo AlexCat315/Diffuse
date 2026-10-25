@@ -141,7 +141,7 @@ public final class EditorApplication: @unchecked Sendable {
         let initialSnapshot = SceneSemanticEncoder().encode(
             scene.scene,
             selectedEntityID: initialSelectedEntityID,
-            workspaceMode: store.state.workspace.mode.rawValue,
+            workspaceMode: store.state.content.rawValue,
             localeIdentifier: nil
         )
         var initialWorldView = WorldView()
@@ -279,7 +279,7 @@ public final class EditorApplication: @unchecked Sendable {
 
         // Propagate initial workflow context, observation bus, and context memory to Session.
         if let initialSession {
-            let ctx = Self.workflowContext(for: store.state.workspace.mode,
+            let ctx = Self.workflowContext(for: store.state.content,
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = observationBus
             let mem = contextMemoryStore

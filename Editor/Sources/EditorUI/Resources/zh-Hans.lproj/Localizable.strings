@@ -714,7 +714,6 @@
 "3D Film Engine · Modeling and Rendering" = "3D 影视引擎 · 建模与渲染";
 "3D Film Engine · Animation" = "3D 影视引擎 · 动画制作";
 "Game: Scripting" = "游戏：脚本开发";
-"Script Development" = "脚本开发";
 "Save Layout" = "保存布局";
 "Maximize Viewport" = "最大化视口";
 "Maximize Editor" = "最大化编辑器";
@@ -772,22 +771,8 @@
 /* Workspace menus and layout arrangements */
 "Workspace" = "工作区";
 "Layout" = "布局";
-"Level Editing" = "关卡编辑";
-"Script Development" = "脚本开发";
-"Models and Rendering" = "模型与渲染";
-"Animation Editing" = "动画编辑";
-"Code and Console" = "代码与控制台";
-"Scene and Scripts" = "场景与脚本";
-"Scene and Assets" = "场景与资源";
-"Animation and Rendering" = "动画与渲染";
-"Assets and Rendering" = "资源与渲染";
-"Viewport Focus" = "视口优先";
-"Viewport and Animation" = "视口与动画";
-"Animation Details" = "动画属性";
 
-"Game Development" = "游戏开发";
 
-"3D Creation" = "3D 创作";
 
 "Manual Editing" = "手动编辑";
 
@@ -836,13 +821,11 @@
 "Files" = "文件";
 "Document" = "文档";
 
-"Write" = "写作";
-"Gameplay" = "玩法";
 "Animate" = "动画";
 "Video" = "剪辑";
 "Outline" = "大纲";
 "Properties" = "属性";
-"Assistant" = "Assistant";
+"Assistant" = "助手";
 "Review" = "审阅";
 "Journal" = "日志";
 "Session Journal" = "会话日志";
@@ -870,7 +853,6 @@
 
 "Import Assets" = "导入资源";
 "Content Browser" = "资源浏览器";
-"Text and Code" = "文本与代码";
 "Video Editing" = "视频剪辑";
 
 "Project-relative file path" = "工程内的文件路径";
@@ -956,7 +938,6 @@
 "Development" = "开发版本";
 "Project directory" = "项目目录";
 "Operating system" = "操作系统";
-"Current Space" = "当前工作空间";
 "Copy application and workspace information for a support request. Credentials are excluded." = "复制应用和工作空间信息，便于反馈问题；其中不包含凭据。";
 "Copy diagnostics" = "复制诊断信息";
 "Search all settings…" = "搜索全部设置…";
@@ -982,8 +963,6 @@
 "Could not save the scene" = "无法保存场景";
 "Show Problems" = "查看问题";
 "Saved" = "已保存";
-"Game stopped" = "已停止试玩";
-"This Space does not run the game." = "当前 Space 不运行游戏。";
 "Layout reset" = "布局已重置";
 "No closed panel to reopen" = "没有可重新打开的面板";
 "Stop the game to send a request" = "停止试玩后才能发送请求";
@@ -1271,3 +1250,5 @@
 
 "Uninstall" = "卸载";
 "Instructions, tools and context the assistant uses." = "助手使用的指令、工具和上下文。";
+"Timeline" = "时间线";
+"Sidebar" = "侧栏";

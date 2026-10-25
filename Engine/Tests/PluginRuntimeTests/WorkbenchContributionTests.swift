@@ -106,7 +106,7 @@ struct WorkbenchContributionTests {
         let runtime = try contract("""
             record document-input { view: string, state: string, event: string, context: string }
             document: func(input: document-input) -> string;
-            record context-input { workspace: string, selection: string }
+            record context-input { content: string, selection: string }
             context: func(input: context-input) -> string;
             """)
         let view = DocumentViewContribution(id: "table", title: "Table", extensions: ["csv"], entryPoint: "document")

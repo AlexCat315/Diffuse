@@ -63,7 +63,7 @@ extension EditorApplication {
         )
         if oldSession != nil || newSession != nil {
             let worldContext = self.aiWorldContext
-            let ctx = Self.workflowContext(for: store.state.workspace.mode,
+            let ctx = Self.workflowContext(for: store.state.content,
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = self.observationBus
             let mem = self.contextMemoryStore
@@ -153,7 +153,7 @@ extension EditorApplication {
     }
 
     static func workflowContext(
-        for mode: EditorWorkspaceMode,
+        for content: EditorContent,
         scriptEntries: [ProjectScriptCatalogEntry] = []
     ) -> WorkflowContext {
         let intent = GameplayIntent(genre: "game", winCondition: "not_specified", pacing: "exploration")
@@ -161,19 +161,14 @@ extension EditorApplication {
             scriptingRegistry: scriptEntries.map(\.identifier),
             scriptSchemas: scriptEntries.map(scriptSchema)
         )
-        switch mode {
-        case .documents: return .workstation(WorkstationContext(domain: .documents))
-        case .video: return .workstation(WorkstationContext(domain: .media))
-        case .level, .scripting:
+        switch content {
+        case .files: return .workstation(WorkstationContext(domain: .documents))
+        case .timeline: return .workstation(WorkstationContext(domain: .media))
+        case .scene:
             return .game(GameWorkflowContext(levelPhase: .blockout,
                                             gameplayIntent: intent,
                                             targetExperience: "Interactive level editing",
                                             knownConstraints: constraints))
-        case .modeling:
-            return .asset(AssetWorkflowContext())
-        case .animation:
-            return .film(FilmWorkflowContext(activeSequenceID: "animation",
-                                              narrativePhase: .blocking, directorIntent: "Animate a 3D film sequence"))
         }
     }
 

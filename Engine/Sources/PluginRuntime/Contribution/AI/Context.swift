@@ -6,7 +6,8 @@ public struct AIContextContribution: Codable, Sendable, Equatable {
     /// Unique among enabled packages; agents name it in their `context`.
     public var id: String
     public var title: String
-    /// `func(input: record { workspace: string, selection: string }) -> string`.
+    /// `func(input: record { workspace: string, selection: string }) -> string`,
+    /// or a step-protocol entry point that serves the `context` operation.
     public var entryPoint: String
     /// Longer text is cut to this many UTF-8 bytes; 4 KiB when absent.
     public var maxBytes: Int?
@@ -32,14 +33,17 @@ public enum AIContextContributionPoint: ContributionPointSpec {
         }
     }
 
+    /// A context entry point is either a plain call, or a step-protocol entry
+    /// point whose commands the editor runs under the package's process permission.
     public static func validateRuntime(_ context: AIContextContribution, contract: WITContract?) throws {
-        guard contract?.capabilityInputs.first(where: { $0.name == context.entryPoint })?.inputType == aiContextInputType else {
+        let inputType = contract?.capabilityInputs.first(where: { $0.name == context.entryPoint })?.inputType
+        guard inputType == aiContextInputType || inputType == stepInputType else {
             throw PluginManifestValidationError.invalidContribution(id)
         }
     }
 }
 
-/// `record { workspace: string, selection: string }`: the active workspace and
+/// `record { content: string, selection: string }`: what the window centers on and
 /// the selected scene references as a JSON array.
-let aiContextInputType = WITValueType.record([WITRecordField(name: "workspace", type: .string),
+let aiContextInputType = WITValueType.record([WITRecordField(name: "content", type: .string),
                                               WITRecordField(name: "selection", type: .string)])

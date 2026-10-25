@@ -16,7 +16,7 @@ struct EditorWorkFocus {
     var isDirty = false
 
     init(app: EditorApplication, documents snapshot: EditorDocumentSnapshot) {
-        guard app.store.workspaceMode.profile.features.contains(.scene) else {
+        guard app.store.content == .scene else {
             rootIcon = UIIcons.File.folder
             guard let path = snapshot.selectedPath else {
                 trail = [L("Files")]

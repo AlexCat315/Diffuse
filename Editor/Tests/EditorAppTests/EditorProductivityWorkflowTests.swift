@@ -47,20 +47,21 @@ struct EditorProductivityWorkflowTests {
         #expect(exact > partial)
     }
 
-    @Test("script and film workspaces have distinct defaults")
-    func workspaceDefaults() {
-        let ids: [WorkspacePanelID] = ["viewport", "documents", "hierarchy", "inspector", "assets", "console", "render-pipeline", "animation", "developer-tools", "intent-input"]
+    @Test("content follows the front center tab")
+    func contentFollowsCenter() {
+        let ids: [WorkspacePanelID] = ["viewport", "documents", "media", "hierarchy", "files", "inspector", "outline", "console"]
         let registry = WorkspacePanelRegistry(ids.map { id in WorkspacePanelDescriptor(id: id, title: id.rawValue, defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() } })
-        let level = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelDefault, registry: registry)
-        let script = EditorWorkspaceDefaults.makeDocument(mode: .scripting, preset: .scriptingDefault, registry: registry)
-        let film = EditorWorkspaceDefaults.makeDocument(mode: .animation, preset: .animationDefault, registry: registry)
-        #expect(level.group("center")?.activePanelID == "viewport")
-        #expect(script.group("center")?.activePanelID == "documents")
-        #expect(WorkspaceController(document: script).focusedPanelID == "documents")
-        #expect(script.group("bottom")?.activePanelID == "console")
-        #expect(film.group("bottom")?.activePanelID == "animation")
-        #expect(EditorWorkspaceMode.scripting.isGameWorkspace)
-        #expect(!EditorWorkspaceMode.animation.isGameWorkspace)
+        let document = EditorWorkspaceDefaults.makeDocument(registry: registry)
+        #expect(document.group("center")?.panels == ["viewport", "documents", "media"])
+        #expect(document.group("bottom")?.activePanelID == "console")
+        let controller = WorkspaceController(document: document)
+        #expect(EditorContentFollower.content(in: controller, current: .files) == .scene)
+        _ = controller.dispatch(.setActivePanel(groupID: "center", panelID: "documents"))
+        #expect(EditorContentFollower.content(in: controller, current: .scene) == .files)
+        _ = controller.dispatch(.setActivePanel(groupID: "leading", panelID: "files"))
+        #expect(EditorContentFollower.content(in: controller, current: .files) == .files)
+        _ = controller.dispatch(.setActivePanel(groupID: "center", panelID: "media"))
+        #expect(EditorContentFollower.content(in: controller, current: .files) == .timeline)
     }
 
     @Test("game preview fits wide and portrait resolutions without stretching")

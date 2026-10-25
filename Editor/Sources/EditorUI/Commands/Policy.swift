@@ -1,20 +1,17 @@
 internal import EditorCore
 
 /// One command policy for menus, the palette, keyboard dispatch and native menus.
+/// Scene editing follows the scene; file commands follow files. Panels, playback
+/// and builds stay available whatever the window centers on.
 enum EditorWorkspaceCommandPolicy {
-    static func allows(_ command: EditorCommand, in mode: EditorWorkspaceMode) -> Bool {
-        let profile = mode.profile
+    static func allows(_ command: EditorCommand, in content: EditorContent) -> Bool {
+        let features = content.profile.features
         switch command {
-        case .showPanel(let id), .togglePanel(let id), .maximizePanel(let id): return profile.allowsPanel(id)
         case .showSceneSettings, .newScene, .openScene, .saveScene, .duplicateSelection, .deleteSelection,
              .selectAll, .clearSelection, .invertSelection, .selectDescendants, .spawnEntity, .frameSelection,
              .toggleSelectionVisibility, .toggleSelectionLock:
-            return profile.features.contains(.scene)
-        case .saveDocument, .revertDocument, .closeDocument: return profile.features.contains(.documents)
-        case .showAssets, .importAssets: return profile.allowsPanel("assets")
-        case .buildProject, .buildAndRun: return profile.features.contains(.gameBuild)
-        case .runTask: return profile.allowsPanel("tasks")
-        case .setPlaybackState, .togglePlayback: return profile.features.contains(.gameplay)
+            return features.contains(.scene)
+        case .saveDocument, .revertDocument, .closeDocument: return features.contains(.documents)
         default: return true
         }
     }

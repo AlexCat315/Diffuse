@@ -186,7 +186,7 @@ struct DocumentFilesPanel: View {
         if model.move(path, to: folder.isEmpty ? name : folder + "/" + name) { index.invalidate() }
     }
 
-    private var allowsScripts: Bool { app?.store.workspaceMode.profile.features.contains(.scripting) == true }
+    private var allowsScripts: Bool { app?.store.content.profile.features.contains(.scripting) == true }
 
     /// Scripts edited without a tab (a rename that touched several files).
     private var dirtyScripts: Set<String> {

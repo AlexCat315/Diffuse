@@ -5,8 +5,7 @@ internal import GuavaUI
 /// Everything a command's availability depends on. The native menu rebuilds
 /// only when this value changes.
 struct EditorCommandContext: Equatable {
-    var workspaceMode: EditorWorkspaceMode
-    var layoutPreset: EditorLayoutPreset
+    var content: EditorContent
     var playbackState: PlaybackState = .stopped
     var canUndo = false
     var canRedo = false
@@ -18,8 +17,7 @@ struct EditorCommandContext: Equatable {
     /// The panel that holds the agent conversation, while an agent is enabled.
     var agentPanelID: String?
 
-    init(workspaceMode: EditorWorkspaceMode,
-         layoutPreset: EditorLayoutPreset? = nil,
+    init(content: EditorContent,
          playbackState: PlaybackState = .stopped,
          canUndo: Bool = false,
          canRedo: Bool = false,
@@ -27,8 +25,7 @@ struct EditorCommandContext: Equatable {
          document: EditorCommandDocument? = nil,
          workbench: WorkbenchCatalog = .empty,
          agentPanelID: String? = nil) {
-        self.workspaceMode = workspaceMode
-        self.layoutPreset = layoutPreset ?? .default(for: workspaceMode)
+        self.content = content
         self.playbackState = playbackState
         self.canUndo = canUndo
         self.canRedo = canRedo
@@ -40,8 +37,7 @@ struct EditorCommandContext: Equatable {
 
     init(app: EditorApplication) {
         let state = app.store.state
-        self.init(workspaceMode: state.workspace.mode,
-                  layoutPreset: state.workspace.layoutPreset,
+        self.init(content: state.content,
                   playbackState: state.timing.playbackState,
                   canUndo: app.canUndo,
                   canRedo: app.canRedo,
@@ -101,7 +97,7 @@ struct EditorCommandCatalog {
     static func make(_ context: EditorCommandContext) -> Self {
         let builder = Builder(context: context)
         return Self(applicationItems: builder.applicationItems,
-                    menus: builder.menus.compactMap { $0.filtered(for: context.workspaceMode) },
+                    menus: builder.menus.compactMap { $0.filtered(for: context.content) },
                     contributed: builder.contributed)
     }
 
@@ -165,15 +161,15 @@ private extension EditorCommand {
 private extension EditorCommandMenu {
     /// Drops commands the workspace does not authorize, then collapses empty
     /// submenus and redundant separators so no menu shows dead structure.
-    func filtered(for mode: EditorWorkspaceMode) -> Self? {
+    func filtered(for content: EditorContent) -> Self? {
         var kept: [EditorCommandItem] = []
         for item in items {
             switch item {
             case let .entry(entry):
-                guard EditorWorkspaceCommandPolicy.allows(entry.command, in: mode) else { continue }
+                guard EditorWorkspaceCommandPolicy.allows(entry.command, in: content) else { continue }
                 kept.append(item)
             case let .submenu(menu):
-                guard let menu = menu.filtered(for: mode) else { continue }
+                guard let menu = menu.filtered(for: content) else { continue }
                 kept.append(.submenu(menu))
             case .separator:
                 guard !kept.isEmpty else { continue }
@@ -192,8 +188,6 @@ private struct Builder {
     private var canAuthorScene: Bool {
         EditorSceneAuthoringPolicy.canEditScene(during: context.playbackState)
     }
-
-    private var isGame: Bool { context.workspaceMode.isGameWorkspace }
 
     var applicationItems: [EditorCommandItem] {
         [
@@ -299,24 +293,13 @@ private struct Builder {
     }
 
     private var view: EditorCommandMenu {
-        let spaces: [EditorCommandItem] = EditorSpace.allCases.enumerated().map { index, space in
-            entry("workspace." + space.mode.rawValue, space.title, "space workspace 工作空间",
-                  .init(.digit(index + 1)), command: .setWorkspaceMode(space.mode),
-                  selected: context.workspaceMode == space.mode)
-        } + [
-            .separator,
-            entry("workspace." + EditorWorkspaceMode.scripting.rawValue, EditorWorkspaceMode.scripting.title,
-                  "space workspace script 工作空间 脚本", command: .setWorkspaceMode(.scripting),
-                  selected: context.workspaceMode == .scripting),
-        ]
-        let presets: [EditorCommandItem] = EditorLayoutPreset.presets(for: context.workspaceMode).map { preset in
-            entry("layout." + preset.rawValue, preset.title, "layout 布局", command: .setLayoutPreset(preset),
-                  selected: context.layoutPreset == preset)
+        let contents: [EditorCommandItem] = EditorContent.allCases.enumerated().map { index, content in
+            entry("content." + content.rawValue, content.title, "show content 内容 场景 文件 时间线",
+                  .init(.digit(index + 1)), command: .showContent(content), selected: context.content == content)
         }
-        return menu("view", "View", [
-            .submenu(menu("space", "Space", spaces)),
-            .submenu(menu("layout", "Layout", presets + [
-                .separator,
+        return menu("view", "View", contents + [
+            .separator,
+            .submenu(menu("layout", "Layout", [
                 entry("layout.save", "Save Layout", "layout workspace 保存布局", command: .saveLayout),
                 entry("layout.reset", "Reset Layout", "layout workspace 重置布局", .init(.digit(0)),
                       command: .resetLayout),
@@ -342,16 +325,15 @@ private struct Builder {
 
     private var agent: EditorCommandMenu {
         // Pending reviews sit at the top of the Agent thread, so one entry serves both.
-        let conversation: [EditorCommandItem] = context.agentPanelID.map { id in
-            [entry("agent.show", "Agent", "agent assistant conversation review approval 智能体 对话 审阅",
-                   command: .showPanel(id))]
-        } ?? []
+        guard context.agentPanelID != nil else {
+            return menu("agent", "Agent", [
+                entry("agent.settings", "Set up Assistant", "assistant agent setup 助手 设置", command: .openSettings),
+            ])
+        }
         return menu("agent", "Agent", [
-            entry("agent.intent", "Ask Guava...", "", .init(.letter("k")), command: .showCommandPalette(.intent),
-                  inPalette: false),
-            .separator,
-        ] + conversation + [
-            entry("journal.show", "Session Journal", "history activity journal 历史 日志", command: .showPanel("journal")),
+            entry("agent.intent", "Ask Guava...", "", .init(.letter("k")), command: .focusAssistant, inPalette: false),
+            entry("agent.show", "Agent", "agent assistant conversation review approval 智能体 对话 审阅",
+                  command: .showAssistant),
         ])
     }
 
@@ -359,20 +341,20 @@ private struct Builder {
         let state = context.playbackState
         func transport(_ target: PlaybackState, _ title: String, _ shortcut: EditorShortcut? = nil) -> EditorCommandItem {
             entry("playback." + target.rawValue, title, "game preview 游戏试玩", shortcut, command: .setPlaybackState(target),
-                  enabled: isGame && EditorPlaybackCommandPolicy.canTransition(from: state, to: target),
+                  enabled: EditorPlaybackCommandPolicy.canTransition(from: state, to: target),
                   selected: state == target)
         }
         return menu("run", "Run", [
             entry("playback.toggle", "Play / Pause", "play pause game 试玩 暂停", .init(.enter),
-                  command: .togglePlayback, enabled: isGame),
+                  command: .togglePlayback),
             transport(.playing, "Play"),
             transport(.paused, "Pause"),
             transport(.stopped, "Stop", .init(.enter, [.primary, .shift])),
             .separator,
             entry("project.build", "Build Project", "export build 导出构建", .init(.letter("b")),
-                  command: .buildProject, enabled: isGame),
+                  command: .buildProject),
             entry("project.run", "Build and Run", "export run 构建运行", .init(.letter("r")),
-                  command: .buildAndRun, enabled: isGame),
+                  command: .buildAndRun),
             .separator,
             entry("task.build", "Run Build Task", "task build compile swift package 任务 构建 编译", command: .runTask(.build)),
             entry("task.test", "Run Tests", "task test xctest testing 任务 测试", .init(.letter("u")),
