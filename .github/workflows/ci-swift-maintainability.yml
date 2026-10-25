@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/sdk-revision'
       - 'Engine/Sources/**'
       - 'Editor/Sources/**'
       - 'Platforms/Android/Sources/**'
@@ -11,6 +12,7 @@ on:
       - '.github/workflows/ci-swift-maintainability.yml'
   pull_request:
     paths:
+      - '.github/sdk-revision'
       - 'Engine/Sources/**'
       - 'Editor/Sources/**'
       - 'Platforms/Android/Sources/**'

@@ -95,8 +95,8 @@ public final class PluginHostProcessClient: @unchecked Sendable {
         command.environment = ProcessInfo.processInfo.environment
         command.environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
         var budget = ProcessBudget()
-        budget.outputBytes = 33_554_432
-        budget.pendingInputBytes = 33_554_432
+        budget.outputBytes = PluginHostFrameCodec.maximumFrameBytes + 4
+        budget.pendingInputBytes = PluginHostFrameCodec.maximumFrameBytes + 4
         budget.lifetimeMilliseconds = nil
         do { session = try ProcessSession(command: command, budget: budget) }
         catch { throw PluginHostClientError.launchFailed(String(describing: error)) }

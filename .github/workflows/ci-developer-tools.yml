@@ -3,9 +3,9 @@ name: Developer tools
 on:
   push:
     branches: [main]
-    paths: ['Tools/Developer/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
+    paths: ['.github/sdk-revision', 'Tools/Developer/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
   pull_request:
-    paths: ['Tools/Developer/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
+    paths: ['.github/sdk-revision', 'Tools/Developer/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
