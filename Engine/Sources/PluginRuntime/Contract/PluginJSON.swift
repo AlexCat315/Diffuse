@@ -32,6 +32,16 @@ public enum PluginJSON: Codable, Sendable, Equatable {
         }
     }
 
+    public var stringValue: String? {
+        if case let .string(value) = self { return value }
+        return nil
+    }
+
+    public var boolValue: Bool? {
+        if case let .bool(value) = self { return value }
+        return nil
+    }
+
     /// The value as `JSONSerialization` objects.
     public var foundationValue: Any {
         switch self {

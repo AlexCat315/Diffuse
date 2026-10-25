@@ -9,8 +9,10 @@ public final class WorkbenchSession: _ObservableObject, @unchecked Sendable {
     public private(set) var catalog = WorkbenchCatalog.empty
     private let publisher = _ObservablePublisher<WorkbenchSession>()
     private var revisions: [UInt64] = []
-    private var states: [String: PluginPanelState] = [:]
+    private var sessions: [String: PluginViewSession] = [:]
     var onChange: (@MainActor () -> Void)?
+    /// Shows a plugin's message; `true` marks a failure. Installed by the shell.
+    var notify: (@MainActor (_ text: String, _ isError: Bool) -> Void)?
 
     /// Publishes a new catalog when the registrations behind it changed.
     @MainActor
@@ -28,28 +30,30 @@ public final class WorkbenchSession: _ObservableObject, @unchecked Sendable {
     func replace(_ catalog: WorkbenchCatalog) {
         guard catalog != self.catalog else { return }
         self.catalog = catalog
-        for (key, state) in states where !state.source.isCurrent(in: catalog) {
-            state.cancel()
-            states.removeValue(forKey: key)
+        for (key, session) in sessions where !session.source.isCurrent(in: catalog) {
+            session.cancel()
+            sessions.removeValue(forKey: key)
         }
         publisher.send()
         onChange?()
     }
 
+    /// The session for a view, created and first rendered on demand.
     @MainActor
-    func state(for source: PluginContentSource,
-               describe: @escaping @MainActor () async throws -> PanelModel) -> PluginPanelState {
-        if let state = states[source.key], state.source == source { return state }
-        let state = PluginPanelState(source: source, describe: describe)
-        states[source.key] = state
-        state.refresh()
-        return state
+    func session(for source: PluginContentSource, invoke: @escaping PluginViewSession.Invoke,
+                 effects: @escaping @MainActor ([UIEffect]) -> Void) -> PluginViewSession {
+        if let session = sessions[source.key], session.source == source { return session }
+        let session = PluginViewSession(source: source, invoke: invoke)
+        session.effectHandler = effects
+        sessions[source.key] = session
+        session.render()
+        return session
     }
 
-    /// A command may change what the package's panels and views show.
+    /// A command may change what the package's views show.
     @MainActor
-    func refreshContent(of pluginID: String) {
-        for state in states.values where state.source.pluginID == pluginID { state.refresh() }
+    func renderViews(of pluginID: String) {
+        for session in sessions.values where session.source.pluginID == pluginID { session.render() }
     }
 }
 

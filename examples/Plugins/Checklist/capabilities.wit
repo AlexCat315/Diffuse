@@ -1,0 +1,11 @@
+package example:checklist;
+
+interface capabilities {
+  /// Serves the checklist panel and the CSV table through the view protocol.
+  record view-input { view: string, state: string, event: string, context: string }
+  view: func(input: view-input) -> string;
+}
+
+world plugin {
+  export capabilities;
+}

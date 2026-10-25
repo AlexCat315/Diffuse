@@ -316,7 +316,7 @@ AI 不是单一插件类型，而是一组贡献点。
 { "id": "git-summary", "title": "Working Tree", "entryPoint": "context", "maxBytes": 4096 }
 ```
 
-- 入口签名：`func(input: record { workspace: string, selection: string }) -> string`，`selection` 是所选场景引用的 JSON 数组。
+- 入口签名：`func(input: record { workspace: string, selection: string }) -> string`，`selection` 是所选场景引用的 JSON 数组。返回值是一个 JSON 字符串（文本本身）。
 - 只有在 agent 的 `context` 里列出时，宿主才在每次请求前读取并随请求发给模型；超过 `maxBytes`（默认 4 KiB，最大 16 KiB）按 UTF-8 截断；读取失败只记日志、不阻断请求。
 - `id` 在已启用插件间唯一；只接受 `access: "read"` 的包。
 
@@ -332,14 +332,83 @@ AI 聊天面板通过通用 `guava.ui.panel/v1` 贡献，内容是宿主视图 `
 
 ## UI 贡献
 
-不允许插件直接持有 GuavaUI 视图树。面板内容采用**宿主渲染的声明式 view model**：插件决定显示什么，宿主用自己的样式绘制，交互回到插件命令。
+插件不持有 GuavaUI 视图，也不画像素。插件界面由**组件树 + 状态往返**构成：
 
-不选另外两个方案的原因：
+- 插件用一组通用组件（布局、文本、按钮、输入框、开关、选择、表格、折叠……）描述界面，宿主按编辑器样式绘制。
+- 用户操作变成事件发回插件；插件拿到上一次的状态和事件，返回新状态、新组件树和要宿主执行的效果（Elm 式的 `update` + `view`）。
+- 插件实例每次调用都是新的、内存不跨调用，所以状态由宿主保管、每次原样传回。这样确定、可重放，插件宿主崩溃或重载后也只是重新渲染。
 
-- 隔离 webview：`GuavaUIWebView` 只有 Apple 宿主；原生视图盖在合成内容之上，不受圆角、透明度和遮挡约束，和编辑器视觉不一致；网页还会绕过宿主的进程、网络和审批边界。
-- WASM view protocol：要先定义布局、事件和增量更新协议，成本最高；声明式 view model 不够用时再在它之上扩展。
+不选的方案：
 
-五个 UI 贡献点均已实现。
+- 隔离 webview：`GuavaUIWebView` 只有 Apple 宿主；原生视图盖在合成内容之上，不受圆角、透明度和遮挡约束；网页还会绕过宿主的进程、网络和审批边界。
+- 常驻实例 + 像素/矢量绘制：需要长期内存、帧调度和独立的输入与无障碍处理，破坏每次调用一个实例的隔离模型。需要自绘时再加 `canvas` 组件（矢量命令），仍走同一协议。
+
+### 视图协议
+
+`guava.ui.panel/v1`（带 `entryPoint`）与 `guava.ui.documentView/v1` 共用一个入口签名：
+
+```
+func(input: record { view: string, state: string, event: string, context: string }) -> string
+```
+
+- `view`：面板 ID 或文档视图 ID。
+- `state`：插件上次返回的 `state`（JSON 文本）；首次为空串。
+- `event`：空串表示只渲染；否则是事件 JSON（见下）。
+- `context`：面板为 `{"workspace": "<工作区>"}`；文档视图为 `{"path": "...", "text": "..."}`，`text` 含未保存修改，超过 48 KiB 不调用。
+
+返回一个 JSON 对象（字符串结果本身就是这段 JSON）：
+
+```json
+{ "state": { "items": ["Ship"] }, "ui": { "type": "column", "children": [ ... ] }, "effects": [ { "type": "message", "text": "Added" } ] }
+```
+
+- `state` 可为任意 JSON，序列化后不超过 48 KiB；省略表示状态不变。
+- 首次构建视图、插件的命令执行后、文档视图切换显示时，宿主以空事件渲染一次。
+- 同一视图的事件按顺序处理；`change` 事件 300 ms 防抖合并。调用失败时保留上一棵树并显示错误。
+- 状态只属于当前编辑器会话的这个视图实例（文档视图按路径区分），不写入项目或设置；插件停用、重载或编辑器重启后丢弃。
+
+### 组件
+
+所有组件都有可选的 `key`（稳定身份）与 `flex`（非负整数）。数字一律为整数。
+
+| 类型 | 属性 |
+| --- | --- |
+| `column` / `row` | `children`，`spacing`、`padding`（0–32），`align`：`start` / `center` / `end` / `stretch` |
+| `scroll` | `child`（纵向滚动） |
+| `section` | `title?`，`children` |
+| `spacer` | — |
+| `text` | `text`，`style`：`body` / `caption` / `label` / `strong` / `mono` / `title`，`tone` |
+| `badge` | `text`，`tone` |
+| `icon` | `name`（宿主图标），`tone` |
+| `progress` | `percent?`（0–100，省略为转圈） |
+| `button` | `title?`、`icon?`（至少一个），`style`：`primary` / `secondary` / `ghost` / `danger`，`action`，`arguments?`，`disabled?` |
+| `textField` | `id`，`placeholder?`，`value?`，`secure?`，`submit?`（回车时的 action），`change?`（输入时的 action） |
+| `toggle` | `id`，`label?`，`value`，`action?` |
+| `select` | `id`，`options: [{value, label}]`，`value`，`action?` |
+| `disclosure` | `title`，`expanded`，`action`，`arguments?`，`children` |
+| `table` | `columns: [string]`，`rows: [{cells: [string], action?, arguments?}]` |
+
+`tone`：`normal` / `muted` / `accent` / `success` / `warning` / `danger`。
+
+- 控件的当前值由宿主保管，打字不调用插件。事件之后插件明确返回的值一律采用（例如提交后返回 `""` 清空）；单纯重绘时，用户改过的值保留，除非插件返回的值变了。不带 `value` 的输入框完全由宿主保管。
+- 上限：4000 个节点、深度 24、单个字符串 4 KiB、`arguments` ≤ 4 KiB；`id` / `action` 匹配 `^[a-z][a-zA-Z0-9_.-]{0,63}$`，同一棵树里 `id` 唯一。
+
+### 事件
+
+```json
+{ "action": "add", "arguments": { "list": "today" }, "value": "Ship", "values": { "draft": "Ship", "done": true } }
+```
+
+- `action` / `arguments` 来自触发的组件；`value` 是触发组件的新值（输入框、开关、选择）。
+- `values` 是这棵树里所有带 `id` 的输入框（字符串）、开关（布尔）、选择（字符串）的当前值，按钮点击时也一并带上。
+
+### 效果
+
+`effects` 是宿主按顺序执行的数组：
+
+- `{"type": "message", "text"}`、`{"type": "error", "text"}`：通知。
+- `{"type": "panel", "id"}`：显示本包的面板。
+- `{"type": "open", "path"}`：在编辑器中打开项目内的文件，路径不在项目内时拒绝。
 
 ### `guava.command/v1`
 
@@ -347,39 +416,19 @@ AI 聊天面板通过通用 `guava.ui.panel/v1` 贡献，内容是宿主视图 `
 { "id": "refresh", "title": "Refresh Status", "keywords": "reload", "entryPoint": "command", "palette": true }
 ```
 
-- `id` 在包内唯一，宿主以 `<pluginID>.<id>` 全局区分；`palette: false` 的命令只供本包面板使用。
+- `id` 在包内唯一，宿主以 `<pluginID>.<id>` 全局区分；`palette: false` 的命令不进命令面板。
 - 入口签名：`func(input: record { command: string, arguments: string }) -> string`，`arguments` 是 JSON 对象文本。
-- 返回 JSON 文本 `{ "message"?, "error"?, "panel"? }`：宿主显示通知或失败，`panel` 只能是本包面板。
-- 命令执行后宿主刷新本包所有 view model 面板。隐式激活事件 `onCommand:<id>`。
+- 返回 `{ "effects": [...] }`，效果同上。命令执行后宿主重新渲染本包的所有视图。隐式激活事件 `onCommand:<id>`。
 
 ### `guava.ui.panel/v1`
 
 ```json
-{ "id": "status", "title": "Status", "slot": "leading", "icon": "console", "entryPoint": "panel" }
+{ "id": "status", "title": "Status", "slot": "leading", "icon": "console", "entryPoint": "view" }
 ```
 
 - `view`（宿主视图，目前只有 `agent`）与 `entryPoint` 二选一；`slot` 为 `leading` / `center` / `trailing` / `bottom`，缺省 `trailing`。
 - `id` 在已启用插件间唯一，不能占用宿主内置面板 ID；布局按它持久化。插件启停时面板实时加入或离开布局。
-- 入口签名：`func(input: record { panel: string }) -> string`，返回 view model JSON 文本。首次构建面板时与本包命令执行后请求，隐式激活事件 `onView:<id>`。
-
-view model：
-
-```json
-{
-  "sections": [
-    { "title": "Changes", "items": [
-      { "title": "README.md", "detail": "modified", "badge": "M", "tone": "warning",
-        "command": "open", "arguments": { "path": "README.md" } }
-    ] }
-  ],
-  "actions": [ { "title": "Refresh", "command": "refresh" } ],
-  "empty": "Working tree clean"
-}
-```
-
-- `tone`：`normal` / `muted` / `accent` / `success` / `warning` / `danger`。
-- 行与动作只能引用本包命令；`arguments` 必须是 JSON 对象（≤ 4 KiB）。
-- 上限：32 个分组、2000 行、8 个动作、文本 512 字符、整体 512 KiB。
+- 带 `entryPoint` 的面板走视图协议，隐式激活事件 `onView:<id>`。
 
 ### `guava.ui.menu/v1` 与 `guava.ui.toolbar/v1`
 
@@ -394,15 +443,34 @@ view model：
 ### `guava.ui.documentView/v1`
 
 ```json
-{ "id": "table", "title": "Table", "extensions": ["csv"], "entryPoint": "document" }
+{ "id": "table", "title": "Table", "extensions": ["csv"], "entryPoint": "view" }
 ```
 
-- 入口签名：`func(input: record { path: string, text: string }) -> string`，返回 view model；`text` 是当前文本（含未保存修改），超过 64 KiB 不调用。
-- 路径栏为每个适用视图提供切换按钮；打开时用 view model 代替文本编辑区，切换回来恢复文本。只接受 `access: "read"` 的包。
+- 走视图协议，`context` 带路径与当前文本。
+- 路径栏为每个适用视图提供切换按钮；打开时用插件视图代替文本编辑区，切换回来恢复文本。
+
+### 插件端
+
+`GuavaPluginKit` 的 `UI` 提供组件构造函数与事件解析，插件写普通函数：
+
+```swift
+func view(view: String, state: String, event: String, context: String) -> String {
+    var items = JSON.parse(state)?["items"]?.array ?? []
+    if let event = UIEvent(event), event.action == "add", let text = event.values["draft"]?.string, !text.isEmpty {
+        items.append(.string(text))
+    }
+    return UI.result(state: ["items": .array(items)], ui: UI.column([
+        UI.textField(id: "draft", placeholder: "New item", value: "", submit: "add"),
+        UI.column(items.compactMap { $0.string }.map { UI.text($0) }),
+    ]))
+}
+```
+
+示例见 `examples/Plugins/Checklist`。
 
 ### 约束
 
-- 命令与 view model 入口只返回读结果：带 `entryPoint` 的命令和面板只接受 `access: "read"` 的包；写操作仍走审批管线。
+- 带 `entryPoint` 的命令、面板与文档视图只接受 `access: "read"` 的包；写操作仍走审批管线。
 - 这些入口由编辑器调用，不暴露给 AI。
 
 ## 授权与安全

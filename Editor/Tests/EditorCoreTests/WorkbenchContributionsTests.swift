@@ -61,49 +61,135 @@ struct WorkbenchContributionsTests {
         #expect(catalog.commands.first { $0.name == "open" }?.showsInPalette == false)
     }
 
-    @Test func panelStateKeepsContentWhileReloadingAndReportsFailures() async throws {
-        let panel = try #require(ContributedPanel(pluginID: "fixture.status",
-            contribution: PanelContribution(id: "status", title: "Status", content: .entryPoint("panel"))))
-        var replies: [Result<PanelModel, Error>] = [
-            .success(PanelModel(sections: [.init(items: [.init(title: "Clean")])])),
-            .failure(PluginWorkbenchResultError.invalidPanel),
-        ]
-        let state = PluginPanelState(source: .panel(panel)) { try replies.removeFirst().get() }
-        state.refresh()
-        #expect(state.snapshot.isLoading)
-        await settle(state)
-        #expect(state.snapshot.model?.sections.first?.items.first?.title == "Clean")
+    @Test func aViewHandsBackItsStateAndTheControlValuesWithEachEvent() async throws {
+        var calls: [(state: PluginJSON?, event: UIEvent?)] = []
+        let session = PluginViewSession(source: .panel(try statusPanel())) { state, event in
+            calls.append((state, event))
+            var count = 0
+            if case let .object(object)? = state, case let .number(saved)? = object["count"] { count = Int(saved) }
+            if event?.action == "add" { count += 1 }
+            return PluginViewResult(state: .object(["count": .number(Double(count))]), ui: Self.form(count: count, draft: event == nil ? nil : ""))
+        }
+        session.render()
+        #expect(session.snapshot.isBusy)
+        await settle(session)
+        #expect(calls.first?.state == nil && calls.first?.event == nil)
+        #expect(session.values == ["draft": .string(""), "done": .bool(false)])
 
-        state.refresh()
-        #expect(state.snapshot.isLoading)
-        #expect(state.snapshot.model != nil)
-        await settle(state)
-        #expect(state.snapshot.model != nil)
-        #expect(state.snapshot.failure == PluginWorkbenchResultError.invalidPanel.errorDescription)
+        session.setValue(.string("Ship"), for: "draft")
+        session.setValue(.bool(true), for: "done")
+        session.send(action: "add")
+        await settle(session)
+        #expect(calls.count == 2)
+        #expect(calls[1].state == .object(["count": .number(0)]))
+        #expect(calls[1].event?.values == ["draft": .string("Ship"), "done": .bool(true)])
+        // After the event the plugin's answers win: it cleared the field and kept the toggle off.
+        #expect(session.values == ["draft": .string(""), "done": .bool(false)])
+
+        session.setValue(.string("Next"), for: "draft")
+        session.render()
+        await settle(session)
+        // A plain render keeps what the user typed.
+        #expect(session.values["draft"] == .string("Next"))
+        #expect(calls[2].state == .object(["count": .number(1)]))
     }
 
-    @Test func aCommandRefreshesOnlyItsPackagesPanels() async throws {
-        let session = WorkbenchSession()
+    @Test func eventsRunInOrderAndAFailureKeepsTheLastTree() async throws {
+        var order: [String] = []
+        var fail = false
+        let session = PluginViewSession(source: .panel(try statusPanel())) { _, event in
+            order.append(event?.action ?? "render")
+            await Task.yield()
+            if fail { throw PluginWorkbenchResultError.invalidView }
+            return PluginViewResult(ui: Self.form(count: order.count, draft: nil))
+        }
+        session.render()
+        session.send(action: "first")
+        session.send(action: "second")
+        await settle(session)
+        #expect(order == ["render", "first", "second"])
+        let tree = session.snapshot.ui
+        fail = true
+        session.send(action: "third")
+        await settle(session)
+        #expect(session.snapshot.ui == tree)
+        #expect(session.snapshot.failure == PluginWorkbenchResultError.invalidView.errorDescription)
+    }
+
+    @Test func typingReachesThePluginOnlyThroughADebouncedChange() async throws {
+        var events: [UIEvent] = []
+        let session = PluginViewSession(source: .panel(try statusPanel())) { _, event in
+            if let event { events.append(event) }
+            return PluginViewResult(ui: Self.form(count: 0, draft: nil))
+        }
+        session.render()
+        await settle(session)
+        session.setValue(.string("a"), for: "draft")
+        session.setValue(.string("ab"), for: "draft", change: "search")
+        session.setValue(.string("abc"), for: "draft", change: "search")
+        try await Task.sleep(for: .milliseconds(450))
+        await settle(session)
+        #expect(events.map(\.action) == ["search"])
+        #expect(events.first?.value == .string("abc"))
+    }
+
+    @Test func aCommandRendersOnlyItsPackagesViews() async throws {
+        let workbench = WorkbenchSession()
         func panel(_ plugin: String, _ id: String) throws -> ContributedPanel {
             try #require(ContributedPanel(pluginID: plugin,
-                contribution: PanelContribution(id: id, title: id, content: .entryPoint("panel"))))
+                contribution: PanelContribution(id: id, title: id, content: .entryPoint("view"))))
         }
         var calls: [String: Int] = [:]
-        let mine = session.state(for: .panel(try panel("fixture.mine", "mine"))) { calls["mine", default: 0] += 1; return PanelModel() }
-        let other = session.state(for: .panel(try panel("fixture.other", "other"))) { calls["other", default: 0] += 1; return PanelModel() }
+        let mine = workbench.session(for: .panel(try panel("fixture.mine", "mine")), invoke: { _, _ in
+            calls["mine", default: 0] += 1; return PluginViewResult(ui: UINode(.spacer))
+        }, effects: { _ in })
+        let other = workbench.session(for: .panel(try panel("fixture.other", "other")), invoke: { _, _ in
+            calls["other", default: 0] += 1; return PluginViewResult(ui: UINode(.spacer))
+        }, effects: { _ in })
         await settle(mine)
         await settle(other)
         #expect(calls == ["mine": 1, "other": 1])
-
-        session.refreshContent(of: "fixture.mine")
+        workbench.renderViews(of: "fixture.mine")
         await settle(mine)
         #expect(calls == ["mine": 2, "other": 1])
     }
 
+    @Test func effectsOpenFilesShowPanelsAndNotify() async throws {
+        let project = try directory()
+        defer { try? FileManager.default.removeItem(at: project) }
+        try Data("todo".utf8).write(to: project.appendingPathComponent("todo.md"))
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false,
+                                        trustedPluginHostExecutableURL: nil)
+        defer { app.shutdown() }
+        var notes: [String] = []
+        var panels: [String] = []
+        app.setPluginNotificationHandler { text, isError in notes.append((isError ? "!" : "") + text) }
+        app.setActivatePanelHandler { panels.append($0) }
+        app.applyPluginEffects([.message("Saved"), .error("Broken"), .panel("checklist"), .open(path: "todo.md")])
+        #expect(notes == ["Saved", "!Broken"])
+        #expect(panels == ["checklist", "documents"])
+        #expect(app.workstation.documents.snapshot.selected?.path == "todo.md")
+    }
+
     // MARK: Fixtures
 
-    private func settle(_ state: PluginPanelState) async {
-        for _ in 0..<100 where state.snapshot.isLoading { await Task.yield() }
+    private func settle(_ session: PluginViewSession) async {
+        for _ in 0..<200 where session.snapshot.isBusy { await Task.yield() }
+    }
+
+    private func statusPanel() throws -> ContributedPanel {
+        try #require(ContributedPanel(pluginID: "fixture.status",
+            contribution: PanelContribution(id: "status", title: "Status", content: .entryPoint("view"))))
+    }
+
+    private static func form(count: Int, draft: String?) -> UINode {
+        let value = draft.map { #", "value": "\#($0)""# } ?? ""
+        return try! JSONDecoder().decode(UINode.self, from: Data("""
+            {"type": "column", "children": [
+              {"type": "textField", "id": "draft", "submit": "add"\(value)},
+              {"type": "toggle", "id": "done", "value": false},
+              {"type": "text", "text": "\(count)"}]}
+            """.utf8))
     }
 
     private func directory() throws -> URL {

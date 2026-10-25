@@ -16,9 +16,11 @@ extension EditorApplication {
             for context in (try? package.manifest.contributes.decode(AIContextContributionPoint.self)) ?? []
             where agent.packageContexts.contains(context.id) {
                 do {
-                    let text = try await readEntryPoint(pluginID: package.manifest.id, entryPoint: context.entryPoint,
-                                                        event: "onAIChat",
-                                                        input: ["workspace": target.workspace.rawValue, "selection": selection])
+                    let payload = try await readEntryPoint(pluginID: package.manifest.id, entryPoint: context.entryPoint,
+                                                           event: "onAIChat",
+                                                           input: ["workspace": target.workspace.rawValue, "selection": selection])
+                    // The entry point returns its text as a JSON string.
+                    let text = try JSONDecoder().decode(String.self, from: payload)
                     guard !text.isEmpty else { continue }
                     sections.append(SessionContextSection(title: context.title,
                                                           text: Self.prefix(text, bytes: context.byteLimit)))

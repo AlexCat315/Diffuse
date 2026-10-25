@@ -47,7 +47,7 @@ struct WorkbenchContributionTests {
         let runtime = try contract("""
             record command-input { command: string, arguments: string }
             command: func(input: command-input) -> string;
-            record panel-input { panel: string }
+            record panel-input { view: string, state: string, event: string, context: string }
             panel: func(input: panel-input) -> string;
             """)
         let command = CommandContribution(id: "refresh", title: "Refresh", entryPoint: "command")
@@ -104,7 +104,7 @@ struct WorkbenchContributionTests {
         }
 
         let runtime = try contract("""
-            record document-input { path: string, text: string }
+            record document-input { view: string, state: string, event: string, context: string }
             document: func(input: document-input) -> string;
             record context-input { workspace: string, selection: string }
             context: func(input: context-input) -> string;
@@ -125,41 +125,82 @@ struct WorkbenchContributionTests {
         }
     }
 
-    @Test("panel content names only the package's own commands and stays within bounds")
-    func panelModelIsValidated() throws {
-        let model = try PanelModel(json: """
-            {"sections": [{"title": "Changes", "items": [
-                {"title": "README.md", "detail": "modified", "badge": "M", "tone": "warning",
-                 "command": "open", "arguments": {"path": "README.md"}}]}],
-             "actions": [{"title": "Refresh", "command": "refresh"}]}
-            """, commands: ["open", "refresh"])
-        #expect(model.sections.first?.items.first?.arguments == .object(["path": .string("README.md")]))
-        #expect(model.actions.map(\.command) == ["refresh"])
-        #expect(try PanelModel(json: #"{"empty": "Clean"}"#, commands: []).sections.isEmpty)
+    @Test("a view result carries a component tree, the state to hand back and effects")
+    func viewResultIsDecoded() throws {
+        let result = try PluginViewResult(json: Data("""
+            {"state": {"items": ["Ship"]},
+             "ui": {"type": "column", "spacing": 8, "children": [
+               {"type": "textField", "id": "draft", "placeholder": "New item", "value": "", "submit": "add"},
+               {"type": "row", "align": "center", "children": [
+                 {"type": "toggle", "id": "done-0", "value": true, "action": "toggle"},
+                 {"type": "text", "text": "Ship", "tone": "muted", "flex": 1},
+                 {"type": "button", "title": "Remove", "style": "ghost", "action": "remove", "arguments": {"index": 0}}]},
+               {"type": "select", "id": "filter", "value": "all", "options": [{"value": "all", "label": "All"}]},
+               {"type": "disclosure", "title": "More", "expanded": false, "action": "expand", "children": [
+                 {"type": "table", "columns": ["a", "b"], "rows": [{"cells": ["1", "2"], "action": "pick"}]}]},
+               {"type": "progress", "percent": 40}, {"type": "spacer"}, {"type": "badge", "text": "1 open"}]},
+             "effects": [{"type": "message", "text": "Added"}, {"type": "panel", "id": "checklist"},
+                         {"type": "open", "path": "notes/todo.md"}]}
+            """.utf8), panels: ["checklist"])
+        #expect(result.state == .object(["items": .array([.string("Ship")])]))
+        #expect(result.effects == [.message("Added"), .panel("checklist"), .open(path: "notes/todo.md")])
+        guard case let .column(stack) = result.ui.kind else { Issue.record("not a column"); return }
+        #expect(stack.spacing == 8 && stack.children.count == 7)
+        guard case let .textField(field) = stack.children[0].kind else { Issue.record("not a field"); return }
+        #expect(field.submit == "add" && field.value == "")
 
-        let tooMany = (0..<9).map { #"{"title": "A\#($0)", "command": "refresh"}"# }.joined(separator: ",")
-        for invalid in [#"{"actions": [{"title": "Delete", "command": "delete"}]}"#,
-                        #"{"sections": [{"items": [{"title": "x", "arguments": {"a": 1}}]}]}"#,
-                        #"{"sections": [{"items": [{"title": "x", "command": "open", "arguments": [1]}]}]}"#,
-                        #"{"sections": [{"items": [{"title": ""}]}]}"#,
-                        #"{"sections": [{"items": [{"title": "x", "tone": "loud"}]}]}"#,
-                        #"{"actions": [\#(tooMany)]}"#,
-                        "not json"] {
-            #expect(throws: PluginWorkbenchResultError.invalidPanel) {
-                try PanelModel(json: invalid, commands: ["open", "refresh"])
+        let unchanged = try PluginViewResult(json: Data(#"{"ui": {"type": "spacer"}}"#.utf8), panels: [])
+        #expect(unchanged.state == nil && unchanged.effects.isEmpty)
+    }
+
+    @Test("view results stay within bounds and name only what the host knows")
+    func viewResultIsValidated() throws {
+        func ui(_ node: String) -> Data { Data(#"{"ui": \#(node)}"#.utf8) }
+        let deep = String(repeating: #"{"type": "column", "children": ["#, count: 30) + #"{"type": "spacer"}"#
+            + String(repeating: "]}", count: 30)
+        let invalid: [Data] = [
+            ui(#"{"type": "canvas"}"#),
+            ui(#"{"type": "button", "action": "add"}"#),
+            ui(#"{"type": "button", "title": "Go", "action": "Not An Action"}"#),
+            ui(#"{"type": "column", "children": [{"type": "toggle", "id": "a", "value": true}, {"type": "toggle", "id": "a", "value": false}]}"#),
+            ui(#"{"type": "select", "id": "s", "value": "missing", "options": [{"value": "a", "label": "A"}]}"#),
+            ui(#"{"type": "table", "columns": ["a", "b"], "rows": [{"cells": ["only one"]}]}"#),
+            ui(#"{"type": "column", "spacing": 99, "children": []}"#),
+            ui(#"{"type": "progress", "percent": 140}"#),
+            ui(#"{"type": "button", "title": "Go", "action": "go", "arguments": [1]}"#),
+            ui(#"{"type": "icon", "name": "../escape"}"#),
+            ui(deep),
+            Data(#"{"ui": {"type": "spacer"}, "effects": [{"type": "panel", "id": "terminal"}]}"#.utf8),
+            Data(#"{"ui": {"type": "spacer"}, "effects": [{"type": "open", "path": "../secrets"}]}"#.utf8),
+            Data(#"{"ui": {"type": "spacer"}, "effects": [{"type": "open", "path": "/etc/hosts"}]}"#.utf8),
+            Data(#"{"ui": {"type": "spacer"}, "state": "\#(String(repeating: "x", count: 50_000))"}"#.utf8),
+            Data("not json".utf8),
+        ]
+        for data in invalid {
+            #expect(throws: PluginWorkbenchResultError.invalidView) { try PluginViewResult(json: data, panels: ["checklist"]) }
+        }
+    }
+
+    @Test("a command returns effects for the host to carry out")
+    func commandResultIsValidated() throws {
+        let result = try PluginCommandResult(json: Data(#"{"effects": [{"type": "error", "text": "Failed"}]}"#.utf8),
+                                             panels: [])
+        #expect(result.effects == [.error("Failed")])
+        #expect(try PluginCommandResult(json: Data("{}".utf8), panels: []) == PluginCommandResult())
+        for invalid in [#"{"effects": [{"type": "panel", "id": "terminal"}]}"#, #"{"effects": [{"type": "message", "text": ""}]}"#, "[]"] {
+            #expect(throws: PluginWorkbenchResultError.invalidCommandResult) {
+                try PluginCommandResult(json: Data(invalid.utf8), panels: ["status"])
             }
         }
     }
 
-    @Test("a command result may only bring forward the package's own panels")
-    func commandResultIsValidated() throws {
-        let result = try PluginCommandResult(json: #"{"message": "Done", "panel": "status"}"#, panels: ["status"])
-        #expect(result == PluginCommandResult(message: "Done", panel: "status"))
-        #expect(try PluginCommandResult(json: "{}", panels: []) == PluginCommandResult())
-        for invalid in [#"{"panel": "terminal"}"#, #"{"message": ""}"#, "[]"] {
-            #expect(throws: PluginWorkbenchResultError.invalidCommandResult) {
-                try PluginCommandResult(json: invalid, panels: ["status"])
-            }
-        }
+    @Test("events carry the action, the raising control's value and every control value")
+    func eventEncodes() throws {
+        let event = UIEvent(action: "add", arguments: .object(["list": .string("today")]), value: .string("Ship"),
+                            values: ["draft": .string("Ship"), "done": .bool(true)])
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(event)) as? [String: Any])
+        #expect(object["action"] as? String == "add")
+        #expect((object["values"] as? [String: Any])?["done"] as? Bool == true)
+        #expect((object["arguments"] as? [String: Any])?["list"] as? String == "today")
     }
 }

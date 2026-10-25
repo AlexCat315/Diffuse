@@ -1,6 +1,6 @@
 import Foundation
 
-/// A command a package adds to the command palette and to its own panels. The
+/// A command a package adds to the command palette, menus and toolbar. The
 /// host calls the entry point with the command's identifier and arguments, and
 /// carries out the result the plugin returns.
 public struct CommandContribution: Codable, Sendable, Equatable {
@@ -11,7 +11,7 @@ public struct CommandContribution: Codable, Sendable, Equatable {
     public var keywords: String?
     /// The capability that runs the command: `func(input: record { command: string, arguments: string }) -> string`.
     public var entryPoint: String
-    /// False keeps a command that needs arguments, such as one row's action, out of the palette.
+    /// False keeps a command out of the palette, for one that only menus or other commands use.
     public var palette: Bool?
 
     public init(id: String, title: String, keywords: String? = nil, entryPoint: String, palette: Bool? = nil) {
@@ -41,44 +41,35 @@ public enum CommandContributionPoint: ContributionPointSpec {
     }
 }
 
-/// What the host does after a command ran. Every field is optional; an empty
-/// object means the command finished with nothing to show.
-public struct PluginCommandResult: Codable, Sendable, Equatable {
-    /// Shown as a notification.
-    public var message: String?
-    /// Shown as a failure notification.
-    public var error: String?
-    /// One of the package's own panels to bring forward.
-    public var panel: String?
+/// What a command entry point returns: the effects for the host to carry out.
+public struct PluginCommandResult: Sendable, Equatable {
+    public var effects: [UIEffect]
 
-    public init(message: String? = nil, error: String? = nil, panel: String? = nil) {
-        self.message = message
-        self.error = error
-        self.panel = panel
+    public init(effects: [UIEffect] = []) {
+        self.effects = effects
     }
 
-    /// Reads the JSON text a command entry point returned. `panels` are the
+    /// Reads the JSON object a command entry point returned. `panels` are the
     /// package's own panel identifiers.
-    public init(json: String, panels: Set<String>) throws {
-        guard json.utf8.count <= 16 * 1_024,
-              let result = try? JSONDecoder().decode(Self.self, from: Data(json.utf8)),
-              result.message.map(PanelModel.isText) ?? true,
-              result.error.map(PanelModel.isText) ?? true,
-              result.panel.map(panels.contains) ?? true else {
+    public init(json: Data, panels: Set<String>) throws {
+        struct Coding: Decodable { var effects: [UIEffect]? }
+        guard json.count <= 64 * 1_024, let decoded = try? JSONDecoder().decode(Coding.self, from: json),
+              (decoded.effects ?? []).count <= 16,
+              (decoded.effects ?? []).allSatisfy({ $0.isValid(panels: panels) }) else {
             throw PluginWorkbenchResultError.invalidCommandResult
         }
-        self = result
+        effects = decoded.effects ?? []
     }
 }
 
 public enum PluginWorkbenchResultError: Error, Sendable, Equatable, LocalizedError {
     case invalidCommandResult
-    case invalidPanel
+    case invalidView
 
     public var errorDescription: String? {
         switch self {
         case .invalidCommandResult: "The plugin returned a command result the editor cannot use."
-        case .invalidPanel: "The plugin returned panel content the editor cannot show."
+        case .invalidView: "The plugin returned a view the editor cannot show."
         }
     }
 }

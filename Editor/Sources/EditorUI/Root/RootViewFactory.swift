@@ -243,7 +243,7 @@ enum EditorRootViewFactory {
                 if let current = app.workbenchCatalog.panel(id: panel.id) {
                     switch current.content {
                     case .view(.agent): IntentInputPanel(app: app, draft: draft)
-                    case .model: PluginModelPanel(app: app, state: MainActor.assumeIsolated { app.panelState(for: current) })
+                    case .model: PluginView(session: MainActor.assumeIsolated { app.viewSession(for: current) })
                     }
                 }
             })

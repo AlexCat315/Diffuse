@@ -2,13 +2,13 @@ import Foundation
 
 /// A workbench panel a package adds. The host owns the panel's frame, tab,
 /// focus and layout; the package chooses what fills it, either a view the host
-/// provides or content its entry point describes as a ``PanelModel``.
+/// provides or a component tree its entry point returns.
 public struct PanelContribution: Codable, Sendable, Equatable {
     public enum Content: Sendable, Equatable {
         /// A view the host provides, such as `agent`.
         case view(String)
-        /// A capability that returns the panel's ``PanelModel`` as JSON text:
-        /// `func(input: record { panel: string }) -> string`.
+        /// A capability that serves the panel through the view protocol:
+        /// `func(input: record { view: string, state: string, event: string, context: string }) -> string`.
         case entryPoint(String)
     }
 
@@ -56,11 +56,8 @@ public enum PanelContributionPoint: ContributionPointSpec {
 
     public static func validateRuntime(_ panel: PanelContribution, contract: WITContract?) throws {
         guard case let .entryPoint(entryPoint) = panel.content else { return }
-        guard contract?.capabilityInputs.first(where: { $0.name == entryPoint })?.inputType == panelInputType else {
+        guard contract?.capabilityInputs.first(where: { $0.name == entryPoint })?.inputType == viewInputType else {
             throw PluginManifestValidationError.invalidContribution(id)
         }
     }
 }
-
-/// `record { panel: string }`: the identifier of the panel to describe.
-let panelInputType = WITValueType.record([WITRecordField(name: "panel", type: .string)])

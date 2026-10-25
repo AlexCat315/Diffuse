@@ -55,7 +55,7 @@ struct DocumentWritingBar: View {
                 let showing = active == view.id
                 session.update { $0.documentView = showing ? nil : view.id }
                 let path = self.path
-                if !showing { MainActor.assumeIsolated { app.documentViewState(for: view, path: path).refresh() } }
+                if !showing { MainActor.assumeIsolated { app.viewSession(for: view, path: path).render() } }
             }.buttonStyle(ToggleButtonStyle(height: 22)).debugName("document-view-" + view.id))
         }
     }

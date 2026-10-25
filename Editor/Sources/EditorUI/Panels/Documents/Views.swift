@@ -25,7 +25,7 @@ struct DocumentContent: View {
             if let app, let active,
                let view = app.workbenchCatalog.documentViews(forPath: path).first(where: { $0.id == active }) {
                 let path = self.path
-                PluginModelPanel(app: app, state: MainActor.assumeIsolated { app.documentViewState(for: view, path: path) })
+                PluginView(session: MainActor.assumeIsolated { app.viewSession(for: view, path: path) })
                     .id(view.id + ":" + path).flex()
             } else {
                 DocumentEditingSurface(model: model, app: app, path: path, session: session).id(path).flex()

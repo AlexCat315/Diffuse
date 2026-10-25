@@ -104,6 +104,10 @@ final class EditorLaunchContext: @unchecked Sendable {
         subscribeWorkspacePersistence(app: app, controller: controller)
         subscribeNativeMenu(app: app, controller: controller, registry: registry)
         subscribeWorkbench(app: app, controller: controller, registry: registry)
+        app.setPluginNotificationHandler { [weak app] text, isError in
+            guard let app else { return }
+            EditorNotifications.of(app).post(text, id: "plugin", tone: isError ? .danger : .info, duration: isError ? nil : 2)
+        }
         bundle = EditorLaunchBundle(app: app, controller: controller, registry: registry)
         shouldExpandEditorWindow = !EditorAppLaunchOptions.settingsRequested
 

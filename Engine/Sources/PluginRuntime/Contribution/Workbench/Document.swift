@@ -1,13 +1,14 @@
 import Foundation
 
 /// Another way to show a text document. The editor keeps the text and offers
-/// the view beside it; the entry point describes the document as a ``PanelModel``.
+/// the view beside it; the entry point serves it through the view protocol,
+/// with the path and current text as context.
 public struct DocumentViewContribution: Codable, Sendable, Equatable {
     public var id: String
     public var title: String
     /// File extensions the view applies to, without the dot.
     public var extensions: [String]
-    /// `func(input: record { path: string, text: string }) -> string`.
+    /// `func(input: record { view: string, state: string, event: string, context: string }) -> string`.
     public var entryPoint: String
 
     public init(id: String, title: String, extensions: [String], entryPoint: String) {
@@ -17,9 +18,9 @@ public struct DocumentViewContribution: Codable, Sendable, Equatable {
         self.entryPoint = entryPoint
     }
 
-    /// The largest document text the host hands to a view, within the
-    /// runtime's 65 536-character bound on string inputs.
-    public static let maximumTextBytes = 64 * 1_024
+    /// The largest document text the host hands to a view; with JSON escaping
+    /// the context stays within the runtime's 65 536-character string inputs.
+    public static let maximumTextBytes = 48 * 1_024
 }
 
 public enum DocumentViewContributionPoint: ContributionPointSpec {
@@ -36,13 +37,8 @@ public enum DocumentViewContributionPoint: ContributionPointSpec {
     }
 
     public static func validateRuntime(_ view: DocumentViewContribution, contract: WITContract?) throws {
-        guard contract?.capabilityInputs.first(where: { $0.name == view.entryPoint })?.inputType == documentViewInputType else {
+        guard contract?.capabilityInputs.first(where: { $0.name == view.entryPoint })?.inputType == viewInputType else {
             throw PluginManifestValidationError.invalidContribution(id)
         }
     }
 }
-
-/// `record { path: string, text: string }`: the project-relative path and the
-/// document's current text, saved or not.
-let documentViewInputType = WITValueType.record([WITRecordField(name: "path", type: .string),
-                                                 WITRecordField(name: "text", type: .string)])
