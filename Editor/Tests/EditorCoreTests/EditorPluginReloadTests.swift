@@ -159,6 +159,11 @@ final class EditorPluginReloadTests: XCTestCase {
     /// Most recently built `GuavaPluginHost`, matching how PluginRuntimeTests
     /// resolves its fixture executable.
     private func pluginHostExecutable() throws -> URL {
+        #if os(Windows)
+        let name = "GuavaPluginHost.exe"
+        #else
+        let name = "GuavaPluginHost"
+        #endif
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -173,8 +178,8 @@ final class EditorPluginReloadTests: XCTestCase {
         var candidates: Set<URL> = []
         for directory in directories {
             for candidate in [
-                directory.appendingPathComponent("GuavaPluginHost"),
-                directory.appendingPathComponent("debug").appendingPathComponent("GuavaPluginHost"),
+                directory.appendingPathComponent(name),
+                directory.appendingPathComponent("debug").appendingPathComponent(name),
             ] where FileManager.default.isExecutableFile(atPath: candidate.path) {
                 candidates.insert(candidate.resolvingSymlinksInPath())
             }

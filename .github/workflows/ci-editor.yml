@@ -46,10 +46,13 @@ jobs:
         include:
           - name: macOS
             runs-on: xcode-27
+            build-system: swiftbuild
           - name: Linux
             runs-on: ubuntu-latest
+            build-system: native
           - name: Windows
             runs-on: windows-2025-vs2026
+            build-system: native
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -86,12 +89,12 @@ jobs:
         timeout-minutes: 25
         shell: bash
         working-directory: Editor
-        run: swift build --build-tests
+        run: swift build --build-system '${{ matrix.build-system }}' --build-tests
 
       - name: Build Plugin Host
         timeout-minutes: 15
         shell: bash
-        run: swift build --package-path Engine --product GuavaPluginHost
+        run: swift build --build-system '${{ matrix.build-system }}' --package-path Engine --product GuavaPluginHost
 
       - name: Run tests
         timeout-minutes: 15
@@ -99,4 +102,4 @@ jobs:
         working-directory: Editor
         # Run the package as a whole so GameRuntimeTests and any future test
         # targets cannot be added without being exercised by CI.
-        run: swift test --skip-build --no-parallel
+        run: swift test --build-system '${{ matrix.build-system }}' --skip-build --no-parallel
