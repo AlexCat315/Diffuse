@@ -6,7 +6,7 @@ import GuavaUICompose
 /// snapshot. Commands are serialized, so a refresh never interleaves with a commit.
 public final class EditorVersionControl: _ObservableObject, @unchecked Sendable {
     private let publisher = _ObservablePublisher<EditorVersionControl>()
-    private let projectRoot: URL
+    let projectRoot: URL
     private let plugins: StepPlugins
     private var backend: (any VersionControlBackend)?
     private var queue: Task<Void, Never>?
@@ -17,7 +17,13 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
 
     /// `plugins` runs the bundled Git and Lore plugins that drive every command.
     init(projectRoot: URL, plugins: StepPlugins) {
+#if os(Windows)
+        // GetFinalPathNameByHandle returns a \\?\ path; keep the ordinary
+        // absolute path so descendants can be appended reliably.
+        self.projectRoot = URL(fileURLWithPath: projectRoot.path).standardizedFileURL
+#else
         self.projectRoot = projectRoot.resolvingSymlinksInPath().standardizedFileURL
+#endif
         self.plugins = plugins
     }
 

@@ -280,6 +280,6 @@ extension VersionControlTests {
             await model.refresh()
         }
         #expect(model.snapshot.repository?.system == .git,
-                "status=\(app.pluginSession.manager.statuses.first { $0.inspection.manifest.id == bundledGit.id }.map { "\($0.phase):\($0.failure ?? "none")" } ?? "missing") providers=\(app.pluginSession.runtime.versionControlProviders.map(\.system.rawValue)) disabled=\(model.snapshot.disabledSystems) error=\(model.snapshot.error ?? "none")")
+                "root=\(model.projectRoot.path) direct=\(VersionControlProvider.repository(containing: model.projectRoot, among: app.pluginSession.runtime.versionControlProviders)?.system.rawValue ?? "nil") raw=\(VersionControlProvider.repository(containing: root, among: app.pluginSession.runtime.versionControlProviders)?.system.rawValue ?? "nil") providers=\(app.pluginSession.runtime.versionControlProviders.map(\.system.rawValue)) disabled=\(model.snapshot.disabledSystems)")
     }
 }

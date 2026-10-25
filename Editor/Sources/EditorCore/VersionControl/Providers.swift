@@ -47,17 +47,21 @@ struct VersionControlProvider: Sendable {
                            excluding disabled: Set<VersionControlSystem> = [], among available: [VersionControlProvider] = bundled) -> VersionControlRepository? {
         let fileManager = FileManager.default
         let providers = available.filter { !disabled.contains($0.system) }
-        var components = directory.resolvingSymlinksInPath().standardizedFileURL.pathComponents
-        while !components.isEmpty {
-            let current = URL(fileURLWithPath: NSString.path(withComponents: components), isDirectory: true)
+#if os(Windows)
+        var current = directory.standardizedFileURL
+#else
+        var current = directory.resolvingSymlinksInPath().standardizedFileURL
+#endif
+        while true {
             // `.git` is a file inside worktrees and submodules.
             for provider in providers
             where fileManager.fileExists(atPath: current.appendingPathComponent(provider.contribution.marker).path) {
                 return VersionControlRepository(system: provider.system, root: current.standardizedFileURL)
             }
-            components.removeLast()
+            let parent = current.deletingLastPathComponent().standardizedFileURL
+            guard parent.path != current.path, !parent.path.isEmpty else { return nil }
+            current = parent
         }
-        return nil
     }
 }
 
