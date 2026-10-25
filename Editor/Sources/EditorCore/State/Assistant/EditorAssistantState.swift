@@ -12,6 +12,9 @@ public struct EditorAssistantState: Codable, Sendable {
     /// Task sessions are transient and are never restored as running after launch.
     public var agentTasks: [EditorAgentTask] = []
     public var chatMessages: [AIChatMessage] = []
+    /// The content the agent last worked on in this conversation; it decides what the
+    /// agent view shows beside the thread. Transient, like the conversation.
+    public var agentCanvas: EditorContent? = nil
 
     public init(_ configure: (inout Self) -> Void = { _ in }) {
         configure(&self)

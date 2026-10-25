@@ -1252,3 +1252,8 @@
 "Instructions, tools and context the assistant uses." = "助手使用的指令、工具和上下文。";
 "Timeline" = "时间线";
 "Sidebar" = "侧栏";
+"Agent" = "智能体";
+"Code" = "代码";
+"Open in Workbench" = "在工作台中打开";
+"Switch Workbench and Agent" = "切换工作台与智能体";
+"Show alongside" = "在旁边显示";

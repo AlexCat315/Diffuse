@@ -11,7 +11,8 @@ import XCTest
 @MainActor
 final class EditorPluginReloadTests: XCTestCase {
     func testReloadRemountsUnchangedPackageAndSurfacesChangedPackage() async throws {
-        var step = "locate host"
+        var step = "locate host" { didSet { pluginE2ELog("step: \(step)") } }
+        pluginE2ELog("step: \(step)")
         do {
             let host = try pluginHostExecutable()
             step = "build package"
@@ -34,10 +35,14 @@ final class EditorPluginReloadTests: XCTestCase {
             step = "authorize"
             let authorization = try application.makePluginAuthorization(afterUserApprovalOf: inspection)
             step = "enable"
-            _ = try await application.enablePlugin(at: package, authorization: authorization)
+            _ = try await withTimeout(step: step) {
+                try await application.enablePlugin(at: package, authorization: authorization)
+            }
             XCTAssertTrue(application.pluginSession.manager.activeBindings.isEmpty)
-            let opened = await application.handleMCPMessage(Data(
-                #"{"action":"open_capability_session","session_id":"4394C8F4-96BF-48C7-880B-40B83D787DFC"}"#.utf8))
+            let opened = try await withTimeout(step: "open capability session") {
+                await application.handleMCPMessage(Data(
+                    #"{"action":"open_capability_session","session_id":"4394C8F4-96BF-48C7-880B-40B83D787DFC"}"#.utf8))
+            }
             let response = try XCTUnwrap(JSONSerialization.jsonObject(with: opened) as? [String: Any])
             XCTAssertEqual(response["ok"] as? Bool, true, String(describing: response))
             XCTAssertEqual(application.enabledPluginInspections().map(\.manifest.id),
@@ -48,7 +53,9 @@ final class EditorPluginReloadTests: XCTestCase {
 
             // Byte-identical package: one-step remount on the same host generation.
             step = "reload"
-            try await application.reloadPlugin(id: "safe.reloadtest")
+            try await withTimeout(step: step) {
+                try await application.reloadPlugin(id: "safe.reloadtest")
+            }
             XCTAssertEqual(application.enabledPluginInspections().map(\.manifest.id),
                            ["safe.reloadtest"])
             XCTAssertEqual(application.pluginSession.manager.activeBindings["safe.reloadtest"]?.hostGeneration,
@@ -66,8 +73,12 @@ final class EditorPluginReloadTests: XCTestCase {
                 .write(to: package.appendingPathComponent("plugin.json"))
             step = "reload stale package"
             do {
-                try await application.reloadPlugin(id: "safe.reloadtest")
+                try await withTimeout(step: step) {
+                    try await application.reloadPlugin(id: "safe.reloadtest")
+                }
                 XCTFail("expected a stale-authorization rejection")
+            } catch let error as PluginE2EStepTimeout {
+                throw error
             } catch {
                 XCTAssertEqual(error as? EditorPluginCapabilityError,
                                .pluginAuthorizationStale("safe.reloadtest"))
@@ -79,19 +90,25 @@ final class EditorPluginReloadTests: XCTestCase {
 
             // The management entry surfaces the changed build for re-authorization.
             step = "management reload"
-            await application.reloadPluginFromManagement(id: "safe.reloadtest")
+            try await withTimeout(step: step) {
+                await application.reloadPluginFromManagement(id: "safe.reloadtest")
+            }
             XCTAssertEqual(application.store.state.assistant.pluginManagement.candidate?.id,
                            "safe.reloadtest")
             XCTAssertEqual(application.store.state.assistant.pluginManagement.phase,
                            .awaitingAuthorization)
 
             step = "approve replacement build"
-            await application.authorizeAndEnableInspectedPlugin()
+            try await withTimeout(step: step) {
+                await application.authorizeAndEnableInspectedPlugin()
+            }
             XCTAssertEqual(application.store.state.assistant.pluginManagement.phase, .idle)
             XCTAssertEqual(application.enabledPluginInspections().first?.manifest.version, 2)
 
             step = "disable"
-            try await application.disablePlugin(id: "safe.reloadtest")
+            try await withTimeout(step: step) {
+                try await application.disablePlugin(id: "safe.reloadtest")
+            }
             XCTAssertTrue(application.enabledPluginInspections().isEmpty)
         } catch {
             XCTFail("failed at step '\(step)': \(error)")
@@ -99,7 +116,10 @@ final class EditorPluginReloadTests: XCTestCase {
     }
 
     func testDependenciesProtectDisableAndReloadRollsBackAfterGenerationLoss() async throws {
+        var step = "locate host" { didSet { pluginE2ELog("step: \(step)") } }
+        pluginE2ELog("step: \(step)")
         let host = try pluginHostExecutable()
+        step = "build packages"
         let provider = try makePluginPackage()
         let dependent = try makePluginPackage(id: "safe.dependent", requires: [
             PluginRequirement(kind: .capability, id: "safe.reloadtest.inspect"),
@@ -111,44 +131,84 @@ final class EditorPluginReloadTests: XCTestCase {
             }
         }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        step = "create application"
         let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false,
                                                 trustedPluginHostExecutableURL: host)
         defer { application.shutdown() }
+        step = "authorize dependent"
         let dependentAuthorization = try application.makePluginAuthorization(
             afterUserApprovalOf: application.inspectPlugin(at: dependent))
+        step = "enable dependent without provider"
         do {
-            _ = try await application.enablePlugin(at: dependent, authorization: dependentAuthorization)
+            _ = try await withTimeout(step: step) {
+                try await application.enablePlugin(at: dependent, authorization: dependentAuthorization)
+            }
             XCTFail("Missing capability dependency must fail")
+        } catch let error as PluginE2EStepTimeout {
+            throw error
         } catch is UnmetPluginRequirements {}
         XCTAssertTrue(application.enabledPluginInspections().isEmpty)
+        step = "enable provider"
         let providerAuthorization = try application.makePluginAuthorization(
             afterUserApprovalOf: application.inspectPlugin(at: provider))
-        _ = try await application.enablePlugin(at: provider, authorization: providerAuthorization)
-        try await application.activatePlugins(event: "onAITool:safe.reloadtest.inspect")
-        _ = try await application.enablePlugin(at: dependent, authorization: dependentAuthorization)
-        try await application.activatePlugins(event: "onAITool:safe.dependent.inspect")
+        _ = try await withTimeout(step: step) {
+            try await application.enablePlugin(at: provider, authorization: providerAuthorization)
+        }
+        try await withTimeout(step: "activate provider") {
+            try await application.activatePlugins(event: "onAITool:safe.reloadtest.inspect")
+        }
+        step = "enable dependent"
+        _ = try await withTimeout(step: step) {
+            try await application.enablePlugin(at: dependent, authorization: dependentAuthorization)
+        }
+        try await withTimeout(step: "activate dependent") {
+            try await application.activatePlugins(event: "onAITool:safe.dependent.inspect")
+        }
+        step = "disable protected provider"
         do {
-            try await application.disablePlugin(id: "safe.reloadtest")
+            try await withTimeout(step: step) {
+                try await application.disablePlugin(id: "safe.reloadtest")
+            }
             XCTFail("A capability provider cannot be disabled while required")
+        } catch let error as PluginE2EStepTimeout {
+            throw error
         } catch let error as RequiredPluginStillNeeded {
             XCTAssertEqual(error.dependents, ["safe.dependent"])
         }
+        step = "revoke protected provider"
         do {
-            try await application.revokePluginAuthorization(id: "safe.reloadtest")
+            try await withTimeout(step: step) {
+                try await application.revokePluginAuthorization(id: "safe.reloadtest")
+            }
             XCTFail("Rejected revocation must preserve the enabled authorization")
+        } catch let error as PluginE2EStepTimeout {
+            throw error
         } catch is RequiredPluginStillNeeded {}
         XCTAssertNotNil(try application.storedPluginAuthorization(for: application.inspectPlugin(at: provider)))
-        let first = Task { @MainActor in try await application.reloadPlugin(id: "safe.reloadtest") }
-        let second = Task { @MainActor in try await application.reloadPlugin(id: "safe.dependent") }
+        step = "reload both concurrently"
+        let first = Task { @MainActor in
+            try await withTimeout(step: "reload provider") {
+                try await application.reloadPlugin(id: "safe.reloadtest")
+            }
+        }
+        let second = Task { @MainActor in
+            try await withTimeout(step: "reload dependent") {
+                try await application.reloadPlugin(id: "safe.dependent")
+            }
+        }
         try await first.value
         try await second.value
         XCTAssertEqual(application.enabledPluginInspections().count, 2)
         // Each plugin owns its process. Dropping the provider's host stops only
         // that plugin; its dependent keeps the process that loaded it.
+        step = "drop provider host"
         application.pluginSession.hosts.discard("safe.reloadtest")
         XCTAssertNil(application.pluginSession.hosts.existing("safe.reloadtest"))
         XCTAssertNotNil(application.pluginSession.hosts.existing("safe.dependent"))
-        try await application.reloadPlugin(id: "safe.reloadtest")
+        step = "reload after generation loss"
+        try await withTimeout(step: step) {
+            try await application.reloadPlugin(id: "safe.reloadtest")
+        }
         XCTAssertNotNil(application.pluginSession.hosts.existing("safe.reloadtest"))
         XCTAssertEqual(application.enabledPluginInspections().count, 2)
         XCTAssertNotNil(application.pluginCapabilityExecutor)
@@ -245,3 +305,92 @@ final class EditorPluginReloadTests: XCTestCase {
         return root
     }
 }
+
+// MARK: - Step instrumentation and timeouts
+
+/// The e2e tests spawn a real plugin host; a wedged host must surface as a
+/// fast, step-labelled failure instead of silently consuming the CI step
+/// timeout (Windows pipe reads can otherwise block a request forever).
+private struct PluginE2EStepTimeout: Error, CustomStringConvertible {
+    let step: String
+    let seconds: UInt64
+
+    var description: String { "timed out after \(seconds)s at step '\(step)'" }
+}
+
+/// Resume-once box for the timeout race. The loser of the race (the wedged
+/// operation, once it eventually unwinds) may still try to deliver its result
+/// long after the winner resumed the test, and the winner may finish before
+/// the test even starts waiting.
+private final class PluginE2EResumeBox<T: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Result<T, any Error>, Never>?
+    private var pending: Result<T, any Error>?
+    private var resumed = false
+
+    func wait() async -> Result<T, any Error> {
+        await withCheckedContinuation { continuation in
+            let immediate: Result<T, any Error>? = lock.withLock {
+                if let pending {
+                    self.pending = nil
+                    return pending
+                }
+                self.continuation = continuation
+                return nil
+            }
+            if let immediate { continuation.resume(returning: immediate) }
+        }
+    }
+
+    @discardableResult
+    func resume(_ result: Result<T, any Error>) -> Bool {
+        let target: CheckedContinuation<Result<T, any Error>, Never>? = lock.withLock {
+            guard !resumed else { return nil }
+            resumed = true
+            if let continuation {
+                self.continuation = nil
+                return continuation
+            }
+            pending = result
+            return nil
+        }
+        guard let target else { return false }
+        target.resume(returning: result)
+        return true
+    }
+}
+
+private func withTimeout<T: Sendable>(
+    _ seconds: UInt64 = 90,
+    step: String,
+    _ operation: sending @escaping @isolated(any) () async throws -> T
+) async throws -> T {
+    let box = PluginE2EResumeBox<T>()
+    // The operation inherits the current actor so plugin state behaves exactly
+    // as an unwrapped await. The watchdog is detached so it still fires when
+    // the operation wedged an actor's executor behind a blocking pipe call.
+    let work = Task {
+        do { _ = box.resume(.success(try await operation())) }
+        catch { _ = box.resume(.failure(error)) }
+    }
+    let watchdog = Task.detached {
+        try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+        work.cancel()
+        _ = box.resume(.failure(PluginE2EStepTimeout(step: step, seconds: seconds)))
+    }
+    let result = await box.wait()
+    watchdog.cancel()
+    return try result.get()
+}
+
+private func pluginE2ELog(_ message: String) {
+    let timestamp = pluginE2ETimeFormatter.string(from: Date())
+    FileHandle.standardError.write(Data("[plugin-e2e \(timestamp)] \(message)\n".utf8))
+}
+
+private let pluginE2ETimeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "HH:mm:ss.SSS"
+    return formatter
+}()

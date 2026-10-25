@@ -207,7 +207,7 @@ struct CommandPaletteOverlay: View {
             let intent = ResultItem(id: "agent.intent", title: text.isEmpty ? L("Open Assistant") : L("Ask Guava") + ": " + text,
                 detail: app.isAIAvailable ? L("Work with the assistant in this context") : L("Set an AI provider in Settings to enable."),
                 shortcut: "↵", enabled: true, searchText: "", perform: {
-                    EditorCommandDispatcher.handle(.showAssistant, app: app, controller: controller,
+                    EditorCommandDispatcher.handle(.showView(.agent), app: app, controller: controller,
                                                    registry: registry, fromCommandPalette: true)
                     if !text.isEmpty {
                         if app.isAIAvailable { _ = app.submitNaturalLanguageIntent(text) }

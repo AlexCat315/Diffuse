@@ -65,6 +65,9 @@ extension EditorApplication {
             throw EditorProjectToolError("This tool is unavailable in the active authoring workflow.")
         }
         if !definition.readOnly, let target = task?.target { try validateAgentTaskTarget(target) }
+        if origin != .mcp, let content = EditorContent.touched(byTool: name), store.state.assistant.agentCanvas != content {
+            store.dispatch(.setAgentCanvas(content))
+        }
         try JSONSchemaValidator.validate(data: evaluatedInput, against: definition.schema)
         let args = (try JSONSerialization.jsonObject(with: evaluatedInput) as? [String: Any] ?? [:])
             .filter { !($0.value is NSNull) }

@@ -15,7 +15,8 @@ struct ShortcutHandlerTests {
     private func fire(_ key: KeyEvent,
                       into r: Recorder,
                       context: EditorCommandContext = EditorCommandContext(content: .scene, canUndo: true,
-                                                                           canRedo: true, hasSelection: true),
+                                                                           canRedo: true, hasSelection: true,
+                                                                           agentPanelID: "intent-input"),
                       paletteVisible: Bool = false) -> Bool {
         let catalog = EditorCommandCatalog.make(context)
         return EditorShortcutHandler.handle(key,

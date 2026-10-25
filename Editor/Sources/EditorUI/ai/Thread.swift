@@ -3,20 +3,18 @@ private import Foundation
 internal import GuavaUI
 internal import GuavaUIRuntime
 
-/// The conversation with the agent: the floating sheet and the pinned column
-/// show the same thread and share one draft.
+/// The conversation at the center of the agent view, kept to a reading width.
 struct AssistantThread: View {
-    enum Placement { case sheet, pinned }
-
     let app: EditorApplication
-    let placement: Placement
+    /// Side margin that keeps lines to a reading width in a wide column.
+    var inset: Float = 12
     @State private var inputText: TextBuffer
     private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
     private var surface: Observed<EditorAssistantSurface, EditorAssistantSurface.State>
 
-    init(app: EditorApplication, placement: Placement) {
+    init(app: EditorApplication, inset: Float = 12) {
         self.app = app
-        self.placement = placement
+        self.inset = inset
         documents = Observed(\.snapshot, on: app.workstation.documents)
         surface = Observed(\.state, on: EditorAssistantSurface.of(app))
         _inputText = State(wrappedValue: EditorAssistantSurface.of(app).draft)
@@ -48,18 +46,17 @@ struct AssistantThread: View {
                            tooltip: L("Clear conversation"),
                            action: { store.dispatch(.clearChatHistory) })
                         .buttonStyle(EditorChromeButtonStyle(height: 22))
-                    Button(icon: .resource(placement == .pinned ? UIIcons.Shape.pinOff : UIIcons.Shape.pin), size: 12,
-                           tooltip: placement == .pinned ? L("Unpin") : L("Pin to the right")) {
-                        EditorAssistantSurface.of(app).setPinned(placement == .sheet)
-                    }.buttonStyle(EditorChromeButtonStyle(height: 22)).debugName("editor-agent-pin")
-                    if placement == .sheet {
-                        Button(icon: .resource(UIIcons.Navigation.chevronDown), size: 12, tooltip: L("Close")) {
-                            EditorAssistantSurface.of(app).close()
-                        }.buttonStyle(EditorChromeButtonStyle(height: 22)).debugName("editor-agent-fold")
+                    if store.pendingConfirmationRequest != nil {
+                        Button(L("Open in Workbench")) {
+                            // Reviews are scene edit plans, so the workbench opens on the scene.
+                            EditorWorkbenchLink.of(app).show(EditorContentFollower.panel(for: .scene))
+                            EditorAssistantSurface.of(app).show(.make)
+                        }
+                            .buttonStyle(EditorChromeButtonStyle(height: 22)).debugName("editor-agent-open-make")
                     }
                 }
                 ScrollView(.vertical, scrollbarGutter: .stable) {
-                    Column(alignment: .leading, spacing: 12) {
+                    Column(alignment: .leading, spacing: 14) {
                         if let request = store.pendingConfirmationRequest {
                             AgentReview(app: app, request: request).id(request.batchID)
                         }
@@ -69,9 +66,12 @@ struct AssistantThread: View {
                         if store.aiStatusMessage != nil || !store.aiWarnings.isEmpty {
                             AIStatusFeedback(status: store.aiStatusMessage, warnings: store.aiWarnings)
                         }
-                }.padding(12).frame(width: .percent(100), minWidth: 0)
+                    }.padding(horizontal: inset, vertical: 16).frame(width: .percent(100), minWidth: 0)
                 }.flex().frame(minWidth: 0, minHeight: 0)
-                composer(busy: busy)
+                // The composer keeps the thread's reading width; padding needs its own box here.
+                Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                    composer(busy: busy)
+                }.padding(horizontal: max(0, inset - 8)).frame(width: .percent(100), minWidth: 0)
             }.flex().frame(minWidth: 0, minHeight: 0).background(.surface)
                 .debugName("editor-agent-thread")
         }
@@ -95,9 +95,7 @@ struct AssistantThread: View {
             Icon(UIIcons.Status.sparkles, size: 22, color: EditorThemeTokens.assistantColor)
                 .frame(width: 42, height: 42)
                 .background(EditorThemeTokens.assistantColor.opacity(0.10)).cornerRadius(12)
-            Text(L("What shall we make?")).font(.headline).foregroundColor(.onSurface)
-            Text(L("One workspace. A shared scene. Tell Guava what you want to create, change, or understand."))
-                .font(.body).foregroundColor(.onSurfaceVariant)
+            Text(L("What shall we make?")).font(.title).foregroundColor(.onSurface)
             if !app.isAIAvailable {
                 Column(alignment: .leading, spacing: 8) {
                     Text(L("Connect an AI provider to start working together."))
@@ -107,7 +105,7 @@ struct AssistantThread: View {
                         .background(EditorThemeTokens.assistantColor.opacity(0.10)).cornerRadius(6)
                 }.padding(vertical: 4)
             }
-            Text(L("TRY A STARTING POINT")).font(.caption).foregroundColor(.onSurfaceMuted).padding(EdgeInsets(top: 12))
+            Box {}.frame(height: 8)
             if app.store.content == .scene {
                 suggestion(L("Explain the current selection"))
                 suggestion(L("Help me plan the next step"))
@@ -147,7 +145,6 @@ struct AssistantThread: View {
                     input.events.onSubmit = submitInput
                     let focus = surface.wrappedValue.focusRequest
                     if focus > 0 { input.navigation.focusRequestID = "assistant-thread-\(focus)" }
-                    if placement == .sheet { input.events.onCancel = { EditorAssistantSurface.of(app).close() } }
                 }.font(.body).textFieldStyle(AgentComposerFieldStyle())
                     .frame(width: .percent(100), minHeight: 48).debugName("editor-agent-composer")
                 Row(alignment: .center, spacing: 5) {

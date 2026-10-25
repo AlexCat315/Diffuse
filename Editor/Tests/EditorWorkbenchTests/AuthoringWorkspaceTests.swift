@@ -80,7 +80,7 @@ struct AuthoringWorkspaceTests {
         #expect(!catalog.menus.contains { $0.id == "world" })
     } }
 
-    @Test("The assistant floats on the scene, pins to the right, and leaves the scene untouched")
+    @Test("Make and Agent views share one project and leave the scene untouched")
     func contextSwitchAndFrames() throws { try WorkbenchUITestSupport.withEnvironment { interactions, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -119,31 +119,28 @@ struct AuthoringWorkspaceTests {
             #expect(frame.absoluteFrame.width >= 220)
             #expect(frame.absoluteFrame.height >= 140)
         }
-        // The composer rests on the scene, inside it.
-        let viewport = try #require(frames.first { $0.debugName == "workspace-panel-viewport" })
-        let composer = try #require(frames.first { $0.debugName == "editor-assistant" })
-        #expect(composer.absoluteFrame.minX >= viewport.absoluteFrame.minX && composer.absoluteFrame.maxX <= viewport.absoluteFrame.maxX)
-        #expect(composer.absoluteFrame.maxY <= viewport.absoluteFrame.maxY)
-        try WorkbenchUITestSupport.activate("editor-assistant-open", in: graph.tree.root, registry: interactions)
+        // Make is yours: no agent panel anywhere, only the switch in the title bar.
+        #expect(frames.contains { $0.debugName == "editor-view-switch" })
+        #expect(!frames.contains { $0.debugName == "editor-agent-view" })
+        try WorkbenchUITestSupport.activate("editor-view-agent", in: graph.tree.root, registry: interactions)
         settle()
-        #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-assistant-sheet" })
-        #expect(controller.document == document)
-
-        // Pinned, the thread docks on the right in front; unpinned, it floats again.
-        let surface = EditorAssistantSurface.of(app)
-        surface.relayout = {
-            EditorRootViewFactory.syncContributedPanels(app: app, registry: registry)
-            controller.replace(EditorRootViewFactory.reconciledWorkspaceDocument(controller.document, registry: registry))
+        let agentFrames = graph.layoutSnapshot()
+        // Nothing sits beside the thread until the agent works on something or one is picked.
+        #expect(!agentFrames.contains { $0.debugName == "editor-agent-canvas" })
+        for name in ["editor-agent-tasks", "editor-agent-thread", "editor-agent-canvas-strip"] {
+            #expect(agentFrames.contains { $0.debugName == name }, "\(name) is missing")
         }
-        defer { surface.relayout = nil; surface.setPinned(false) }
-        surface.setPinned(true)
-        EditorCommandDispatcher.handle(.showAssistant, app: app, controller: controller, registry: registry, fromCommandPalette: true)
+        #expect(!agentFrames.contains { $0.debugName == "editor-workspace" })
+        try WorkbenchUITestSupport.activate("editor-agent-show-files", in: graph.tree.root, registry: interactions)
         settle()
-        #expect(controller.document.groups["trailing"]?.panels == ["details", "intent-input"])
-        #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-agent-thread" })
-        #expect(!graph.layoutSnapshot().contains { $0.debugName == "editor-assistant" })
-        surface.setPinned(false)
+        #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-agent-canvas" })
+        // The canvas is the content the workbench edits, so opening it there lands on the same code.
+        try WorkbenchUITestSupport.activate("editor-agent-canvas-make", in: graph.tree.root, registry: interactions)
         settle()
+        #expect(app.store.content == .files)
+        defer { EditorAssistantSurface.of(app).showCanvas(.follow) }
+        #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-workspace" })
+        #expect(controller.document.group("center")?.activePanelID == "documents")
         #expect(controller.document.groups["trailing"]?.panels == ["details"])
         EditorCommandDispatcher.handle(.showPanel("inspector"), app: app, controller: controller,
                                        registry: registry, fromCommandPalette: true)
@@ -234,9 +231,9 @@ struct AuthoringWorkspaceTests {
         handle(.togglePanel("files"))
         #expect(controller.document.groups["leading"]?.isCollapsed == true)
         #expect(rail()["editor-rail-files"] == false)
-        EditorRootViewFactory.activatePanel("source-control", in: controller)
+        EditorRootViewFactory.activatePanel("assets", in: controller)
         #expect(controller.document.groups["leading"]?.isCollapsed == false)
-        #expect(rail()["editor-rail-source-control"] == true)
+        #expect(rail()["editor-rail-assets"] == true)
     } }
 
     @Test("Scoped palette opens with its prefix, and closing removes the card and its modal scope")
@@ -267,7 +264,7 @@ struct AuthoringWorkspaceTests {
         #expect(!focus.hasModalScope)
     } }
 
-    @Test("The assistant draft survives moving between the sheet and the pinned column, and a failed submission")
+    @Test("The assistant draft survives the thread unmounting and a failed submission")
     func agentDraftRetention() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -277,10 +274,10 @@ struct AuthoringWorkspaceTests {
         let draft = EditorAssistantSurface.of(app)
         draft.draft = "Keep this thought"
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: AssistantThread(app: app, placement: .sheet))
+        graph.install(root: AssistantThread(app: app))
         graph.computeLayout(width: 324, height: 720)
         graph.install(root: Text("Properties"))
-        graph.install(root: AssistantThread(app: app, placement: .pinned))
+        graph.install(root: AssistantThread(app: app, inset: 200))
         graph.computeLayout(width: 324, height: 720)
         #expect(draft.draft.stringValue == "Keep this thought")
         #expect(!app.submitNaturalLanguageIntent(draft.draft.stringValue))
@@ -300,7 +297,7 @@ struct AuthoringWorkspaceTests {
         let draft = EditorAssistantSurface.of(app)
         draft.draft = "Next thought"
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
-        graph.install(root: AssistantThread(app: app, placement: .pinned))
+        graph.install(root: AssistantThread(app: app, inset: 200))
         graph.computeLayout(width: 324, height: 720)
         #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-agent-review" })
         try WorkbenchUITestSupport.activate("editor-agent-discard-review", in: graph.tree.root, registry: interactions)

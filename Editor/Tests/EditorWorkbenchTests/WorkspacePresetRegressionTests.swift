@@ -16,7 +16,7 @@ struct WorkspacePresetRegressionTests {
         EditorLocalizationPreferences.language = .simplifiedChinese
         defer { EditorLocalizationPreferences.language = previous }
         let catalog = EditorCommandCatalog.make(EditorCommandContext(content: .scene))
-        #expect(catalog.menus.map(\.title) == ["文件", "编辑", "选择", "世界", "视图", "Agent", "运行", "窗口", "帮助"])
+        #expect(catalog.menus.map(\.title) == ["文件", "编辑", "选择", "世界", "视图", "智能体", "运行", "窗口", "帮助"])
         let view = try #require(catalog.menus.first { $0.id == "view" })
         let nested = view.items.compactMap { item -> String? in
             if case let .submenu(menu) = item { return menu.title }
@@ -52,7 +52,8 @@ struct WorkspacePresetRegressionTests {
             let document = EditorWorkspaceDefaults.makeDocument(registry: registry)
             #expect(document.hasValidLayoutReferences)
             // Sidebar views show through the sidebar pane instead of docking.
-            let docked = registry.descriptors.filter { !EditorSidebar.isView($0) }.map(\.panel.id)
+            // The center holds only the scene; code and timeline wait until picked.
+            let docked = registry.descriptors.filter { !EditorSidebar.isView($0) && $0.panel.id != "documents" }.map(\.panel.id)
             let assigned = document.groups.values.flatMap(\.panels)
             #expect(assigned.count == docked.count)
             #expect(Set(assigned) == Set(docked))

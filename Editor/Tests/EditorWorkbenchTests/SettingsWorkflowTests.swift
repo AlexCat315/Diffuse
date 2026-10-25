@@ -236,11 +236,14 @@ struct AgentSurfaceTests {
             #expect(app.isAgentEnabled)
 
             let enabled = EditorRootViewFactory.makeRegistry(app: app)
-            #expect(enabled.descriptor(for: "intent-input") != nil)
+            // The agent has its own view, not a docked panel.
+            #expect(enabled.descriptor(for: "intent-input") == nil)
+            #expect(app.agentPanelID == "intent-input")
 
             app.pluginSession.agents = .empty
             let disabled = EditorRootViewFactory.makeRegistry(app: app)
             #expect(disabled.descriptor(for: "intent-input") == nil)
+            #expect(app.agentPanelID == nil)
             #expect(!app.isAgentEnabled)
             #expect(!app.isAIAvailable)
         }

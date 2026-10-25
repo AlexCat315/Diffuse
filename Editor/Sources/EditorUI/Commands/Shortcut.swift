@@ -70,6 +70,8 @@ struct EditorShortcutKey: Equatable {
     static let space = Self(equivalent: " ", symbol: "Space", name: "Space", scancodes: [Scancode.space])
     static let leftBracket = Self(equivalent: "[", symbol: "[", name: "[", scancodes: [Scancode.leftBracket])
     static let rightBracket = Self(equivalent: "]", symbol: "]", name: "]", scancodes: [Scancode.rightBracket])
+    // SDL_SCANCODE_BACKSLASH; the shared scancode table has no name for it.
+    static let backslash = Self(equivalent: "\\", symbol: "\\", name: "\\", scancodes: [49])
     static let f2 = Self(equivalent: "\u{F705}", symbol: "F2", name: "F2", scancodes: [Scancode.f2])
     static let f12 = Self(equivalent: "\u{F70F}", symbol: "F12", name: "F12", scancodes: [Scancode.f12])
     static let delete = Self(equivalent: "\u{8}", symbol: "⌫", name: "Delete",

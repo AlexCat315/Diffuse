@@ -3,7 +3,7 @@ private import Foundation
 internal import GuavaUI
 internal import GuavaUIRuntime
 
-/// Project, focus, the assistant, package tools and run controls on one 40pt row.
+/// Project, focus, the Make and Agent switch, package tools and run controls on one 40pt row.
 /// Lower-priority items step down as the window narrows; their order never changes.
 struct EditorTitleBar: View {
     let app: EditorApplication
@@ -33,6 +33,7 @@ struct EditorTitleBar: View {
                         EditorTitleMenu(catalog: catalog, onCommand: onCommand).id("title-menu")
                     }
                     project.id("title-project")
+                    EditorContentPicker(app: app, content: store.content, onCommand: onCommand).id("title-content")
                     if width >= 1180, let branch = EditorProjectBranch.name(in: app.projectDirectory) {
                         Row(alignment: .center, spacing: 4) {
                             Icon(UIIcons.Editor.gitBranch, size: 11, color: .onSurfaceMuted)
@@ -43,14 +44,8 @@ struct EditorTitleBar: View {
                     if width >= 1180 {
                         breadcrumb(focus).flex(0, shrink: 1).frame(minWidth: 0, maxWidth: 320).clipped().id("title-selection")
                     }
-                    // The assistant's entry sits centered in the room between focus and run controls.
                     WindowDragRegion().flex().frame(minWidth: 8).id("title-drag")
-                    if app.isAgentEnabled {
-                        AssistantTitleField(app: app, compact: width < 1100,
-                                            shortcut: catalog.entries.first { $0.id == "agent.intent" }?.shortcut?.label ?? "")
-                            .frame(width: width < 1100 ? .points(32) : .percent(100), minWidth: width < 1100 ? 32 : 220, maxWidth: 520)
-                            .flex(width < 1100 ? 0 : 2, shrink: 1, basis: 0).id("title-assistant")
-                    }
+                    if app.isAgentEnabled { EditorViewSwitch(app: app).id("title-view") }
                     WindowDragRegion().flex().frame(minWidth: 8).id("title-drag-fill")
                     if width >= 900, !workbench.wrappedValue.toolbarItems.isEmpty {
                         PluginToolbar(items: workbench.wrappedValue.toolbarItems, onCommand: onCommand).id("title-plugins")
@@ -120,7 +115,6 @@ struct EditorTitleBar: View {
 
     private func breadcrumb(_ focus: EditorWorkFocus) -> some View {
         Row(alignment: .center, spacing: 5) {
-            Icon(focus.rootIcon, size: 12, color: .onSurfaceMuted)
             for (index, part) in focus.trail.enumerated() {
                 if index > 0 { AnyView(Icon(UIIcons.Navigation.chevronRight, size: 9, color: .onSurfaceMuted)) }
                 AnyView(Text(part, lineLimit: 1).font(.caption).foregroundColor(.onSurfaceMuted))

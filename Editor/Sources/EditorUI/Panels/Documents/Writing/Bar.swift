@@ -33,9 +33,8 @@ struct DocumentWritingBar: View {
             if let app {
                 separator
                 if app.isAgentEnabled {
-                    // The assistant already sees the open file; this opens it with the caret in its composer.
+                    // The assistant already sees the open file; this puts the caret in its composer.
                     Button(icon: .resource(UIIcons.Status.sparkles), size: 12, tooltip: L("Ask about this file")) {
-                        EditorAssistantSurface.of(app).open()
                         EditorAssistantSurface.of(app).focus()
                     }.buttonStyle(ToggleButtonStyle(height: 22)).debugName("document-ask")
                 }

@@ -47,20 +47,31 @@ struct EditorProductivityWorkflowTests {
         #expect(exact > partial)
     }
 
-    @Test("content follows the front center tab")
+    @Test("the center holds one kind of content, and picking another swaps it in")
     func contentFollowsCenter() {
-        let ids: [WorkspacePanelID] = ["viewport", "documents", "media", "hierarchy", "files", "inspector", "outline", "console"]
-        let registry = WorkspacePanelRegistry(ids.map { id in WorkspacePanelDescriptor(id: id, title: id.rawValue, defaultSlot: .center, configure: { $0.isCollapsible = false }) { EmptyView() } })
+        let ids: [WorkspacePanelID] = ["viewport", "documents", "media", "console", "animation"]
+        let registry = WorkspacePanelRegistry(ids.map { id in
+            WorkspacePanelDescriptor(id: id, title: id.rawValue,
+                                     defaultSlot: ["console", "animation"].contains(id) ? .bottom : .center,
+                                     configure: { $0.isCollapsible = false }) { EmptyView() }
+        })
+        let code = EditorWorkspaceDefaults.makeDocument(registry: registry, content: .files)
+        #expect(code.group("center")?.panels == ["documents"])
+        #expect(code.group("bottom")?.panels == ["console"])
         let document = EditorWorkspaceDefaults.makeDocument(registry: registry)
-        #expect(document.group("center")?.panels == ["viewport", "documents", "media"])
-        #expect(document.group("bottom")?.activePanelID == "console")
+        #expect(document.group("center")?.panels == ["viewport"])
+        #expect(document.group("bottom")?.panels == ["console", "animation"])
+        // A saved layout with every content as a tab keeps only the one in front.
+        var saved = document
+        saved.groups["center"]?.panels = ["viewport", "documents", "media"]
+        saved.groups["center"]?.activePanelID = "media"
+        #expect(EditorRootViewFactory.reconciledWorkspaceDocument(saved, registry: registry).group("center")?.panels == ["media"])
         let controller = WorkspaceController(document: document)
         #expect(EditorContentFollower.content(in: controller, current: .files) == .scene)
-        _ = controller.dispatch(.setActivePanel(groupID: "center", panelID: "documents"))
+        EditorRootViewFactory.activatePanel("documents", in: controller)
+        #expect(controller.document.group("center")?.panels == ["documents"])
         #expect(EditorContentFollower.content(in: controller, current: .scene) == .files)
-        _ = controller.dispatch(.setActivePanel(groupID: "leading", panelID: "files"))
-        #expect(EditorContentFollower.content(in: controller, current: .files) == .files)
-        _ = controller.dispatch(.setActivePanel(groupID: "center", panelID: "media"))
+        EditorRootViewFactory.activatePanel("media", in: controller)
         #expect(EditorContentFollower.content(in: controller, current: .files) == .timeline)
     }
 

@@ -30,6 +30,19 @@ struct EditorReducerTests {
         #expect(state.selection.selectedEntityIDs.isEmpty)
     }
 
+    @Test("The agent canvas follows the tools it uses and clears with the conversation")
+    func agentCanvas() {
+        #expect(EditorContent.touched(byTool: "write_file") == .files)
+        #expect(EditorContent.touched(byTool: "add_media_clip") == .timeline)
+        #expect(EditorContent.touched(byTool: "save_scene") == .scene)
+        #expect(EditorContent.touched(byTool: "vcs_status") == nil)
+        var state = EditorState()
+        EditorReducer.reduce(state: &state, action: .setAgentCanvas(.files))
+        #expect(state.assistant.agentCanvas == .files)
+        EditorReducer.reduce(state: &state, action: .clearChatHistory)
+        #expect(state.assistant.agentCanvas == nil)
+    }
+
     @Test("Content follows the action")
     func settingContent() {
         var state = EditorState()

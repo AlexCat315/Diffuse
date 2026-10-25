@@ -90,10 +90,11 @@ final class EditorLaunchContext: @unchecked Sendable {
         // .guava/editor-scene-manifest.json). Without this, saved edits only
         // come back via a manual File → Open Scene — a relaunch always showed
         // the seeded preview scene.
-        _ = app.restoreProjectSceneAtLaunch()
+        let hasScene = app.restoreProjectSceneAtLaunch() != nil
 
         let registry = EditorRootViewFactory.makeRegistry(app: app)
-        let controller = EditorRootViewFactory.makeController(registry: registry)
+        // A project with a saved scene opens on it; any other project opens on its code.
+        let controller = EditorRootViewFactory.makeController(registry: registry, content: hasScene ? .scene : .files)
         contentToken = EditorContentFollower.follow(controller, app: app)
 
         EditorWorkbenchLink.of(app).controller = controller
@@ -318,13 +319,6 @@ final class EditorLaunchContext: @unchecked Sendable {
         app.setWorkbenchChangeHandler { [weak self, weak app, weak controller, weak registry] in
             guard let self, let app, let controller, let registry else { return }
             self.relayoutWorkbench(app: app, controller: controller, registry: registry)
-        }
-        // Pinning docks the thread beside the details, in front.
-        EditorAssistantSurface.of(app).relayout = { [weak self, weak app, weak controller, weak registry] in
-            guard let self, let app, let controller, let registry else { return }
-            self.relayoutWorkbench(app: app, controller: controller, registry: registry)
-            guard EditorAssistantSurface.of(app).state.isPinned, let id = app.agentPanelID else { return }
-            EditorRootViewFactory.activatePanel(WorkspacePanelID(rawValue: id), in: controller)
         }
     }
 

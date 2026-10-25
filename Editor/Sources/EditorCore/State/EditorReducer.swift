@@ -60,6 +60,7 @@ public enum EditorAction: Sendable {
     case appendChatMessage(AIChatMessage)
     case updateChatMessage(id: String, assistantState: AIChatMessage.AssistantState)
     case clearChatHistory
+    case setAgentCanvas(EditorContent?)
     case appendConsoleMessage(String, severity: EditorConsoleSeverity = .info, detail: String? = nil,
                               target: EditorIssueTarget? = nil, nextStep: String? = nil)
     case setOperation(EditorOperation)
@@ -228,6 +229,8 @@ public enum EditorReducer {
             }
         case let .setPendingConfirmationRequest(request):
             state.assistant.pendingConfirmationRequest = request
+            // Reviews come from scene edit plans.
+            if request != nil { state.assistant.agentCanvas = .scene }
         case let .setAISettings(settings):
             state.assistant.aiSettings = settings
         case let .setCapabilitySettings(settings):
@@ -246,6 +249,9 @@ public enum EditorReducer {
             }
         case .clearChatHistory:
             state.assistant.chatMessages.removeAll()
+            state.assistant.agentCanvas = nil
+        case let .setAgentCanvas(content):
+            state.assistant.agentCanvas = content
         case let .setOperation(operation):
             state.navigation.operations.removeAll { $0.id == operation.id }
             state.navigation.operations.append(operation)

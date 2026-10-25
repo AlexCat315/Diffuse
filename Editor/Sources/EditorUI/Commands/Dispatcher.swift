@@ -181,11 +181,12 @@ enum EditorCommandDispatcher {
             let selected = store.state.selection.selectedEntityIDs
             guard !selected.isEmpty else { return }
             app.scene.setEntityLocked(!selected.allSatisfy { app.scene.isEntityLocked($0) }, entityIDs: selected)
-        case .showAssistant:
-            showAssistant(app: app, controller: controller)
         case .focusAssistant:
-            showAssistant(app: app, controller: controller)
             EditorAssistantSurface.of(app).focus()
+        case let .showView(view):
+            EditorAssistantSurface.of(app).show(view)
+        case .toggleView:
+            EditorAssistantSurface.of(app).toggleView()
         case let .showContent(content):
             EditorContentFollower.show(content, app: app, controller: controller)
         case .resetLayout:
@@ -237,16 +238,6 @@ enum EditorCommandDispatcher {
 
     /// Collapses every group docked on the edge while any of them shows;
     /// expands them all when the edge is already hidden.
-    /// The pinned thread comes to the front; otherwise the floating one opens.
-    private static func showAssistant(app: EditorApplication, controller: WorkspaceController) {
-        let surface = EditorAssistantSurface.of(app)
-        if surface.state.isPinned, let id = app.agentPanelID {
-            EditorRootViewFactory.activatePanel(WorkspacePanelID(rawValue: id), in: controller)
-        } else {
-            surface.open()
-        }
-    }
-
     private static func togglePanelArea(_ area: EditorPanelArea, in controller: WorkspaceController) {
         let slot: WorkspaceSlotID = switch area {
         case .leading: .leading

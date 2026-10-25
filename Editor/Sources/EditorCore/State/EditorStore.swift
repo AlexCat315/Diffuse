@@ -68,6 +68,7 @@ public final class EditorStore: @unchecked Sendable {
         case aiStatusMessage
         case aiWarnings
         case chatMessages
+        case agentCanvas
         case consoleEntries
         case commandPaletteVisible
         case scriptCaretLabel
@@ -264,6 +265,9 @@ public final class EditorStore: @unchecked Sendable {
             mark(.pendingConfirmationRequest,
                  old.assistant.pendingConfirmationRequest,
                  new.assistant.pendingConfirmationRequest)
+            mark(.agentCanvas, old.assistant.agentCanvas, new.assistant.agentCanvas)
+        case .setAgentCanvas:
+            mark(.agentCanvas, old.assistant.agentCanvas, new.assistant.agentCanvas)
         case .setAISettings:
             mark(.aiSettings, old.assistant.aiSettings, new.assistant.aiSettings)
         case .setCapabilitySettings:
@@ -276,6 +280,7 @@ public final class EditorStore: @unchecked Sendable {
             mark(.aiWarnings, old.assistant.aiWarnings, new.assistant.aiWarnings)
         case .appendChatMessage, .updateChatMessage, .clearChatHistory:
             mark(.chatMessages, old.assistant.chatMessages, new.assistant.chatMessages)
+            mark(.agentCanvas, old.assistant.agentCanvas, new.assistant.agentCanvas)
         case .appendConsoleMessage, .appendLogRecord, .clearConsole:
             mark(.consoleEntries, old.output.consoleEntries, new.output.consoleEntries)
         case .setCommandPaletteVisible:
@@ -403,4 +408,5 @@ extension EditorStore {
     }
     public var commandPaletteVisible: Bool { read(.commandPaletteVisible, storage.navigation.commandPaletteVisible) }
     public var chatMessages: [AIChatMessage] { read(.chatMessages, storage.assistant.chatMessages) }
+    public var agentCanvas: EditorContent? { read(.agentCanvas, storage.assistant.agentCanvas) }
 }

@@ -11,6 +11,14 @@ struct EditorRootView: View {
     let registry: WorkspacePanelRegistry
     @State private var windowWidth: Float = 1280
     @State private var windowHeight: Float = 720
+    private var session: Observed<EditorAssistantSurface, EditorAssistantSurface.State>
+
+    init(app: EditorApplication, controller: WorkspaceController, registry: WorkspacePanelRegistry) {
+        self.app = app
+        self.controller = controller
+        self.registry = registry
+        session = Observed(\.state, on: EditorAssistantSurface.of(app))
+    }
 
     var body: some View {
         StoreScope(app.store) { store in
@@ -26,17 +34,23 @@ struct EditorRootView: View {
                         EditorCanvasChrome {
                             EditorTitleBar(app: app, width: windowWidth, onCommand: cb.handleMenuCommand)
                         }
+                        // You work in the canvas; the agent works in its own view of the same project.
+                        let agent = app.isAgentEnabled && session.wrappedValue.view == .agent
                         Box(direction: .row, alignItems: .stretch, spacing: 0) {
-                            EditorActivityRail(app: app, controller: controller, onCommand: cb.handleMenuCommand)
-                            WorkspaceView(controller: controller, compact: windowWidth < 1000) {
-                                EditorRootViewFactory.content(for: $0, controller: controller, registry: registry)
+                            if agent {
+                                EditorAgentView(app: app, controller: controller, registry: registry, width: windowWidth)
+                            } else {
+                                EditorActivityRail(app: app, controller: controller, onCommand: cb.handleMenuCommand)
+                                WorkspaceView(controller: controller, compact: windowWidth < 1000) {
+                                    EditorRootViewFactory.content(for: $0, controller: controller, registry: registry)
+                                }
+                                    .flex()
+                                    .frame(minWidth: 0, minHeight: 0)
+                                    .padding(EdgeInsets(trailing: 6))
+                                    .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, animatesLayout: true, showsCollapsedRails: false))
+                                    .layoutRole("editor-workspace")
+                                    .debugName("editor-workspace")
                             }
-                                .flex()
-                                .frame(minWidth: 0, minHeight: 0)
-                                .padding(EdgeInsets(trailing: 6))
-                                .workspaceTheme(WorkspaceTheme(tabBarHeight: 32, animatesLayout: true, showsCollapsedRails: false))
-                                .layoutRole("editor-workspace")
-                                .debugName("editor-workspace")
                         }.flex().frame(minWidth: 0, minHeight: 0)
 
                         EditorStatusBar(app: app, controller: controller, onCommand: cb.handleMenuCommand)
@@ -51,7 +65,6 @@ struct EditorRootView: View {
                 } portals: {
                     PortalHost()
                     EditorNotificationHost(notifications: .of(app))
-                    AssistantLayer(app: app, availableHeight: windowHeight)
                     CommandPalettePresentation(app: app, controller: controller, registry: registry,
                                                availableHeight: windowHeight)
                     if let pendingClose = store.pendingCloseRequest {

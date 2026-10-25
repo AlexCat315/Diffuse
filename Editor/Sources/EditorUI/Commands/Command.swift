@@ -38,8 +38,9 @@ enum EditorCommand {
     case toggleSelectionVisibility
     case toggleSelectionLock
     case showContent(EditorContent)
-    case showAssistant
     case focusAssistant
+    case showView(EditorStudioView)
+    case toggleView
     case resetLayout
     case reopenClosedPanel
     case setPlaybackState(PlaybackState)

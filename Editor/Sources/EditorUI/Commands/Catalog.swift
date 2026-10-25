@@ -327,13 +327,16 @@ private struct Builder {
         // Pending reviews sit at the top of the Agent thread, so one entry serves both.
         guard context.agentPanelID != nil else {
             return menu("agent", "Agent", [
-                entry("agent.settings", "Set up Assistant", "assistant agent setup 助手 设置", command: .openSettings),
+                entry("agent.intent", "Set up Assistant", "assistant agent setup 助手 设置", .init(.letter("k")), command: .openSettings,
+                      inPalette: false),
             ])
         }
         return menu("agent", "Agent", [
             entry("agent.intent", "Ask Guava...", "", .init(.letter("k")), command: .focusAssistant, inPalette: false),
             entry("agent.show", "Agent", "agent assistant conversation review approval 智能体 对话 审阅",
-                  command: .showAssistant),
+                  command: .showView(.agent)),
+            entry("view.toggle", "Switch Workbench and Agent", "workbench agent view switch 工作台 智能体 视图 切换",
+                  .init(.backslash), command: .toggleView),
         ])
     }
 

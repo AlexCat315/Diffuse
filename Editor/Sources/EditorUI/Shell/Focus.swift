@@ -7,8 +7,7 @@ internal import GuavaUIRuntime
 /// selected entity in scene Spaces. The title bar, the ⌘K palette and the
 /// Agent composer all read this one value, so their context never disagrees.
 struct EditorWorkFocus {
-    var rootIcon: BundleImageResource
-    var trail: [String]
+    var trail: [String] = []
     var leaf: String?
     var leafIcon: BundleImageResource?
     /// Set for a document leaf: its file icon replaces `leafIcon`.
@@ -17,11 +16,7 @@ struct EditorWorkFocus {
 
     init(app: EditorApplication, documents snapshot: EditorDocumentSnapshot) {
         guard app.store.content == .scene else {
-            rootIcon = UIIcons.File.folder
-            guard let path = snapshot.selectedPath else {
-                trail = [L("Files")]
-                return
-            }
+            guard let path = snapshot.selectedPath else { return }
             let parts = path.split(separator: "/").map(String.init)
             trail = Array(parts.dropLast())
             leaf = parts.last
@@ -30,8 +25,6 @@ struct EditorWorkFocus {
             return
         }
         let entity = app.scene.entitySummary(id: app.store.selectedEntityID)
-        rootIcon = UIIcons.Shape.globe
-        trail = [L("Scene")]
         leaf = entity?.name
         leafIcon = entity == nil ? nil : UIIcons.Editor.box
     }

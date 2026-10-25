@@ -69,13 +69,13 @@ enum EditorRootViewFactory {
         }
     }
 
-    static func makeController(registry: WorkspacePanelRegistry) -> WorkspaceController {
+    static func makeController(registry: WorkspacePanelRegistry, content: EditorContent = .scene) -> WorkspaceController {
         if let saved = loadSavedWorkspaceDocument() {
             let document = reconciledWorkspaceDocument(saved, registry: registry)
             if document != saved { saveWorkspaceDocument(document) }
             return WorkspaceController(document: document)
         }
-        let document = EditorWorkspaceDefaults.makeDocument(registry: registry)
+        let document = EditorWorkspaceDefaults.makeDocument(registry: registry, content: content)
         saveWorkspaceDocument(document)
         return WorkspaceController(document: document)
     }
@@ -90,6 +90,7 @@ enum EditorRootViewFactory {
     /// live in the details pane.
     static func activatePanel(_ requested: WorkspacePanelID, in controller: WorkspaceController) {
         let id = dockedPanel(for: requested, in: controller)
+        if EditorContentFollower.isContentPanel(id) { EditorContentFollower.swap(to: id, in: controller) }
         if id == EditorSidebar.panelID, requested != id { EditorSidebar.of(controller).select(requested) }
         if let maximized = controller.maximizedPanelID, maximized != id {
             _ = controller.dispatch(.restoreMaximized)
@@ -164,7 +165,7 @@ enum EditorRootViewFactory {
                     })
                 }
             },
-            WorkspacePanelDescriptor(id: "viewport", title: localizedPanelTitle(for: "viewport"), defaultSlot: .center, configure: { $0.isCollapsible = false; $0.isClosable = false; $0.iconAssetKey = "panel.viewport" }) {
+            WorkspacePanelDescriptor(id: "viewport", title: localizedPanelTitle(for: "viewport"), defaultSlot: .center, configure: { $0.isCollapsible = false; $0.isClosable = false; $0.hidesTabBarWhenAlone = true; $0.iconAssetKey = "panel.viewport" }) {
                 EditorViewportWorkspacePanel(app: app)
             },
             WorkspacePanelDescriptor(id: "console", title: localizedPanelTitle(for: "console"), defaultSlot: .bottom, configure: { $0.isCollapsible = true; $0.iconAssetKey = "panel.console" }) {
@@ -201,7 +202,8 @@ enum EditorRootViewFactory {
                     app.store.dispatch(.setCommandPaletteVisible(true))
                 })
             },
-            WorkspacePanelDescriptor(id: "media", title: localizedPanelTitle(for: "media"), defaultSlot: .center) {
+            WorkspacePanelDescriptor(id: "media", title: localizedPanelTitle(for: "media"), defaultSlot: .center,
+                                     configure: { $0.hidesTabBarWhenAlone = true }) {
                 MediaTimelinePanel(model: app.workstation.media, projectRoot: URL(fileURLWithPath: app.projectDirectory))
             },
         ])
@@ -213,9 +215,8 @@ enum EditorRootViewFactory {
     /// left. A panel whose tab is unchanged keeps its descriptor, so its view
     /// keeps its state; the view itself follows the package's current content.
     static func syncContributedPanels(app: EditorApplication, registry: WorkspacePanelRegistry) {
-        // The agent view docks only while its thread is pinned; otherwise it floats under the content.
-        let pinned = app.isAgentEnabled && EditorAssistantSurface.of(app).state.isPinned
-        let panels = app.workbenchCatalog.panels.filter { $0.content != .view(.agent) || pinned }
+        // The agent view is the window's session column, never a docked panel.
+        let panels = app.workbenchCatalog.panels.filter { $0.content == .model }
         for id in registry.ids where !EditorWorkspaceProfile.builtInPanelIDs.contains(id.rawValue)
             && !panels.contains(where: { $0.id == id.rawValue }) {
             registry.unregister(id: id)
@@ -236,10 +237,7 @@ enum EditorRootViewFactory {
             registry.register(WorkspacePanelDescriptor(id: id, title: title, defaultSlot: slot,
                                                        configure: { $0.isCollapsible = true; $0.iconAssetKey = iconKey }) {
                 if let current = app.workbenchCatalog.panel(id: panel.id) {
-                    switch current.content {
-                    case .view(.agent): AssistantThread(app: app, placement: .pinned)
-                    case .model: PluginView(session: MainActor.assumeIsolated { app.viewSession(for: current) })
-                    }
+                    PluginView(session: MainActor.assumeIsolated { app.viewSession(for: current) })
                 }
             })
         }
@@ -420,9 +418,20 @@ enum EditorRootViewFactory {
             !registeredIDs.contains(closed.panelID)
         }
 
+        // The center shows one kind of content at a time: scene, code or timeline.
+        for groupID in Array(next.groups.keys) {
+            guard var group = next.groups[groupID] else { continue }
+            let contents = group.panels.filter(EditorContentFollower.isContentPanel)
+            guard contents.count > 1 else { continue }
+            let kept = group.activePanelID.flatMap { contents.contains($0) ? $0 : nil } ?? contents[0]
+            group.panels.removeAll { EditorContentFollower.isContentPanel($0) && $0 != kept }
+            next.groups[groupID] = group
+        }
+
         for descriptor in docked {
             next.panels[descriptor.panel.id] = workspacePanel(for: descriptor)
-            guard next.groupContaining(panelID: descriptor.panel.id) == nil else { continue }
+            guard next.groupContaining(panelID: descriptor.panel.id) == nil,
+                  !EditorContentFollower.isPlacedByContent(descriptor.panel.id) else { continue }
             // A panel intentionally closed by the user remains represented in
             // `closedHistory`. Reattaching it here made panel closure appear to
             // work only until the next launch. Descriptors with no history are
@@ -441,6 +450,18 @@ enum EditorRootViewFactory {
             var slot = next.slot(descriptor.defaultSlot)
             if !slot.containsGroup(groupID) {
                 slot.appendGroup(groupID)
+                next.setSlot(slot)
+            }
+        }
+        if !next.groups.values.contains(where: { $0.panels.contains(where: EditorContentFollower.isContentPanel) }),
+           let first = docked.first(where: { EditorContentFollower.isContentPanel($0.panel.id) })?.panel.id {
+            var group = next.groups["center"] ?? WorkspaceTabGroup(id: "center", panels: [])
+            group.panels.insert(first, at: 0)
+            group.activePanelID = first
+            next.groups["center"] = group
+            var slot = next.slot(.center)
+            if !slot.containsGroup("center") {
+                slot.appendGroup("center")
                 next.setSlot(slot)
             }
         }

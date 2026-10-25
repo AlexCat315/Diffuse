@@ -2,21 +2,32 @@ internal import EditorCore
 internal import GuavaUI
 internal import GuavaUICompose
 
-/// Where the assistant shows in one window: a composer floating under the
-/// content, a thread that opens above it, or a column pinned to the right.
-/// The draft is shared, so switching between them keeps what was typed.
+/// Who is doing the work decides the window: you, in the canvas, or the agent,
+/// in the conversation. Both views share one project, its files and selection.
+enum EditorStudioView: Hashable {
+    case make
+    case agent
+}
+
+/// The agent side of one window: which view is in front and the shared draft.
 final class EditorAssistantSurface: _ObservableObject {
+    /// What the agent view shows beside the thread.
+    enum Canvas: Hashable {
+        /// Whatever the agent is working on, nothing until it starts.
+        case follow
+        case hidden
+        case content(EditorContent)
+    }
+
     struct State: Equatable {
-        var isOpen = false
-        var isPinned = false
+        var view: EditorStudioView = .make
+        var canvas: Canvas = .follow
         /// Bumped to put the caret in the composer.
         var focusRequest: UInt64 = 0
     }
 
     private(set) var state = State()
     var draft: TextBuffer = ""
-    /// Rebuilds the layout when the pinned column comes or goes. Installed by the shell.
-    var relayout: (@MainActor () -> Void)?
     private let publisher = _ObservablePublisher<EditorAssistantSurface>()
 
     nonisolated(unsafe) private static var byApplication: [ObjectIdentifier: EditorAssistantSurface] = [:]
@@ -30,19 +41,11 @@ final class EditorAssistantSurface: _ObservableObject {
         return created
     }
 
-    func open() { update { $0.isOpen = true } }
-    func close() { update { $0.isOpen = false } }
-    func focus() { update { $0.focusRequest &+= 1 } }
-
-    func setPinned(_ pinned: Bool) {
-        guard pinned != state.isPinned else { return }
-        update {
-            $0.isPinned = pinned
-            $0.isOpen = !pinned && $0.isOpen
-        }
-        let relayout = relayout
-        MainActor.assumeIsolated { relayout?() }
-    }
+    func show(_ view: EditorStudioView) { update { $0.view = view } }
+    func showCanvas(_ canvas: Canvas) { update { $0.canvas = canvas } }
+    func toggleView() { show(state.view == .make ? .agent : .make) }
+    /// The composer lives in the agent view, so asking brings it to the front.
+    func focus() { update { $0.view = .agent; $0.focusRequest &+= 1 } }
 
     private func update(_ change: (inout State) -> Void) {
         var next = state
