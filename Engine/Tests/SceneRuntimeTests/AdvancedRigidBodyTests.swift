@@ -99,6 +99,7 @@ struct AdvancedRigidBodyTests {
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
         #expect(report.physics.bodyCount == 1)
         #expect(report.physics.writebackCount == 0)
+        #expect(runtime.physicsFrameState.activeBodyCount == 1)
     }
 
     @Test("independent same-build simulations produce identical state hashes")

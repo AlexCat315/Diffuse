@@ -258,7 +258,7 @@ public final class NatselPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             }
         }
         let writebacks = context.activeBodies.compactMap { descriptor -> PhysicsBodyWriteback? in
-            guard let record = bodies[descriptor.entity], let rigid = descriptor.rigidBody, rigid.motionType != .static else { return nil }
+            guard var record = bodies[descriptor.entity], let rigid = descriptor.rigidBody, rigid.motionType != .static else { return nil }
             let pose = world.bodyTransform(record.id)
             let rotation = simd_quatf(vector: SIMD4<Float>(sv(pose.q.v), pose.q.s))
             let matrix = matrix(translation: sv(pose.p), rotation: rotation, scale: scale(descriptor.worldTransform.matrix))
@@ -267,10 +267,11 @@ public final class NatselPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             let angular = clamped(sv(world.bodyAngularVelocity(record.id)), rigid.maxAngularVelocity)
             let asleep = !world.isBodyAwake(record.id)
             // ECS writebacks must not look like authored teleports on the next prepare.
-            bodies[descriptor.entity]?.descriptor.worldTransform = transform
-            bodies[descriptor.entity]?.descriptor.rigidBody?.linearVelocity = linear
-            bodies[descriptor.entity]?.descriptor.rigidBody?.angularVelocity = angular
-            bodies[descriptor.entity]?.descriptor.rigidBody?.isSleeping = asleep
+            record.descriptor.worldTransform = transform
+            record.descriptor.rigidBody?.linearVelocity = linear
+            record.descriptor.rigidBody?.angularVelocity = angular
+            record.descriptor.rigidBody?.isSleeping = asleep
+            bodies[descriptor.entity] = record
             let completeWriteback = context.stepIndex > 0
             guard completeWriteback || transform != descriptor.worldTransform || linear != rigid.linearVelocity
                 || angular != rigid.angularVelocity || asleep != rigid.isSleeping else { return nil }

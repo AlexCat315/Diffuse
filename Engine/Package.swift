@@ -91,7 +91,7 @@ let package = Package(
     dependencies: [
         .package(name: "GuavaUI", path: sdkRoot),
         .package(path: "Media"),
-        .package(url: "https://github.com/AlexCat315/Natsel.git", revision: "45e4dfb232fdcfd6676c0c0e4a9342b7678755b0"),
+        .package(url: "https://github.com/AlexCat315/Natsel.git", revision: "87a0f0d49f7211e84bd79bb0cb7bbfdff4697361"),
     ],
     targets: [
         // MARK: - C Bridges

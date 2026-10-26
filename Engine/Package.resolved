@@ -1,12 +1,12 @@
 {
-  "originHash" : "456cf7ea2c0ada8e590213a3e45f6cbeff6a6dfd79a78d8edf321d7f00f68a48",
+  "originHash" : "1f3f200007abd23163929783ebb3d27e247f3d945e38682a97728c5d3228cd37",
   "pins" : [
     {
       "identity" : "natsel",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AlexCat315/Natsel.git",
       "state" : {
-        "revision" : "45e4dfb232fdcfd6676c0c0e4a9342b7678755b0"
+        "revision" : "87a0f0d49f7211e84bd79bb0cb7bbfdff4697361"
       }
     },
     {

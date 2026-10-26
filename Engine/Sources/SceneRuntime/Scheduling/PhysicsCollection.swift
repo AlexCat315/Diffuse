@@ -98,7 +98,7 @@ extension RuntimeWorldSchedule {
         constraints: [PhysicsConstraintDescriptor],
         vehicles: [PhysicsVehicleDescriptor],
         softBodies: [PhysicsSoftBodyDescriptor]
-    ) -> (events: [PhysicsSyncEvent], report: JobDispatchReport) {
+    ) -> (events: [PhysicsSyncEvent], report: JobDispatchReport, cache: PhysicsSyncCache) {
         let previousBodies = physicsSyncCache.bodies
         let previousConstraints = physicsSyncCache.constraints
         let previousVehicles = physicsSyncCache.vehicles
@@ -107,13 +107,13 @@ extension RuntimeWorldSchedule {
         let constraintMap = Dictionary(uniqueKeysWithValues: constraints.map { ($0.entity, $0) })
         let vehicleMap = Dictionary(uniqueKeysWithValues: vehicles.map { ($0.entity, $0) })
         let softBodyMap = Dictionary(uniqueKeysWithValues: softBodies.map { ($0.entity, $0) })
-        let changedBodyEntities = Set(bodies.compactMap { descriptor in
-            previousBodies[descriptor.entity] == descriptor ? nil : descriptor.entity
-        })
-
         let bodyUpserts = jobSystem.parallelCompactMap(items: bodies) { descriptor -> PhysicsSyncEvent? in
             previousBodies[descriptor.entity] == descriptor ? nil : .bodyUpsert(descriptor)
         }
+        let changedBodyEntities = Set(bodyUpserts.0.compactMap { event -> EntityID? in
+            if case .bodyUpsert(let descriptor) = event { return descriptor.entity }
+            return nil
+        })
         let bodyRemovals = jobSystem.parallelCompactMap(items: Array(previousBodies.keys)) { entity -> PhysicsSyncEvent? in
             bodyMap[entity] == nil ? .bodyRemove(entity) : nil
         }
@@ -152,7 +152,8 @@ extension RuntimeWorldSchedule {
             bodyUpserts.0 + bodyRemovals.0 + constraintUpserts.0 + constraintRemovals.0
                 + vehicleUpserts.0 + vehicleRemovals.0
                 + softBodyUpserts.0 + softBodyRemovals.0,
-            mergeDispatchReports(reports)
+            mergeDispatchReports(reports),
+            PhysicsSyncCache(bodies: bodyMap, constraints: constraintMap, vehicles: vehicleMap, softBodies: softBodyMap)
         )
     }
 
@@ -200,8 +201,8 @@ extension RuntimeWorldSchedule {
 
     func buildPhysicsReadView(in world: RuntimeWorld) -> RuntimePhysicsReadView {
         let entities = world.entities()
-        let colliders = world.componentSnapshot(Collider.self, matching: entities)
-        let softBodyMeshes = world.componentSnapshot(SoftBodyMesh.self, matching: entities)
+        let colliders = world.componentSnapshot(Collider.self)
+        let softBodyMeshes = world.componentSnapshot(SoftBodyMesh.self)
         let geometryResource = world.resource(MeshColliderGeometryResource.self)
         var meshGeometries: [EntityID: MeshColliderGeometry] = [:]
         for (entity, collider) in colliders {
@@ -218,15 +219,15 @@ extension RuntimeWorldSchedule {
         }
         return RuntimePhysicsReadView(
             entities: entities,
-            localTransforms: world.localTransformSnapshot(matching: entities),
-            worldTransforms: world.worldTransformSnapshot(matching: entities),
-            rigidBodies: world.componentSnapshot(RigidBody.self, matching: entities),
+            localTransforms: world.localTransformSnapshot(),
+            worldTransforms: world.worldTransformSnapshot(),
+            rigidBodies: world.componentSnapshot(RigidBody.self),
             colliders: colliders,
-            constraints: world.componentSnapshot(Constraint.self, matching: entities),
-            characters: world.componentSnapshot(CharacterController.self, matching: entities),
-            vehicles: world.componentSnapshot(Vehicle.self, matching: entities),
-            softBodies: world.componentSnapshot(SoftBody.self, matching: entities),
-            cloths: world.componentSnapshot(Cloth.self, matching: entities),
+            constraints: world.componentSnapshot(Constraint.self),
+            characters: world.componentSnapshot(CharacterController.self),
+            vehicles: world.componentSnapshot(Vehicle.self),
+            softBodies: world.componentSnapshot(SoftBody.self),
+            cloths: world.componentSnapshot(Cloth.self),
             softBodyMeshes: softBodyMeshes,
             meshGeometries: meshGeometries,
             softBodyMeshGeometries: softBodyMeshGeometries

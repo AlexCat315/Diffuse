@@ -131,12 +131,7 @@ extension RuntimeWorldSchedule {
         frame.metrics.synchronizedConstraintCount += prepareResult.synchronizedConstraints
         frame.metrics.error = prepareResult.error
         if prepareResult.error == nil {
-            replacePhysicsSyncCache(
-                bodies: frame.descriptors.bodies,
-                constraints: frame.descriptors.constraints,
-                vehicles: frame.descriptors.vehicles,
-                softBodies: frame.descriptors.softBodies
-            )
+            physicsSyncCache = syncEventDiff.cache
         } else {
             physicsSyncCache = PhysicsSyncCache()
         }
@@ -331,7 +326,10 @@ extension RuntimeWorldSchedule {
             ),
             simulatedSteps: frame.metrics.stepCount,
             simulatedSeconds: physicsClock.lastSteppedSeconds,
-            activeBodyCount: frame.results.writebacks.filter { $0.isSleeping == false }.count,
+            activeBodyCount: frame.descriptors.bodies.reduce(0) { count, descriptor in
+                guard let body = world.component(RigidBody.self, for: descriptor.entity), body.motionType != .static else { return count }
+                return count + (body.isSleeping ? 0 : 1)
+            },
             activeSoftBodyCount: frame.results.softBodyStates.values.filter {
                 !$0.isSleeping
             }.count,
@@ -548,32 +546,29 @@ extension RuntimeWorldSchedule {
         frame.jobs.record(spatialIndexBuild.report, for: .spatialIndexUpdate)
     }
 
-    mutating func replacePhysicsSyncCache(
-        bodies: [PhysicsBodyDescriptor],
-        constraints: [PhysicsConstraintDescriptor],
-        vehicles: [PhysicsVehicleDescriptor],
-        softBodies: [PhysicsSoftBodyDescriptor]
-    ) {
-        physicsSyncCache.bodies = Dictionary(uniqueKeysWithValues: bodies.map { ($0.entity, $0) })
-        physicsSyncCache.constraints = Dictionary(uniqueKeysWithValues: constraints.map { ($0.entity, $0) })
-        physicsSyncCache.vehicles = Dictionary(uniqueKeysWithValues: vehicles.map { ($0.entity, $0) })
-        physicsSyncCache.softBodies = Dictionary(uniqueKeysWithValues: softBodies.map { ($0.entity, $0) })
-    }
-
     mutating func refreshPhysicsSyncCacheAfterWriteback(
         in world: RuntimeWorld,
         activeBodies: [PhysicsBodyDescriptor]
     ) {
+        let localTransforms = world.localTransformSnapshot()
+        let worldTransforms = world.worldTransformSnapshot()
+        let rigidBodies = world.componentSnapshot(RigidBody.self)
+        let colliders = world.componentSnapshot(Collider.self)
+        func refresh(_ cached: inout PhysicsBodyDescriptor, local: LocalTransform, world: WorldTransform,
+                     rigidBody: RigidBody?, collider: Collider?) {
+            cached.localTransform = local
+            cached.worldTransform = world
+            cached.rigidBody = rigidBody
+            cached.collider = collider
+        }
         for original in activeBodies {
-            guard var cached = physicsSyncCache.bodies[original.entity],
-                  let localTransform = world.localTransform(for: original.entity),
-                  let worldTransform = world.worldTransform(for: original.entity)
+            guard let index = physicsSyncCache.bodies.index(forKey: original.entity),
+                  let localTransform = localTransforms[original.entity],
+                  let worldTransform = worldTransforms[original.entity]
             else { continue }
-            cached.localTransform = localTransform
-            cached.worldTransform = worldTransform
-            cached.rigidBody = world.component(RigidBody.self, for: original.entity)
-            cached.collider = world.component(Collider.self, for: original.entity)
-            physicsSyncCache.bodies[original.entity] = cached
+            // One mutable dictionary access updates the large descriptor in place.
+            refresh(&physicsSyncCache.bodies.values[index], local: localTransform, world: worldTransform,
+                    rigidBody: rigidBodies[original.entity], collider: colliders[original.entity])
         }
     }
 }

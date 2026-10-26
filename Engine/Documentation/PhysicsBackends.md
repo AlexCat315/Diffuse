@@ -3,7 +3,7 @@
 `PhysicsBackendKind.preferred` selects Natsel on macOS, iOS and Linux. Windows and
 Android continue to select Jolt because the pinned Natsel package does not support
 those targets. Engine pins Natsel revision
-`45e4dfb232fdcfd6676c0c0e4a9342b7678755b0`; no sibling checkout is required.
+`87a0f0d49f7211e84bd79bb0cb7bbfdff4697361`; no sibling checkout is required.
 
 The SceneRuntime physics API, components and scene geometry stay unchanged. Code
 that explicitly selects `.jolt` continues to use Jolt. To migrate such a caller:
@@ -50,7 +50,7 @@ and build; Natsel and Jolt are not expected to produce identical trajectories.
   Rebuilding surfaces has a cost when querying a deforming mesh every frame.
 - Disconnected soft mesh pieces get separated rest-space exclusion neighborhoods
   while retaining their authored initial positions. Restoring those positions uses
-  the upstream per-vertex setter; initialization can be expensive for large meshes
+  Natsel's per-vertex setter; initialization can be expensive for large meshes
   with many disconnected pieces.
 - General mesh-versus-mesh trigger detection is not supported by the proxy query
   path. Use a convex trigger volume for mesh terrain or deformable surfaces.
@@ -77,5 +77,15 @@ GUAVA_PHYSICS_BACKEND=natsel GUAVA_PHYSICS_SCENARIO=active-grid \
 ```
 
 Keep frame counts, worker counts and build configuration equal for comparisons.
-The benchmark prints its selected backend with step/synchronization percentiles,
-contacts, active bodies and RSS growth. Performance gates are unchanged.
+The benchmark defaults to a 120 FPS target: 8.33 ms for the CPU tick and a separate
+1 ms physics CPU budget. `GUAVA_PHYSICS_TARGET_FPS` changes the target; the default
+physics allocation is 12% of the frame and can be set with `GUAVA_PHYSICS_BUDGET_MS`.
+Both P95 and P99 are checked, with at least 100 measured frames required.
+
+`physics_cpu_ms` includes complete preparation, step, writeback, spatial-index and
+trigger phases. `step_ms` reports the backend call separately. `cpu_tick_ms` includes
+the entire SceneRuntime schedule. Each phase also reports its own percentiles.
+This harness does not perform GPU drawing or run a representative game's full
+logic load, and always prints `full_rendered_frame_verified=false`.
+
+Measured timings and gate results are recorded in [PhysicsBenchmarkResults.md](PhysicsBenchmarkResults.md).

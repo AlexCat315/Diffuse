@@ -104,7 +104,8 @@ extension NatselPhysicsBackend {
     public func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource {
         guard maxEventCount > 0 else { return TriggerFrameResource() }
         var current: Set<Pair> = []
-        for entity in bodies.keys.sorted(by: entityOrder) {
+        let triggerEntities = bodies.compactMap { $0.value.descriptor.collider?.isTrigger == true ? $0.key : nil }.sorted(by: entityOrder)
+        for entity in triggerEntities {
             let trigger = bodies[entity]!
             guard let collider = trigger.descriptor.collider, collider.isTrigger else { continue }
             let box = world.bodyWorldAABB(trigger.id)

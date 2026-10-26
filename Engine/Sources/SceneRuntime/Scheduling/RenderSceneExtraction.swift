@@ -214,7 +214,7 @@ extension RuntimeWorldSchedule {
 
     func buildRenderReadView(in world: RuntimeWorld) -> RuntimeRenderReadView {
         let entities = world.entities()
-        let softBodyMeshes = world.componentSnapshot(SoftBodyMesh.self, matching: entities)
+        let softBodyMeshes = world.componentSnapshot(SoftBodyMesh.self)
         let geometryResource = world.resource(MeshColliderGeometryResource.self)
         var softBodyMeshGeometries: [EntityID: MeshColliderGeometry] = [:]
         for (entity, mesh) in softBodyMeshes {
@@ -224,15 +224,15 @@ extension RuntimeWorldSchedule {
         }
         return RuntimeRenderReadView(
             entities: entities,
-            worldTransforms: world.worldTransformSnapshot(matching: entities),
-            cameras: world.componentSnapshot(CameraComponent.self, matching: entities),
-            renderMeshes: world.componentSnapshot(RenderMeshComponent.self, matching: entities),
-            renderMaterials: world.componentSnapshot(RenderMaterialComponent.self, matching: entities),
-            lights: world.componentSnapshot(LightComponent.self, matching: entities),
-            cloths: world.componentSnapshot(Cloth.self, matching: entities),
+            worldTransforms: world.worldTransformSnapshot(),
+            cameras: world.componentSnapshot(CameraComponent.self),
+            renderMeshes: world.componentSnapshot(RenderMeshComponent.self),
+            renderMaterials: world.componentSnapshot(RenderMaterialComponent.self),
+            lights: world.componentSnapshot(LightComponent.self),
+            cloths: world.componentSnapshot(Cloth.self),
             softBodyMeshes: softBodyMeshes,
             softBodyMeshGeometries: softBodyMeshGeometries,
-            assetReferences: world.componentSnapshot(AssetReferenceComponent.self, matching: entities)
+            assetReferences: world.componentSnapshot(AssetReferenceComponent.self)
         )
     }
 }
