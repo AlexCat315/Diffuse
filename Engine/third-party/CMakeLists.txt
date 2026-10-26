@@ -4,12 +4,10 @@ if(POLICY CMP0177)
 endif()
 project(cove-third-party LANGUAGES C CXX)
 
-set(COVE_SDK_ROOT "$ENV{COVE_SDK_ROOT}" CACHE PATH "Cove SDK checkout")
-if(NOT COVE_SDK_ROOT)
-    set(COVE_SDK_ROOT "${CMAKE_SOURCE_DIR}/../../CoveUI")
-endif()
-include("${COVE_SDK_ROOT}/cmake/NativePlatform.cmake")
-include("${COVE_SDK_ROOT}/cmake/ArtifactBundleManifest.cmake")
+# Engine builds its own native dependencies against an installed Cove SDK.
+# Keep its build helpers here; released SDKs do not ship native source tooling.
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/NativePlatform.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/ArtifactBundleManifest.cmake")
 
 message(STATUS "Cove third-party target triple: ${COVE_TRIPLE} (SPM: ${COVE_SPM_TRIPLE})")
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Engine 原生依赖构建使用 Diffuse 自带的 CMake 平台与产物清单辅助文件，不再假设已安装的 Cove SDK 包含原生源码构建工具。
+
 - 编辑器改名为 Diffuse，Cove SDK、模块、CLI、工作区配置、发布包与插件宿主名称同步迁移；固定依赖 Cove SDK 0.2.4。
 
 - SDK 安装器按固定版本获取，不再依赖 Latest 中的安装脚本；显式本地 SDK 覆盖支持联调，并统一使用物理路径，避免目录改名后的编译缓存冲突。
