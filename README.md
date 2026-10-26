@@ -18,7 +18,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 | Render backend | NativeRHI (Metal / Vulkan / DX12) |
 | UI layout | Yoga (Meta) |
 | Text shaping / rendering | HarfBuzz + FreeType |
-| Physics | Jolt Physics |
+| Physics | Natsel (Swift) |
 | Platform shell | SDL3 / native |
 | Target platform (first) | macOS 26+; Linux & Windows in progress |
 
@@ -28,6 +28,8 @@ Studio contains the Engine and Editor packages plus an MCP server; the SDK is an
 - **`GuavaUI/`** — the [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) is a separate project, fetched at the version pinned by `Editor/guava.json` when you run `./guava`; it owns UI, NativeRHI, platform services and the CLI.
 - **`Editor/`** — the desktop editor application. Hosts the engine, mounts GuavaUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
 - **`GuavaMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
+
+CI checks out the exact SDK commit in `.github/sdk-revision` and validates it against `Editor/guava.json`. For local development before that SDK version is released, set `GUAVA_SDK_ROOT` to the matching SDK checkout.
 
 ---
 
@@ -103,7 +105,7 @@ git submodule update --init --recursive
 ./guava build Editor
 ```
 
-`./guava` fetches the GuavaUI SDK version declared by `Editor/guava.json` into the ignored `GuavaUI/` checkout, or uses `GUAVA_SDK_ROOT` when a local SDK checkout is selected. `guava studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg, Jolt and OpenEXR/Imath dependencies, and stages the pinned Wasmtime runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
+`./guava` fetches the GuavaUI SDK version declared by `Editor/guava.json` into the ignored `GuavaUI/` checkout, or uses `GUAVA_SDK_ROOT` when a local SDK checkout is selected. `guava studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg and OpenEXR/Imath dependencies, and stages the pinned Wasmtime runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
 
 After the first bootstrap, day-to-day development only needs:
 
@@ -135,7 +137,7 @@ The SDK's portable core, DevTools server, browser prototype and examples live in
 | SDL3 | SDK release artifact / CMake source build | SDK checkout `Runtime/third-party/sdl3` |
 | Imath | CMake source build | submodule under `Engine/third-party/imath` |
 | OpenEXR | CMake source build | submodule under `Engine/third-party/openexr` |
-| JoltPhysics | CMake source build → `.artifactbundle` | submodule under `Engine/third-party/jolt` |
+| Natsel | Swift Package Manager | `AlexCat315/Natsel` main; commit recorded in lockfiles |
 | Wasmtime | pinned official C API dynamic library → `.xcframework` | Bytecode Alliance release (SHA-256 verified, macOS) |
 
 The pattern is uniform: each SPM package owns its native deps under `<package>/third-party/`, CMake builds them into `<package>/vendor/` (gitignored), and the package consumes them via `.binaryTarget(path:)`.

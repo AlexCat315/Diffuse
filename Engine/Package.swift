@@ -91,6 +91,7 @@ let package = Package(
     dependencies: [
         .package(name: "GuavaUI", path: sdkRoot),
         .package(path: "Media"),
+        .package(url: "https://github.com/AlexCat315/Natsel.git", branch: "main"),
     ],
     targets: [
         // MARK: - C Bridges
@@ -101,25 +102,6 @@ let package = Package(
             dependencies: [.product(name: "CGuavaLog", package: "GuavaUI")],
             path: "Sources/Bridge/CEngineBridge",
             publicHeadersPath: "include"
-        ),
-        .binaryTarget(
-            name: "Jolt",
-            path: "\(nativeArtifactRoot)/Jolt.artifactbundle"
-        ),
-        .target(
-            name: "CJoltBridge",
-            dependencies: ["Jolt"],
-            path: "Sources/Bridge/CJoltBridge",
-            publicHeadersPath: "include",
-            cxxSettings: [
-                // Must match Jolt's PUBLIC INTERFACE_COMPILE_DEFINITIONS from
-                // JoltConfig.cmake (Release config). Mismatches cause undef
-                // symbols at link or crashes at runtime.
-                .define("NDEBUG"),
-                .define("JPH_PROFILE_ENABLED"),
-                .define("JPH_OBJECT_STREAM"),
-                .define("JPH_OBJECT_LAYER_BITS", to: "16"),
-            ]
         ),
         .target(
             name: "COpenEXRBridge",
@@ -153,7 +135,7 @@ let package = Package(
             dependencies: [
                 "SIMDCompat",
                 "EngineKernel",
-                "CJoltBridge",
+                .product(name: "Natsel", package: "Natsel"),
             ]
         ),
         .target(

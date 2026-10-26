@@ -8,7 +8,7 @@ struct VehicleTests {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
             allowSleep: false,
@@ -53,7 +53,7 @@ struct VehicleTests {
         return (runtime, vehicle)
     }
 
-    @Test("Jolt vehicle reports wheel contact and consumes current-frame throttle")
+    @Test("Natsel vehicle reports wheel contact and consumes current-frame throttle")
     func drivesAndReportsWheelState() {
         var (runtime, vehicle) = makeRuntime()
         for frame in 0..<90 {

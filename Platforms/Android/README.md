@@ -20,7 +20,7 @@ export ANDROID_NDK_HOME=/absolute/path/to/android-ndk-r30
 git submodule update --init --recursive
 ```
 
-[Guava CLI](https://github.com/AlexCat315/GuavaUI/blob/main/Tools/Guava/README.md) 是不依赖 UI / 引擎二进制的独立 Swift 工具包。它直接调用 SwiftPM、CMake、JDK 和 Android SDK。SDK 构建 SDL3、图像解码和字体依赖；Studio 构建 Jolt 与其他引擎依赖。SDK 原生缓存位于 `GuavaUI/Runtime/build` 和 `GuavaUI/build`，Studio 缓存位于 `Engine/build`，通过各自的 artifact root 选择，保持桌面 archives 独立。Swift runtime 静态链接；FoundationNetworking 的 OpenSSL / zlib 也显式链接，并在链接阶段拒绝未解析符号。SDL 的 Java 类随应用打包，JNI 初始化由宿主转交 SDL。
+[Guava CLI](https://github.com/AlexCat315/GuavaUI/blob/main/Tools/Guava/README.md) 是不依赖 UI / 引擎二进制的独立 Swift 工具包。它直接调用 SwiftPM、CMake、JDK 和 Android SDK。SDK 构建 SDL3、图像解码和字体依赖；Studio 构建 OpenEXR 等引擎依赖，物理使用纯 Swift 的 Natsel。SDK 原生缓存位于 `GuavaUI/Runtime/build` 和 `GuavaUI/build`，Studio 缓存位于 `Engine/build`，通过各自的 artifact root 选择，保持桌面 archives 独立。Swift runtime 静态链接；FoundationNetworking 的 OpenSSL / zlib 也显式链接，并在链接阶段拒绝未解析符号。SDL 的 Java 类随应用打包，JNI 初始化由宿主转交 SDL。
 
 参考 [Swift Android SDK 官方说明](https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html)、[Swift 6.4 发布说明](https://www.swift.org/blog/swift-6.4-released/)、[SDL Android 宿主约定](https://wiki.libsdl.org/SDL3/README-android)。
 

@@ -8,7 +8,7 @@ struct SoftBodyTests {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: gravity,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
@@ -18,7 +18,7 @@ struct SoftBodyTests {
         return runtime
     }
 
-    @Test("Jolt cloth streams deformed vertices while fixed vertices stay pinned")
+    @Test("Natsel cloth streams deformed vertices while fixed vertices stay pinned")
     func clothSimulationAndVertexStreaming() throws {
         var runtime = makeRuntime()
         let clothEntity = runtime.createEntity()
@@ -219,8 +219,8 @@ struct SoftBodyTests {
         #expect(clothState.positions.count == size * size)
     }
 
-    @Test("native character can use pinned cloth as support")
-    func clothSupportsCharacter() {
+    @Test("native character uses pinned cloth only when both collision masks allow it", arguments: [0, 1, 2])
+    func clothSupportsCharacter(filterCase: Int) {
         var runtime = makeRuntime()
         let clothEntity = runtime.createEntity()
         _ = runtime.setLocalTransform(
@@ -239,14 +239,15 @@ struct SoftBodyTests {
             for: clothEntity
         )
         _ = runtime.setComponent(
-            SoftBody(vertexRadius: 0.03, allowSleep: false), for: clothEntity
+            SoftBody(vertexRadius: 0.03, layerID: 1, layerMask: filterCase == 1 ? 0 : .max,
+                allowSleep: false), for: clothEntity
         )
 
         let character = runtime.createEntity()
         _ = runtime.setLocalTransform(
             LocalTransform(translation: SIMD3<Float>(0, 4, 0)), for: character
         )
-        _ = runtime.setComponent(CharacterController(), for: character)
+        _ = runtime.setComponent(CharacterController(layerMask: filterCase == 2 ? 1 : .max), for: character)
 
         for frame in 0..<120 {
             runtime.submitCharacterCommand(CharacterCommand(), for: character)
@@ -256,8 +257,13 @@ struct SoftBodyTests {
             ).physics.error == nil)
         }
         let state = runtime.characterStateFrame.states[character]
-        #expect(state?.isGrounded == true)
-        #expect(abs((state?.position.y ?? 0) - 2) < 0.15)
+        if filterCase == 0 {
+            #expect(state?.isGrounded == true)
+            #expect(abs((state?.position.y ?? 0) - 2) < 0.15)
+        } else {
+            #expect(state?.isGrounded == false)
+            #expect((state?.position.y ?? 1) < 0)
+        }
     }
 
     @Test("independent cloth simulations produce identical checkpoint hashes")

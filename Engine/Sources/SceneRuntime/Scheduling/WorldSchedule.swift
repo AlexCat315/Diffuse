@@ -166,7 +166,10 @@ public struct RuntimeWorldSchedule {
         // are pruned after descriptor collection below.
         frame.results.softBodyStates = softBodyStateFrame.states
 
+        var phaseNanoseconds: [RuntimeSystemPhase: UInt64] = [:]
+        phaseNanoseconds.reserveCapacity(RuntimeSystemPhase.allCases.count)
         for phase in RuntimeSystemPhase.allCases {
+            let phaseStarted = DispatchTime.now().uptimeNanoseconds
             switch phase {
             case .commandApply:
                 applyCommands(drainedCommands, world: &world, into: &frame)
@@ -214,6 +217,7 @@ public struct RuntimeWorldSchedule {
                 world.setDerivedResource(renderExtraction.resource)
                 frame.jobs.record(renderExtraction.report, for: .renderExtract)
             }
+            phaseNanoseconds[phase] = DispatchTime.now().uptimeNanoseconds - phaseStarted
         }
 
         world.advanceRevision()
@@ -248,7 +252,8 @@ public struct RuntimeWorldSchedule {
                 parallelPhases: RuntimeSystemPhase.allCases.filter { frame.jobs.parallelPhases.contains($0) },
                 phaseJobCounts: frame.jobs.phaseJobCounts
             ),
-            revision: world.revision
+            revision: world.revision,
+            phaseNanoseconds: phaseNanoseconds
         )
     }
 }

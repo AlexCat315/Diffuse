@@ -119,7 +119,7 @@ struct ScriptLanguageWorkspace {
     /// without building them. This is the same include set ``SwiftScriptCompiler``
     /// uses, so the language server sees *exactly* the same modules as the
     /// dynamic-script compiler — instead of trying to build the whole engine
-    /// package (which pulls graphics/SDL3/Jolt and never finishes).
+    /// package (which pulls graphics/SDL3 and never finishes).
     var includeFlags: [String] {
         var flags: [String] = []
         if let sdkURL { flags.append(contentsOf: ["-sdk", sdkURL.path]) }

@@ -16,7 +16,6 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
     public let allowSleep: Bool
     public let collisionSteps: Int
     public let capacity: PhysicsCapacitySettings
-    public let jolt: JoltPhysicsTuning
 
     private enum CodingKeys: String, CodingKey {
         case simulationMode
@@ -27,7 +26,6 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
         case allowSleep
         case collisionSteps
         case capacity
-        case jolt
     }
 
     public init(_ settings: PhysicsSettingsResource) {
@@ -39,14 +37,13 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
         self.allowSleep = settings.allowSleep
         self.collisionSteps = settings.collisionSteps
         self.capacity = settings.capacity
-        self.jolt = settings.jolt
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         simulationMode = try c.decode(String.self, forKey: .simulationMode)
-        backendKind = try c.decodeIfPresent(String.self, forKey: .backendKind)
-            ?? PhysicsBackendKind.preferred.rawValue
+        let storedBackend = try c.decodeIfPresent(String.self, forKey: .backendKind)
+        backendKind = (storedBackend.flatMap(PhysicsBackendKind.init(rawValue:)) ?? .preferred).rawValue
         gravity = try c.decode(EditorSceneManifestVector3.self, forKey: .gravity)
         fixedTimeStepSeconds = try c.decode(Double.self, forKey: .fixedTimeStepSeconds)
         maxSubstepsPerFrame = try c.decode(Int.self, forKey: .maxSubstepsPerFrame)
@@ -54,7 +51,6 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
         collisionSteps = try c.decodeIfPresent(Int.self, forKey: .collisionSteps) ?? 1
         capacity = try c.decodeIfPresent(PhysicsCapacitySettings.self, forKey: .capacity)
             ?? PhysicsCapacitySettings()
-        jolt = try c.decodeIfPresent(JoltPhysicsTuning.self, forKey: .jolt) ?? JoltPhysicsTuning()
     }
 
     var settings: PhysicsSettingsResource {
@@ -66,8 +62,7 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
             maxSubstepsPerFrame: maxSubstepsPerFrame,
             allowSleep: allowSleep,
             collisionSteps: collisionSteps,
-            capacity: capacity,
-            jolt: jolt
+            capacity: capacity
         )
     }
 }

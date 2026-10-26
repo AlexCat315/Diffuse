@@ -85,7 +85,7 @@ package enum IOSStaging {
           // The Engine package resolves ocio_openexr from the staged artifact
           // root, so iOS must build and stage the EXR stack like every other
           // native dependency; a missing bundle breaks package resolution.
-          targets = ["stage_jolt", "stage_ocio_openexr"]
+          targets = ["stage_ocio_openexr"]
           if plugins { targets.append("stage_wasmtime") }
         } else if package == runtimeRoot {
           targets = ["stage_sdl3", "stage_image_decode"]

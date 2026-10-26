@@ -15,7 +15,7 @@ struct DestructionTests {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: .zero,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
@@ -381,7 +381,7 @@ struct DestructionTests {
         #expect(runtime.destructionStateFrame.activeFragmentCount == 2)
     }
 
-    @Test("Jolt contact impulses trigger destruction through the unified listener")
+    @Test("Natsel contact impulses trigger destruction through the unified listener")
     func contactImpulseActivation() throws {
         var (runtime, source) = makeRuntime()
         _ = runtime.updateComponent(Destructible.self, for: source) {

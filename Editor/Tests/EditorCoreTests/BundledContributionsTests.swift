@@ -79,8 +79,8 @@ struct BundledContributionsTests {
 
     private func git(_ arguments: [String], in directory: URL) throws {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git"] + arguments
+        process.executableURL = try #require(ContributionTool.locate("git")).executable
+        process.arguments = arguments
         process.currentDirectoryURL = directory
         try process.run()
         process.waitUntilExit()

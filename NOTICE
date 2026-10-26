@@ -6,7 +6,7 @@ This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 This product bundles or builds against third-party software, each under its own
 license (see README.md for the dependency list and their upstream sources):
 
-  - Yoga, FreeType, HarfBuzz, SDL3, Imath, OpenEXR, OpenColorIO, JoltPhysics,
+  - Yoga, FreeType, HarfBuzz, SDL3, Imath, OpenEXR, OpenColorIO, Natsel,
     Wasmtime, FFmpeg (LGPL configuration; see Engine/Media/README.md), lunasvg, plutovg, libwebp, sharpyuv.
 
 File-type icons in Editor/Sources/EditorUI/Resources/FileIcons are taken from

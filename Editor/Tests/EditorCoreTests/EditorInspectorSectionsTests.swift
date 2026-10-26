@@ -130,9 +130,9 @@ struct EditorInspectorSectionsTests {
         #expect(abs(binding.wrappedValue - 1.777) < 1e-4)
     }
 
-    // MARK: - Jolt Physics
+    // MARK: - Physics
 
-    @Test("physics settings inspector authors the Jolt world configuration")
+    @Test("physics settings inspector authors the preferred world configuration")
     func physicsSettingsBindings() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
@@ -163,7 +163,7 @@ struct EditorInspectorSectionsTests {
         allowSleep.wrappedValue = false
 
         let settings = try #require(adapter.scene.resource(PhysicsSettingsResource.self))
-        #expect(settings.backendKind == .jolt)
+        #expect(settings.backendKind == .preferred)
         #expect(settings.simulationMode == .preview)
         #expect(settings.gravity == SIMD3<Float>(1, -20, 2))
         #expect(abs(settings.fixedTimeStepSeconds - (1.0 / 120.0)) < 0.000_001)
@@ -172,16 +172,20 @@ struct EditorInspectorSectionsTests {
         #expect(!settings.allowSleep)
     }
 
-    @Test("physics settings inspector selects the backend and shows only its tuning")
+    @Test("physics settings inspector offers Natsel and disabled physics")
     func physicsBackendSelection() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
-        #expect(field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") != nil)
+        #expect(PhysicsBackendKind.allCases == [.none, .natsel])
+        #expect(field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") == nil)
 
         guard case let .stringOptions(backend, _) =
                 field(adapter, id, section: "physics-settings", field: "physics-backend") else {
             Issue.record("expected physics backend options"); return
         }
+        backend.wrappedValue = PhysicsBackendKind.natsel.inspectorOptionID
+        #expect(adapter.scene.physicsSettings.backendKind == .natsel)
+        #expect(field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") == nil)
         backend.wrappedValue = PhysicsBackendKind.none.inspectorOptionID
 
         let settings = try #require(adapter.scene.resource(PhysicsSettingsResource.self))
@@ -189,8 +193,8 @@ struct EditorInspectorSectionsTests {
         #expect(field(adapter, id, section: "physics-settings", field: "physics-max-body-pairs") == nil)
     }
 
-    @Test("rigid body inspector edits Jolt velocity damping and CCD settings")
-    func rigidBodyJoltSettingsBindings() throws {
+    @Test("rigid body inspector edits rigid-body velocity damping and CCD settings")
+    func rigidBodyPhysicsSettingsBindings() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
         let entity = try #require(EntityID(rawValue: id))
@@ -481,8 +485,8 @@ struct EditorInspectorSectionsTests {
         #expect(!hasSection(adapter, id, "destructible"))
     }
 
-    @Test("collider inspector edits Jolt shape center and collision mask")
-    func colliderJoltSettingsBindings() throws {
+    @Test("collider inspector edits collider shape center and collision mask")
+    func colliderPhysicsSettingsBindings() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
         let entity = try #require(EntityID(rawValue: id))

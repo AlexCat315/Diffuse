@@ -38,7 +38,7 @@ enum Bootstrap {
 
     // ── Sentinels ────────────────────────────────────────────────────────
 
-    let engineDone = root.appendingPathComponent("Engine/vendor/Jolt.artifactbundle")
+    let engineDone = root.appendingPathComponent("Engine/vendor/ocio_openexr.artifactbundle")
     let guavaUIDone = sdkRoot.appendingPathComponent("vendor/CFreeType.artifactbundle")
     let terminalDone = sdkRoot.appendingPathComponent("vendor/GhosttyVt.artifactbundle")
     var wasmtimeReady = true
@@ -88,8 +88,7 @@ enum Bootstrap {
       ], environment: environment)
     // `--config Release` is required by multi-config generators (Visual
     // Studio): they ignore CMAKE_BUILD_TYPE and otherwise default to Debug,
-    // which both mismatches the Release-only Jolt config defines and
-    // triggers MSVC's parallel PDB server (C1090) on the static-lib builds.
+    // which triggers MSVC's parallel PDB server (C1090) on the static-lib builds.
     // Harmless on single-config generators (Ninja/Make on macOS/Linux).
     try Shell.inherit(
       [cmake.path, "--build", engineBuild.path, "--parallel", "--config", "Release"],

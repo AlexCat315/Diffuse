@@ -26,6 +26,7 @@ private struct Configuration {
     }
 
     var scenario: Scenario
+    var backend: PhysicsBackendKind
     var bodyCount: Int
     var warmupFrames: Int
     var sampleFrames: Int
@@ -36,9 +37,23 @@ private struct Configuration {
     var maxVertexStreamNanoseconds: UInt64
     var maxDestructionActivationNanoseconds: UInt64
     var maxDestructionStepNanoseconds: UInt64
+    var targetFPS: Double
+    var maxFrameNanoseconds: UInt64
+    var maxPhysicsNanoseconds: UInt64
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        func positive(_ key: String, fallback: Double) -> Double {
+            guard let value = Double(environment[key] ?? ""), value.isFinite, value > 0 else { return fallback }
+            return value
+        }
+        targetFPS = min(1_000, max(1, positive("GUAVA_PHYSICS_TARGET_FPS", fallback: 120)))
+        let frameBudgetMS = 1_000 / targetFPS
+        // Keep 88% of the frame available to the rest of the engine and game.
+        let physicsBudgetMS = min(frameBudgetMS, positive("GUAVA_PHYSICS_BUDGET_MS", fallback: frameBudgetMS * 0.12))
+        maxFrameNanoseconds = UInt64(frameBudgetMS * 1_000_000)
+        maxPhysicsNanoseconds = UInt64(physicsBudgetMS * 1_000_000)
         scenario = Scenario(rawValue: environment["GUAVA_PHYSICS_SCENARIO"] ?? "") ?? .activeGrid
+        backend = PhysicsBackendKind(rawValue: environment["GUAVA_PHYSICS_BACKEND"] ?? "") ?? .preferred
         let defaultBodyCount: Int
         switch scenario {
         case .activeGrid: defaultBodyCount = 10_000
@@ -47,27 +62,25 @@ private struct Configuration {
         case .softBodyInstances: defaultBodyCount = 8
         case .destructionFragments, .destructionIslands: defaultBodyCount = 4_096
         }
-        bodyCount = Int(environment["GUAVA_PHYSICS_BODIES"] ?? "") ?? defaultBodyCount
-        warmupFrames = Int(environment["GUAVA_PHYSICS_WARMUP_FRAMES"] ?? "") ?? 120
-        sampleFrames = Int(environment["GUAVA_PHYSICS_SAMPLE_FRAMES"] ?? "") ?? 600
+        bodyCount = max(1, Int(environment["GUAVA_PHYSICS_BODIES"] ?? "") ?? defaultBodyCount)
+        warmupFrames = max(0, Int(environment["GUAVA_PHYSICS_WARMUP_FRAMES"] ?? "") ?? 120)
+        sampleFrames = max(1, Int(environment["GUAVA_PHYSICS_SAMPLE_FRAMES"] ?? "") ?? 600)
         workerThreadCount = Int(environment["GUAVA_PHYSICS_WORKERS"] ?? "") ?? 0
         maxResidentGrowthBytes = UInt64(environment["GUAVA_PHYSICS_MAX_RSS_GROWTH_BYTES"] ?? "")
             ?? 32 * 1_024 * 1_024
         clothGridSize = Int(environment["GUAVA_PHYSICS_CLOTH_GRID"] ?? "")
             ?? (scenario == .cloth64 ? 64 : 32)
-        let stepBudgetMS = Double(environment["GUAVA_PHYSICS_SOFT_STEP_BUDGET_MS"] ?? "")
-            ?? 16.67
-        let streamBudgetMS = Double(environment["GUAVA_PHYSICS_VERTEX_STREAM_BUDGET_MS"] ?? "")
-            ?? 2.0
+        let stepBudgetMS = positive("GUAVA_PHYSICS_SOFT_STEP_BUDGET_MS", fallback: physicsBudgetMS)
+        let streamBudgetMS = positive("GUAVA_PHYSICS_VERTEX_STREAM_BUDGET_MS", fallback: physicsBudgetMS * 0.1)
         maxSoftBodyStepNanoseconds = UInt64(max(0, stepBudgetMS) * 1_000_000)
         maxVertexStreamNanoseconds = UInt64(max(0, streamBudgetMS) * 1_000_000)
         let destructionBudgetMS = Double(
             environment["GUAVA_PHYSICS_DESTRUCTION_ACTIVATION_BUDGET_MS"] ?? ""
-        ) ?? 2_500
+        ) ?? frameBudgetMS
         maxDestructionActivationNanoseconds = UInt64(max(0, destructionBudgetMS) * 1_000_000)
         let destructionStepBudgetMS = Double(
             environment["GUAVA_PHYSICS_DESTRUCTION_STEP_BUDGET_MS"] ?? ""
-        ) ?? 16.67
+        ) ?? physicsBudgetMS
         maxDestructionStepNanoseconds = UInt64(max(0, destructionStepBudgetMS) * 1_000_000)
     }
 }
@@ -77,7 +90,7 @@ private func makeBenchmarkScene(configuration: Configuration) -> SceneRuntime {
     runtime.setPhysicsSettings(
         PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: configuration.backend,
             gravity: configuration.scenario == .activeGrid ? .zero : SIMD3<Float>(0, -9.81, 0),
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
@@ -86,11 +99,6 @@ private func makeBenchmarkScene(configuration: Configuration) -> SceneRuntime {
             capacity: PhysicsCapacitySettings(
                 maxBodies: max(16_384, configuration.bodyCount + 16),
                 workerThreadCount: configuration.workerThreadCount
-            ),
-            jolt: JoltPhysicsTuning(
-                maxBodyPairs: configuration.scenario == .denseContact ? 131_072 : 65_536,
-                maxContactConstraints: configuration.scenario == .denseContact ? 32_768 : 16_384,
-                tempAllocatorBytes: 64 * 1_024 * 1_024
             )
         )
     )
@@ -347,6 +355,11 @@ if configuration.scenario == .destructionFragments
 }
 
 var stepSamples: [UInt64] = []
+var frameSamples: [UInt64] = []
+var physicsSamples: [UInt64] = []
+var phaseSamples: [RuntimeSystemPhase: [UInt64]] = [:]
+let physicsPhases: [RuntimeSystemPhase] = [.fixedPhysicsPrepare, .fixedPhysicsStep, .physicsWriteback, .spatialIndexUpdate, .triggerDetection]
+var backendErrorCount = 0
 var syncSamples: [UInt64] = []
 var contactTotal = 0
 var activeBodyPeak = 0
@@ -365,6 +378,8 @@ var retainedFragmentPeak = 0
 var retainedProxyPeak = 0
 var compoundRootPeak = 0
 stepSamples.reserveCapacity(configuration.sampleFrames)
+frameSamples.reserveCapacity(configuration.sampleFrames)
+physicsSamples.reserveCapacity(configuration.sampleFrames)
 syncSamples.reserveCapacity(configuration.sampleFrames)
 residentSamples.reserveCapacity(configuration.sampleFrames)
 vertexStreamSamples.reserveCapacity(configuration.sampleFrames)
@@ -373,6 +388,10 @@ for offset in 0..<configuration.sampleFrames {
     let frame = configuration.warmupFrames + offset
     let frameStarted = DispatchTime.now().uptimeNanoseconds
     let report = runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame))
+    frameSamples.append(DispatchTime.now().uptimeNanoseconds - frameStarted)
+    physicsSamples.append(physicsPhases.reduce(0) { $0 + (report.phaseNanoseconds[$1] ?? 0) })
+    for phase in RuntimeSystemPhase.allCases { phaseSamples[phase, default: []].append(report.phaseNanoseconds[phase] ?? 0) }
+    if report.physics.error != nil { backendErrorCount += 1 }
     if (configuration.scenario == .destructionFragments
         || configuration.scenario == .destructionIslands) && offset == 0 {
         destructionActivationNanoseconds = DispatchTime.now().uptimeNanoseconds - frameStarted
@@ -432,13 +451,22 @@ for offset in 0..<configuration.sampleFrames {
 }
 
 let sortedSteps = stepSamples.sorted()
+let sortedFrames = frameSamples.sorted()
+let sortedPhysics = physicsSamples.sorted()
 let sortedSync = syncSamples.sorted()
 let sortedVertexStream = vertexStreamSamples.sorted()
 let windowSize = max(1, configuration.sampleFrames / 10)
 let initialResident = percentile(Array(residentSamples.prefix(windowSize)).sorted(), 0.50)
 let finalResident = percentile(Array(residentSamples.suffix(windowSize)).sorted(), 0.50)
 let residentGrowth = finalResident > initialResident ? finalResident - initialResident : 0
-print("PhysicsRuntimeBenchmarks scenario=\(configuration.scenario.rawValue) bodies=\(configuration.bodyCount) frames=\(configuration.sampleFrames)")
+print("PhysicsRuntimeBenchmarks backend=\(runtime.physicsFrameState.backendIdentifier) requested_backend=\(configuration.backend.rawValue) scenario=\(configuration.scenario.rawValue) bodies=\(configuration.bodyCount) workers=\(configuration.workerThreadCount) warmup=\(configuration.warmupFrames) frames=\(configuration.sampleFrames)")
+print("target_fps=\(configuration.targetFPS) cpu_tick_budget_ms=\(milliseconds(configuration.maxFrameNanoseconds)) physics_cpu_budget_ms=\(milliseconds(configuration.maxPhysicsNanoseconds)) full_rendered_frame_verified=false")
+print("cpu_tick_ms p50=\(milliseconds(percentile(sortedFrames, 0.50))) p95=\(milliseconds(percentile(sortedFrames, 0.95))) p99=\(milliseconds(percentile(sortedFrames, 0.99))) max=\(milliseconds(sortedFrames.last ?? 0))")
+print("physics_cpu_ms p50=\(milliseconds(percentile(sortedPhysics, 0.50))) p95=\(milliseconds(percentile(sortedPhysics, 0.95))) p99=\(milliseconds(percentile(sortedPhysics, 0.99)))")
+for phase in RuntimeSystemPhase.allCases {
+    let samples = (phaseSamples[phase] ?? []).sorted()
+    print("phase_ms phase=\(phase.rawValue) p50=\(milliseconds(percentile(samples, 0.50))) p95=\(milliseconds(percentile(samples, 0.95))) p99=\(milliseconds(percentile(samples, 0.99)))")
+}
 print("step_ms p50=\(milliseconds(percentile(sortedSteps, 0.50))) p95=\(milliseconds(percentile(sortedSteps, 0.95))) p99=\(milliseconds(percentile(sortedSteps, 0.99)))")
 print("sync_ms p50=\(milliseconds(percentile(sortedSync, 0.50))) p95=\(milliseconds(percentile(sortedSync, 0.95))) p99=\(milliseconds(percentile(sortedSync, 0.99)))")
 print("vertex_stream_ms p50=\(milliseconds(percentile(sortedVertexStream, 0.50))) p95=\(milliseconds(percentile(sortedVertexStream, 0.95))) p99=\(milliseconds(percentile(sortedVertexStream, 0.99))) vertices_peak=\(streamedVertexPeak) checksum=\(vertexChecksum)")
@@ -447,47 +475,28 @@ print("rss_initial_bytes=\(initialResident) rss_final_bytes=\(finalResident) rss
 print("destruction_activation_ms=\(milliseconds(destructionActivationNanoseconds)) active_fragment_peak=\(activeFragmentPeak) destruction_events_total=\(destructionEventTotal)")
 print("destruction_partial_source_peak=\(partiallyFracturedSourcePeak) destruction_full_source_peak=\(fullyFracturedSourcePeak) retained_fragment_peak=\(retainedFragmentPeak) retained_proxy_peak=\(retainedProxyPeak) compound_root_peak=\(compoundRootPeak)")
 
-if configuration.scenario == .activeGrid,
-   configuration.bodyCount >= 10_000,
-   percentile(sortedSteps, 0.95) > 16_670_000 || droppedSteps > 0 {
-    LogSystem.logger("com.guava.tools").error("Physics benchmark gate failed: 10k p95 exceeds 16.67 ms or fixed steps were dropped.")
-        LogSystem.flush()
-    exit(1)
+var failures: [String] = []
+@MainActor
+func checkBudget(_ name: String, _ samples: [UInt64], _ budget: UInt64) {
+    let p95 = percentile(samples, 0.95), p99 = percentile(samples, 0.99)
+    if p95 > budget || p99 > budget {
+        failures.append("\(name) exceeds \(milliseconds(budget)) ms: P95=\(milliseconds(p95)), P99=\(milliseconds(p99))")
+    }
 }
-if configuration.scenario == .denseContact,
-   configuration.bodyCount >= 2_000,
-   droppedSteps > 0 {
-    LogSystem.logger("com.guava.tools").error("Physics benchmark gate failed: dense-contact scenario dropped fixed steps.")
-        LogSystem.flush()
-    exit(1)
-}
-if configuration.scenario == .cloth64,
-   configuration.clothGridSize >= 64,
-   percentile(sortedSteps, 0.95) > configuration.maxSoftBodyStepNanoseconds
-        || percentile(sortedVertexStream, 0.95) > configuration.maxVertexStreamNanoseconds
-        || droppedSteps > 0 {
-    LogSystem.logger("com.guava.tools").error("Physics benchmark gate failed: 64x64 cloth exceeded the step/vertex-stream budget or dropped fixed steps.")
-        LogSystem.flush()
-    exit(1)
-}
-if configuration.scenario == .softBodyInstances,
-   configuration.bodyCount >= 8,
-   configuration.clothGridSize >= 32,
-   percentile(sortedSteps, 0.95) > configuration.maxSoftBodyStepNanoseconds
-        || percentile(sortedVertexStream, 0.95) > configuration.maxVertexStreamNanoseconds
-        || droppedSteps > 0 {
-    LogSystem.logger("com.guava.tools").error("Physics benchmark gate failed: medium soft-body instances exceeded the step/vertex-stream budget or dropped fixed steps.")
-        LogSystem.flush()
-    exit(1)
+checkBudget("CPU tick", sortedFrames, configuration.maxFrameNanoseconds)
+checkBudget("Physics CPU envelope", sortedPhysics, configuration.maxPhysicsNanoseconds)
+if frameSamples.count < 100 { failures.append("At least 100 measured frames are required for P99 acceptance") }
+if backendErrorCount > 0 { failures.append("Backend reported errors in \(backendErrorCount) frames") }
+if droppedSteps > 0 { failures.append("Dropped \(droppedSteps) fixed steps") }
+if activeSoftBodyPeak > 0 {
+    checkBudget("Soft-body step", sortedSteps, configuration.maxSoftBodyStepNanoseconds)
+    checkBudget("Vertex stream", sortedVertexStream, configuration.maxVertexStreamNanoseconds)
 }
 if configuration.scenario == .destructionFragments,
    activeFragmentPeak != configuration.bodyCount
         || destructionActivationNanoseconds > configuration.maxDestructionActivationNanoseconds
-        || percentile(sortedSteps, 0.95) > configuration.maxDestructionStepNanoseconds
-        || droppedSteps > 0 {
-    LogSystem.logger("com.guava.tools").error("Physics benchmark gate failed: destructible activation missed its fragment count/burst/step budget or dropped fixed steps.")
-        LogSystem.flush()
-    exit(1)
+        || percentile(sortedSteps, 0.95) > configuration.maxDestructionStepNanoseconds {
+    failures.append("Destructible activation missed its fragment count or burst/step budget")
 }
 if configuration.scenario == .destructionIslands {
     let expectedSourceCount = Int(ceil(Double(configuration.bodyCount) / 15.0))
@@ -498,17 +507,16 @@ if configuration.scenario == .destructionIslands {
         || retainedProxyPeak != expectedSourceCount
         || compoundRootPeak != expectedSourceCount
         || destructionActivationNanoseconds > configuration.maxDestructionActivationNanoseconds
-        || percentile(sortedSteps, 0.95) > configuration.maxDestructionStepNanoseconds
-        || droppedSteps > 0 {
-        LogSystem.logger("com.guava.tools").error("Physics benchmark gate failed: incremental destruction islands missed their fragment/source/compound/proxy count, burst/step budget, or dropped fixed steps.")
-        LogSystem.flush()
-        exit(1)
+        || percentile(sortedSteps, 0.95) > configuration.maxDestructionStepNanoseconds {
+        failures.append("Incremental destruction missed its fragment/source/compound/proxy count or burst/step budget")
     }
 }
 if initialResident > 0,
    finalResident > 0,
    residentGrowth > configuration.maxResidentGrowthBytes {
-    LogSystem.logger("com.guava.tools").error("Physics benchmark gate failed: sustained resident-memory growth exceeded the configured budget.")
-        LogSystem.flush()
-    exit(1)
+    failures.append("Sustained resident-memory growth exceeded the configured budget")
 }
+print("gate_status=\(failures.isEmpty ? "passed" : "failed") failed_checks=\(failures.count)")
+for failure in failures { LogSystem.logger("com.guava.tools").error("Physics benchmark gate failed: \(failure)") }
+LogSystem.flush()
+if !failures.isEmpty { exit(1) }

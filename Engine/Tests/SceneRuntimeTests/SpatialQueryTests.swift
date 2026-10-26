@@ -89,7 +89,7 @@ struct SpatialQueryTests {
         #expect(runtime.spatialIndex.entries.first { $0.entity == entities[0] }?.bounds.halfExtents.x == 1)
     }
 
-    @Test("raycast returns the nearest collider hit from Jolt")
+    @Test("raycast returns the nearest collider hit from Natsel")
     func raycastReturnsNearestColliderHit() {
         var runtime = SceneRuntime()
 
@@ -120,7 +120,7 @@ struct SpatialQueryTests {
         #expect(hit?.normal == SIMD3<Float>(-1, 0, 0))
     }
 
-    @Test("raycast uses Jolt sphere geometry instead of broad-phase bounds")
+    @Test("raycast uses Natsel sphere geometry instead of broad-phase bounds")
     func raycastUsesPreciseSphereNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -144,7 +144,7 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.y ?? 0) - 0.5) < 0.000_1)
     }
 
-    @Test("raycast uses Jolt rotated box geometry instead of broad-phase bounds")
+    @Test("raycast uses Natsel rotated box geometry instead of broad-phase bounds")
     func raycastUsesPreciseRotatedBoxNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -172,8 +172,8 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.y ?? 0) - 0.707_106_77) < 0.000_2)
     }
 
-    @Test("raycast applies transform scale to Jolt shape center")
-    func raycastAppliesTransformScaleToJoltShapeCenter() {
+    @Test("raycast applies transform scale to Natsel shape center")
+    func raycastAppliesTransformScaleToNatselShapeCenter() {
         var runtime = SceneRuntime()
 
         let box = runtime.createEntity()
@@ -198,8 +198,8 @@ struct SpatialQueryTests {
         #expect(abs((hit?.position.x ?? 0) - 1) < 0.000_1)
     }
 
-    @Test("raycast uses conservative Jolt scale for non-uniform sphere")
-    func raycastUsesConservativeJoltScaleForNonUniformSphere() {
+    @Test("raycast uses conservative Natsel scale for non-uniform sphere")
+    func raycastUsesConservativeNatselScaleForNonUniformSphere() {
         var runtime = SceneRuntime()
 
         let sphere = runtime.createEntity()
@@ -223,7 +223,7 @@ struct SpatialQueryTests {
         #expect(abs((hit?.distance ?? 0) - 1.677_124_4) < 0.000_5)
     }
 
-    @Test("raycast uses Jolt capsule geometry instead of broad-phase bounds")
+    @Test("raycast uses Natsel capsule geometry instead of broad-phase bounds")
     func raycastUsesPreciseCapsuleNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -250,7 +250,7 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.y ?? 0) - 0.6) < 0.000_1)
     }
 
-    @Test("overlap uses Jolt sphere geometry instead of broad-phase bounds")
+    @Test("overlap uses Natsel sphere geometry instead of broad-phase bounds")
     func overlapUsesPreciseSphereNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -268,7 +268,7 @@ struct SpatialQueryTests {
         #expect(hits.isEmpty)
     }
 
-    @Test("overlap uses Jolt rotated box geometry instead of broad-phase bounds")
+    @Test("overlap uses Natsel rotated box geometry instead of broad-phase bounds")
     func overlapUsesPreciseRotatedBoxNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -290,7 +290,7 @@ struct SpatialQueryTests {
         #expect(hits.isEmpty)
     }
 
-    @Test("overlap uses Jolt capsule geometry instead of broad-phase bounds")
+    @Test("overlap uses Natsel capsule geometry instead of broad-phase bounds")
     func overlapUsesPreciseCapsuleNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -311,7 +311,7 @@ struct SpatialQueryTests {
         #expect(hits.isEmpty)
     }
 
-    @Test("physics overlap shape uses Jolt sphere geometry")
+    @Test("physics overlap shape uses Natsel sphere geometry")
     func physicsOverlapShapeUsesPreciseSphereNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -337,7 +337,7 @@ struct SpatialQueryTests {
         #expect(narrowPhaseHits.map(\.entity) == [sphere])
     }
 
-    @Test("physics overlap shape supports rotated Jolt boxes")
+    @Test("physics overlap shape supports rotated Natsel boxes")
     func physicsOverlapShapeSupportsRotatedBoxes() {
         var runtime = SceneRuntime()
 
@@ -358,7 +358,7 @@ struct SpatialQueryTests {
         #expect(hits.map(\.entity) == [sphere])
     }
 
-    @Test("physics overlap shape supports Jolt capsules")
+    @Test("physics overlap shape supports Natsel capsules")
     func physicsOverlapShapeSupportsCapsules() {
         var runtime = SceneRuntime()
 
@@ -423,7 +423,7 @@ struct SpatialQueryTests {
         #expect(hitsIncludingTriggers.map(\ .entity) == [sphere, box, trigger].sorted { $0.rawValue < $1.rawValue })
     }
 
-    @Test("sweep returns the nearest collider hit from Jolt")
+    @Test("sweep returns the nearest collider hit from Natsel")
     func sweepReturnsNearestColliderHit() {
         var runtime = SceneRuntime()
 
@@ -499,7 +499,7 @@ struct SpatialQueryTests {
         #expect(triggerHit?.isTrigger == true)
     }
 
-    @Test("sweep uses Jolt sphere geometry instead of broad-phase bounds")
+    @Test("sweep uses Natsel sphere geometry instead of broad-phase bounds")
     func sweepUsesPreciseSphereNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -518,7 +518,7 @@ struct SpatialQueryTests {
         #expect(hit == nil)
     }
 
-    @Test("physics sweep shape returns the nearest Jolt hit")
+    @Test("physics sweep shape returns the nearest Natsel hit")
     func physicsSweepShapeReturnsNearestHit() {
         var runtime = SceneRuntime()
 
@@ -665,7 +665,7 @@ struct SpatialQueryTests {
         #expect(shapeSweepHit?.entity == filteredHit)
     }
 
-    @Test("physics sweep reports the Jolt shape contact normal")
+    @Test("physics sweep reports the Natsel shape contact normal")
     func physicsSweepReportsPreciseContactNormal() {
         var runtime = SceneRuntime()
 
@@ -689,8 +689,8 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.y ?? 0) - expectedNormal.y) < 0.01)
     }
 
-    @Test("Jolt query scene is reused until the runtime revision changes")
-    func joltQuerySceneCachesByWorldRevision() {
+    @Test("Natsel query scene is reused until the runtime revision changes")
+    func natselQuerySceneCachesByWorldRevision() {
         var runtime = SceneRuntime()
         let sphere = runtime.createEntity()
         _ = runtime.setComponent(Collider(shape: .sphere(radius: 1, center: .zero)), for: sphere)
@@ -751,8 +751,8 @@ struct SpatialQueryTests {
         #expect(runtime.physicsQueryCacheStats.cacheHitCount == 2)
     }
 
-    @Test("simulation and queries share the same persistent Jolt world")
-    func simulationAndQueriesShareJoltWorld() {
+    @Test("simulation and queries share the same persistent Natsel world")
+    func simulationAndQueriesShareNatselWorld() {
         var runtime = SceneRuntime()
         runtime.setResource(
             PhysicsSettingsResource(

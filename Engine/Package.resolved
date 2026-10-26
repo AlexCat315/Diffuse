@@ -1,6 +1,15 @@
 {
-  "originHash" : "8288bb149c0fd5bfa5128e56216fcc2e81a9d565e60b6fe4b9b3fabcb8ae4197",
+  "originHash" : "2764cacef19ac93d2203398f5e218876c02cbce3b5541dd8f77b3e8e89e0d69d",
   "pins" : [
+    {
+      "identity" : "natsel",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AlexCat315/Natsel.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "9431ebecaf25cff18174e643e6bdd7f51e80d23f"
+      }
+    },
     {
       "identity" : "swift-atomics",
       "kind" : "remoteSourceControl",

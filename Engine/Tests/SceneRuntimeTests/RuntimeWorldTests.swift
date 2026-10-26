@@ -252,7 +252,37 @@ struct RuntimeWorldTests {
 
         let namedTransforms = runtime.query(TransformStub.self, NameStub.self, using: jobSystem)
         #expect(namedTransforms.0.map(\ .entity) == [second])
-        #expect(namedTransforms.1.executedInParallel)
+        #expect(namedTransforms.1.jobCount == 1)
+        #expect(!namedTransforms.1.executedInParallel)
+        _ = runtime.setComponent(NameStub(value: "First"), for: first)
+        let bothNamed = runtime.query(TransformStub.self, NameStub.self, using: jobSystem)
+        #expect(bothNamed.0.map(\ .entity) == [first, second])
+        #expect(bothNamed.1.executedInParallel)
+    }
+
+    @Test("Flat transform propagation preserves snapshots and supports a later hierarchy")
+    func flatTransformPropagation() {
+        var world = RuntimeWorld()
+        let first = world.createEntity()
+        let second = world.createEntity()
+        let empty = world.createEntity()
+        _ = world.setLocalTransform(LocalTransform(translation: SIMD3<Float>(2, 0, 0)), for: first)
+        _ = world.setLocalTransform(LocalTransform(translation: SIMD3<Float>(4, 0, 0)), for: second)
+        let jobs = JobSystem(workerCount: 2, minimumChunkSize: 1, label: "test.jobs.flat.hierarchy")
+        #expect(world.propagateTransforms(using: jobs).executedInParallel)
+        #expect(world.componentSnapshot(WorldTransform.self).count == 3)
+        #expect(world.worldTransform(for: empty) == .identity)
+        let captured = world.componentSnapshot(WorldTransform.self)
+        let copy = world
+        _ = world.setLocalTransform(LocalTransform(translation: SIMD3<Float>(5, 0, 0)), for: first)
+        world.propagateTransforms()
+        #expect(world.worldTransform(for: first)?.translation.x == 5)
+        #expect(world.worldTransform(for: second)?.translation.x == 4)
+        #expect(copy.worldTransform(for: first)?.translation.x == 2)
+        #expect(captured[first]?.translation.x == 2)
+        _ = world.setParent(first, for: second)
+        world.propagateTransforms()
+        #expect(world.worldTransform(for: second)?.translation.x == 9)
     }
 
     @Test("Hierarchy propagation composes parent and child transforms")
@@ -472,6 +502,51 @@ struct RuntimeWorldTests {
 
         let lastPrepare = backend.prepareContexts.last
         #expect(lastPrepare?.syncEvents.contains(.bodyRemove(entity)) == true)
+    }
+
+    @Test("component updates isolate copied worlds and captured snapshots")
+    func componentUpdateCopyIsolation() {
+        var original = RuntimeWorld()
+        let entity = original.createEntity()
+        _ = original.setComponent(TransformStub(x: 1, y: 2), for: entity)
+        let snapshot = original.componentSnapshot(TransformStub.self)
+        var copy = original
+        #expect(copy.updateComponent(TransformStub.self, for: entity) { $0.x = 10 })
+        #expect(copy.updateComponent(TransformStub.self, for: entity) { $0.y = 20 })
+        #expect(copy.component(TransformStub.self, for: entity) == TransformStub(x: 10, y: 20))
+        #expect(original.component(TransformStub.self, for: entity) == TransformStub(x: 1, y: 2))
+        #expect(snapshot[entity] == TransformStub(x: 1, y: 2))
+        let missing = copy.createEntity()
+        #expect(!copy.updateComponent(TransformStub.self, for: missing) { $0.x = 99 })
+        #expect(copy.component(TransformStub.self, for: missing) == nil)
+    }
+
+    @Test("schedule timing covers every complete phase")
+    func completePhaseTimings() {
+        var runtime = SceneRuntime()
+        let report = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(Set(report.phaseNanoseconds.keys) == Set(RuntimeSystemPhase.allCases))
+        #expect(report.phaseNanoseconds.values.reduce(0, +) > 0)
+    }
+
+    @Test("component snapshots preserve captured values and exclude destroyed generations")
+    func componentSnapshotLifetime() {
+        var world = RuntimeWorld()
+        let old = world.createEntity()
+        _ = world.setComponent(TransformStub(x: 1, y: 2), for: old)
+        let captured = world.componentSnapshot(TransformStub.self)
+        _ = world.updateComponent(TransformStub.self, for: old) { $0.x = 9 }
+        #expect(captured[old] == TransformStub(x: 1, y: 2))
+        #expect(world.componentSnapshot(TransformStub.self)[old]?.x == 9)
+        let destroyed = world.destroyEntity(old)
+        #expect(destroyed)
+        let replacement = world.createEntity()
+        _ = world.setComponent(TransformStub(x: 3, y: 4), for: replacement)
+        let live = world.componentSnapshot(TransformStub.self)
+        #expect(live[old] == nil)
+        #expect(live[replacement] == TransformStub(x: 3, y: 4))
+        #expect(captured[old] == TransformStub(x: 1, y: 2))
+        #expect(world.componentSnapshot(TransformStub.self, matching: [old]).isEmpty)
     }
 
     @Test("SceneRuntime stores current frame input as a derived resource")

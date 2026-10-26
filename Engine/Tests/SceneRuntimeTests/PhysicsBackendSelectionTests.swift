@@ -57,12 +57,12 @@ private final class SelectionRecordingPhysicsBackend: PhysicsBackend, @unchecked
 
 @Suite("PhysicsBackendSelection")
 struct PhysicsBackendSelectionTests {
-    private func makeJoltRuntime() -> SceneRuntime {
+    private func makeNatselRuntime() -> SceneRuntime {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 gravity: .zero,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
@@ -98,13 +98,13 @@ struct PhysicsBackendSelectionTests {
         return entity
     }
 
-    @Test("configured backendKind selects the Jolt skeleton backend")
-    func configuredBackendKindSelectsJolt() {
+    @Test("configured backendKind selects the Natsel skeleton backend")
+    func configuredBackendKindSelectsNatsel() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1
             )
@@ -120,14 +120,14 @@ struct PhysicsBackendSelectionTests {
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
 
-        #expect(report.physics.backendIdentifier == "jolt")
-        #expect(runtime.physicsFrameState.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
+        #expect(runtime.physicsFrameState.backendIdentifier == "natsel")
         #expect(report.physics.bodyCount == 1)
         #expect(report.physics.constraintCount == 0)
     }
 
-    @Test("default backendKind selects Jolt when simulation runs")
-    func defaultBackendKindSelectsJoltWhenSimulationRuns() {
+    @Test("default backendKind selects the preferred engine when simulation runs")
+    func defaultBackendKindSelectsPreferredWhenSimulationRuns() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
@@ -148,7 +148,7 @@ struct PhysicsBackendSelectionTests {
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
 
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == PhysicsBackendKind.preferred.rawValue)
         #expect(report.physics.bodyCount == 1)
     }
 
@@ -160,7 +160,7 @@ struct PhysicsBackendSelectionTests {
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1
             )
@@ -188,7 +188,7 @@ struct PhysicsBackendSelectionTests {
             runtime.setPhysicsSettings(
                 PhysicsSettingsResource(
                     simulationMode: .play,
-                    backendKind: .jolt,
+                    backendKind: .natsel,
                     fixedTimeStepSeconds: 1.0 / 60.0,
                     maxSubstepsPerFrame: 1
                 )
@@ -209,18 +209,18 @@ struct PhysicsBackendSelectionTests {
         _ = limitedRuntime.tick(deltaTime: 1.0 / 60.0)
         #expect(limitedRuntime.physicsFrameState.unsupportedFeatures == .cylinderColliders)
 
-        var joltRuntime = makeRuntime(backend: nil)
-        _ = joltRuntime.tick(deltaTime: 1.0 / 60.0)
-        #expect(joltRuntime.physicsFrameState.unsupportedFeatures.isEmpty)
+        var natselRuntime = makeRuntime(backend: nil)
+        _ = natselRuntime.tick(deltaTime: 1.0 / 60.0)
+        #expect(natselRuntime.physicsFrameState.unsupportedFeatures.isEmpty)
     }
 
-    @Test("configured Jolt backend writes stepped body state back into SceneRuntime")
-    func configuredJoltBackendWritesBackSteppedBodyState() {
+    @Test("configured Natsel backend writes stepped body state back into SceneRuntime")
+    func configuredNatselBackendWritesBackSteppedBodyState() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
                 allowSleep: false
@@ -252,20 +252,20 @@ struct PhysicsBackendSelectionTests {
         let expectedVelocityY = Float(-9.81 / 60.0)
         let expectedPositionY = expectedVelocityY / 60.0
 
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
         #expect(report.physics.writebackCount == 1)
         #expect(abs((runtime.worldTransform(for: entity)?.translation.y ?? 0) - expectedPositionY) < 0.000_01)
         #expect(abs((runtime.component(RigidBody.self, for: entity)?.linearVelocity.y ?? 0) - expectedVelocityY) < 0.000_01)
         #expect(runtime.component(RigidBody.self, for: entity)?.isSleeping == false)
     }
 
-    @Test("configured Jolt backend writes stepped body rotation back into SceneRuntime")
-    func configuredJoltBackendWritesBackSteppedBodyRotation() {
+    @Test("configured Natsel backend writes stepped body rotation back into SceneRuntime")
+    func configuredNatselBackendWritesBackSteppedBodyRotation() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 gravity: .zero,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
@@ -299,19 +299,19 @@ struct PhysicsBackendSelectionTests {
         let actualRotation = quaternion(from: runtime.worldTransform(for: entity)?.matrix ?? matrix_identity_float4x4)
         let alignment = abs(simd_dot(expectedRotation.vector, actualRotation.vector))
 
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
         #expect(report.physics.writebackCount == 1)
         #expect(alignment > 0.999_99)
         #expect(runtime.component(RigidBody.self, for: entity)?.angularVelocity == SIMD3<Float>(0, .pi, 0))
     }
 
-    @Test("configured Jolt backend integrates runtime forces and impulses")
-    func configuredJoltBackendIntegratesRuntimeForcesAndImpulses() {
+    @Test("configured Natsel backend integrates runtime forces and impulses")
+    func configuredNatselBackendIntegratesRuntimeForcesAndImpulses() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 gravity: .zero,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
@@ -355,13 +355,13 @@ struct PhysicsBackendSelectionTests {
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
         let body = runtime.component(RigidBody.self, for: entity)
 
-        // Real Jolt: sphere inertia I = (2/5)·m·r虏 = 0.4·2·0.25 = 0.2.
+        // Real Natsel: sphere inertia I = (2/5)·m·r虏 = 0.4·2·0.25 = 0.2.
         // Linear impulse (2,0,0) on m=2  →Δv  = 1 in x
         // Force (0,120,0) for dt=1/60  →Δv  = 120/2 · 1/60 = 1 in y
         // Angular impulse (0,0,0.2)     →Δω = 0.2/0.2 = 1 in z
         // Torque (0,0,120) for dt=1/60 →Δω = 120/0.2 · 1/60 = 10 in z
         let expectedAngularZ: Float = 11
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
         #expect(report.physics.writebackCount == 1)
         #expect(abs((body?.linearVelocity.x ?? 0) - 1) < 0.001)
         #expect(abs((body?.linearVelocity.y ?? 0) - 1) < 0.001)
@@ -377,9 +377,9 @@ struct PhysicsBackendSelectionTests {
         #expect(runtime.component(Collider.self, for: entity)?.material == PhysicsMaterial(friction: 0.9, restitution: 0.25, density: 2))
     }
 
-    @Test("configured Jolt backend exposes contact frame events")
-    func configuredJoltBackendExposesContactFrameEvents() {
-        var runtime = makeJoltRuntime()
+    @Test("configured Natsel backend exposes contact frame events")
+    func configuredNatselBackendExposesContactFrameEvents() {
+        var runtime = makeNatselRuntime()
         let mover = addBody(to: &runtime, position: .zero, motionType: .dynamic)
         let wall = addBody(to: &runtime, position: SIMD3<Float>(0.75, 0, 0), motionType: .static)
 
@@ -391,7 +391,7 @@ struct PhysicsBackendSelectionTests {
                 || ($0.entityA == wall && $0.entityB == mover)
         }
 
-        #expect(firstReport.physics.backendIdentifier == "jolt")
+        #expect(firstReport.physics.backendIdentifier == "natsel")
         #expect(firstReport.physics.contactCount >= 1)
         #expect(runtime.physicsFrameState.counts.contacts >= 1)
         #expect(firstPair != nil)
@@ -410,13 +410,13 @@ struct PhysicsBackendSelectionTests {
         #expect(endedPair != nil)
     }
 
-    @Test("configured Jolt backend uses CCD for fast dynamic bodies")
-    func configuredJoltBackendUsesCCDForFastDynamicBodies() {
+    @Test("configured Natsel backend uses CCD for fast dynamic bodies")
+    func configuredNatselBackendUsesCCDForFastDynamicBodies() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 gravity: .zero,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
@@ -456,13 +456,13 @@ struct PhysicsBackendSelectionTests {
         #expect(fastX < 0.25, "CCD body should not tunnel past the static collider (x=\(fastX))")
     }
 
-    @Test("configured Jolt backend applies distance constraints between active bodies")
-    func configuredJoltBackendAppliesDistanceConstraint() {
+    @Test("configured Natsel backend applies distance constraints between active bodies")
+    func configuredNatselBackendAppliesDistanceConstraint() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 gravity: .zero,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
@@ -526,10 +526,10 @@ struct PhysicsBackendSelectionTests {
             for: constraintEntity
         )
 
-        // Real Jolt's iterative constraint solver converges over several frames
+        // Real Natsel's iterative constraint solver converges over several frames
         // (vs. the fake impl's single-frame projection). Tick until convergence.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
         #expect(report.physics.constraintCount == 1)
         for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
@@ -540,13 +540,13 @@ struct PhysicsBackendSelectionTests {
         #expect(abs(followerX - 2) < 0.05, "distance constraint should pull follower to ~x=2 (got \(followerX))")
     }
 
-    @Test("configured Jolt backend applies point-to-point constraints between active bodies")
-    func configuredJoltBackendAppliesPointToPointConstraint() {
+    @Test("configured Natsel backend applies point-to-point constraints between active bodies")
+    func configuredNatselBackendAppliesPointToPointConstraint() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 gravity: .zero,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
@@ -615,7 +615,7 @@ struct PhysicsBackendSelectionTests {
         // follower target: pos + pivotB = (1,0,0) ⇒pos = (2,0,0)
         // Iterative solver —converge over several frames.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
         #expect(report.physics.constraintCount == 1)
         for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
@@ -626,13 +626,13 @@ struct PhysicsBackendSelectionTests {
         #expect(abs(followerX - 2) < 0.05, "point-to-point should pull follower to ~x=2 (got \(followerX))")
     }
 
-    @Test("configured Jolt backend adds velocity-layer response for distance constraints")
-    func configuredJoltBackendAddsVelocityLayerResponseForDistanceConstraint() {
+    @Test("configured Natsel backend adds velocity-layer response for distance constraints")
+    func configuredNatselBackendAddsVelocityLayerResponseForDistanceConstraint() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 gravity: .zero,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
@@ -701,7 +701,7 @@ struct PhysicsBackendSelectionTests {
         //   - equalize velocities via momentum conservation (1·1 + 5·1)/(1+1) = 3
         // Iterative solver converges over many frames.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
         #expect(report.physics.constraintCount == 1)
         for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
@@ -717,13 +717,13 @@ struct PhysicsBackendSelectionTests {
         #expect(abs(velocityB - 3) < 0.1, "bodyB velocity should converge to ~3 (got \(velocityB))")
     }
 
-    @Test("configured Jolt backend applies slider constraints between active bodies")
-    func configuredJoltBackendAppliesSliderConstraint() {
+    @Test("configured Natsel backend applies slider constraints between active bodies")
+    func configuredNatselBackendAppliesSliderConstraint() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 gravity: .zero,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1,
@@ -793,7 +793,7 @@ struct PhysicsBackendSelectionTests {
         // After a few frames the perpendicular y velocity is killed and y
         // settles back near 0; x continues unconstrained until limits engage.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
         #expect(report.physics.constraintCount == 1)
         for _ in 0..<60 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
@@ -805,9 +805,9 @@ struct PhysicsBackendSelectionTests {
         #expect(abs(velocityY) < 0.1, "slider should kill y velocity (got \(velocityY))")
     }
 
-    @Test("configured Jolt backend creates hinge constraints")
-    func configuredJoltBackendCreatesHingeConstraint() {
-        var runtime = makeJoltRuntime()
+    @Test("configured Natsel backend creates hinge constraints")
+    func configuredNatselBackendCreatesHingeConstraint() {
+        var runtime = makeNatselRuntime()
         let anchor = addBody(to: &runtime, position: .zero, motionType: .static)
         let follower = addBody(to: &runtime, position: SIMD3<Float>(2, 0, 0), motionType: .dynamic)
 
@@ -828,13 +828,13 @@ struct PhysicsBackendSelectionTests {
         )
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
         #expect(report.physics.constraintCount == 1)
     }
 
-    @Test("configured Jolt backend applies fixed constraints")
-    func configuredJoltBackendAppliesFixedConstraint() {
-        var runtime = makeJoltRuntime()
+    @Test("configured Natsel backend applies fixed constraints")
+    func configuredNatselBackendAppliesFixedConstraint() {
+        var runtime = makeNatselRuntime()
         let anchor = addBody(to: &runtime, position: .zero, motionType: .static)
         let follower = addBody(to: &runtime, position: SIMD3<Float>(3, 0, 0), motionType: .dynamic)
 
@@ -853,7 +853,7 @@ struct PhysicsBackendSelectionTests {
         )
 
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
-        #expect(report.physics.backendIdentifier == "jolt")
+        #expect(report.physics.backendIdentifier == "natsel")
         #expect(report.physics.constraintCount == 1)
         for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)

@@ -90,16 +90,20 @@ public struct RuntimeScheduleReport: Sendable {
     public var physics: SchedulePhysicsReport
     public var jobs: ScheduleJobReport
     public var revision: UInt64
+    /// CPU duration of each complete schedule phase, including descriptor collection and writeback.
+    public var phaseNanoseconds: [RuntimeSystemPhase: UInt64]
 
     public init(phases: [RuntimeSystemPhase] = [],
                 commands: ScheduleCommandReport = ScheduleCommandReport(),
                 physics: SchedulePhysicsReport = SchedulePhysicsReport(),
                 jobs: ScheduleJobReport = ScheduleJobReport(),
-                revision: UInt64 = 0) {
+                revision: UInt64 = 0,
+                phaseNanoseconds: [RuntimeSystemPhase: UInt64] = [:]) {
         self.phases = phases
         self.commands = commands
         self.physics = physics
         self.jobs = jobs
         self.revision = revision
+        self.phaseNanoseconds = phaseNanoseconds
     }
 }

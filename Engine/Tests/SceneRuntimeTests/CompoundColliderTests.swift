@@ -22,7 +22,7 @@ struct CompoundColliderTests {
         material: PhysicsMaterial(friction: 0.4, restitution: 0.2, density: 3)
     )
 
-    @Test("Jolt queries every child in a compound collider")
+    @Test("Natsel queries every child in a compound collider")
     func nativeCompoundShape() {
         var runtime = SceneRuntime()
         let entity = runtime.createEntity()
@@ -61,7 +61,7 @@ struct CompoundColliderTests {
     @Test("empty compounds report an explicit native error")
     func emptyCompoundFails() {
         var runtime = SceneRuntime()
-        runtime.setPhysicsSettings(PhysicsSettingsResource(simulationMode: .play, backendKind: .jolt))
+        runtime.setPhysicsSettings(PhysicsSettingsResource(simulationMode: .play, backendKind: .preferred))
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(.identity, for: entity)
         _ = runtime.setComponent(Collider(shapes: []), for: entity)
@@ -145,7 +145,7 @@ struct CompoundColliderTests {
     @Test("play-mode sensors are emitted by the contact listener")
     func nativeSensorEvents() {
         var runtime = SceneRuntime()
-        runtime.setPhysicsSettings(PhysicsSettingsResource(simulationMode: .play, backendKind: .jolt))
+        runtime.setPhysicsSettings(PhysicsSettingsResource(simulationMode: .play, backendKind: .preferred))
         let trigger = runtime.createEntity()
         _ = runtime.setLocalTransform(.identity, for: trigger)
         _ = runtime.setComponent(

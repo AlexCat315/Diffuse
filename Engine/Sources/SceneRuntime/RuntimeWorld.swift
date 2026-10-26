@@ -230,11 +230,10 @@ public struct RuntimeWorld: @unchecked Sendable {
             for entity: EntityID,
             _ body: (inout Component) -> Void
         ) -> Bool {
-            let key = ObjectIdentifier(type)
-            guard let current = boxes[key] as? ComponentStoreBox<Component>,
-                  current.values[entity] != nil else { return false }
+            // Retaining the store box here would make mutableBox's uniqueness check fail
+            // and copy the entire component dictionary for every entity update.
+            guard var component = get(type, for: entity) else { return false }
             let box = mutableBox(for: type)
-            guard var component = box.values[entity] else { return false }
             body(&component)
             box.values[entity] = component
             return true
@@ -515,17 +514,17 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     public func entities<Component: RuntimeComponent>(with type: Component.Type) -> [EntityID] {
-        let alive = Set(entities())
         return components
             .entities(with: type)
-            .filter { alive.contains($0) }
             .sorted { lhs, rhs in lhs.rawValue < rhs.rawValue }
     }
 
     public func componentSnapshot<Component: RuntimeComponent>(
         _ type: Component.Type
     ) -> [EntityID: Component] {
-        componentSnapshot(type, matching: entities())
+        // Stores remove destroyed entities and validate generations at insertion. Dictionary
+        // copy-on-write supplies a stable snapshot without scanning every live entity.
+        components.snapshot(for: type)
     }
 
     public func componentSnapshot<Component: RuntimeComponent>(
@@ -533,6 +532,7 @@ public struct RuntimeWorld: @unchecked Sendable {
         matching entities: [EntityID]
     ) -> [EntityID: Component] {
         let storedComponents = components.snapshot(for: type)
+        guard !storedComponents.isEmpty, !entities.isEmpty else { return [:] }
         var snapshot: [EntityID: Component] = [:]
         snapshot.reserveCapacity(min(storedComponents.count, entities.count))
         for entity in entities where contains(entity) {
@@ -547,7 +547,7 @@ public struct RuntimeWorld: @unchecked Sendable {
         _ type: Component.Type
     ) -> [RuntimeComponentQuery<Component>] {
         let componentSnapshot = componentSnapshot(type)
-        return entities()
+        return entities(with: type)
             .compactMap { entity in
                 guard let component = componentSnapshot[entity] else { return nil }
                 return RuntimeComponentQuery(entity: entity, component: component)
@@ -558,8 +558,8 @@ public struct RuntimeWorld: @unchecked Sendable {
         _ type: Component.Type,
         using jobSystem: JobSystem
     ) -> ([RuntimeComponentQuery<Component>], JobDispatchReport) {
-        let entities = entities()
-        let componentSnapshot = componentSnapshot(type, matching: entities)
+        let entities = entities(with: type)
+        let componentSnapshot = componentSnapshot(type)
         return jobSystem.parallelCompactMap(items: entities) { entity -> RuntimeComponentQuery<Component>? in
             guard let component = componentSnapshot[entity] else { return nil }
             return RuntimeComponentQuery(entity: entity, component: component)
@@ -572,7 +572,8 @@ public struct RuntimeWorld: @unchecked Sendable {
     ) -> [RuntimeComponentPairQuery<A, B>] {
         let snapshotA = componentSnapshot(a)
         let snapshotB = componentSnapshot(b)
-        return entities()
+        let candidates = snapshotA.count <= snapshotB.count ? Array(snapshotA.keys) : Array(snapshotB.keys)
+        return candidates.sorted { $0.rawValue < $1.rawValue }
             .compactMap { entity in
                 guard let componentA = snapshotA[entity],
                       let componentB = snapshotB[entity]
@@ -588,9 +589,10 @@ public struct RuntimeWorld: @unchecked Sendable {
         _ b: B.Type,
         using jobSystem: JobSystem
     ) -> ([RuntimeComponentPairQuery<A, B>], JobDispatchReport) {
-        let entities = entities()
-        let snapshotA = componentSnapshot(a, matching: entities)
-        let snapshotB = componentSnapshot(b, matching: entities)
+        let snapshotA = componentSnapshot(a)
+        let snapshotB = componentSnapshot(b)
+        let entities = (snapshotA.count <= snapshotB.count ? Array(snapshotA.keys) : Array(snapshotB.keys))
+            .sorted { $0.rawValue < $1.rawValue }
         return jobSystem.parallelCompactMap(items: entities) { entity -> RuntimeComponentPairQuery<A, B>? in
             guard let componentA = snapshotA[entity],
                   let componentB = snapshotB[entity]
@@ -609,7 +611,9 @@ public struct RuntimeWorld: @unchecked Sendable {
         let snapshotA = componentSnapshot(a)
         let snapshotB = componentSnapshot(b)
         let snapshotC = componentSnapshot(c)
-        return entities()
+        let candidates = snapshotA.count <= snapshotB.count && snapshotA.count <= snapshotC.count
+            ? Array(snapshotA.keys) : snapshotB.count <= snapshotC.count ? Array(snapshotB.keys) : Array(snapshotC.keys)
+        return candidates.sorted { $0.rawValue < $1.rawValue }
             .compactMap { entity in
                 guard let componentA = snapshotA[entity],
                       let componentB = snapshotB[entity],
@@ -627,10 +631,12 @@ public struct RuntimeWorld: @unchecked Sendable {
         _ c: C.Type,
         using jobSystem: JobSystem
     ) -> ([RuntimeComponentTripleQuery<A, B, C>], JobDispatchReport) {
-        let entities = entities()
-        let snapshotA = componentSnapshot(a, matching: entities)
-        let snapshotB = componentSnapshot(b, matching: entities)
-        let snapshotC = componentSnapshot(c, matching: entities)
+        let snapshotA = componentSnapshot(a)
+        let snapshotB = componentSnapshot(b)
+        let snapshotC = componentSnapshot(c)
+        let candidates = snapshotA.count <= snapshotB.count && snapshotA.count <= snapshotC.count
+            ? Array(snapshotA.keys) : snapshotB.count <= snapshotC.count ? Array(snapshotB.keys) : Array(snapshotC.keys)
+        let entities = candidates.sorted { $0.rawValue < $1.rawValue }
         return jobSystem.parallelCompactMap(items: entities) { entity -> RuntimeComponentTripleQuery<A, B, C>? in
             guard let componentA = snapshotA[entity],
                   let componentB = snapshotB[entity],
@@ -768,7 +774,8 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     public func localTransformSnapshot() -> [EntityID: LocalTransform] {
-        localTransformSnapshot(matching: entities())
+        let stored = components.snapshot(for: LocalTransform.self)
+        return stored.count == entityCount ? stored : localTransformSnapshot(matching: entities())
     }
 
     public func localTransformSnapshot(matching entities: [EntityID]) -> [EntityID: LocalTransform] {
@@ -787,7 +794,8 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     public func worldTransformSnapshot() -> [EntityID: WorldTransform] {
-        worldTransformSnapshot(matching: entities())
+        let stored = components.snapshot(for: WorldTransform.self)
+        return stored.count == entityCount ? stored : worldTransformSnapshot(matching: entities())
     }
 
     public func worldTransformSnapshot(matching entities: [EntityID]) -> [EntityID: WorldTransform] {
@@ -901,6 +909,26 @@ public struct RuntimeWorld: @unchecked Sendable {
     public mutating func propagateTransforms(using jobSystem: JobSystem) -> JobDispatchReport {
         guard hierarchyNeedsPropagation() else {
             return JobDispatchReport(jobCount: 0, workerCount: jobSystem.workerCount, executedInParallel: false)
+        }
+
+        if components.count(for: Parent.self) == 0 && components.count(for: Children.self) == 0 {
+            // Independent roots have no graph to traverse. Physics already writes both local
+            // and world transforms, so those roots usually need no additional store mutation.
+            let entities = entities()
+            let localTransforms = components.snapshot(for: LocalTransform.self)
+            let computed = jobSystem.parallelMap(items: entities, minimumChunkSize: 1) { entity in
+                matrix_identity_float4x4 * (localTransforms[entity]?.matrix ?? matrix_identity_float4x4)
+            }
+            for (index, entity) in entities.enumerated() {
+                let transform = WorldTransform(matrix: computed.0[index])
+                if components.get(WorldTransform.self, for: entity) != transform {
+                    components.set(transform, for: entity)
+                }
+            }
+            dirtyHierarchyEntities.removeAll(keepingCapacity: true)
+            revision &+= 1
+            physicsRevision &+= 1
+            return computed.1
         }
 
         let snapshotBuild = hierarchyReadSnapshot(using: jobSystem)
@@ -1119,9 +1147,9 @@ public struct RuntimeWorld: @unchecked Sendable {
     private func hierarchyReadSnapshot(using jobSystem: JobSystem) -> HierarchyReadSnapshotBuild {
         let entities = entities()
         let entitySet = Set(entities)
-        let localTransforms = componentSnapshot(LocalTransform.self, matching: entities)
-        let parents = componentSnapshot(Parent.self, matching: entities)
-        let children = componentSnapshot(Children.self, matching: entities)
+        let localTransforms = componentSnapshot(LocalTransform.self)
+        let parents = componentSnapshot(Parent.self)
+        let children = componentSnapshot(Children.self)
 
         let localMatrixPairs = jobSystem.parallelMap(items: entities) { entity in
             (entity, localTransforms[entity]?.matrix ?? matrix_identity_float4x4)
@@ -1260,6 +1288,9 @@ public struct RuntimeWorld: @unchecked Sendable {
     mutating func clearPhysicsAccumulators(for entities: [EntityID]) -> Int {
         var clearedCount = 0
         for entity in entities {
+            guard let body = component(RigidBody.self, for: entity),
+                body.accumulatedForce != .zero || body.accumulatedTorque != .zero
+                    || body.accumulatedLinearImpulse != .zero || body.accumulatedAngularImpulse != .zero else { continue }
             let cleared = updateComponent(RigidBody.self, for: entity) { body in
                 body.accumulatedForce = .zero
                 body.accumulatedTorque = .zero

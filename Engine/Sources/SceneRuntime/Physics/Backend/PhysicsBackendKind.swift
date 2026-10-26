@@ -1,16 +1,16 @@
 public enum PhysicsBackendKind: String, CaseIterable, Sendable, Equatable {
     case none
-    case jolt
+    case natsel
 
     /// The backend selected when settings do not choose one.
-    public static let preferred: PhysicsBackendKind = .jolt
+    public static let preferred: PhysicsBackendKind = .natsel
 
     func makeBackend() -> any PhysicsBackend {
         switch self {
         case .none:
             return NullPhysicsBackend()
-        case .jolt:
-            return JoltPhysicsBackend()
+        case .natsel:
+            return NatselPhysicsBackend()
         }
     }
 }

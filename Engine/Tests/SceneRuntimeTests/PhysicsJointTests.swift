@@ -1,79 +1,15 @@
-import CJoltBridge
 import SceneRuntime
 import SIMDCompat
 import Testing
 
 @Suite("PhysicsJoint v2")
 struct PhysicsJointTests {
-    @Test("C ABI v6 publishes exact physics structure sizes and stable leading offsets")
-    func abiLayout() {
-        var layout = GuavaJoltABILayout()
-        var vehicleLayout = GuavaJoltVehicleABILayout()
-        vehicleLayout.struct_size = UInt32(MemoryLayout<GuavaJoltVehicleABILayout>.size)
-        #expect(guava_jolt_bridge_abi_version() == 6)
-        #expect(guava_jolt_bridge_get_abi_layout(&layout))
-        #expect(guava_jolt_bridge_get_vehicle_abi_layout(&vehicleLayout))
-        #expect(layout.struct_size == UInt32(MemoryLayout<GuavaJoltABILayout>.size))
-        #expect(layout.body_desc_size == UInt32(MemoryLayout<GuavaJoltBodyDesc>.size))
-        #expect(layout.constraint_desc_size == UInt32(MemoryLayout<GuavaJoltConstraintDesc>.size))
-        #expect(layout.contact_event_size == UInt32(MemoryLayout<GuavaJoltContactEvent>.size))
-        #expect(layout.joint_break_event_size == UInt32(MemoryLayout<GuavaJoltJointBreakEvent>.size))
-        #expect(layout.context_config_size == UInt32(MemoryLayout<GuavaJoltContextConfig>.size))
-        #expect(layout.soft_body_desc_size == UInt32(MemoryLayout<GuavaJoltSoftBodyDesc>.size))
-        #expect(layout.soft_body_state_size == UInt32(MemoryLayout<GuavaJoltSoftBodyState>.size))
-        #expect(layout.soft_body_sync_stats_size == UInt32(MemoryLayout<GuavaJoltSoftBodySyncStats>.size))
-        #expect(MemoryLayout<GuavaJoltConstraintDesc>.offset(of: \.entity_id) == 0)
-        #expect(MemoryLayout<GuavaJoltConstraintDesc>.offset(of: \.entity_a) == 8)
-        #expect(MemoryLayout<GuavaJoltConstraintDesc>.offset(of: \.entity_b) == 16)
-        #expect(MemoryLayout<GuavaJoltJointBreakEvent>.offset(of: \.joint_entity) == 0)
-        #expect(MemoryLayout<GuavaJoltSoftBodyDesc>.offset(of: \.entity_id) == 0)
-        #expect(MemoryLayout<GuavaJoltSoftBodyDesc>.offset(of: \.topology_kind) == 48)
-        #expect(MemoryLayout<GuavaJoltSoftBodyDesc>.offset(of: \.surface_positions_xyz) == 72)
-        #expect(MemoryLayout<GuavaJoltSoftBodyDesc>.offset(of: \.surface_vertex_count) == 80)
-        #expect(MemoryLayout<GuavaJoltSoftBodyDesc>.offset(of: \.surface_triangle_indices) == 88)
-        #expect(MemoryLayout<GuavaJoltSoftBodyDesc>.offset(of: \.tetrahedron_indices) == 104)
-        #expect(MemoryLayout<GuavaJoltSoftBodyDesc>.offset(of: \.tetrahedron_index_count) == 112)
-        #expect(MemoryLayout<GuavaJoltSoftBodyDesc>.offset(of: \.fixed_vertices) == 120)
-        #expect(MemoryLayout<GuavaJoltSoftBodyDesc>.offset(of: \.volume_compliance) == 148)
-        #expect(ClothBendType.none.rawValue == 0)
-        #expect(ClothBendType.distance.rawValue == 1)
-        #expect(ClothBendType.dihedral.rawValue == 2)
-        #expect(vehicleLayout.abi_version == 6)
-        #expect(vehicleLayout.struct_size == UInt32(MemoryLayout<GuavaJoltVehicleABILayout>.size))
-        #expect(vehicleLayout.vehicle_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleDesc>.size))
-        #expect(vehicleLayout.wheel_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleWheelDesc>.size))
-        #expect(vehicleLayout.differential_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleDifferentialDesc>.size))
-        #expect(vehicleLayout.anti_roll_bar_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleAntiRollBarDesc>.size))
-        #expect(vehicleLayout.track_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleTrackDesc>.size))
-        #expect(vehicleLayout.command_size == UInt32(MemoryLayout<GuavaJoltVehicleCommand>.size))
-        #expect(vehicleLayout.state_size == UInt32(MemoryLayout<GuavaJoltVehicleState>.size))
-        #expect(vehicleLayout.wheel_state_size == UInt32(MemoryLayout<GuavaJoltVehicleWheelState>.size))
-        #expect(vehicleLayout.sync_stats_size == UInt32(MemoryLayout<GuavaJoltVehicleSyncStats>.size))
-        #expect(MemoryLayout<GuavaJoltVehicleDesc>.offset(of: \.entity_id) == 0)
-        #expect(MemoryLayout<GuavaJoltVehicleCommand>.offset(of: \.entity_id) == 0)
-
-        var invalidVehicleLayout = GuavaJoltVehicleABILayout()
-        invalidVehicleLayout.struct_size = 0
-        #expect(!guava_jolt_bridge_get_vehicle_abi_layout(&invalidVehicleLayout))
-    }
-
-    @Test("C ABI rejects malformed context capacity configuration")
-    func invalidContextConfiguration() {
-        var config = GuavaJoltContextConfig()
-        config.struct_size = UInt32(MemoryLayout<GuavaJoltContextConfig>.size)
-        config.max_bodies = 0
-        config.max_body_pairs = 64
-        config.max_contact_constraints = 64
-        config.temp_allocator_bytes = 1_024 * 1_024
-        #expect(guava_jolt_context_create_with_config(&config) == nil)
-    }
-
     @Test("joint is resent when a connected body must be recreated")
     func jointSurvivesConnectedBodyRecreation() {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: .zero,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
@@ -116,7 +52,7 @@ struct PhysicsJointTests {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: .zero,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,
@@ -152,7 +88,7 @@ struct PhysicsJointTests {
         #expect(runtime.component(PhysicsJoint.self, for: jointEntity)?.isEnabled == false)
     }
 
-    @Test("Jolt creates cone and six-DOF joints from typed configurations", arguments: [
+    @Test("Natsel creates cone and six-DOF joints from typed configurations", arguments: [
         PhysicsJointConfiguration.cone(ConeJointConfiguration(
             halfConeAngle: 0.4,
             minimumTwistAngle: -0.2,
@@ -172,7 +108,7 @@ struct PhysicsJointTests {
         var runtime = SceneRuntime()
         runtime.setPhysicsSettings(PhysicsSettingsResource(
             simulationMode: .play,
-            backendKind: .jolt,
+            backendKind: .preferred,
             gravity: .zero,
             fixedTimeStepSeconds: 1.0 / 60.0,
             maxSubstepsPerFrame: 1,

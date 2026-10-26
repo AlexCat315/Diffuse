@@ -17,6 +17,9 @@ enum EditorCommand {
     /// The activity rail: open the panel, or collapse its group when it is already showing.
     case togglePanel(String)
     case saveLayout
+    case openFolder
+    /// Brings another open project to the front, by its folder.
+    case activateProject(String)
     case closeProject
     case newScene
     case openScene

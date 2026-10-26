@@ -9,14 +9,18 @@ struct EditorRootView: View {
     let app: EditorApplication
     let controller: WorkspaceController
     let registry: WorkspacePanelRegistry
+    /// The window's projects; absent when a view shows one project on its own.
+    var projects: EditorLaunchContext?
     @State private var windowWidth: Float = 1280
     @State private var windowHeight: Float = 720
     private var session: Observed<EditorAssistantSurface, EditorAssistantSurface.State>
 
-    init(app: EditorApplication, controller: WorkspaceController, registry: WorkspacePanelRegistry) {
+    init(app: EditorApplication, controller: WorkspaceController, registry: WorkspacePanelRegistry,
+         projects: EditorLaunchContext? = nil) {
         self.app = app
         self.controller = controller
         self.registry = registry
+        self.projects = projects
         session = Observed(\.state, on: EditorAssistantSurface.of(app))
     }
 
@@ -32,13 +36,14 @@ struct EditorRootView: View {
 
                         // Title bar, rail and status bar rest on the canvas; only panes are cards.
                         EditorCanvasChrome {
-                            EditorTitleBar(app: app, width: windowWidth, onCommand: cb.handleMenuCommand)
+                            EditorTitleBar(app: app, width: windowWidth, projects: projects, onCommand: cb.handleMenuCommand)
                         }
                         // You work in the canvas; the agent works in its own view of the same project.
                         let agent = app.isAgentEnabled && session.wrappedValue.view == .agent
                         Box(direction: .row, alignItems: .stretch, spacing: 0) {
                             if agent {
-                                EditorAgentView(app: app, controller: controller, registry: registry, width: windowWidth)
+                                EditorAgentView(app: app, controller: controller, registry: registry,
+                                                width: windowWidth, projects: projects)
                             } else {
                                 EditorActivityRail(app: app, controller: controller, onCommand: cb.handleMenuCommand)
                                 WorkspaceView(controller: controller, compact: windowWidth < 1000) {
