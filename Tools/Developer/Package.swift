@@ -41,7 +41,7 @@ guard let resolvedSDK, let actualSDK = sdkVersion(resolvedSDK),
     fatalError("Install the shared Cove SDK with cove sdk install \(requiredSDK), then select it with cove sdk use VERSION or PATH")
 }
 
-let sdkRoot = resolvedSDK.path
+let sdkRoot = resolvedSDK.resolvingSymlinksInPath().path
 
 let decoderHeaders = URL(fileURLWithPath: sdkRoot,
   relativeTo: URL(fileURLWithPath: #filePath).deletingLastPathComponent())

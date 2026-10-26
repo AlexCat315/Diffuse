@@ -42,7 +42,7 @@ guard let resolvedSDK, let actualSDK = sdkVersion(resolvedSDK),
     fatalError("Install the shared Cove SDK with cove sdk install \(requiredSDK), then select it with cove sdk use VERSION or PATH")
 }
 
-let sdkRoot = resolvedSDK.path
+let sdkRoot = resolvedSDK.resolvingSymlinksInPath().path
 
 // Cross builds stage target archives separately from the host's vendor directory.
 let nativeArtifactRoot = ProcessInfo.processInfo.environment["COVE_ENGINE_ARTIFACT_ROOT"] ?? "vendor"
