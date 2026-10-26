@@ -65,10 +65,11 @@ runs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers
+
     - name: Install pinned native Vulkan headers and loader on Windows
       if: runner.os == 'Windows'
       shell: bash
       run: |
-        ./guava studio vulkan bootstrap --destination "$RUNNER_TEMP/guava-vulkan-sdk"
+        guava task vulkan -- bootstrap --destination "$RUNNER_TEMP/guava-vulkan-sdk"
         echo "VULKAN_SDK=$RUNNER_TEMP/guava-vulkan-sdk" >> "$GITHUB_ENV"
         echo "$RUNNER_TEMP/guava-vulkan-sdk/bin" >> "$GITHUB_PATH"

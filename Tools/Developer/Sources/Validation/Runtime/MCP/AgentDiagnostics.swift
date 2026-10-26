@@ -5,7 +5,7 @@ internal import ToolSupport
 /// through the portable TCP transport into the headless editor's tools.
 enum AgentDiagnostics {
   static let usage = """
-    guava-dev validate agent-diagnostics
+    guava task validate -- agent-diagnostics
 
     Launches the headless editor in a temporary project and drives GuavaMCP
     over stdio against it. Needs a built EditorApp and GuavaMCP.

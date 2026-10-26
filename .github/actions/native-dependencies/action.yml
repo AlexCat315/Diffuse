@@ -21,11 +21,11 @@ runs:
     - name: Prepare native artifacts
       if: runner.os != 'Windows'
       shell: bash
-      run: ./guava studio native-bootstrap
+      run: guava task native-bootstrap --
     - name: Prepare native artifacts (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
-      run: ./guava studio native-bootstrap
+      run: guava task native-bootstrap --
     - uses: actions/cache/save@v5
       if: steps.native.outputs.cache-hit != 'true'
       with:

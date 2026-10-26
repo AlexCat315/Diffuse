@@ -7,16 +7,16 @@ internal import ToolSupport
 /// Replaces `scripts/bootstrap-ios.py`: it stages the pinned FFmpeg variant for
 /// the requested iOS SDK/arch, then configures and builds the Engine and
 /// GuavaUI third-party CMake graphs into `build/ios-*/` with an iOS sysroot.
-package enum IOSStaging {
+public enum IOSStaging {
   static let usage = """
-    guava-dev ios-native [--sdk iphoneos|iphonesimulator] [--arch arm64|x86_64] [--plugins|--no-plugins]
+    guava task ios-native -- [--sdk iphoneos|iphonesimulator] [--arch arm64|x86_64] [--plugins|--no-plugins]
 
       --sdk      iOS SDK to target; defaults to iphonesimulator.
       --arch     Architecture to build; defaults to arm64. Devices require arm64.
       --plugins  Build the Wasmtime/Pulley runtime (requires a Rust target).
     """
 
-  package static func run(_ arguments: [String]) throws {
+  public static func run(_ arguments: [String]) throws {
     var sdk = "iphonesimulator"
     var arch = "arm64"
     var plugins = true

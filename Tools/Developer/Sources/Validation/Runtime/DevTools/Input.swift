@@ -4,7 +4,7 @@ internal import ToolSupport
 /// Port of `scripts/input-ui-devtools.swift`: drive the host's input dispatcher
 /// through DevTools, without OS automation.
 enum InputUI {
-  static let usage = "guava-dev devtools input-ui PORT|@SESSION_FILE --click-node NODE_ID | --input JSON_OR_@FILE [--capture OUTPUT.jpg] (events may include {\"kind\":\"wait\",\"milliseconds\":100}; --capture mirrors the window about 120 ms after delivery, once the host has rendered the input, so transient states are still visible)"
+  static let usage = "guava task devtools -- input-ui PORT|@SESSION_FILE --click-node NODE_ID | --input JSON_OR_@FILE [--capture OUTPUT.jpg] (events may include {\"kind\":\"wait\",\"milliseconds\":100}; --capture mirrors the window about 120 ms after delivery, once the host has rendered the input, so transient states are still visible)"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {

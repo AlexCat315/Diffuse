@@ -109,7 +109,7 @@ legacy/zig-engine/sdk/csharp/**/**/obj/**
 Engine/.build/
 Editor/.build/
 
-# Standalone Guava SDK checkout fetched by `./guava` or .github/actions/fetch-sdk
+# Standalone Guava SDK checkout fetched by `guava` or .github/actions/fetch-sdk
 /GuavaUI
 
 # Local SDK selection written by the Guava CLI

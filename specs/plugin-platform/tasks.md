@@ -60,14 +60,14 @@
 
 ## 验证
 
-- [x] `./guava build Editor --debug`
-- [x] `./guava build GuavaUI/Examples --debug`
-- [x] `./guava test Editor --filter PluginPlatformTests`
-- [x] `./guava test Editor --filter BundledLanguagesTests`
-- [x] `./guava test Editor --filter FileIconTests`
-- [x] `./guava test Engine --filter WorkbenchContributionTests`
-- [x] `./guava test Editor --filter "WorkbenchContributionsTests|PluginPanelTests"`
-- [x] 随包插件：`./guava test Editor --filter BundledContributionsTests`（真实 Git 仓库与本仓库的 Package.resolved）
+- [x] `guava build Editor --debug`
+- [x] `guava build GuavaUI/Examples --debug`
+- [x] `guava test Editor --filter PluginPlatformTests`
+- [x] `guava test Editor --filter BundledLanguagesTests`
+- [x] `guava test Editor --filter FileIconTests`
+- [x] `guava test Engine --filter WorkbenchContributionTests`
+- [x] `guava test Editor --filter "WorkbenchContributionsTests|PluginPanelTests"`
+- [x] 随包插件：`guava test Editor --filter BundledContributionsTests`（真实 Git 仓库与本仓库的 Package.resolved）
 - [ ] 手动：纯资源主题安装/切换/停用/重载；AI provider 切换；`.tex` 着色/提纲/格式化不回退。
 
 ## 本轮落地
@@ -82,6 +82,6 @@
 
 插件设置新增按贡献点推导的分类筛选，一个插件可以属于多个分类；显示启用、运行、失败与关闭状态，外部插件关闭后在当前会话保留条目，可重新启用或卸载。格式化与进程入口不会因使用 WIT 而暴露给 AI；主题/语言变化保留 AI 会话和聊天，AI 工具变化只替换会话能力与待执行草案，选中 provider 变化才重建模型会话。
 
-新增覆盖：分类筛选、混合贡献、声明注册回滚、逆序清理、并发需求只激活一次、退出期间激活不能复活、依赖激活/失效、关闭后重新启用/卸载、格式化惰性激活与聊天保留。验证均通过 `./guava` 执行；agent profile、harness 与插件化 UI 面板保持待办。
+新增覆盖：分类筛选、混合贡献、声明注册回滚、逆序清理、并发需求只激活一次、退出期间激活不能复活、依赖激活/失效、关闭后重新启用/卸载、格式化惰性激活与聊天保留。验证均通过 `guava` 执行；agent profile、harness 与插件化 UI 面板保持待办。
 
-本轮验证：Engine 插件/能力相关 70 项测试通过；Editor 的插件生命周期、分类筛选、主题重绘、格式化、任务/VCS、MCP 与工具策略回归通过。已用 `./guava run Editor --devtools --no-open` 启动真实编辑器，实际切换到主题分类并核对结果。
+本轮验证：Engine 插件/能力相关 70 项测试通过；Editor 的插件生命周期、分类筛选、主题重绘、格式化、任务/VCS、MCP 与工具策略回归通过。已用 `guava run Editor --devtools --no-open` 启动真实编辑器，实际切换到主题分类并核对结果。

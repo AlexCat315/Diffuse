@@ -193,8 +193,9 @@ struct BoundaryChecks {
   private mutating func checkTooling() throws {
     let developer = try loader.manifest(at: path("Tools/Developer"))
     try require(
-      developer.productNames == ["guava-dev"],
-      "Tools/Developer must vend only the guava-dev executable")
+      !developer.productNames.contains("guava-dev") && developer.productNames.contains("NativeBootstrap")
+        && developer.productNames.contains("ProjectTasks"),
+      "Studio project tasks must be libraries dispatched by the SDK")
     let example = application
     let tools = try loader.manifest(at: sdkRoot.appendingPathComponent("Tools/Guava"))
     try require(

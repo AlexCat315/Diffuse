@@ -13,8 +13,6 @@ on:
       - '.github/actions/build-cache/**'
       - '.github/sdk-revision'
       - 'Editor/guava.json'
-      - 'guava'
-      - 'guava.cmd'
       - 'Tools/Developer/Package.swift'
       - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
@@ -29,8 +27,6 @@ on:
       - '.github/actions/build-cache/**'
       - '.github/sdk-revision'
       - 'Editor/guava.json'
-      - 'guava'
-      - 'guava.cmd'
       - 'Tools/Developer/Package.swift'
       - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
@@ -89,7 +85,7 @@ jobs:
       - name: Test shared system contracts
         timeout-minutes: 5
         shell: bash
-        run: ./guava test GuavaUI/System --no-parallel --timeout 120
+        run: guava test GuavaUI/System --no-parallel --timeout 120
 
       - name: Prepare cached native dependencies
         uses: ./.github/actions/native-dependencies
@@ -98,7 +94,7 @@ jobs:
       - name: Build Editor, Player, Plugin Host and tests
         timeout-minutes: 25
         shell: bash
-        run: ./guava test Editor --build-only
+        run: guava test Editor --build-only
 
       - uses: actions/cache/save@v5
         if: steps.build-cache.outputs.hit != 'true'
@@ -115,7 +111,7 @@ jobs:
         if: runner.os != 'Windows'
         timeout-minutes: 6
         shell: bash
-        run: ./guava test Editor --skip-build --no-parallel --testing-library xctest --timeout 300
+        run: guava test Editor --skip-build --no-parallel --testing-library xctest --timeout 300
 
       - name: Run XCTest with hang diagnostics
         if: runner.os == 'Windows'
@@ -127,7 +123,7 @@ jobs:
         if: runner.os != 'Windows'
         timeout-minutes: 11
         shell: bash
-        run: ./guava test Editor --skip-build --no-parallel --testing-library swift-testing --timeout 600 --event-output test-results/events.jsonl
+        run: guava test Editor --skip-build --no-parallel --testing-library swift-testing --timeout 600 --event-output test-results/events.jsonl
 
       - name: Run Swift Testing with hang diagnostics
         if: runner.os == 'Windows'

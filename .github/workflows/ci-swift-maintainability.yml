@@ -35,7 +35,8 @@ jobs:
       - uses: SwiftyLab/setup-swift@v1.14.1
         with:
           swift-version: '6.4.1'
+
       - name: Check type and initializer size
         run: |
           swift test --package-path Tools/Developer --filter MaintainabilityTests
-          ./guava studio maintainability
+          guava task maintainability --

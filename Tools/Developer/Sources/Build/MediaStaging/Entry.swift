@@ -7,7 +7,7 @@ internal import ToolSupport
 /// downloads the pinned source archive, configures it per target, links the
 /// combined static archive and records a provenance stamp so later runs can
 /// verify readiness without network access.
-package enum MediaStaging {
+public enum MediaStaging {
   /// Version of the pinned FFmpeg source release.
   static let version = "8.1.3"
 
@@ -21,7 +21,7 @@ package enum MediaStaging {
   static var defaultVendor: URL { Repository.path("Engine/Media/vendor") }
 
   static let usage = """
-    guava-dev media [--platform NAME] [--vendor PATH] [--check]
+    guava task media -- [--platform NAME] [--vendor PATH] [--check]
 
       --platform NAME  Target to stage; defaults to the host target.
       --vendor PATH    Artifact bundle root; defaults to Engine/Media/vendor.
@@ -31,7 +31,7 @@ package enum MediaStaging {
   /// `environment` defaults to this process's environment; callers that build
   /// a tailored toolchain environment (the native bootstrap) pass it down so
   /// configure, make and `xcrun` see the same compiler setup.
-  package static func run(
+  public static func run(
     _ arguments: [String],
     environment: [String: String] = ProcessInfo.processInfo.environment
   ) throws {

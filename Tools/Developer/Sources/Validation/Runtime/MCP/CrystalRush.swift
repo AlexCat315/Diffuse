@@ -6,7 +6,7 @@ internal import ToolSupport
 /// drafts, script attachment, save, play inspection and export all use MCP tools.
 enum CrystalRush {
   static let usage = """
-    guava-dev validate crystal-rush [--project PATH] [--source-file PATH]
+    guava task validate -- crystal-rush [--project PATH] [--source-file PATH]
 
       --project      Project directory; defaults to examples/CrystalRush.
       --source-file  Gameplay source to write; defaults to the example's script.

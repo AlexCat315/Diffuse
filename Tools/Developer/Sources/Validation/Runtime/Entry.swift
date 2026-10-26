@@ -7,8 +7,8 @@ internal import ToolSupport
 /// Replaces `scripts/check-guava-mcp-protocol.py`, `validate-crystal-rush-mcp.py`,
 /// `validate-agent-diagnostics.py`, and `validate-editor-native-loop.py`.
 /// DevTools clients live under `guava-dev devtools`, not here.
-package enum RuntimeValidation {
-  package static func run(_ arguments: [String]) throws {
+public enum RuntimeValidation {
+  public static func run(_ arguments: [String]) throws {
     guard let operation = arguments.first else {
       throw ToolError.message(
         "Missing operation; expected one of \(operations.joined(separator: ", "))")
@@ -32,7 +32,7 @@ package enum RuntimeValidation {
   ]
 
   static let usage = """
-    guava-dev validate <operation> [options]
+    guava task validate -- <operation> [options]
 
       mcp-protocol                  Exercise the built GuavaMCP stdio server's protocol edges
       crystal-rush [options]        Create and validate Crystal Rush through the MCP server

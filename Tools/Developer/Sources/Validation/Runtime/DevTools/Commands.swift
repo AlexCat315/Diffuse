@@ -31,7 +31,7 @@ package enum DevToolsCommands {
   ]
 
   static let usage = """
-    guava-dev devtools <operation> [options]
+    guava task devtools -- <operation> [options]
 
       query-ui PORT --list|TOOL …   Run one read-only AI tool against the live window
       input-ui PORT …               Deliver input events through DevTools

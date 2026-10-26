@@ -28,7 +28,7 @@ git submodule update --init --recursive
 
 创建独立应用，无需修改引擎里的 Gallery 或 Android 宿主：
 
-先安装统一 CLI（仓库内也可使用 `./guava`）：
+先安装统一 CLI（仓库内也可使用 `guava`）：
 
 ```sh
 curl -fsSL https://github.com/AlexCat315/GuavaUI/blob/main/Tools/Guava/install.sh | sh
@@ -69,9 +69,9 @@ guava showcase gallery --android --device DEVICE_SERIAL
 ```
 
 ```sh
-./guava studio android gallery --serial DEVICE_SERIAL
-./guava studio android demo --serial DEVICE_SERIAL
-./guava studio android validate --serial DEVICE_SERIAL
+guava task android -- gallery --serial DEVICE_SERIAL
+guava task android -- demo --serial DEVICE_SERIAL
+guava task android -- validate --serial DEVICE_SERIAL
 ```
 
 默认 APK 运行完整 **GuavaUI Gallery（72 个页面）**。可用 `--component textField` 选择入口，或用 `guava showcase counter --android` 运行共享的 CounterExample。Gallery 与桌面使用同一 `GalleryView` 和所有 story，没有另一份 Android 组件实现。

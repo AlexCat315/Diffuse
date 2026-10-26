@@ -5,7 +5,7 @@ internal import ToolSupport
 /// launched CLI session and prove the DevTools endpoint rejects unauthenticated
 /// clients while serving one real session per platform.
 enum DevelopmentSession {
-  static let usage = "guava-dev devtools session PROJECT mac|android"
+  static let usage = "guava task devtools -- session PROJECT mac|android"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {

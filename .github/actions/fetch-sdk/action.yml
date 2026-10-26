@@ -34,10 +34,14 @@ runs:
             https://github.com/AlexCat315/GuavaUI.git GuavaUI
         fi
         actual=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' GuavaUI/Tools/Guava/Sources/GuavaCLI/SDK.json)
-        if [ "$actual" != "$version" ]; then
+        if [ "$version" != latest ] && [ "$actual" != "$version" ]; then
           echo "SDK checkout version $actual does not match Editor SDK $version" >&2
           exit 1
         fi
+        sdk_root="$PWD/GuavaUI"
+        if [ "${RUNNER_OS:-}" = Windows ]; then sdk_root=$(cygpath -w "$sdk_root"); fi
+        echo "$sdk_root" >> "$GITHUB_PATH"
+        echo "GUAVA_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
         if [ -n "$revision" ] && [ "$(git -C GuavaUI rev-parse HEAD)" != "$revision" ]; then
           echo "SDK checkout does not match .github/sdk-revision" >&2
           exit 1

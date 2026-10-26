@@ -2,7 +2,7 @@
 import Foundation
 import PackageDescription
 
-/// The standalone Guava SDK checkout. `./guava` and CI provision `GuavaUI/`;
+/// The standalone Guava SDK checkout. `guava` and CI provision `GuavaUI/`;
 /// `GUAVA_SDK_ROOT` selects another checkout, matching the CLI.
 let sdkRoot =
   ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
@@ -48,7 +48,7 @@ let checks: [Target] = [
 // compile unsupported host APIs just to stage native dependencies.
 #if os(Windows)
   let hostTools: [Target] = []
-  let hostDependencies: [Target.Dependency] = []
+  let hostProducts: [Product] = []
   let hostTests: [Target] = []
 #else
   let hostTools: [Target] = [
@@ -63,7 +63,7 @@ let checks: [Target] = [
         .product(name: "NIOHTTP1", package: "swift-nio"), .product(name: "NIOWebSocket", package: "swift-nio")],
       path: "Sources/Validation/Browser"),
   ]
-  let hostDependencies: [Target.Dependency] = ["RuntimeValidation", "AndroidValidation", "Browser"]
+  let hostProducts: [Product] = ["RuntimeValidation", "AndroidValidation", "Browser"].map { .library(name: $0, targets: [$0]) }
   let hostTests: [Target] = [
     .testTarget(name: "BrowserTests", dependencies: ["Browser", .product(name: "ToolSupport", package: "Support")]),
     .testTarget(name: "RuntimeValidationTests", dependencies: ["RuntimeValidation"]),
@@ -71,19 +71,25 @@ let checks: [Target] = [
 #endif
 
 let package = Package(
-  name: "GuavaDeveloper",
+  name: "StudioProjectTasks",
   platforms: [.macOS(.v26), .iOS(.v26)],
-  products: [.executable(name: "guava-dev", targets: ["GuavaDev"])],
+  products: [
+    .library(name: "NativeBootstrap", targets: ["NativeBootstrap"]),
+    .library(name: "MediaStaging", targets: ["MediaStaging"]),
+    .library(name: "PluginStaging", targets: ["PluginStaging"]),
+    .library(name: "ShaderToolchain", targets: ["ShaderToolchain"]),
+    .library(name: "VulkanBootstrap", targets: ["VulkanBootstrap"]),
+    .library(name: "IOSStaging", targets: ["IOSStaging"]),
+    .library(name: "Maintainability", targets: ["Maintainability"]),
+    .library(name: "Boundaries", targets: ["Boundaries"]),
+    .library(name: "RegressionReport", targets: ["RegressionReport"]),
+    .library(name: "IOSSimulator", targets: ["IOSSimulator"]),
+    .library(name: "ProjectTasks", targets: ["ProjectTasks"])
+  ] + hostProducts,
   dependencies: [.package(path: "\(sdkRoot)/Tools/Support"), .package(path: "\(sdkRoot)/System"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.104.0")],
   targets: infrastructure + buildTools + checks + hostTools + [
-    .executableTarget(
-      name: "GuavaDev",
-      dependencies: [
-        .product(name: "ToolSupport", package: "Support"), "Maintainability", "Boundaries", "ShaderToolchain", "VulkanBootstrap",
-        "MediaStaging", "PluginStaging", "NativeBootstrap", "RegressionReport", "IOSStaging",
-        "IOSSimulator",
-      ] + hostDependencies),
+    .target(name: "ProjectTasks", dependencies: [.product(name: "ToolSupport", package: "Support")], path: "Sources/ProjectTasks"),
     .testTarget(name: "ToolSupportTests", dependencies: [.product(name: "ToolSupport", package: "Support")]),
     .testTarget(name: "ImageCodecTests", dependencies: ["ImageCodec"]),
     .testTarget(name: "MaintainabilityTests", dependencies: ["Maintainability"]),

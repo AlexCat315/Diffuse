@@ -7,8 +7,8 @@ internal import ToolSupport
 /// Replaces `scripts/test-gpu-regression.sh` and
 /// `scripts/verify-gpu-regression.py`. The first token of `arguments` selects
 /// the operation; the remaining tokens are its arguments.
-package enum RegressionReport {
-  package static func run(_ arguments: [String]) throws {
+public enum RegressionReport {
+  public static func run(_ arguments: [String]) throws {
     guard let operation = arguments.first else {
       throw ToolError.message("Missing operation; expected run or verify")
     }
@@ -40,7 +40,7 @@ package enum RegressionReport {
   }
 
   static let usage = """
-    guava-dev gpu-regression <operation> [options]
+    guava task gpu-regression -- <operation> [options]
 
       run     Run the fixed GPU regression inventory in Engine and GuavaUI, then verify it
       verify  Verify an existing report directory's Swift Testing XML and XCTest logs

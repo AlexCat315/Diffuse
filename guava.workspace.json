@@ -1,0 +1,101 @@
+{
+  "packages": [
+    "Engine",
+    "Editor",
+    ".",
+    "Tools/Developer"
+  ],
+  "dependencyUpdates": "branches",
+  "beforeBuild": [
+    "native-bootstrap"
+  ],
+  "tasks": {
+    "native-bootstrap": {
+      "package": "Tools/Developer",
+      "product": "NativeBootstrap",
+      "entry": "NativeBootstrap.run"
+    },
+    "media": {
+      "package": "Tools/Developer",
+      "product": "MediaStaging",
+      "entry": "MediaStaging.run"
+    },
+    "plugins": {
+      "package": "Tools/Developer",
+      "product": "PluginStaging",
+      "entry": "PluginStaging.run"
+    },
+    "shader": {
+      "package": "Tools/Developer",
+      "product": "ShaderToolchain",
+      "entry": "ShaderToolchain.run"
+    },
+    "vulkan": {
+      "package": "Tools/Developer",
+      "product": "VulkanBootstrap",
+      "entry": "VulkanBootstrap.run"
+    },
+    "ios-native": {
+      "package": "Tools/Developer",
+      "product": "IOSStaging",
+      "entry": "IOSStaging.run"
+    },
+    "ios-simulator": {
+      "package": "Tools/Developer",
+      "product": "IOSSimulator",
+      "entry": "IOSSimulator.run"
+    },
+    "maintainability": {
+      "package": "Tools/Developer",
+      "product": "Maintainability",
+      "entry": "Maintainability.run"
+    },
+    "boundaries": {
+      "package": "Tools/Developer",
+      "product": "Boundaries",
+      "entry": "Boundaries.run"
+    },
+    "gpu-regression": {
+      "package": "Tools/Developer",
+      "product": "RegressionReport",
+      "entry": "RegressionReport.run"
+    },
+    "validate": {
+      "package": "Tools/Developer",
+      "product": "RuntimeValidation",
+      "entry": "RuntimeValidation.run",
+      "platforms": [
+        "mac",
+        "linux"
+      ]
+    },
+    "android": {
+      "package": "Tools/Developer",
+      "product": "AndroidValidation",
+      "entry": "AndroidValidation.run",
+      "platforms": [
+        "mac",
+        "linux"
+      ]
+    },
+    "browser": {
+      "package": "Tools/Developer",
+      "product": "Browser",
+      "entry": "Browser.run",
+      "platforms": [
+        "mac",
+        "linux"
+      ]
+    },
+    "export-game": {
+      "package": "Tools/Developer",
+      "product": "ProjectTasks",
+      "entry": "ProjectExportTask.run"
+    },
+    "plugin-build": {
+      "package": "Tools/Developer",
+      "product": "ProjectTasks",
+      "entry": "ProjectPluginTask.run"
+    }
+  }
+}

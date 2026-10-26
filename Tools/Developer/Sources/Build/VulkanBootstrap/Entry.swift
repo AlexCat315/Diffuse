@@ -6,7 +6,7 @@ internal import ToolSupport
 /// Replaces `scripts/bootstrap-rhi-vulkan.py`. This builds SDK libraries, not a
 /// GPU driver; point `VULKAN_SDK` at the resulting destination. macOS uses
 /// Metal and needs no Vulkan dependency.
-package enum VulkanBootstrap {
+public enum VulkanBootstrap {
   static let version = "1.4.328"
 
   /// Pinned source archives, verified before extraction.
@@ -16,12 +16,12 @@ package enum VulkanBootstrap {
   ]
 
   static let usage = """
-    guava-dev vulkan bootstrap [--destination PATH]
+    guava task vulkan -- bootstrap [--destination PATH]
 
       --destination PATH  Defaults to Engine/vendor/vulkan-sdk; the path must not exist.
     """
 
-  package static func run(_ arguments: [String]) throws {
+  public static func run(_ arguments: [String]) throws {
     guard let operation = arguments.first else {
       throw ToolError.message("Missing operation; expected bootstrap")
     }

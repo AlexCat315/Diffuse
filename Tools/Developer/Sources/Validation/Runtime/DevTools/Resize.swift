@@ -4,7 +4,7 @@ internal import ToolSupport
 /// Resize the live main window, as a user dragging its corner would, so
 /// layout and resize handling can be exercised without OS automation.
 enum ResizeWindow {
-  static let usage = "guava-dev devtools resize-window PORT|@SESSION_FILE WIDTH HEIGHT [--capture OUTPUT.jpg] (logical points; the platform may clamp to the screen or the window's minimum size)"
+  static let usage = "guava task devtools -- resize-window PORT|@SESSION_FILE WIDTH HEIGHT [--capture OUTPUT.jpg] (logical points; the platform may clamp to the screen or the window's minimum size)"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {

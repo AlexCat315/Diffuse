@@ -2,9 +2,9 @@ name: iOS application host
 on:
   push:
     branches: [main]
-    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
+    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
   pull_request:
-    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
+    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,7 +27,7 @@ jobs:
             GuavaUI/build/ios-arm64-simulator/vendor
           key: ios-native-v1-${{ runner.arch }}-xcode27-${{ hashFiles('Editor/guava.json') }}
       - name: Prepare iOS SDK dependencies
-        run: ./guava setup --ios
+        run: guava setup --ios
       - uses: actions/cache/save@v5
         if: steps.native.outputs.cache-hit != 'true'
         with:
@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           application="$RUNNER_TEMP/guava-ios-application"
-          ./guava create app "$application" --platforms ios
-          ./guava build "$application" --ios --debug --output "$RUNNER_TEMP/guava-ios/Application.app"
+          guava create app "$application" --platforms ios
+          guava build "$application" --ios --debug --output "$RUNNER_TEMP/guava-ios/Application.app"
       - name: Verify actual simulator rendering
-        run: ./guava studio ios-simulator validate "$RUNNER_TEMP/guava-ios/Application.app"
+        run: guava task ios-simulator -- validate "$RUNNER_TEMP/guava-ios/Application.app"

@@ -5,8 +5,8 @@ internal import ToolSupport
 /// This is a structural guard, not a replacement for Swift's parser or code
 /// review. It ignores comments, strings, computed/static properties, and nested
 /// function bodies when counting a type's stored properties.
-package enum Maintainability {
-  package static func run(_ arguments: [String]) throws {
+public enum Maintainability {
+  public static func run(_ arguments: [String]) throws {
     var report = false
     for argument in arguments {
       switch argument {
@@ -35,7 +35,7 @@ package enum Maintainability {
 
   static var usage: String {
     """
-    usage: guava-dev maintainability [-h] [--report]
+    usage: guava task maintainability -- [-h] [--report]
 
     Reject new oversized Swift types and initializers; report existing debt.
     This is a structural guard, not a replacement for Swift's parser or code

@@ -13,8 +13,6 @@ on:
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
       - 'Editor/guava.json'
-      - 'guava'
-      - 'guava.cmd'
       - 'Tools/Developer/Package.swift'
       - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
@@ -29,8 +27,6 @@ on:
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
       - 'Editor/guava.json'
-      - 'guava'
-      - 'guava.cmd'
       - 'Tools/Developer/Package.swift'
       - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
@@ -94,4 +90,4 @@ jobs:
         shell: bash
         env:
           GUAVA_MCP_EXECUTABLE: ${{ github.workspace }}/GuavaMcp/.build/release/GuavaMCP
-        run: ./guava studio validate mcp-protocol
+        run: guava task validate -- mcp-protocol

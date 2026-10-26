@@ -25,7 +25,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 Studio contains the Engine and Editor packages plus an MCP server; the SDK is an independent repository:
 
 - **`Engine/`** — rendering, scene, simulation, asset pipeline, AI runtime kernels, observation bus, film pipeline (EXR / color / denoise / render farm).
-- **`GuavaUI/`** — the [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) is a separate project, fetched at the version pinned by `Editor/guava.json` when you run `./guava`; it owns UI, NativeRHI, platform services and the CLI.
+- **`GuavaUI/`** — the [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) is a separate project, fetched at the version pinned by `Editor/guava.json` when you run `guava`; it owns UI, NativeRHI, platform services and the CLI.
 - **`Editor/`** — the desktop editor application. Hosts the engine, mounts GuavaUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
 - **`GuavaMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
 
@@ -101,26 +101,26 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
 git clone https://github.com/AlexCat315/GuavaStudio.git
 cd GuavaStudio
 git submodule update --init --recursive
-./guava studio native-bootstrap
-./guava build Editor
+guava sdk install latest
+guava build Editor
 ```
 
-`./guava` fetches the GuavaUI SDK version declared by `Editor/guava.json` into the ignored `GuavaUI/` checkout, or uses `GUAVA_SDK_ROOT` when a local SDK checkout is selected. `guava studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg and OpenEXR/Imath dependencies, and stages the pinned Wasmtime runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
+Install the [Guava SDK CLI](https://github.com/AlexCat315/GuavaUI) once and use its global `guava` command. `guava.workspace.json` declares Studio task libraries and the native-dependency pre-build hook. The SDK dispatches them automatically; Studio has no launcher scripts or separate CLI. Native staging installs the SDK artifacts and prepares FFmpeg, OpenEXR/Imath and Wasmtime.
 
 After the first bootstrap, day-to-day development only needs:
 
 ```bash
-./guava build Editor
+guava build Editor
 ```
 
-> **Force rebuild of native deps:** `./guava studio native-bootstrap --force`
+> **Force rebuild of native deps:** `guava task native-bootstrap -- --force`
 
 ### Individual packages
 
 ```bash
-./guava internal build-package Engine   # engine + renderers
-./guava build Editor   # editor (run: ./guava run Editor)
-./guava internal build-package GuavaMcp --product GuavaMCP # MCP server
+guava internal build-package Engine   # engine + renderers
+guava build Editor   # editor (run: guava run Editor)
+guava internal build-package GuavaMcp --product GuavaMCP # MCP server
 ```
 
 The SDK's portable core, DevTools server, browser prototype and examples live in the [GuavaUI repository](https://github.com/AlexCat315/GuavaUI).

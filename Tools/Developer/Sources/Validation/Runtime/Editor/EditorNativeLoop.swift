@@ -9,7 +9,7 @@ internal import ToolSupport
 /// a new temporary directory that is kept and printed.
 enum EditorNativeLoop {
   static let usage = """
-    guava-dev validate editor-loop [--mode both|event-driven|continuous] [--renderer native|metal]
+    guava task validate -- editor-loop [--mode both|event-driven|continuous] [--renderer native|metal]
                                    [--configuration debug|release] [--timing-frames N]
 
       --mode            Which frame loops to run; defaults to both.

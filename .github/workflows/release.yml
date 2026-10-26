@@ -118,7 +118,7 @@ jobs:
         uses: ./.github/actions/setup-toolchains
 
       - name: Build native dependencies
-        run: ./guava studio native-bootstrap --force
+        run: guava task native-bootstrap -- --force
 
       - name: Build Editor, Player, and MCP
         shell: bash
@@ -238,7 +238,7 @@ jobs:
 
       - name: Build native dependencies
         shell: pwsh
-        run: ./guava studio native-bootstrap --force
+        run: guava task native-bootstrap -- --force
 
       - name: Build Editor, Player, and MCP
         shell: pwsh
@@ -406,7 +406,7 @@ jobs:
 
       - name: Build native dependencies
         shell: bash
-        run: ./guava studio native-bootstrap --force
+        run: guava task native-bootstrap -- --force
 
       - name: Build Editor, Player, and MCP
         shell: bash

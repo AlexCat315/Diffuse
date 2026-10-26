@@ -25,8 +25,8 @@ jobs:
       - name: Build and verify real media
         shell: bash
         run: |
-          ./guava studio media
-          ./guava studio media --check
+          guava task media --
+          guava task media -- --check
           # Swift Build's planner crashes on this package on Linux; use the
           # native build system there, as the Engine and Editor jobs do.
           build_system=""
@@ -37,6 +37,6 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          ./guava studio media --platform ios-arm64-simulator
+          guava task media -- --platform ios-arm64-simulator
           swift build --package-path Engine/Media --target MediaRuntime --build-system native \
             --triple arm64-apple-ios26.0-simulator --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)"

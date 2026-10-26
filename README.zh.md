@@ -4,7 +4,7 @@
 
 > 基于 Swift 构建、以 AI Agent 驱动的综合创作工作站：文本与代码编辑、游戏开发、动画制作和视频剪辑。
 
-[GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) 是独立项目，按 `Editor/guava.json` 声明的版本由 `./guava` 拉取到被忽略的 `GuavaUI/` 检出目录；它拥有 UI、NativeRHI、平台服务和 CLI。Studio 拥有场景、三维渲染、物理、脚本及其 UI 适配器。
+[GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) 是独立项目，按 `Editor/guava.json` 声明的版本由 `guava` 拉取到被忽略的 `GuavaUI/` 检出目录；它拥有 UI、NativeRHI、平台服务和 CLI。Studio 拥有场景、三维渲染、物理、脚本及其 UI 适配器。
 
 ---
 
@@ -29,31 +29,31 @@
 git clone https://github.com/AlexCat315/GuavaStudio.git
 cd GuavaStudio
 git submodule update --init --recursive
-./guava studio native-bootstrap
-./guava build Editor --mac
+guava sdk install latest
+guava build Editor --mac
 ```
 
-`./guava` 会先拉取 `Editor/guava.json` 声明的 SDK 版本到被忽略的 `GuavaUI/` 目录，也支持用 `GUAVA_SDK_ROOT` 选择本地检出。`guava studio native-bootstrap` 随后安装 SDK 发布的原生依赖，构建 Studio 的 FFmpeg、OpenEXR/Imath，并准备固定版本的 Wasmtime；Windows 下自动初始化 MSVC 工具链。
+先安装 [Guava SDK CLI](https://github.com/AlexCat315/GuavaUI)，之后统一使用全局 `guava`。`guava.workspace.json` 声明 Studio 的任务库和原生依赖构建钩子，由 SDK 自动调度；Studio 不再维护启动脚本和独立 CLI。原生准备任务会安装 SDK artifacts，并准备 FFmpeg、OpenEXR/Imath 和 Wasmtime。
 
 后续日常开发只需要：
 
 ```bash
-./guava build Editor --mac
+guava build Editor --mac
 ```
 
-> **强制重编译原生依赖**：`./guava studio native-bootstrap --force`
+> **强制重编译原生依赖**：`guava task native-bootstrap -- --force`
 
 ### 按包独立构建
 
 ```bash
-./guava internal build-package Engine    # 引擎核心
-./guava build Editor    # 编辑器（运行: ./guava run Editor）
-./guava internal build-package GuavaMcp --product GuavaMCP # MCP 服务
+guava internal build-package Engine    # 引擎核心
+guava build Editor    # 编辑器（运行: guava run Editor）
+guava internal build-package GuavaMcp --product GuavaMCP # MCP 服务
 ```
 
 SDK 的共享核心、跨平台调试服务、浏览器原型与示例位于 [GuavaUI 仓库](https://github.com/AlexCat315/GuavaUI)。
 
-应用开发统一使用 [Guava CLI](https://github.com/AlexCat315/GuavaUI/blob/main/Tools/Guava/README.md)：`./guava create app MyApp` 创建共享桌面 / Android / iOS 项目，`./guava run MyApp --mac` 或 `./guava run MyApp --android` 选择宿主；`build --release`、`test`、`clean` 使用同一项目配置。Editor 也是应用，可用 `./guava build Editor --mac`。桌面目标需在匹配主机构建；iOS / iPadOS 使用 Xcode、SDL/UIKit 生命周期和 Metal，可通过 `./guava build MyApp --ios`、`./guava run MyApp --ios --simulator UDID` 构建和运行；真机添加 `--device ID --team TEAM_ID`。Web 完整应用宿主仍在开发。Android 使用 Swift 6.4.1 与 NativeRHI Vulkan，可运行完整 GuavaUI Gallery，并将项目场景、资源和 Swift 游戏脚本静态编译为 APK。工具链、真机验证和签名导出命令见 [Android 接入说明](Platforms/Android/README.md)。
+应用开发统一使用 [Guava CLI](https://github.com/AlexCat315/GuavaUI/blob/main/Tools/Guava/README.md)：`guava create app MyApp` 创建共享桌面 / Android / iOS 项目，`guava run MyApp --mac` 或 `guava run MyApp --android` 选择宿主；`build --release`、`test`、`clean` 使用同一项目配置。Editor 也是应用，可用 `guava build Editor --mac`。桌面目标需在匹配主机构建；iOS / iPadOS 使用 Xcode、SDL/UIKit 生命周期和 Metal，可通过 `guava build MyApp --ios`、`guava run MyApp --ios --simulator UDID` 构建和运行；真机添加 `--device ID --team TEAM_ID`。Web 完整应用宿主仍在开发。Android 使用 Swift 6.4.1 与 NativeRHI Vulkan，可运行完整 GuavaUI Gallery，并将项目场景、资源和 Swift 游戏脚本静态编译为 APK。工具链、真机验证和签名导出命令见 [Android 接入说明](Platforms/Android/README.md)。
 
 ---
 

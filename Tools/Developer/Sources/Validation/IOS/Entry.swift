@@ -8,9 +8,9 @@ internal import Foundation
   ///
   /// Replaces `scripts/ios/validate-app.py` together with its `FrameCheck.swift`
   /// helper. The first token of `arguments` selects the operation.
-  package enum IOSSimulator {
+  public enum IOSSimulator {
     static let usage = """
-      guava-dev ios-simulator <operation> [options]
+      guava task ios-simulator -- <operation> [options]
 
         udid [--prefix NAME]      Print the UDID of an available simulator device
         validate APP [--simulator UDID]
@@ -21,7 +21,7 @@ internal import Foundation
                          isolated device from the newest available iOS runtime.
       """
 
-    package static func run(_ arguments: [String]) throws {
+    public static func run(_ arguments: [String]) throws {
       guard let operation = arguments.first else {
         throw ToolError.message("Missing operation; expected udid or validate")
       }
@@ -114,8 +114,8 @@ internal import Foundation
   internal import ToolSupport
 
   /// On platforms without a simulator, the operation exists only to fail clearly.
-  package enum IOSSimulator {
-    package static func run(_ arguments: [String]) throws {
+  public enum IOSSimulator {
+    public static func run(_ arguments: [String]) throws {
       throw ToolError.message("iOS simulator control requires macOS")
     }
   }

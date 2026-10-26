@@ -6,8 +6,8 @@ internal import ToolSupport
 /// Replaces `Engine/third-party/wasmtime/stage.py` and the
 /// `Engine/Validation/Plugins/{prepare,verify}.py` helpers. The first token of
 /// `arguments` selects the operation; the remaining tokens are its flags.
-package enum PluginStaging {
-  package static func run(_ arguments: [String]) throws {
+public enum PluginStaging {
+  public static func run(_ arguments: [String]) throws {
     guard let operation = arguments.first else {
       throw ToolError.message("Missing operation; expected stage, prepare, or verify")
     }
@@ -24,7 +24,7 @@ package enum PluginStaging {
   }
 
   static let usage = """
-    guava-dev plugins <operation> [options]
+    guava task plugins -- <operation> [options]
 
       stage    Stage a pinned Wasmtime runtime independently of the graphics dependencies
       prepare  Build shared Component fixtures using the same Wasmtime C API as production

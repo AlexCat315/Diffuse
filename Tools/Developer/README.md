@@ -1,4 +1,4 @@
-# GuavaDeveloper (`guava-dev`)
+# Studio project tasks
 
 First-party Swift replacement for the former `scripts/` directory. Every
 repository task — native bootstrap, media and plugin staging, shader toolchain,
@@ -10,17 +10,18 @@ packages. Vendored third-party source trees retain their upstream files.
 
 ## Running
 
+Install the Guava SDK CLI, then use the workspace declarations:
+
 ```sh
-./guava studio <command> [options]
+guava task
+guava task native-bootstrap -- --force
+guava task maintainability -- --report
 ```
 
-The executable discovers the checkout by walking up from its current directory,
-or from `GUAVA_ROOT` when set. From another directory, invoke the checkout's
-`guava` wrapper with an absolute path.
-
-The standalone SDK CLI lives in the [GuavaUI repository](https://github.com/AlexCat315/GuavaUI). Studio's root wrapper
-dispatches `studio` commands here and forwards application commands to the SDK.
-The SDK has no dependency on Studio tooling.
+The SDK reads `guava.workspace.json`, resolves task dependencies and generates
+a host in `.guava/build/tasks`. These targets export library entry points;
+Studio has no launcher scripts or separate command dispatcher. Task arguments
+after `--` are passed unchanged. `GUAVA_ROOT` identifies this checkout.
 
 ## Commands
 
@@ -64,7 +65,7 @@ Only cross-process and cross-device behavior belongs here. Application
 behavior belongs in the application package's tests. If an operation neither
 launches a real artifact nor has a gate, it is a tool, not a validation.
 
-Run `guava-dev --help`, or `guava-dev <command> --help`, for the full flag list.
+Run `guava task` to list tasks, or `guava task NAME -- --help` for task-specific flags.
 
 DevTools `input-ui --input` accepts a JSON event array. Pointer `button` may be
 `left`, `middle`, `right`, `back`, `forward`, or the corresponding Web pointer
@@ -82,7 +83,7 @@ into commands. `devtools session PROJECT mac|android` shares the same resolver.
 
 ```text
 Sources/
-  GuavaDev/                  command dispatch and help
+  ProjectTasks/                  command dispatch and help
   Infrastructure/
     ImageCodec/              Swift screenshot decoding boundary
     CImageDecoder/           thin adapter to the SDK's vendored stb header
@@ -105,10 +106,9 @@ Sources/
 Tests/<Target>Tests/          tests owned by each target
 ```
 
-The package publishes only the `guava-dev` executable. Cross-target entry points
-and shared values use Swift `package` access; implementation details stay
-`internal` or `private`. Imports declare their access explicitly, and generated
-resource accessors use `InternalImportsByDefault`.
+The package publishes task libraries. SDK-generated hosts call their public
+entry points; implementation details stay internal or private. Resource accessors
+use `InternalImportsByDefault`.
 
 Build recipes depend on infrastructure or another recipe they orchestrate.
 Validation harnesses depend on infrastructure; they launch built applications
@@ -142,13 +142,13 @@ download policy, so one scale/backend check cannot carry state into the next.
 ## Tests
 
 ```sh
-./guava test Tools/Developer
+guava test Tools/Developer
 
 # Include real Chromium protocol and screenshot checks.
-GUAVA_TEST_CHROMIUM=1 ./guava test Tools/Developer
+GUAVA_TEST_CHROMIUM=1 guava test Tools/Developer
 
 # Include compilation tests against the pinned Slang compiler.
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" ./guava test Tools/Developer
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" guava test Tools/Developer
 ```
 
 `ci-developer-tools.yml` builds and tests the standalone package on all three

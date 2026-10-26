@@ -9,15 +9,15 @@ internal import ToolSupport
 /// independent dependency graphs, so this tool only rebuilds them when their
 /// readiness gates report stale output; the graphics libraries are always
 /// configured incrementally unless `--force` invalidates the build stamps.
-package enum NativeBootstrap {
+public enum NativeBootstrap {
   static let usage = """
-    guava-dev native-bootstrap [--force]
+    guava task native-bootstrap -- [--force]
 
       --force  Discard Engine/build/native and restage Media and Wasmtime
                even when they already verify.
     """
 
-  package static func run(_ arguments: [String]) throws {
+  public static func run(_ arguments: [String]) throws {
     if arguments.contains("--help") || arguments.contains("-h") {
       Terminal.info(usage)
       return

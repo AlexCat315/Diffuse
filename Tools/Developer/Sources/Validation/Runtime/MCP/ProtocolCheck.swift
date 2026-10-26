@@ -6,7 +6,7 @@ internal import ToolSupport
 /// cases, with no running editor or model key.
 enum MCPProtocolCheck {
   static let usage = """
-    guava-dev validate mcp-protocol
+    guava task validate -- mcp-protocol
 
     Runs the built GuavaMCP stdio server against its protocol edge cases.
     Honors GUAVA_MCP_EXECUTABLE to select the server executable.

@@ -5,8 +5,8 @@ internal import ToolSupport
 /// probe, the SharedCounter demo, the Gallery, the exported game, and the
 /// logging journal. Each operation mirrors its former `scripts/android/*.py`
 /// program, sharing `AndroidTools` for device discovery.
-package enum AndroidValidation {
-  package static func run(_ arguments: [String]) throws {
+public enum AndroidValidation {
+  public static func run(_ arguments: [String]) throws {
     guard let operation = arguments.first else {
       throw ToolError.message(
         "Expected an operation: validate, demo, gallery, game, or logging")
@@ -24,7 +24,7 @@ package enum AndroidValidation {
   }
 
   static let usage = """
-    guava-dev android <operation> …
+    guava task android -- <operation> …
 
       validate [--android-sdk S] [--ndk D] [--serial S]
           cross-compile and run the strict NativeRHI/GuavaUI Vulkan probes

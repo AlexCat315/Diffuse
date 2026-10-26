@@ -21,7 +21,7 @@ open examples/CrystalRush/export/CrystalRush.app
 Android ARM64 / Vulkan 真机也已接入。完成 [Android 工具链安装](../../Platforms/Android/README.md)后，在仓库根目录导出：
 
 ```bash
-./guava export game examples/CrystalRush --android \
+guava export game examples/CrystalRush --android \
   --id com.guava.game.crystalrush \
   --output Engine/build/android-validation/CrystalRush.apk
 adb -s DEVICE_SERIAL install -r Engine/build/android-validation/CrystalRush.apk

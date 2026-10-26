@@ -3,9 +3,9 @@ name: Developer tools
 on:
   push:
     branches: [main]
-    paths: ['.github/sdk-revision', 'Tools/Developer/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
+    paths: ['.github/sdk-revision', 'Tools/Developer/**', 'Editor/guava.json', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
   pull_request:
-    paths: ['.github/sdk-revision', 'Tools/Developer/**', 'Editor/guava.json', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
+    paths: ['.github/sdk-revision', 'Tools/Developer/**', 'Editor/guava.json', '.github/actions/fetch-sdk/**', '.github/workflows/ci-developer-tools.yml']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,26 +38,27 @@ jobs:
         shell: bash
         env:
           GUAVA_TEST_CHROMIUM: '1'
-        run: ./guava test Tools/Developer
+        run: guava test Tools/Developer
       - name: Test repository tools with a Linux session bus
         if: runner.os == 'Linux'
         shell: bash
         env:
           GUAVA_TEST_CHROMIUM: '1'
-        run: dbus-run-session -- ./guava test Tools/Developer
+        run: dbus-run-session -- guava test Tools/Developer
+
       - name: Verify SDK and Studio package boundaries
         shell: bash
-        run: ./guava studio boundaries
+        run: guava task boundaries --
       - name: Smoke test safe command entry points
         shell: bash
         run: |
-          ./guava studio --help
+          guava task
           for command in maintainability boundaries shader vulkan media plugins native-bootstrap ios-native; do
-            ./guava studio "$command" --help
+            guava task "$command" -- --help
           done
       - name: Smoke test host-only command entry points
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          ./guava studio validate --help
-          ./guava studio devtools --help
+          guava task validate -- --help
+          guava devtools --help

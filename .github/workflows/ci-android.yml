@@ -2,9 +2,9 @@ name: Android application build
 on:
   push:
     branches: [main]
-    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
+    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Platforms/Android/**', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
   pull_request:
-    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
+    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Platforms/Android/**', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -52,9 +52,9 @@ jobs:
       - name: Build a standalone arm64 application through Guava CLI
         shell: bash
         run: |
-          ./guava doctor --android
-          ./guava create app "$RUNNER_TEMP/guava-android-application" --id com.guava.ci.android --platforms android
-          ./guava build "$RUNNER_TEMP/guava-android-application" --android --release --output "$RUNNER_TEMP/android/Application.apk"
+          guava doctor --android
+          guava create app "$RUNNER_TEMP/guava-android-application" --id com.guava.ci.android --platforms android
+          guava build "$RUNNER_TEMP/guava-android-application" --android --release --output "$RUNNER_TEMP/android/Application.apk"
       - name: Verify the APK signature and native payload
         shell: bash
         run: |

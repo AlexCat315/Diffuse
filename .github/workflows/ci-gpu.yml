@@ -53,17 +53,17 @@ jobs:
 
       - name: Verify pinned shader toolchain and bundled artifacts
         run: |
-          ./guava studio shader bootstrap-slang --destination "$RUNNER_TEMP/guava-slang"
+          guava task shader -- bootstrap-slang --destination "$RUNNER_TEMP/guava-slang"
           export SLANGC="$RUNNER_TEMP/guava-slang/bin/slangc"
           swift test --package-path Tools/Developer --filter ShaderToolchainTests
           swift test --package-path Tools/Developer --filter RegressionReportTests
-          ./guava studio shader rebuild --check
+          guava task shader -- rebuild --check
           SLANGC="$SLANGC" swift test --package-path Engine --filter NativeRHITests
 
       - name: Run actual GPU regressions
         env:
           GUAVA_GPU_TEST_OUTPUT_DIR: ${{ runner.temp }}/guava-gpu-regression
-        run: ./guava studio gpu-regression run
+        run: guava task gpu-regression -- run
 
       - name: Save pixel captures, test report and device log
         if: always()

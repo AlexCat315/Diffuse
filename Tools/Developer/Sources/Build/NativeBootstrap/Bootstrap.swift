@@ -54,7 +54,7 @@ enum Bootstrap {
       FileManager.default.fileExists(atPath: terminalDone.path),
       wasmtimeReady
     {
-      print("Native deps already built. Run `guava-dev native-bootstrap --force` to rebuild.")
+      print("Native deps already built. Run `guava task native-bootstrap -- --force` to rebuild.")
       return
     }
 
@@ -99,6 +99,6 @@ enum Bootstrap {
         "--config", "Release",
       ], environment: environment)
 
-    print("\nDone. Run: ./guava run Editor --mac")
+    print("\nDone. Run: guava run Editor --mac")
   }
 }

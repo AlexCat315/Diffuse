@@ -5,7 +5,7 @@ internal import ToolSupport
 /// submission path without enabling mirror readbacks. Also called in-process
 /// by the editor loop.
 enum RecordTimings {
-  static let usage = "guava-dev devtools record-timings PORT|@SESSION_FILE OUTPUT.json FRAMES WARMUP"
+  static let usage = "guava task devtools -- record-timings PORT|@SESSION_FILE OUTPUT.json FRAMES WARMUP"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {

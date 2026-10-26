@@ -3,7 +3,7 @@
 用 Embedded Swift 编写 Guava 插件的 SDK。插件编译成 WebAssembly 核心模块，再包进 `capabilities.wit` 描述的组件；不需要手写 WAT。
 
 ```sh
-./guava plugin build Editor/Plugins/Git --output Editor/Sources/EditorCore/Resources/Plugins/Git.guavaplugin
+guava plugin build Editor/Plugins/Git --output Editor/Sources/EditorCore/Resources/Plugins/Git.guavaplugin
 ```
 
 可执行插件目录包含 `plugin.json`、`capabilities.wit` 与 `Sources/*.swift`；纯声明插件只需要 `plugin.json` 和已声明的 `resources/`，同一个打包命令直接复制这些文件。可执行插件的构建会：
