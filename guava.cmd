@@ -26,16 +26,6 @@ set "GUAVA_ROOT=%~dp0"
 "%GUAVA_STUDIO_PRODUCTS%\guava-dev.exe" %GUAVA_STUDIO_ARGS%
 exit /b %errorlevel%
 :forward
-if defined CI goto launch
-if /i "%~1"=="build" (
-    call "%~f0" studio dependencies sync natsel
-    if errorlevel 1 exit /b 1
-)
-if /i "%~1"=="run" (
-    call "%~f0" studio dependencies sync natsel
-    if errorlevel 1 exit /b 1
-)
-:launch
 "%GUAVA_SDK_ROOT%\guava.cmd" %*
 exit /b %errorlevel%
 :select_sdk

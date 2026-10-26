@@ -35,7 +35,6 @@ enum GuavaDev {
 
   private static func dispatch(_ verb: String, _ arguments: [String]) throws {
     switch verb {
-    case "dependencies": try DependencyUpdate.run(arguments)
     case "export-game": try AndroidExport.run(arguments)
     case "plugin-build":
       guard let first = arguments.first else { throw ToolError.message("Supply a plugin directory") }
@@ -79,7 +78,6 @@ enum GuavaDev {
       guava-dev media [--platform NAME] [--vendor PATH] [--check]
       guava-dev plugins <stage|prepare|verify> …
       guava-dev native-bootstrap [--force]         build Engine + GuavaUI native deps
-      guava-dev dependencies update natsel        refresh Natsel main in all lockfiles
       guava-dev ios-native [--sdk S] [--arch A]    stage isolated iOS native deps
       guava-dev ios-simulator <udid|validate> …    pick a simulator and verify a built .app
       guava-dev validate <mcp-protocol|crystal-rush|agent-diagnostics|editor-loop> …

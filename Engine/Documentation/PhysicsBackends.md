@@ -3,17 +3,9 @@
 Natsel is the physics backend on macOS, iOS, Linux, Windows and Android.
 `PhysicsBackendKind.preferred` is `.natsel`; select `.none` to disable the backend.
 Engine follows Natsel's `main` branch; no sibling checkout or physics C++ artifact
-is required. Local `./guava build` and `./guava run` automatically check Natsel
-main and refresh the Engine, Editor and root lockfiles when it changes. There is
-no separate update step. Offline builds reuse the resolved version; CI uses the
-committed lockfiles. An explicit refresh is also available:
-
-```sh
-./guava studio dependencies update natsel
-```
-
-Updating Natsel does not require editing `Package.swift`. Lockfiles record the
-actual commit used by the build.
+is required. SwiftPM resolves the branch and lockfiles record the actual commit
+used by the build. Updating Natsel does not require editing `Package.swift`.
+The Studio launch scripts do not implement a separate dependency-update policy.
 
 The editor exposes Natsel and None. Loading a scene with a retired or unknown
 backend name selects Natsel and rewrites the backend name when saved. Obsolete

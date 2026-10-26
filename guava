@@ -41,12 +41,4 @@ if [ "${1:-}" = studio ]; then
   GUAVA_ROOT="$GUAVA_CHECKOUT" exec "$GUAVA_STUDIO_PRODUCTS/guava-dev" "$@"
 fi
 
-case "${1:-}" in
-  build|run)
-    if [ -z "${CI:-}" ]; then
-      "$GUAVA_CHECKOUT/guava" studio dependencies sync natsel
-    fi
-    ;;
-esac
-
 GUAVA_SDK_ROOT="$GUAVA_SDK_ROOT" exec "$GUAVA_SDK_ROOT/guava" "$@"
