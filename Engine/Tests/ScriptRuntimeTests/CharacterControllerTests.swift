@@ -15,7 +15,7 @@ struct CharacterControllerTests {
         runtime.setPhysicsSettings(
             PhysicsSettingsResource(
                 simulationMode: .play,
-                backendKind: .jolt,
+                backendKind: .natsel,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 60
             )

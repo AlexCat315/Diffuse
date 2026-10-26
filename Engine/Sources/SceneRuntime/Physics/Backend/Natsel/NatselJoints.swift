@@ -1,4 +1,3 @@
-#if canImport(Natsel)
 import SIMDCompat
 internal import Natsel
 
@@ -129,5 +128,3 @@ extension NatselPhysicsBackend {
         jointDescriptors[descriptor.entity] = descriptor
     }
 }
-
-#endif

@@ -232,12 +232,12 @@ struct EditorSceneAdapterTests {
         }
     }
 
-    @Test("Scene manifest preserves Jolt CCD and pending impulses")
-    func sceneManifestPreservesCompleteJoltRigidBodyState() throws {
+    @Test("Scene manifest preserves rigid-body CCD and pending impulses")
+    func sceneManifestPreservesCompleteRigidBodyState() throws {
         let source = EditorSceneAdapter()
         source.scene = SceneRuntime()
         let entity = source.scene.createEntity()
-        _ = source.scene.setComponent(SceneNameComponent(value: "Jolt Body"), for: entity)
+        _ = source.scene.setComponent(SceneNameComponent(value: "Physics Body"), for: entity)
         _ = source.scene.setComponent(
             RigidBody(
                 linearVelocity: SIMD3<Float>(1, 2, 3),
@@ -257,7 +257,7 @@ struct EditorSceneAdapterTests {
         let restored = EditorSceneAdapter()
         _ = restored.load(manifest: decoded)
 
-        let restoredNode = try #require(flatten(restored.roots).first { $0.name == "Jolt Body" })
+        let restoredNode = try #require(flatten(restored.roots).first { $0.name == "Physics Body" })
         let body = try #require(
             restored.scene.component(RigidBody.self, for: entityID(restoredNode.id))
         )
@@ -270,7 +270,7 @@ struct EditorSceneAdapterTests {
         #expect(body.continuousCollisionDetection)
     }
 
-    @Test("Scene manifest preserves backend kind, collision steps, and backend tuning")
+    @Test("Scene manifest preserves backend kind, collision steps, and capacity")
     func sceneManifestPreservesCompletePhysicsSettings() throws {
         let source = EditorSceneAdapter()
         source.scene.setResource(
@@ -282,13 +282,7 @@ struct EditorSceneAdapterTests {
                 maxSubstepsPerFrame: 8,
                 allowSleep: false,
                 collisionSteps: 4,
-                capacity: PhysicsCapacitySettings(maxBodies: 20_000, workerThreadCount: 3),
-                jolt: JoltPhysicsTuning(
-                    bodyMutexCount: 128,
-                    maxBodyPairs: 40_000,
-                    maxContactConstraints: 12_000,
-                    tempAllocatorBytes: 32 * 1_024 * 1_024
-                )
+                capacity: PhysicsCapacitySettings(maxBodies: 20_000, workerThreadCount: 3)
             )
         )
 
@@ -306,12 +300,25 @@ struct EditorSceneAdapterTests {
         #expect(settings.collisionSteps == 4)
         #expect(!settings.allowSleep)
         #expect(settings.capacity == PhysicsCapacitySettings(maxBodies: 20_000, workerThreadCount: 3))
-        #expect(settings.jolt == JoltPhysicsTuning(
-            bodyMutexCount: 128,
-            maxBodyPairs: 40_000,
-            maxContactConstraints: 12_000,
-            tempAllocatorBytes: 32 * 1_024 * 1_024
-        ))
+    }
+
+    @Test("Legacy physics settings migrate to Natsel without retaining obsolete tuning")
+    func legacyPhysicsSettingsMigrate() throws {
+        let legacy = Data("""
+        {"simulationMode":"play","backendKind":"jolt","gravity":{"x":1,"y":-15,"z":2},
+         "fixedTimeStepSeconds":0.01,"maxSubstepsPerFrame":8,"allowSleep":false,"collisionSteps":4,
+         "capacity":{"maxBodies":64,"workerThreadCount":2},"jolt":{"maxBodyPairs":128}}
+        """.utf8)
+        let decoded = try JSONDecoder().decode(EditorSceneManifestPhysicsSettings.self, from: legacy)
+        #expect(decoded.backendKind == "natsel")
+        #expect(decoded.settings.backendKind == .natsel)
+        #expect(decoded.settings.gravity == SIMD3<Float>(1, -15, 2))
+        #expect(decoded.settings.collisionSteps == 4)
+        #expect(decoded.settings.capacity == PhysicsCapacitySettings(maxBodies: 64, workerThreadCount: 2))
+        let encoded = try JSONEncoder().encode(decoded)
+        let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(object["backendKind"] as? String == "natsel")
+        #expect(object["jolt"] == nil)
     }
 
     @Test("Scene manifest round-trips particle scalability settings")

@@ -1,4 +1,3 @@
-#if canImport(Natsel)
 import SIMDCompat
 internal import Natsel
 
@@ -38,4 +37,3 @@ extension NatselPhysicsBackend {
         softQuerySurfacesDirty = false
     }
 }
-#endif

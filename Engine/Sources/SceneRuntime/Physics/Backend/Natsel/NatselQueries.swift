@@ -1,4 +1,3 @@
-#if canImport(Natsel)
 import SIMDCompat
 internal import Natsel
 
@@ -147,5 +146,3 @@ extension NatselPhysicsBackend {
         return TriggerFrameResource(enters: enters, exits: exits, active: active)
     }
 }
-
-#endif

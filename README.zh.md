@@ -33,7 +33,7 @@ git submodule update --init --recursive
 ./guava build Editor --mac
 ```
 
-`./guava` 会先拉取 `Editor/guava.json` 声明的 SDK 版本到被忽略的 `GuavaUI/` 目录，也支持用 `GUAVA_SDK_ROOT` 选择本地检出。`guava studio native-bootstrap` 随后安装 SDK 发布的原生依赖，构建 Studio 的 FFmpeg、Jolt、OpenEXR/Imath，并准备固定版本的 Wasmtime；Windows 下自动初始化 MSVC 工具链。
+`./guava` 会先拉取 `Editor/guava.json` 声明的 SDK 版本到被忽略的 `GuavaUI/` 目录，也支持用 `GUAVA_SDK_ROOT` 选择本地检出。`guava studio native-bootstrap` 随后安装 SDK 发布的原生依赖，构建 Studio 的 FFmpeg、OpenEXR/Imath，并准备固定版本的 Wasmtime；Windows 下自动初始化 MSVC 工具链。
 
 后续日常开发只需要：
 
@@ -67,7 +67,7 @@ SDK 的共享核心、跨平台调试服务、浏览器原型与示例位于 [Gu
 | SDL3 | SDK 发布包 / CMake 源码编译 | SDK 检出 `Runtime/third-party/sdl3` |
 | Imath | CMake 源码编译 | submodule `Engine/third-party/imath` |
 | OpenEXR | CMake 源码编译 | submodule `Engine/third-party/openexr` |
-| JoltPhysics | CMake 源码编译 → `.artifactbundle` | submodule `Engine/third-party/jolt` |
+| Natsel | Swift Package Manager | 跟随 `AlexCat315/Natsel` main，锁文件记录实际提交 |
 | Wasmtime | 固定版本静态 C API；iOS 使用 Pulley | Bytecode Alliance 49.0.2，SHA-256 校验 |
 | FFmpeg | 固定版本 LGPL 静态库和桌面工具 | 官方 8.1.3 源码，SHA-256 校验 |
 

@@ -384,12 +384,24 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
             }
         }
         let declaration = try? NSRegularExpression(pattern: #"(?:^|\n)\s*(?:framework\s+)?module\s+(\w+)\s*\{"#)
+        let umbrella = try? NSRegularExpression(pattern: #"\bumbrella\s+(?:header\s+)?"([^"]+)""#)
         var byModule: [String: String] = [:]
         for path in maps.sorted() {
             guard let contents = try? String(contentsOfFile: path, encoding: .utf8),
                   !contents.contains("-Swift.h"),
                   let match = declaration?.firstMatch(in: contents, range: NSRange(contents.startIndex..., in: contents)),
                   let nameRange = Range(match.range(at: 1), in: contents) else { continue }
+            // Build caches can retain module maps for bridges removed from the package graph.
+            // Passing their missing umbrella paths to swiftc breaks unrelated script imports.
+            let missingUmbrella = (umbrella?.matches(in: contents, range: NSRange(contents.startIndex..., in: contents)) ?? []).contains { match in
+                guard let range = Range(match.range(at: 1), in: contents) else { return false }
+                let header = String(contents[range])
+                let url = (header as NSString).isAbsolutePath
+                    ? URL(fileURLWithPath: header)
+                    : URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(header)
+                return !FileManager.default.fileExists(atPath: url.path)
+            }
+            guard !missingUmbrella else { continue }
             let name = String(contents[nameRange])
             if byModule[name] == nil { byModule[name] = path }
         }

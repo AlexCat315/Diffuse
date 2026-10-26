@@ -6,7 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AlexCat315/Natsel.git",
       "state" : {
-        "revision" : "45e4dfb232fdcfd6676c0c0e4a9342b7678755b0"
+        "branch" : "main",
+        "revision" : "9431ebecaf25cff18174e643e6bdd7f51e80d23f"
       }
     },
     {

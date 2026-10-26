@@ -18,7 +18,7 @@ struct SoftBodyTests {
         return runtime
     }
 
-    @Test("Jolt cloth streams deformed vertices while fixed vertices stay pinned")
+    @Test("Natsel cloth streams deformed vertices while fixed vertices stay pinned")
     func clothSimulationAndVertexStreaming() throws {
         var runtime = makeRuntime()
         let clothEntity = runtime.createEntity()

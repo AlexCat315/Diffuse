@@ -1,4 +1,4 @@
-# Natsel migration performance
+# Natsel migration performance history
 
 Measured on 2026-10-26 on Apple M1, macOS arm64, Swift 6.4.1, Release.
 Both backends use 1 or 7 physics workers, 60 warm-up frames and 180 measured frames.
@@ -45,7 +45,9 @@ Build with the repository CLI:
 ./guava internal build-package Engine --product PhysicsRuntimeBenchmarks --release
 ```
 
-Run each combination of `natsel`/`jolt` and the following scenarios:
+The following results were captured before Jolt was removed. Jolt comparisons
+require the migration commit `6cddabbb`; the current engine runs Natsel. Use the
+following scenarios to reproduce Natsel measurements:
 
 | Scenario | `GUAVA_PHYSICS_BODIES` | Geometry |
 | --- | ---: | --- |

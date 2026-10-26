@@ -1,4 +1,3 @@
-#if canImport(Natsel)
 import Foundation
 import SIMDCompat
 internal import Natsel
@@ -282,7 +281,7 @@ public final class NatselPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 isSleeping: completeWriteback || asleep != rigid.isSleeping ? asleep : nil)
         }
         return PhysicsStepResult(bodyCount: bodies.count + softBodies.count, constraintCount: joints.count,
-            contactCount: world.touchingContactCount().asInt, writebacks: writebacks, contactEvents: events,
+            contactCount: max(world.touchingContactCount().asInt, contacts.count), writebacks: writebacks, contactEvents: events,
             jointBreakEvents: breaks, characterStates: characterStates, vehicleStates: vehicleStates(), softBodyStates: softStates())
     }
 
@@ -307,6 +306,18 @@ public final class NatselPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 event.relativeVelocity = sv(world.bodyLinearVelocity(world.shapeBody(contact.shapeIdB)) - world.bodyLinearVelocity(world.shapeBody(contact.shapeIdA)))
                 current[pair] = event
             }
+        }
+        // CCD may stop at impact before a persistent manifold exists. Publish that contact in
+        // the same frame; the pair cache then supplies stayed/ended transitions as usual.
+        for impact in world.continuousImpacts() {
+            guard let a = shapeOwner(impact.shapeIdA), let b = shapeOwner(impact.shapeIdB), a.entity != b.entity else { continue }
+            let pair = Pair(a: a.entity.rawValue < b.entity.rawValue ? a.entity : b.entity,
+                            b: a.entity.rawValue < b.entity.rawValue ? b.entity : a.entity)
+            guard current[pair] == nil else { continue }
+            current[pair] = PhysicsContactEvent(entityA: a.entity, entityB: b.entity,
+                subShapeIDA: a.child, subShapeIDB: b.child, kind: contacts[pair] == nil ? .began : .stayed,
+                position: sv(impact.point), normal: sv(impact.normal),
+                relativeVelocity: sv(world.bodyLinearVelocity(world.shapeBody(impact.shapeIdB)) - world.bodyLinearVelocity(world.shapeBody(impact.shapeIdA))))
         }
         var result = current.keys.sorted().map { current[$0]! }
         for pair in contacts.keys.sorted() where current[pair] == nil { var event = contacts[pair]!; event.kind = .ended; result.append(event) }
@@ -356,5 +367,3 @@ public final class NatselPhysicsBackend: PhysicsBackend, @unchecked Sendable {
 }
 
 private extension Int32 { var asInt: Int { Int(self) } }
-
-#endif

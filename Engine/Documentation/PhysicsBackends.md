@@ -1,24 +1,27 @@
-# Physics backends
+# Physics backend
 
-`PhysicsBackendKind.preferred` selects Natsel on macOS, iOS and Linux. Windows and
-Android continue to select Jolt because the pinned Natsel package does not support
-those targets. Engine pins Natsel revision
-`87a0f0d49f7211e84bd79bb0cb7bbfdff4697361`; no sibling checkout is required.
+Natsel is the physics backend on macOS, iOS, Linux, Windows and Android.
+`PhysicsBackendKind.preferred` is `.natsel`; select `.none` to disable the backend.
+Engine follows Natsel's `main` branch; no sibling checkout or physics C++ artifact
+is required. Local `./guava build` and `./guava run` automatically check Natsel
+main and refresh the Engine, Editor and root lockfiles when it changes. There is
+no separate update step. Offline builds reuse the resolved version; CI uses the
+committed lockfiles. An explicit refresh is also available:
 
-The SceneRuntime physics API, components and scene geometry stay unchanged. Code
-that explicitly selects `.jolt` continues to use Jolt. To migrate such a caller:
-
-```swift
-var settings = runtime.physicsSettings
-settings.backendKind = .preferred
-runtime.setPhysicsSettings(settings)
+```sh
+./guava studio dependencies update natsel
 ```
 
-The editor's physics backend picker also exposes Natsel on supported platforms.
-Use `.jolt` to compare behavior or return to Jolt. Switching backends rebuilds the
-native world from the current ECS state. Solver contact caches and other native
-transient state do not transfer. Manual `setPhysicsBackend(...)` overrides still
-take precedence. `NatselPhysicsBackend()` is available for those overrides.
+Updating Natsel does not require editing `Package.swift`. Lockfiles record the
+actual commit used by the build.
+
+The editor exposes Natsel and None. Loading a scene with a retired or unknown
+backend name selects Natsel and rewrites the backend name when saved. Obsolete
+backend tuning is ignored and omitted from new manifests. Shared capacity,
+worker, gravity, sleep, collision-step and body settings retain their values.
+
+Switching between None and Natsel rebuilds the native world from current ECS
+state. Manual `setPhysicsBackend(...)` overrides take precedence.
 
 ## Integration
 
@@ -30,9 +33,8 @@ share the simulation world. AABB overlaps use narrow-phase box geometry, and swe
 positions report the query origin at impact, matching the existing Guava API.
 
 `capacity.maxBodies`, worker selection, gravity, sleep and collision steps apply to
-Natsel. Natsel caps workers at 32. The `settings.jolt` group is retained for Jolt
-and does not tune Natsel. Deterministic replay is checked within the same backend
-and build; Natsel and Jolt are not expected to produce identical trajectories.
+Natsel. Natsel caps workers at 32. Deterministic replay is checked within the same
+backend and build, including worker-count determinism in native solver tests.
 
 ## Behavior to account for
 
@@ -40,7 +42,7 @@ and build; Natsel and Jolt are not expected to produce identical trajectories.
   geometry. Sphere/capsule scaling uses a conservative radial scale.
 - Natsel's split position solver does not retain every positional reaction in its
   reported joint force. Break-force evaluation also estimates the force from the
-  corrected anchor error. Exact break timing can differ from Jolt.
+  corrected anchor error.
 - Rigid velocity limits are applied to submitted velocities and ECS writebacks.
   Natsel exposes a world-wide linear integration limit, so bodies with different
   limits can temporarily exceed their own limit during a contact/force solve.
@@ -66,8 +68,7 @@ Run through the repository CLI:
 ./guava internal build-package Engine --product PhysicsRuntimeBenchmarks --release
 ```
 
-The physics benchmark defaults to `.preferred`. Set `GUAVA_PHYSICS_BACKEND=natsel`
-or `GUAVA_PHYSICS_BACKEND=jolt` to compare the same scene. For example, after the
+The physics benchmark defaults to Natsel. For example, after the
 release build on macOS:
 
 ```sh

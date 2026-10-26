@@ -53,7 +53,7 @@ struct VehicleTests {
         return (runtime, vehicle)
     }
 
-    @Test("Jolt vehicle reports wheel contact and consumes current-frame throttle")
+    @Test("Natsel vehicle reports wheel contact and consumes current-frame throttle")
     func drivesAndReportsWheelState() {
         var (runtime, vehicle) = makeRuntime()
         for frame in 0..<90 {

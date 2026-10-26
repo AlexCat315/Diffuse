@@ -1,8 +1,7 @@
 import Foundation
 import SIMDCompat
 
-/// Capacity limits every backend honors. Engine-specific tuning lives in the
-/// backend's own settings group.
+/// Capacity limits for the physics world.
 public struct PhysicsCapacitySettings: Sendable, Equatable, Codable {
     public var maxBodies: Int
     /// Zero selects the platform default: the available logical core count minus one.
@@ -42,7 +41,6 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
     public var allowSleep: Bool
     public var collisionSteps: Int
     public var capacity: PhysicsCapacitySettings
-    public var jolt: JoltPhysicsTuning
 
     public init(
         simulationMode: PhysicsSimulationMode = .off,
@@ -52,8 +50,7 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
         maxSubstepsPerFrame: Int = 4,
         allowSleep: Bool = true,
         collisionSteps: Int = 1,
-        capacity: PhysicsCapacitySettings = PhysicsCapacitySettings(),
-        jolt: JoltPhysicsTuning = JoltPhysicsTuning()
+        capacity: PhysicsCapacitySettings = PhysicsCapacitySettings()
     ) {
         self.simulationMode = simulationMode
         self.backendKind = backendKind
@@ -63,6 +60,5 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
         self.allowSleep = allowSleep
         self.collisionSteps = max(1, collisionSteps)
         self.capacity = capacity.validated()
-        self.jolt = jolt.validated()
     }
 }

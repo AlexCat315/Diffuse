@@ -22,7 +22,7 @@ struct CompoundColliderTests {
         material: PhysicsMaterial(friction: 0.4, restitution: 0.2, density: 3)
     )
 
-    @Test("Jolt queries every child in a compound collider")
+    @Test("Natsel queries every child in a compound collider")
     func nativeCompoundShape() {
         var runtime = SceneRuntime()
         let entity = runtime.createEntity()

@@ -1,4 +1,3 @@
-#if os(macOS) || os(iOS) || os(Linux)
 import SceneRuntime
 import SIMDCompat
 import Testing
@@ -12,14 +11,14 @@ struct NatselMigrationTests {
         return runtime
     }
 
-    @Test("switching between Natsel and Jolt rebuilds queries from the current ECS state")
+    @Test("disabling and re-enabling physics rebuilds queries from the current ECS state")
     func switchesBackendWithoutLosingBodies() {
         var runtime = makeScene()
         let entity = runtime.createEntity()
         _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.5, center: .zero)), for: entity)
         _ = runtime.setComponent(RigidBody(linearVelocity: SIMD3<Float>(6, 0, 0), allowSleep: false), for: entity)
         var previousX: Float = 0
-        for backend in [PhysicsBackendKind.natsel, .jolt, .natsel] {
+        for backend in [PhysicsBackendKind.natsel, .none, .natsel] {
             var settings = runtime.physicsSettings
             settings.backendKind = backend
             runtime.setPhysicsSettings(settings)
@@ -27,6 +26,10 @@ struct NatselMigrationTests {
             #expect(report.physics.error == nil)
             #expect(report.physics.backendIdentifier == backend.rawValue)
             let x = runtime.worldTransform(for: entity)?.translation.x ?? 0
+            if backend == .none {
+                #expect(x == previousX)
+                continue
+            }
             #expect(x > previousX + 0.09)
             previousX = x
             let hit = runtime.physicsRaycast(PhysicsRaycastQuery(origin: SIMD3<Float>(x, 0, -2),
@@ -35,9 +38,9 @@ struct NatselMigrationTests {
         }
     }
 
-    @Test("editing a moving compound replaces child geometry and preserves motion", arguments: [PhysicsBackendKind.natsel, .jolt])
-    func editsDynamicCompound(backend: PhysicsBackendKind) {
-        var runtime = makeScene(backend)
+    @Test("editing a moving compound replaces child geometry and preserves motion")
+    func editsDynamicCompound() {
+        var runtime = makeScene()
         let entity = runtime.createEntity()
         let shape = ColliderShapeInstance(shape: .sphere(radius: 0.25, center: .zero), localPosition: SIMD3<Float>(-2, 0, 0))
         _ = runtime.setComponent(Collider(shapes: [shape]), for: entity)
@@ -83,9 +86,9 @@ struct NatselMigrationTests {
         #expect(runtime.physicsEventFrame.triggers.contains { $0.triggerEntity == trigger && $0.otherEntity == character && $0.kind == .exit })
     }
 
-    @Test("multiple fixed substeps accumulate gravity and consume impulses once", arguments: [PhysicsBackendKind.natsel, .jolt])
-    func fixedSubsteps(backend: PhysicsBackendKind) {
-        var runtime = makeScene(backend)
+    @Test("multiple fixed substeps accumulate gravity and consume impulses once")
+    func fixedSubsteps() {
+        var runtime = makeScene()
         var settings = runtime.physicsSettings
         settings.gravity = SIMD3<Float>(0, -6, 0)
         settings.maxSubstepsPerFrame = 4
@@ -102,9 +105,9 @@ struct NatselMigrationTests {
         #expect(abs(velocity.y + 0.2) < 0.001)
     }
 
-    @Test("sweeps do not report a contact beyond the requested translation", arguments: [PhysicsBackendKind.natsel, .jolt])
-    func sweepEndpoint(backend: PhysicsBackendKind) {
-        var runtime = makeScene(backend)
+    @Test("sweeps do not report a contact beyond the requested translation")
+    func sweepEndpoint() {
+        var runtime = makeScene()
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(2.003, 0, 0)), for: entity)
         _ = runtime.setComponent(Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero)), for: entity)
@@ -114,9 +117,9 @@ struct NatselMigrationTests {
         #expect(hit == nil)
     }
 
-    @Test("scene queries consistently exclude geometry with an empty collision mask", arguments: [PhysicsBackendKind.natsel, .jolt])
-    func queriesWithoutPhysicalCollisions(backend: PhysicsBackendKind) {
-        var runtime = makeScene(backend)
+    @Test("scene queries consistently exclude geometry with an empty collision mask")
+    func queriesWithoutPhysicalCollisions() {
+        var runtime = makeScene()
         let entity = runtime.createEntity()
         _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.5, center: .zero), layerMask: 0), for: entity)
         _ = runtime.tick(deltaTime: 0)
@@ -127,4 +130,3 @@ struct NatselMigrationTests {
         #expect(runtime.physicsOverlapAABB(overlap).isEmpty)
     }
 }
-#endif

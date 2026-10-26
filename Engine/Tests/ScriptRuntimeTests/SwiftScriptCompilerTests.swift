@@ -22,17 +22,18 @@ struct SwiftScriptCompilerTests {
             try contents.write(to: file, atomically: true, encoding: .utf8)
             return file.path
         }
-        _ = try write("GeneratedModuleMaps/CJoltBridge.modulemap", "module CJoltBridge { export * }")
-        _ = try write("GuavaStudioRuntime.build/Debug-linux-x86_64/CJoltBridge.build/module.modulemap", "module CJoltBridge { export * }")
+        _ = try write("GeneratedModuleMaps/CTestBridge.modulemap", "module CTestBridge { export * }")
+        _ = try write("GuavaStudioRuntime.build/Debug-linux-x86_64/CTestBridge.build/module.modulemap", "module CTestBridge { export * }")
         _ = try write("GuavaStudioRuntime.build/Debug-linux-x86_64/CNativeBridge.build/module.modulemap", "module CNativeBridge { export * }")
         _ = try write("GuavaStudioRuntime.build/Release-linux-x86_64/CReleaseBridge.build/module.modulemap", "module CReleaseBridge { export * }")
         _ = try write("GeneratedModuleMaps/ContextMemory.modulemap", "module ContextMemory { header \"ContextMemory-Swift.h\" }")
+        _ = try write("GeneratedModuleMaps/CRemovedBridge.modulemap", "module CRemovedBridge { umbrella \"removed-include\" export * }")
         let alias = root.appendingPathComponent(".build/debug")
         try FileManager.default.createDirectory(at: alias.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: products)
         let maps = SwiftScriptCompiler.discoverClangModuleMapPaths(in: alias)
         #expect(maps.count == 2)
-        #expect(maps.contains { $0.hasSuffix("GeneratedModuleMaps/CJoltBridge.modulemap") })
+        #expect(maps.contains { $0.hasSuffix("GeneratedModuleMaps/CTestBridge.modulemap") })
         #expect(maps.contains { $0.hasSuffix("Debug-linux-x86_64/CNativeBridge.build/module.modulemap") })
     }
 
