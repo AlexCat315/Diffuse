@@ -1,4 +1,4 @@
-import GuavaUIRuntime
+import CoveUIRuntime
 import SceneRuntime
 
 public struct EditorInspectorSection {

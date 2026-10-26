@@ -180,9 +180,9 @@ struct GamepadInputTests {
         #expect(runtime.resource(InputFrameState.self)?.axis("camera_zoom") == 0)
     }
 
-    @Test("Guava defaults cover built-in movement, camera, and jump actions")
+    @Test("Cove defaults cover built-in movement, camera, and jump actions")
     func standardInputMap() {
-        let map = InputActionMap.guavaDefault
+        let map = InputActionMap.coveDefault
         #expect(map.bindings["move_forward"]?.contains(.key(Scancode.w)) == true)
         #expect(map.bindings["jump"]?.contains(.key(Scancode.space)) == true)
         #expect(map.bindings["look_x"]?.contains(

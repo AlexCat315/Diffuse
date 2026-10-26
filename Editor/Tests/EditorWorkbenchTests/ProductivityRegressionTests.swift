@@ -2,9 +2,9 @@
 @testable import EditorCore
 import EngineKernel
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
-import GuavaUIWorkspace
+import CoveUICompose
+import CoveUIRuntime
+import CoveUIWorkspace
 import RenderBackend
 import Testing
 
@@ -15,7 +15,7 @@ struct ProductivityRegressionTests {
           arguments: [Float(600), 1280], [Float(360), 600])
     func commandPaletteLayout(width: Float, height: Float) throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-palette-layout-\(UUID().uuidString)")
+            .appendingPathComponent("cove-palette-layout-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path)
@@ -52,7 +52,7 @@ struct ProductivityRegressionTests {
           arguments: [Float(320), 778], [Float(138), 360])
     func assetDockLayout(width: Float, height: Float) throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-assets-layout-\(UUID().uuidString)")
+            .appendingPathComponent("cove-assets-layout-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path)
@@ -84,7 +84,7 @@ struct ProductivityRegressionTests {
           arguments: [EditorViewportMode.scene, .game], [Float(320), 778, 1280])
     func viewportWorkspaceLayout(mode: EditorViewportMode, width: Float) throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-viewport-layout-\(UUID().uuidString)")
+            .appendingPathComponent("cove-viewport-layout-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path)
@@ -138,7 +138,7 @@ struct ProductivityRegressionTests {
     @Test("clicking the game image retains input focus through recomposition")
     func gameImageFocus() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-game-focus-\(UUID().uuidString)")
+            .appendingPathComponent("cove-game-focus-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path)

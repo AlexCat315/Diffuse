@@ -111,22 +111,22 @@ jobs:
         with:
           ref: ${{ needs.prepare-release.outputs.target }}
           submodules: recursive
-      - name: Fetch pinned Guava SDK
+      - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
 
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
 
       - name: Build native dependencies
-        run: ./guava studio native-bootstrap --force
+        run: ./cove studio native-bootstrap --force
 
       - name: Build Editor, Player, and MCP
         shell: bash
         run: |
           swift build -c release --package-path Editor --product EditorApp
-          swift build -c release --package-path Editor --product GuavaPlayer
-          swift build -c release --package-path Engine --product GuavaPluginHost
-          swift build -c release --package-path GuavaMcp
+          swift build -c release --package-path Editor --product CovePlayer
+          swift build -c release --package-path Engine --product DiffusePluginHost
+          swift build -c release --package-path CoveMcp
 
       - name: Test packages before release
         shell: bash
@@ -142,22 +142,22 @@ jobs:
 
           arch="$(uname -m)"
           editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
-          player_bin="$(swift build -c release --package-path Editor --product GuavaPlayer --show-bin-path)"
-          plugin_host_bin="$(swift build -c release --package-path Engine --product GuavaPluginHost --show-bin-path)"
-          mcp_bin="$(swift build -c release --package-path GuavaMcp --show-bin-path)"
+          player_bin="$(swift build -c release --package-path Editor --product CovePlayer --show-bin-path)"
+          plugin_host_bin="$(swift build -c release --package-path Engine --product DiffusePluginHost --show-bin-path)"
+          mcp_bin="$(swift build -c release --package-path CoveMcp --show-bin-path)"
 
           dist_root="$PWD/dist"
-          package_dir="$dist_root/GuavaStudio-macos-$arch"
-          app_dir="$package_dir/GuavaStudio.app"
+          package_dir="$dist_root/Diffuse-macos-$arch"
+          app_dir="$package_dir/Diffuse.app"
           rm -rf "$dist_root"
           mkdir -p "$app_dir/Contents/MacOS" \
             "$app_dir/Contents/Helpers" \
             "$app_dir/Contents/Resources"
 
           cp "$editor_bin/EditorApp" "$app_dir/Contents/MacOS/"
-          cp "$player_bin/GuavaPlayer" "$app_dir/Contents/MacOS/"
-          cp "$plugin_host_bin/GuavaPluginHost" "$app_dir/Contents/Helpers/"
-          cp "$mcp_bin/GuavaMCP" "$app_dir/Contents/Helpers/"
+          cp "$player_bin/CovePlayer" "$app_dir/Contents/MacOS/"
+          cp "$plugin_host_bin/DiffusePluginHost" "$app_dir/Contents/Helpers/"
+          cp "$mcp_bin/CoveMCP" "$app_dir/Contents/Helpers/"
           cp "Engine/Media/vendor/FFmpeg.artifactbundle/macos-$arch/bin/ffmpeg" "$app_dir/Contents/Helpers/"
           cp "Engine/Media/vendor/FFmpeg.artifactbundle/macos-$arch/bin/ffprobe" "$app_dir/Contents/Helpers/"
           mkdir -p "$app_dir/Contents/Resources/FFmpeg"
@@ -173,11 +173,11 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>CFBundleDisplayName</key><string>GuavaStudio</string>
+            <key>CFBundleDisplayName</key><string>Diffuse</string>
             <key>CFBundleExecutable</key><string>EditorApp</string>
-            <key>CFBundleIdentifier</key><string>com.guava.studio</string>
+            <key>CFBundleIdentifier</key><string>com.cove.diffuse</string>
             <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-            <key>CFBundleName</key><string>GuavaStudio</string>
+            <key>CFBundleName</key><string>Diffuse</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleShortVersionString</key><string>0.0.1</string>
             <key>CFBundleVersion</key><string>1</string>
@@ -200,13 +200,13 @@ jobs:
           plutil -lint "$app_dir/Contents/Info.plist"
 
           "$app_dir/Contents/MacOS/EditorApp" --validate-install
-          "$app_dir/Contents/MacOS/GuavaPlayer" --validate-install
-          "$app_dir/Contents/Helpers/GuavaPluginHost" </dev/null
-          "$app_dir/Contents/Helpers/GuavaMCP" </dev/null
+          "$app_dir/Contents/MacOS/CovePlayer" --validate-install
+          "$app_dir/Contents/Helpers/DiffusePluginHost" </dev/null
+          "$app_dir/Contents/Helpers/CoveMCP" </dev/null
           codesign --force --deep --sign - --timestamp=none "$app_dir"
           codesign --verify --deep --strict "$app_dir"
 
-          zip_path="$dist_root/guava-studio-macos-$arch.zip"
+          zip_path="$dist_root/diffuse-macos-$arch.zip"
           ditto -c -k --sequesterRsrc --keepParent "$package_dir" "$zip_path"
           echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
 
@@ -224,7 +224,7 @@ jobs:
         with:
           ref: ${{ needs.prepare-release.outputs.target }}
           submodules: recursive
-      - name: Fetch pinned Guava SDK
+      - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
 
       - name: Set up build toolchains
@@ -238,7 +238,7 @@ jobs:
 
       - name: Build native dependencies
         shell: pwsh
-        run: ./guava studio native-bootstrap --force
+        run: ./cove studio native-bootstrap --force
 
       - name: Build Editor, Player, and MCP
         shell: pwsh
@@ -246,9 +246,9 @@ jobs:
           $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $true
           swift build -c release --package-path Editor --product EditorApp
-          swift build -c release --package-path Editor --product GuavaPlayer
-          swift build -c release --package-path Engine --product GuavaPluginHost
-          swift build -c release --package-path GuavaMcp
+          swift build -c release --package-path Editor --product CovePlayer
+          swift build -c release --package-path Engine --product DiffusePluginHost
+          swift build -c release --package-path CoveMcp
 
       - name: Test packages before release
         shell: pwsh
@@ -266,21 +266,21 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
 
           $editorBin = (swift build -c release --package-path Editor --product EditorApp --show-bin-path).Trim()
-          $playerBin = (swift build -c release --package-path Editor --product GuavaPlayer --show-bin-path).Trim()
-          $pluginHostBin = (swift build -c release --package-path Engine --product GuavaPluginHost --show-bin-path).Trim()
-          $mcpBin = (swift build -c release --package-path GuavaMcp --show-bin-path).Trim()
+          $playerBin = (swift build -c release --package-path Editor --product CovePlayer --show-bin-path).Trim()
+          $pluginHostBin = (swift build -c release --package-path Engine --product DiffusePluginHost --show-bin-path).Trim()
+          $mcpBin = (swift build -c release --package-path CoveMcp --show-bin-path).Trim()
 
           $distRoot = Join-Path $PWD "dist"
-          $packageDir = Join-Path $distRoot "GuavaStudio-windows-x86_64"
+          $packageDir = Join-Path $distRoot "Diffuse-windows-x86_64"
           if (Test-Path $distRoot) {
             Remove-Item $distRoot -Recurse -Force
           }
           New-Item -ItemType Directory -Path (Join-Path $packageDir "Tools") -Force | Out-Null
 
           Copy-Item (Join-Path $editorBin "EditorApp.exe") $packageDir
-          Copy-Item (Join-Path $playerBin "GuavaPlayer.exe") $packageDir
-          Copy-Item (Join-Path $pluginHostBin "GuavaPluginHost.exe") (Join-Path $packageDir "Tools")
-          Copy-Item (Join-Path $mcpBin "GuavaMCP.exe") (Join-Path $packageDir "Tools")
+          Copy-Item (Join-Path $playerBin "CovePlayer.exe") $packageDir
+          Copy-Item (Join-Path $pluginHostBin "DiffusePluginHost.exe") (Join-Path $packageDir "Tools")
+          Copy-Item (Join-Path $mcpBin "CoveMCP.exe") (Join-Path $packageDir "Tools")
           Copy-Item "Engine/Media/vendor/FFmpeg.artifactbundle/windows-x86_64/bin/*.exe" (Join-Path $packageDir "Tools")
           $mediaLicenses = Join-Path $packageDir "Licenses/FFmpeg"
           New-Item -ItemType Directory -Path $mediaLicenses -Force | Out-Null
@@ -325,9 +325,9 @@ jobs:
             $env:PATH = "$packageDir;$env:SystemRoot\System32;$env:SystemRoot"
             & (Join-Path $packageDir "EditorApp.exe") --validate-install
             if ($LASTEXITCODE -ne 0) { throw "Packaged EditorApp validation failed" }
-            & (Join-Path $packageDir "GuavaPlayer.exe") --validate-install
-            if ($LASTEXITCODE -ne 0) { throw "Packaged GuavaPlayer validation failed" }
-            foreach ($helper in @("GuavaPluginHost.exe", "GuavaMCP.exe")) {
+            & (Join-Path $packageDir "CovePlayer.exe") --validate-install
+            if ($LASTEXITCODE -ne 0) { throw "Packaged CovePlayer validation failed" }
+            foreach ($helper in @("DiffusePluginHost.exe", "CoveMCP.exe")) {
               $helperPath = Join-Path (Join-Path $packageDir "Tools") $helper
               $process = Start-Process -FilePath $helperPath -RedirectStandardInput $emptyInput.FullName -NoNewWindow -Wait -PassThru
               if ($process.ExitCode -ne 0) {
@@ -339,7 +339,7 @@ jobs:
             Remove-Item $emptyInput -Force
           }
 
-          $zipPath = Join-Path $distRoot "guava-studio-windows-x86_64.zip"
+          $zipPath = Join-Path $distRoot "diffuse-windows-x86_64.zip"
           Compress-Archive -Path $packageDir -DestinationPath $zipPath -Force
           "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
 
@@ -358,7 +358,7 @@ jobs:
         with:
           ref: ${{ needs.prepare-release.outputs.target }}
           submodules: recursive
-      - name: Fetch pinned Guava SDK
+      - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
 
       - name: Install system dependencies
@@ -406,15 +406,15 @@ jobs:
 
       - name: Build native dependencies
         shell: bash
-        run: ./guava studio native-bootstrap --force
+        run: ./cove studio native-bootstrap --force
 
       - name: Build Editor, Player, and MCP
         shell: bash
         run: |
           swift build -c release --package-path Editor --product EditorApp
-          swift build -c release --package-path Editor --product GuavaPlayer
-          swift build -c release --package-path Engine --product GuavaPluginHost
-          swift build -c release --package-path GuavaMcp
+          swift build -c release --package-path Editor --product CovePlayer
+          swift build -c release --package-path Engine --product DiffusePluginHost
+          swift build -c release --package-path CoveMcp
 
       - name: Test packages before release
         shell: bash
@@ -429,19 +429,19 @@ jobs:
           set -euo pipefail
 
           editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
-          player_bin="$(swift build -c release --package-path Editor --product GuavaPlayer --show-bin-path)"
-          plugin_host_bin="$(swift build -c release --package-path Engine --product GuavaPluginHost --show-bin-path)"
-          mcp_bin="$(swift build -c release --package-path GuavaMcp --show-bin-path)"
+          player_bin="$(swift build -c release --package-path Editor --product CovePlayer --show-bin-path)"
+          plugin_host_bin="$(swift build -c release --package-path Engine --product DiffusePluginHost --show-bin-path)"
+          mcp_bin="$(swift build -c release --package-path CoveMcp --show-bin-path)"
 
           dist_root="$PWD/dist"
-          package_dir="$dist_root/GuavaStudio-linux-x86_64"
+          package_dir="$dist_root/Diffuse-linux-x86_64"
           rm -rf "$dist_root"
           mkdir -p "$package_dir/Tools" "$package_dir/Lib"
 
           cp "$editor_bin/EditorApp" "$package_dir/"
-          cp "$player_bin/GuavaPlayer" "$package_dir/"
-          cp "$plugin_host_bin/GuavaPluginHost" "$package_dir/Tools/"
-          cp "$mcp_bin/GuavaMCP" "$package_dir/Tools/"
+          cp "$player_bin/CovePlayer" "$package_dir/"
+          cp "$plugin_host_bin/DiffusePluginHost" "$package_dir/Tools/"
+          cp "$mcp_bin/CoveMCP" "$package_dir/Tools/"
           cp Engine/Media/vendor/FFmpeg.artifactbundle/linux-x86_64/bin/ffmpeg "$package_dir/Tools/"
           cp Engine/Media/vendor/FFmpeg.artifactbundle/linux-x86_64/bin/ffprobe "$package_dir/Tools/"
           mkdir -p "$package_dir/Licenses/FFmpeg"
@@ -452,8 +452,8 @@ jobs:
           find "$editor_bin" -maxdepth 1 -type d \( -name "*.bundle" -o -name "*.resources" \) \
             -exec cp -R {} "$package_dir/" \;
 
-          ldd "$package_dir/EditorApp" "$package_dir/GuavaPlayer" \
-            "$package_dir/Tools/GuavaPluginHost" "$package_dir/Tools/GuavaMCP" \
+          ldd "$package_dir/EditorApp" "$package_dir/CovePlayer" \
+            "$package_dir/Tools/DiffusePluginHost" "$package_dir/Tools/CoveMCP" \
             | awk '/=> \// { print $3 } /^\// { print $1 }' \
             | sort -u \
             | { grep -E '/swift-|/usr/lib/swift|/swift/linux|libswift|libFoundation|libdispatch|libBlocksRuntime|lib_Foundation|libicu' || true; } \
@@ -467,11 +467,11 @@ jobs:
           # shellcheck disable=SC2016
           patchelf --set-rpath '$ORIGIN/Lib:$ORIGIN' "$package_dir/EditorApp"
           # shellcheck disable=SC2016
-          patchelf --set-rpath '$ORIGIN/Lib:$ORIGIN' "$package_dir/GuavaPlayer"
+          patchelf --set-rpath '$ORIGIN/Lib:$ORIGIN' "$package_dir/CovePlayer"
           # shellcheck disable=SC2016
-          patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/GuavaPluginHost"
+          patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/DiffusePluginHost"
           # shellcheck disable=SC2016
-          patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/GuavaMCP"
+          patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/CoveMCP"
 
           cat > "$package_dir/run-editor.sh" <<'EOF'
           #!/usr/bin/env bash
@@ -484,20 +484,20 @@ jobs:
 
           # Resolve Swift libraries from this package during validation.
           export LD_LIBRARY_PATH="$package_dir/Lib"
-          if ldd "$package_dir/EditorApp" "$package_dir/GuavaPlayer" \
-            "$package_dir/Tools/GuavaPluginHost" "$package_dir/Tools/GuavaMCP" \
+          if ldd "$package_dir/EditorApp" "$package_dir/CovePlayer" \
+            "$package_dir/Tools/DiffusePluginHost" "$package_dir/Tools/CoveMCP" \
             | grep -q 'not found'; then
             echo "Packaged binaries contain unresolved shared libraries" >&2
-            ldd "$package_dir/EditorApp" "$package_dir/GuavaPlayer" \
-              "$package_dir/Tools/GuavaPluginHost" "$package_dir/Tools/GuavaMCP" >&2
+            ldd "$package_dir/EditorApp" "$package_dir/CovePlayer" \
+              "$package_dir/Tools/DiffusePluginHost" "$package_dir/Tools/CoveMCP" >&2
             exit 1
           fi
           "$package_dir/EditorApp" --validate-install
-          "$package_dir/GuavaPlayer" --validate-install
-          "$package_dir/Tools/GuavaPluginHost" </dev/null
-          "$package_dir/Tools/GuavaMCP" </dev/null
+          "$package_dir/CovePlayer" --validate-install
+          "$package_dir/Tools/DiffusePluginHost" </dev/null
+          "$package_dir/Tools/CoveMCP" </dev/null
 
-          tar_path="$dist_root/guava-studio-linux-x86_64.tar.gz"
+          tar_path="$dist_root/diffuse-linux-x86_64.tar.gz"
           tar -C "$dist_root" -czf "$tar_path" "$(basename "$package_dir")"
           echo "tar_path=$tar_path" >> "$GITHUB_OUTPUT"
 

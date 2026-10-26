@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 
 public enum ScriptProjectTrustState: Sendable, Equatable {
@@ -73,16 +73,16 @@ final class ScriptProjectTrustStore: @unchecked Sendable {
     }
 
     private static func defaultStorageURL(environment: [String: String]) -> URL {
-        if let override = environment["GUAVA_EDITOR_STATE_DIRECTORY"],
+        if let override = environment["COVE_EDITOR_STATE_DIRECTORY"],
            !override.isEmpty {
             return URL(fileURLWithPath: override, isDirectory: true)
                 .appendingPathComponent("script-workspace-trust.json")
         }
         let fileManager = FileManager.default
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".guava", isDirectory: true)
+            ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".cove", isDirectory: true)
         return base
-            .appendingPathComponent("GuavaStudioEditor", isDirectory: true)
+            .appendingPathComponent("DiffuseEditor", isDirectory: true)
             .appendingPathComponent("script-workspace-trust.json")
     }
 }

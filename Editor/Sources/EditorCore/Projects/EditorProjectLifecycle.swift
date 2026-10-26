@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 
 public enum EditorProjectTemplate: String, Codable, Sendable {
@@ -29,8 +29,8 @@ public struct EditorProjectLocation: Sendable {
 }
 
 public enum EditorProjectLifecycle {
-    public static let descriptorPath = ".guava/project.json"
-    public static let scenePath = ".guava/editor-scene-manifest.json"
+    public static let descriptorPath = ".cove/project.json"
+    public static let scenePath = ".cove/editor-scene-manifest.json"
 
     /// Creates a new child of the chosen parent. Existing directories are never adopted or overwritten.
     public static func create(name: String, parent: URL,
@@ -46,10 +46,10 @@ public enum EditorProjectLifecycle {
         guard !manager.fileExists(atPath: destination.path) else {
             throw Failure("A file or folder with this project name already exists.")
         }
-        let staging = parent.appendingPathComponent(".guava-create-\(UUID().uuidString)", isDirectory: true)
+        let staging = parent.appendingPathComponent(".cove-create-\(UUID().uuidString)", isDirectory: true)
         try manager.createDirectory(at: staging, withIntermediateDirectories: false)
         defer { try? manager.removeItem(at: staging) }
-        for folder in [".guava", "Assets", "Scripts"] {
+        for folder in [".cove", "Assets", "Scripts"] {
             try manager.createDirectory(at: staging.appendingPathComponent(folder), withIntermediateDirectories: false)
         }
         let descriptor = EditorProjectDescriptor(name: name, template: template)
@@ -64,7 +64,7 @@ public enum EditorProjectLifecycle {
         case .crystalRush:
             try copyTemplate("crystal-rush.swift", extension: "txt", to: staging.appendingPathComponent("Scripts/CrystalRush.swift"))
             try copyTemplate("crystal-rush.scene", extension: "json", to: staging.appendingPathComponent(scenePath))
-            try copyTemplate("crystal-rush.script-assets", extension: "json", to: staging.appendingPathComponent(".guava/script-assets.json"))
+            try copyTemplate("crystal-rush.script-assets", extension: "json", to: staging.appendingPathComponent(".cove/script-assets.json"))
             try copyTemplate("crystal-rush.readme", extension: "txt", to: staging.appendingPathComponent("README.md"))
         }
         // Rename only after every file has been written and validated. A collision at this point also fails safely.
@@ -73,7 +73,7 @@ public enum EditorProjectLifecycle {
         return EditorProjectLocation(directory: destination, descriptor: descriptor)
     }
 
-    /// Opens any folder as a project. A folder without `.guava` gains only a
+    /// Opens any folder as a project. A folder without `.cove` gains only a
     /// project descriptor; its own files are left as they are.
     public static func adopt(_ directory: URL) throws -> EditorProjectLocation {
         let directory = directory.standardizedFileURL.resolvingSymlinksInPath()
@@ -82,9 +82,9 @@ public enum EditorProjectLifecycle {
         guard manager.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             throw Failure("The project folder no longer exists.")
         }
-        let guava = directory.appendingPathComponent(".guava", isDirectory: true)
-        if !manager.fileExists(atPath: guava.path) {
-            try manager.createDirectory(at: guava, withIntermediateDirectories: false)
+        let cove = directory.appendingPathComponent(".cove", isDirectory: true)
+        if !manager.fileExists(atPath: cove.path) {
+            try manager.createDirectory(at: cove, withIntermediateDirectories: false)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
@@ -96,7 +96,7 @@ public enum EditorProjectLifecycle {
     }
 
     /// Read-only validation before EditorApplication creates caches, history, or script services.
-    /// Older projects with a .guava directory remain supported, including empty legacy projects.
+    /// Older projects with a .cove directory remain supported, including empty legacy projects.
     public static func inspect(_ directory: URL, validateScene: Bool = true) throws -> EditorProjectLocation {
         let directory = directory.standardizedFileURL.resolvingSymlinksInPath()
         let manager = FileManager.default
@@ -104,12 +104,12 @@ public enum EditorProjectLifecycle {
         guard manager.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             throw Failure("The project folder no longer exists.")
         }
-        let guava = directory.appendingPathComponent(".guava", isDirectory: true)
-        guard manager.fileExists(atPath: guava.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            throw Failure("This folder is not a Guava project. Choose its project root or create a new project.")
+        let cove = directory.appendingPathComponent(".cove", isDirectory: true)
+        guard manager.fileExists(atPath: cove.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw Failure("This folder is not a Cove project. Choose its project root or create a new project.")
         }
-        guard try guava.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else {
-            throw Failure("The project's .guava folder must not be a symbolic link.")
+        guard try cove.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else {
+            throw Failure("The project's .cove folder must not be a symbolic link.")
         }
         var descriptor: EditorProjectDescriptor?
         let descriptorURL = directory.appendingPathComponent(descriptorPath)
@@ -150,7 +150,7 @@ public enum EditorProjectLifecycle {
             throw Failure("Legacy projects can only be removed from Recents. Manage their files in the file manager.")
         }
         let recovery = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Guava/DeletedProjects", isDirectory: true)
+            .appendingPathComponent("Cove/DeletedProjects", isDirectory: true)
         return try FileTrash.move(root, recoveryDirectory: recovery)
 
     }

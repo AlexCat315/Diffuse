@@ -3,11 +3,11 @@ import EditorCore
 import EngineCore
 import EngineKernel
 import Foundation
-import GuavaLogging
-import GuavaUI
-import GuavaUIRuntime
-import GuavaUIWorkspace
-import GuavaUIAgent
+import CoveLogging
+import CoveUI
+import CoveUIRuntime
+import CoveUIWorkspace
+import CoveUIAgent
 import PlatformShell
 import NativeRHI
 
@@ -77,7 +77,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         for entry in projects[min(preferred, projects.count)...] + projects[..<min(preferred, projects.count)] {
             do { try activate(entry.directory); break }
             catch {
-                LogSystem.logger("com.guava.editor").warning("Saved project did not open",
+                LogSystem.logger("com.cove.editor").warning("Saved project did not open",
                     metadata: ["project": "\(entry.directory)", "error": "\(error)"])
                 projects.removeAll { $0.directory == entry.directory }
             }
@@ -298,7 +298,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         applyShellState(to: app)
 
         // Restore the project's saved scene (File → Save Scene writes
-        // .guava/editor-scene-manifest.json). Without this, saved edits only
+        // .cove/editor-scene-manifest.json). Without this, saved edits only
         // come back via a manual File → Open Scene — a relaunch always showed
         // the seeded preview scene.
         let hasScene = app.restoreProjectSceneAtLaunch() != nil

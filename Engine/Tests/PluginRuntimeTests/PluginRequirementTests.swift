@@ -5,8 +5,8 @@ import Testing
 
 @Suite("Plugin requirements")
 struct PluginRequirementTests {
-    private func manifest(_ requires: [PluginRequirement]) -> GuavaPluginManifest {
-        GuavaPluginManifest(id: "studio.gizmo",
+    private func manifest(_ requires: [PluginRequirement]) -> CovePluginManifest {
+        CovePluginManifest(id: "studio.gizmo",
                             version: 1,
                             name: "Gizmo",
                             description: "Requirement test package",
@@ -139,13 +139,13 @@ struct PluginRequirementTests {
 
     @Test("dependents include plugin and exact capability requirements")
     func dependents() {
-        let core = GuavaPluginManifest(id: "studio.core", version: 1, name: "Core",
+        let core = CovePluginManifest(id: "studio.core", version: 1, name: "Core",
                                        description: "d", access: .read)
-        let gizmo = GuavaPluginManifest(
+        let gizmo = CovePluginManifest(
             id: "studio.gizmo", version: 1, name: "Gizmo", description: "d", access: .read,
             requires: [PluginRequirement(kind: .plugin, id: "studio.core")]
         )
-        let palette = GuavaPluginManifest(
+        let palette = CovePluginManifest(
             id: "studio.palette", version: 1, name: "Palette", description: "d", access: .read,
             requires: [PluginRequirement(kind: .capability, id: "studio.core.draw")]
         )
@@ -188,7 +188,7 @@ struct PluginRequirementTests {
     func registryRequirements() throws {
         func binding(_ id: String, version: Int = 1,
                      requires: [PluginRequirement] = []) throws -> PluginExecutionBinding {
-            let manifest = GuavaPluginManifest(id: id, version: version, name: id,
+            let manifest = CovePluginManifest(id: id, version: version, name: id,
                 description: "Fixture", access: .read, requires: requires)
             let contract = CapabilityContract(id: id + ".inspect", version: version,
                 title: "Inspect", description: "Fixture", domain: "plugin", access: .read,

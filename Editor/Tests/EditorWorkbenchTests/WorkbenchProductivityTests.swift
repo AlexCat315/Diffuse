@@ -1,11 +1,11 @@
 @testable import EditorUI
 import EditorCore
 import EngineKernel
-import GuavaUICompose
-import GuavaUIRuntime
-import GuavaUIWorkspace
+import CoveUICompose
+import CoveUIRuntime
+import CoveUIWorkspace
 import Testing
-import GuavaUICompose
+import CoveUICompose
 
 @Suite("Workbench productivity interactions", .serialized)
 @MainActor

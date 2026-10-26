@@ -1,8 +1,8 @@
 import Foundation
 import AssetPipeline
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 import SIMDCompat
 
 /// One shaded triangle of a mesh thumbnail, in normalized `[0,1]²` thumbnail

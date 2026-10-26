@@ -76,7 +76,7 @@ extension NatselPhysicsBackend {
             _ = world.shapeCast(Natsel.Pos(nv(query.position)), input) { id, point, normal, fraction, _, _, _ in
                 guard self.accepts(id, filter), let owner = self.shapeOwner(id) else { return 1 }
                 // Native casts retain a solver separation. Project the moving proxy's support
-                // point onto the returned contact plane to report geometric travel, as Guava's
+                // point onto the returned contact plane to report geometric travel, as Cove's
                 // query API requires. Its position is the query origin at impact.
                 let n = self.sv(normal)
                 let approach = simd_dot(n, query.translation)

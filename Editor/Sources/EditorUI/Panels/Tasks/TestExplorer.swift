@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Tests by group, each with its last result and a run button. The language
 /// service finds them; a failing test shows the first issue it recorded.

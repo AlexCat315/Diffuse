@@ -1,10 +1,10 @@
 private import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Projects the command catalog onto the platform menu bar.
 enum EditorNativeMenuBuilder {
-    static func make(appName: String = "GuavaStudio",
+    static func make(appName: String = "Diffuse",
                      catalog: EditorCommandCatalog,
                      focusChain: @escaping @MainActor () -> FocusChain? = { FocusChainHolder.current },
                      onCommand: @escaping @MainActor (EditorCommand) -> Void) -> NativeMenuBar {
@@ -39,7 +39,7 @@ enum EditorNativeMenuBuilder {
     }
 
     /// The menu bar while no project is open: the platform entries and Open Folder.
-    static func projectless(appName: String = "GuavaStudio",
+    static func projectless(appName: String = "Diffuse",
                             onOpenFolder: @escaping @MainActor () -> Void) -> NativeMenuBar {
         let shortcut = EditorCommandCatalog.openFolderShortcut
         let open = NativeMenuAction(title: L("Open Folder..."), keyEquivalent: shortcut.key.equivalent,

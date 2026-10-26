@@ -1,8 +1,8 @@
 internal import EditorCore
 private import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
-internal import GuavaUIWorkspace
+internal import CoveUI
+internal import CoveUIRuntime
+internal import CoveUIWorkspace
 #if canImport(AppKit)
 private import AppKit
 #endif
@@ -261,7 +261,7 @@ enum EditorCommandDispatcher {
     }
 
     private static func openDocumentation(app: EditorApplication) {
-        guard let url = URL(string: "https://github.com/AlexCat315/GuavaStudio/tree/main/docs") else {
+        guard let url = URL(string: "https://github.com/AlexCat315/Diffuse/tree/main/docs") else {
             app.logConsole("Unable to open documentation", severity: .error)
             return
         }
@@ -282,7 +282,7 @@ enum EditorCommandDispatcher {
             return
         }
         MainActor.assumeIsolated {
-            _ = display.openWindow(title: L("About Guava"), width: 440, height: 280) {
+            _ = display.openWindow(title: L("About Cove"), width: 440, height: 280) {
                 EditorAboutView()
             }
         }

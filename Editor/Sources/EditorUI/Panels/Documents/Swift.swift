@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The language sessions a document editor keeps for its Swift tabs.
 struct ScriptDocumentSessions {

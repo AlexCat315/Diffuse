@@ -1,22 +1,22 @@
 import Swift
 
-@_extern(wasm, module: "guava:process/host", name: "query")
+@_extern(wasm, module: "cove:process/host", name: "query")
 @_extern(c)
 private func processQuery(_ request: UnsafeRawPointer?, _ length: Int, _ result: UnsafeMutableRawPointer)
 
-@_extern(wasm, module: "guava:http/host", name: "query")
+@_extern(wasm, module: "cove:http/host", name: "query")
 @_extern(c)
 private func httpQuery(_ request: UnsafeRawPointer?, _ length: Int, _ result: UnsafeMutableRawPointer)
 
 /// Host interfaces granted to the plugin by `plugin.json`'s `imports`.
-public enum GuavaHost {
-    /// One `guava:process/host` request: start, poll, write to or stop a
+public enum CoveHost {
+    /// One `cove:process/host` request: start, poll, write to or stop a
     /// process the manifest permits. Requests and responses are JSON.
     public static func process(_ request: String) -> String {
         call(processQuery, request)
     }
 
-    /// One `guava:http/host` request: start, poll or cancel a host-owned HTTP
+    /// One `cove:http/host` request: start, poll or cancel a host-owned HTTP
     /// transfer to a host the manifest lists. Requests and responses are JSON.
     public static func http(_ request: String) -> String {
         call(httpQuery, request)

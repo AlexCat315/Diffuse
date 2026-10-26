@@ -1,6 +1,6 @@
 internal import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Connects the writing bar, the status line and the AI actions to the open
 /// editor. The editing surface reports its buffer, caret and commit path here;

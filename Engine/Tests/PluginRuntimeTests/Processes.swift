@@ -11,7 +11,7 @@ struct PluginProcessTests {
         rule.argumentPrefix = ["hello"]
         rule.entryPoints = ["launch"]
         var permissions = PluginHostPermissions(); permissions.processes = [rule]
-        let manifest = GuavaPluginManifest(id: id, version: 1, name: "Process test", description: "fixture", access: .read,
+        let manifest = CovePluginManifest(id: id, version: 1, name: "Process test", description: "fixture", access: .read,
                                           imports: [.process], host: permissions)
         let wit = try WITContractParser.parse(Data("""
         package test:process;
@@ -19,9 +19,9 @@ struct PluginProcessTests {
           record launch-input { enabled: bool }
           launch: func(input: launch-input) -> string;
         }
-        world plugin { import guava:process/host; export capabilities; }
+        world plugin { import cove:process/host; export capabilities; }
         """.utf8), grantedImports: [.process])
-        let package = ValidatedPluginPackage(rootURL: URL(fileURLWithPath: "/tmp/test.guavaplugin"), manifest: manifest,
+        let package = ValidatedPluginPackage(rootURL: URL(fileURLWithPath: "/tmp/test.coveplugin"), manifest: manifest,
             runtime: ValidatedPluginComponent(componentURL: URL(fileURLWithPath: "/tmp/component.wasm"), witURL: URL(fileURLWithPath: "/tmp/capabilities.wit"),
             witContract: wit, componentHash: "code", witHash: "contract"))
         return PluginInspection(package: package, contracts: PluginWITContractDeriver.contracts(for: package))
@@ -81,7 +81,7 @@ struct PluginProcessTests {
     func authorization() throws {
         var inspection = try inspection()
         let authorization = try PluginAuthorizationRecord(inspection: inspection)
-        let binding = try PluginExecutionBinding(pluginPath: "/tmp/test.guavaplugin", inspection: inspection,
+        let binding = try PluginExecutionBinding(pluginPath: "/tmp/test.coveplugin", inspection: inspection,
                                                   authorization: authorization, hostGeneration: 1)
         let registry = try PluginCapabilityRegistryBuilder.build(base: .default, bindings: [binding])
         #expect(registry.descriptor(for: "test.process.launch")?.isAIExposed == false)

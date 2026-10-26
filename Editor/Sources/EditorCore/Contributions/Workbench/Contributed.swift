@@ -7,7 +7,7 @@ public enum WorkbenchView: String, Sendable {
     case agent
 }
 
-/// One enabled `guava.command/v1` contribution.
+/// One enabled `cove.command/v1` contribution.
 public struct ContributedCommand: Sendable, Equatable, Identifiable {
     public let pluginID: String
     public let title: String
@@ -30,7 +30,7 @@ public struct ContributedCommand: Sendable, Equatable, Identifiable {
     }
 }
 
-/// One enabled `guava.ui.panel/v1` contribution.
+/// One enabled `cove.ui.panel/v1` contribution.
 public struct ContributedPanel: Sendable, Equatable, Identifiable {
     public enum Content: Sendable, Equatable {
         case view(WorkbenchView)

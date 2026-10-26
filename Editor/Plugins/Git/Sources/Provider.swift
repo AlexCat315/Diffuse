@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// Git through its machine-readable porcelain formats. Path lists travel on
 /// standard input, so no command line outgrows a process request.

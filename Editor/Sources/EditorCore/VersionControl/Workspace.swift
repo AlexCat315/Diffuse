@@ -1,6 +1,6 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 
 /// The project's working tree as the editor sees it. Detection, status reads
 /// and every operation run off the main thread; results are published as one
@@ -131,10 +131,10 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
         }
     }
 
-    /// The editor's per-machine state under `.guava` (observation logs, plugin
+    /// The editor's per-machine state under `.cove` (observation logs, plugin
     /// approvals and preferences) is not project content. Existing rules are kept.
     static let machineStatePatterns = [
-        ".guava/observation/", ".guava/plugin_authorizations.json", ".guava/disabled_bundled_plugins.json", ".guava/sourcekit-lsp/",
+        ".cove/observation/", ".cove/plugin_authorizations.json", ".cove/disabled_bundled_plugins.json", ".cove/sourcekit-lsp/",
     ]
 
     static func ignoreMachineState(in root: URL, file name: String) throws {
@@ -145,7 +145,7 @@ public final class EditorVersionControl: _ObservableObject, @unchecked Sendable 
         guard !missing.isEmpty else { return }
         var text = existing
         if !text.isEmpty, !text.hasSuffix("\n") { text += "\n" }
-        text += "# Guava Studio machine-local state\n" + missing.joined(separator: "\n") + "\n"
+        text += "# Cove Studio machine-local state\n" + missing.joined(separator: "\n") + "\n"
         try AtomicFile.write(Data(text.utf8), to: url)
     }
 

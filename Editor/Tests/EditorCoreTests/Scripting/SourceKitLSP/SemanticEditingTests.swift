@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 import LanguageServerRuntime
 import Testing
 @testable import EditorCore

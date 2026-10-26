@@ -1,5 +1,5 @@
 import AssetPipeline
-import GuavaLogging
+import CoveLogging
 import NativeRHI
 
 /// Resident particle images, including retryable decode failures and a white fallback.

@@ -1,6 +1,6 @@
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import PluginRuntime
 import Testing
 @testable import EditorCore

@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// What a document path looks like to the user: a language name and a file
 /// icon. Derived on demand from the file name; nothing here is stored. Whole

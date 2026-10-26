@@ -3,7 +3,7 @@ import Foundation
 import PluginRuntime
 
 /// Mobile hosts use an approved, immutable package in-process. iOS always uses
-/// Pulley. Desktop Editor hosts retain the separate GuavaPluginHost process.
+/// Pulley. Desktop Editor hosts retain the separate DiffusePluginHost process.
 public actor EmbeddedPluginSession {
     public let inspection: PluginInspection
     private let execution: ExecutionPackage

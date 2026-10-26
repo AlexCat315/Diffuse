@@ -146,7 +146,7 @@ public enum WITContractError: Error, Sendable, Equatable, CustomStringConvertibl
     }
 }
 
-/// Parses the small, authority-bearing WIT subset supported by Guava plugins.
+/// Parses the small, authority-bearing WIT subset supported by Cove plugins.
 ///
 /// Every `<name>: func(input: <name>-input) -> string` declaration inside
 /// `interface capabilities` defines one AI capability. Supported inputs are

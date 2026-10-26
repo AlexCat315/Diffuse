@@ -1,16 +1,16 @@
-# GuavaStudio 媒体运行库
+# Diffuse 媒体运行库
 
 `MediaRuntime` 独立于场景、UI 和 SDL。FFmpeg 8.1.3 从官方源码构建并校验 SHA-256；构建禁用 GPL、nonfree、网络协议和外部自动探测。设备播放由 AudioRuntime/SDL 接入，不启动 ffmpeg 子进程。桌面剪辑导出使用同次构建的 `ffmpeg` 可执行文件，通过 argv 调用。
 
 ```sh
-swift run --package-path Tools/Developer guava-dev media
+swift run --package-path Tools/Developer cove-dev media
 swift test --package-path Engine/Media
 # 移动目标复用相同 API：
-swift run --package-path Tools/Developer guava-dev media --platform ios-arm64-simulator
-ANDROID_NDK_HOME=/path/to/ndk swift run --package-path Tools/Developer guava-dev media --platform android-arm64
+swift run --package-path Tools/Developer cove-dev media --platform ios-arm64-simulator
+ANDROID_NDK_HOME=/path/to/ndk swift run --package-path Tools/Developer cove-dev media --platform android-arm64
 ```
 
-构建需要 sh、GNU make 和 C 编译器；Windows 使用 MSVC Developer 环境与 MSYS2 的 sh/make（不是 MinGW 编译器）。iOS 需要 Xcode。Android 需要 NDK，API 28+。所有目标的库和头文件位于 `vendor/FFmpeg.artifactbundle`，variant 可以同时存在；`GUAVA_MEDIA_ARTIFACT_ROOT` 可选择相对于此包的其他产物目录。`--check` 验证已暂存文件的完整性。
+构建需要 sh、GNU make 和 C 编译器；Windows 使用 MSVC Developer 环境与 MSYS2 的 sh/make（不是 MinGW 编译器）。iOS 需要 Xcode。Android 需要 NDK，API 28+。所有目标的库和头文件位于 `vendor/FFmpeg.artifactbundle`，variant 可以同时存在；`COVE_MEDIA_ARTIFACT_ROOT` 可选择相对于此包的其他产物目录。`--check` 验证已暂存文件的完整性。
 
 ```swift
 import MediaRuntime

@@ -1,7 +1,7 @@
 import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// The same coordinate tooltip used by controls and diagnostic messages owns
 /// viewport fitting, clipping escape and node-lifetime cleanup.

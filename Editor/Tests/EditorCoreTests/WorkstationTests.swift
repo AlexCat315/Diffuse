@@ -1,6 +1,6 @@
 import EditorCore
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 import Testing
 
 @Test func filesAndTimelineOwnIndependentWorkflowTools() {

@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import EngineKernel
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 private import Foundation
 
 struct SettingsPanel: View {

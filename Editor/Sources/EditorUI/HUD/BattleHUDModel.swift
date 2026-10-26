@@ -1,9 +1,9 @@
 import Foundation
-public import GuavaUIRuntime
+public import CoveUIRuntime
 public import CardBattleRuntime
 
 /// Main-thread observable model that bridges `BattleHUDSnapshot` to the
-/// GuavaUI reactive system. Observers are notified synchronously on `update`.
+/// CoveUI reactive system. Observers are notified synchronously on `update`.
 public final class BattleHUDModel: _ObservableObject {
     private let publisher = _ObservablePublisher<BattleHUDModel>()
 

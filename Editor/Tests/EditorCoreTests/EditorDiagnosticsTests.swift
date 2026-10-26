@@ -1,8 +1,8 @@
 import Foundation
 import Testing
 import AIRuntime
-import GuavaUIRuntime
-import GuavaUIAgent
+import CoveUIRuntime
+import CoveUIAgent
 @testable import EditorCore
 
 @Suite("Editor AI diagnostics", .serialized)

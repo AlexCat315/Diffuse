@@ -1,4 +1,4 @@
-import GuavaPlatformCore
+import CovePlatformCore
 import AssetPipeline
 import Foundation
 import EngineKernel
@@ -8,7 +8,7 @@ import SIMDCompat
 
 public enum MeshProbeScene {
     public static func importedFixture() throws -> MeshAsset {
-        let bundle = PackageResourceBundle.required(named: "GuavaStudioRuntime_RenderBackend")
+        let bundle = PackageResourceBundle.required(named: "DiffuseRuntime_RenderBackend")
         guard let url = bundle.url(forResource: "NativeSceneFixture", withExtension: "gltf") else {
             throw CocoaError(.fileNoSuchFile)
         }

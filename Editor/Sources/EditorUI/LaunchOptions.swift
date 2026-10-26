@@ -13,23 +13,23 @@ struct EditorAppLaunchOptions {
     ) throws -> EditorAppLaunchOptions {
         let commandLine = try ParsedCommandLine(arguments: arguments)
         let configPath = commandLine.configPath
-            ?? environment["GUAVA_RHI_CONFIG"]
+            ?? environment["COVE_RHI_CONFIG"]
 
         let fileConfig = try configPath.map(Self.loadConfigFile)
 
         let preferredBackends = try resolvePreferredBackends(
             commandLineValue: commandLine.backendList,
-            environmentValue: environment["GUAVA_RHI_BACKENDS"],
+            environmentValue: environment["COVE_RHI_BACKENDS"],
             fileValue: fileConfig?.rhi?.preferredBackends
         )
 
         let validationEnabled = fileConfig?.rhi?.validationEnabled ?? true
         let framesInFlight = fileConfig?.rhi?.framesInFlight ?? 2
         let projectDirectory = commandLine.projectDirectory
-            ?? environment["GUAVA_PROJECT_DIR"]
+            ?? environment["COVE_PROJECT_DIR"]
 
         let useLegacy = commandLine.useLegacy
-            || environment["GUAVA_LEGACY"] == "1"
+            || environment["COVE_LEGACY"] == "1"
 
         return EditorAppLaunchOptions(
             backendConfig: DeviceConfig(
@@ -105,12 +105,12 @@ extension EditorAppLaunchOptions {
     static var settingsRequested: Bool { CommandLine.arguments.contains("--settings") }
 
     /// Opt-in developer watch for enabled plugin packages (`--watch-plugins`,
-    /// `GUAVA_WATCH_PLUGINS=1`). Watching never authorizes changed packages:
+    /// `COVE_WATCH_PLUGINS=1`). Watching never authorizes changed packages:
     /// byte-identical builds are remounted, and anything else is surfaced for
     /// review in the plugin management flow.
     static var watchPluginPackagesRequested: Bool {
         CommandLine.arguments.contains("--watch-plugins")
-            || ProcessInfo.processInfo.environment["GUAVA_WATCH_PLUGINS"] == "1"
+            || ProcessInfo.processInfo.environment["COVE_WATCH_PLUGINS"] == "1"
     }
 
     /// A plugin package to open for review over the editor window once the

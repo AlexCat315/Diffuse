@@ -1,6 +1,6 @@
 import EngineCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Persistent per-editor parser. No document String or flattened token list is
 /// built during editing or painting; TSInput asks the Rope for bounded chunks.

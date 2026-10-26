@@ -4,8 +4,8 @@ import CoreGraphics
 import EditorCore
 import EngineKernel
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 import SceneRuntime
 
 struct InspectorPanel: View {

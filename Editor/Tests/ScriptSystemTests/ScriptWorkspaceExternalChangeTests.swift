@@ -1,14 +1,14 @@
 import Foundation
 import ScriptRuntime
 import Testing
-import GuavaUICompose
+import CoveUICompose
 @testable import EditorCore
 
 @Suite("Script workspace external changes", .serialized)
 struct ScriptWorkspaceExternalChangeTests {
     @Test("Editor annotations stay with their document, rebase once, and never dirty or serialize into source")
     func editorAnnotations() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-annotations-\(UUID().uuidString)")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-annotations-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let manager = DynamicScriptManager(projectDirectory: root.path, scriptRuntime: ScriptRuntime(),
             engineModulePaths: [], scriptTrustStorageURL: root.appendingPathComponent("trust.json"))
@@ -35,7 +35,7 @@ struct ScriptWorkspaceExternalChangeTests {
     @Test("Dismissing setup errors preserves health; retry and shutdown reset presentation")
     @MainActor
     func languageServiceHealthAndDismissal() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-script-service-\(UUID().uuidString)")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-script-service-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let manager = DynamicScriptManager(projectDirectory: root.path, scriptRuntime: ScriptRuntime(),
             engineModulePaths: [], scriptTrustStorageURL: root.appendingPathComponent("trust.json"))
@@ -71,7 +71,7 @@ struct ScriptWorkspaceExternalChangeTests {
 
     @Test("Typing and deleting back to saved contents clears dirty state without reusing a root")
     func dirtyContentReversion() throws {
-        let project = FileManager.default.temporaryDirectory.appendingPathComponent("guava-script-dirty-\(UUID().uuidString)", isDirectory: true)
+        let project = FileManager.default.temporaryDirectory.appendingPathComponent("cove-script-dirty-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let manager = DynamicScriptManager(projectDirectory: project.path, scriptRuntime: ScriptRuntime(),
             engineModulePaths: [], scriptTrustStorageURL: project.appendingPathComponent("trust.json"))
@@ -91,7 +91,7 @@ struct ScriptWorkspaceExternalChangeTests {
     @Test("clean documents reload while dirty documents require conflict resolution")
     func reconcilesExternalEdits() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-script-watch-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-script-watch-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let manager = DynamicScriptManager(
             projectDirectory: project.path,

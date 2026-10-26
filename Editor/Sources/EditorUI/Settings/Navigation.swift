@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 private import Foundation
 
 struct SettingsSidebar: View {
@@ -14,7 +14,7 @@ struct SettingsSidebar: View {
             Row(alignment: .center, spacing: 10) {
                 SettingsBrandMark()
                 Column(alignment: .leading, spacing: 2) {
-                    Text("Guava Studio").font(.bodyStrong).foregroundColor(.onSurface)
+                    Text("Cove Studio").font(.bodyStrong).foregroundColor(.onSurface)
                     Text(L("Settings")).font(.caption).foregroundColor(.onSurfaceMuted)
                 }
             }.padding(horizontal: 18, vertical: 22)

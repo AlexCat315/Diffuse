@@ -126,7 +126,7 @@ private struct PassBenchmarkOptions {
     var warmup = 30
     var repeats = 3
     var backends: [GraphicsAPI] = NativeRHI.platformDefaultBackends
-    var output = URL(fileURLWithPath: "/tmp/guava-native-grid")
+    var output = URL(fileURLWithPath: "/tmp/cove-native-grid")
     init(arguments: [String]) throws {
         guard arguments.count % 2 == 0 else { throw RHIError.invalidArgument("use --scene grid|mesh|pbr|animated|post|stylized|particles|simulation --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR") }
         for index in stride(from: 0, to: arguments.count, by: 2) {

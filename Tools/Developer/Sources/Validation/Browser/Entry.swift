@@ -1,17 +1,17 @@
 internal import Foundation
 private import ToolSupport
 
-/// Browser verification and local development servers for the GuavaUI web
+/// Browser verification and local development servers for the CoveUI web
 /// prototype and the native DevTools client.
 ///
 /// The first token of `arguments` selects the operation; the remaining tokens
-/// are its flags. This replaces the former `GuavaUI/Browser/*.py` scripts and
+/// are its flags. This replaces the former `CoveUI/Browser/*.py` scripts and
 /// `Platforms/Web/Plugins/tests/browser.py`.
 package enum Browser {
   static var sdkRoot: URL {
-    ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+    ProcessInfo.processInfo.environment["COVE_SDK_ROOT"]
       .map { URL(fileURLWithPath: $0).standardizedFileURL }
-      ?? Repository.path("GuavaUI")
+      ?? Repository.path("CoveUI")
   }
   package static func run(_ arguments: [String]) throws {
     guard let operation = arguments.first else {
@@ -38,10 +38,10 @@ package enum Browser {
   ]
 
   static let usage = """
-    guava-dev browser <operation> [options]
+    cove-dev browser <operation> [options]
 
       verify       Verify the Wasm prototype and the native WebSocket Inspector in a real browser
-      native-demo  Verify the native Compose/Metal mirror; start GuavaUIDemo --shared-counter first
+      native-demo  Verify the native Compose/Metal mirror; start CoveUIDemo --shared-counter first
       dev          Run the Swift/Wasm development server with complete-build reloads
       verify-dev   Exercise real Swift rebuilds, checkpoint retention and failed-build recovery
       serve        Serve the built Browser/dist directory over http.server-compatible HTTP
@@ -58,6 +58,6 @@ package enum Browser {
       web-plugins --host PATH --probe PATH
 
     Every operation runs against the checkout discovered from the current
-    directory (or GUAVA_ROOT); the browser build lives in GuavaUI/Browser.
+    directory (or COVE_ROOT); the browser build lives in CoveUI/Browser.
     """
 }

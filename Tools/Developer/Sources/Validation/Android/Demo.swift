@@ -4,7 +4,7 @@ internal import ToolSupport
 /// Port of `scripts/android/verify-demo.py`: validates the SharedCounter APK
 /// through pixels, touch, Compose state, IME input and Activity recreation.
 enum DemoOperation {
-  private static let package = "com.guava.probe"
+  private static let package = "com.cove.probe"
 
   static func run(_ arguments: [String]) throws {
     let parsed = try ParsedArguments.parse(
@@ -50,7 +50,7 @@ enum DemoOperation {
 
     func action(_ name: String, _ text: String? = nil) throws {
       var values: [any CustomStringConvertible] = [
-        "am", "broadcast", "-a", "com.guava.probe.DEMO_INPUT",
+        "am", "broadcast", "-a", "com.cove.probe.DEMO_INPUT",
         "-p", package, "--es", "demoAction", name,
       ]
       if let text { values += ["--es", "text", text] }
@@ -104,7 +104,7 @@ enum DemoOperation {
     var previous: JSON = .null
     do { previous = try read()["session"] } catch { previous = .null }
     try shell([
-      "am", "start", "-W", "-S", "-n", "com.guava.probe/.MainActivity", "--ei", "orientation", 0,
+      "am", "start", "-W", "-S", "-n", "com.cove.probe/.MainActivity", "--ei", "orientation", 0,
       "--es", "mode", "counter", "--ez", "snapshots", "true",
     ])
     let initial = try wait(
@@ -149,14 +149,14 @@ enum DemoOperation {
       throw ToolError.message("Theme state changed without painting a dark background")
     }
     try tap(dark, "counter.note")
-    _ = try wait({ $0["focused"] == .string("counter.note") }, "GuavaUI note receives focus")
+    _ = try wait({ $0["focused"] == .string("counter.note") }, "CoveUI note receives focus")
     // Verify that the real IME is bound to our view, then inject physical keys.
     // Some IMEs keep the word in their candidate window until Space selects it.
     let ime = try Command.output(adb + ["shell", "dumpsys", "input_method"])
-    guard ime.contains("connection=com.guava.probe.TextInputConnection"),
+    guard ime.contains("connection=com.cove.probe.TextInputConnection"),
       ime.contains("mInputShown=true")
     else {
-      throw ToolError.message("the Android IME is not bound to com.guava.probe.TextInputConnection")
+      throw ToolError.message("the Android IME is not bound to com.cove.probe.TextInputConnection")
     }
     try shell(["input", "text", "Vulkan"])
     let noteDeadline = AndroidTools.uptime + 2
@@ -217,7 +217,7 @@ enum DemoOperation {
     try shell(["input", "keyevent", "KEYCODE_HOME"])
     Thread.sleep(forTimeInterval: 0.5)
     try shell([
-      "am", "start", "-W", "-n", "com.guava.probe/.MainActivity", "--ez", "snapshots", "true",
+      "am", "start", "-W", "-n", "com.cove.probe/.MainActivity", "--ez", "snapshots", "true",
     ])
     _ = try wait(
       { snapshot in
@@ -226,7 +226,7 @@ enum DemoOperation {
           && snapshot["state"] == expected
       }, "foreground restores surface and demo state")
     try shell([
-      "am", "start", "-W", "-n", "com.guava.probe/.MainActivity", "--ei", "orientation", 1, "--ez",
+      "am", "start", "-W", "-n", "com.cove.probe/.MainActivity", "--ei", "orientation", 1, "--ez",
       "snapshots", "true",
     ])
     _ = try wait(
@@ -236,7 +236,7 @@ enum DemoOperation {
       }, "portrait relayout retains demo state")
     _ = try screenshot("portrait")
     try shell([
-      "am", "start", "-W", "-n", "com.guava.probe/.MainActivity", "--ei", "orientation", 0, "--ez",
+      "am", "start", "-W", "-n", "com.cove.probe/.MainActivity", "--ei", "orientation", 0, "--ez",
       "snapshots", "true",
     ])
     let landscape = try wait(
@@ -258,7 +258,7 @@ enum DemoOperation {
     _ = try screenshot("landscape")
     // Restore sensor orientation after the explicit orientation checks.
     try shell([
-      "am", "start", "-W", "-n", "com.guava.probe/.MainActivity", "--ei", "orientation", -1, "--ez",
+      "am", "start", "-W", "-n", "com.cove.probe/.MainActivity", "--ei", "orientation", -1, "--ez",
       "snapshots", "true",
     ])
     _ = try wait(
@@ -266,7 +266,7 @@ enum DemoOperation {
       "sensor orientation restored")
     let pid = try Command.output(adb + ["shell", "pidof", package]).trimmingCharacters(
       in: .whitespacesAndNewlines)
-    let log = try Command.output(adb + ["logcat", "-d", "--pid=" + pid, "-s", "Guava:I", "*:S"])
+    let log = try Command.output(adb + ["logcat", "-d", "--pid=" + pid, "-s", "Cove:I", "*:S"])
     try Fs.write(log, to: directory.appendingPathComponent("app.log"))
     guard !log.contains("FAIL") else { throw ToolError.message(log) }
     let report = JSON.object([("passed", .bool(true)), ("checks", .array(checkpoints))])

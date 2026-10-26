@@ -30,7 +30,7 @@ struct EditorAIRequestPolicyTests {
     @Test("unavailable AI rejects submission without consuming the draft")
     func unavailableAIRejectsSubmission() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-ai-unavailable-\(UUID().uuidString)",
+            .appendingPathComponent("cove-ai-unavailable-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -45,7 +45,7 @@ struct EditorAIRequestPolicyTests {
     @Test("human commands cannot accidentally dismiss an AI confirmation")
     func humanCommandPreservesPendingConfirmation() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-ai-request-policy-\(UUID().uuidString)",
+            .appendingPathComponent("cove-ai-request-policy-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -69,7 +69,7 @@ struct EditorAIRequestPolicyTests {
     @Test("quick intents cannot mutate a locked selection")
     func quickIntentHonorsHierarchyLock() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-locked-quick-intent-\(UUID().uuidString)",
+            .appendingPathComponent("cove-locked-quick-intent-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -91,7 +91,7 @@ struct EditorAIRequestPolicyTests {
     @Test("locking a staged plan blocks acceptance but still permits discard")
     func confirmationRechecksHierarchyLock() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-locked-confirmation-\(UUID().uuidString)",
+            .appendingPathComponent("cove-locked-confirmation-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -119,7 +119,7 @@ struct EditorAIRequestPolicyTests {
     @Test("scene authoring requests are rejected during playback and pause")
     func playbackRejectsSceneAuthoring() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-playback-authoring-policy-\(UUID().uuidString)",
+            .appendingPathComponent("cove-playback-authoring-policy-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

@@ -6,8 +6,8 @@ import EngineKernel
 import NativeRHI
 import NativeRendererValidation
 import RenderBackend
-import GuavaUICompose
-import GuavaUI
+import CoveUICompose
+import CoveUI
 
 private struct HUDTiming: Codable {
     let p50Microseconds: Double
@@ -48,7 +48,7 @@ private struct HUDBenchmarkReport: Encodable {
 final class NativeInGameUIBenchmarkTests: XCTestCase {
     @MainActor
     func testReleaseSceneAndHUDWorkload() async throws {
-        guard ProcessInfo.processInfo.environment["GUAVA_NATIVE_HUD_BENCHMARK"] == "1" else {
+        guard ProcessInfo.processInfo.environment["COVE_NATIVE_HUD_BENCHMARK"] == "1" else {
             throw XCTSkip("opt-in release scene/HUD benchmark")
         }
         #if DEBUG
@@ -58,7 +58,7 @@ final class NativeInGameUIBenchmarkTests: XCTestCase {
         let hud = HUDRouter()
         let scene = try NativeRenderer(device: device, inGameUI: hud)
         let nativeHUD = try InGameUIHost(device: device)
-        nativeHUD.setRootView(Text("Guava NativeRHI HUD 中🙂"))
+        nativeHUD.setRootView(Text("Cove NativeRHI HUD 中🙂"))
         for post in [false, true] { for size in [RenderDrawableSize(width: 1280, height: 720), .init(width: 1920, height: 1080)] {
             let scale = Float(size.width) / 1280
             func packet(_ frame: Int) -> RenderPacket {
@@ -86,7 +86,7 @@ final class NativeInGameUIBenchmarkTests: XCTestCase {
             XCTAssertEqual(actual.count, Int(size.width * size.height * 4))
             let report = HUDBenchmarkReport(device: device.deviceName, width: size.width, height: size.height, post: post,
                 results: [native])
-            let root = ProcessInfo.processInfo.environment["GUAVA_NATIVE_HUD_BENCHMARK_OUTPUT"] ?? "/tmp/guava-native-hud-benchmark"
+            let root = ProcessInfo.processInfo.environment["COVE_NATIVE_HUD_BENCHMARK_OUTPUT"] ?? "/tmp/cove-native-hud-benchmark"
             let directory = URL(fileURLWithPath: root)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

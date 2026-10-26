@@ -9,9 +9,9 @@ enum Bootstrap {
   static func run(_ arguments: [String]) throws {
     let force = arguments.contains("--force")
     let root = Repository.root
-    let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+    let sdkRoot = ProcessInfo.processInfo.environment["COVE_SDK_ROOT"]
       .map { URL(fileURLWithPath: $0).standardizedFileURL }
-      ?? root.appendingPathComponent("GuavaUI")
+      ?? root.appendingPathComponent("CoveUI")
 
     // mimalloc must not redirect the CRT allocator while the graphics
     // libraries and their consumers are built.
@@ -30,17 +30,17 @@ enum Bootstrap {
     }
 
     #if os(Windows)
-    let binary = sdkRoot.appendingPathComponent("guava.exe")
-    let sdkCommand = FileManager.default.fileExists(atPath: binary.path) ? binary : sdkRoot.appendingPathComponent("guava.cmd")
+    let binary = sdkRoot.appendingPathComponent("cove.exe")
+    let sdkCommand = FileManager.default.fileExists(atPath: binary.path) ? binary : sdkRoot.appendingPathComponent("cove.cmd")
     #else
-    let sdkCommand = sdkRoot.appendingPathComponent("guava")
+    let sdkCommand = sdkRoot.appendingPathComponent("cove")
     #endif
     try Shell.inherit([sdkCommand.path, "setup", "--sdk-root", sdkRoot.path], environment: environment)
 
     // ── Sentinels ────────────────────────────────────────────────────────
 
     let engineDone = root.appendingPathComponent("Engine/vendor/ocio_openexr.artifactbundle")
-    let guavaUIDone = sdkRoot.appendingPathComponent("vendor/CFreeType.artifactbundle")
+    let coveUIDone = sdkRoot.appendingPathComponent("vendor/CFreeType.artifactbundle")
     let terminalDone = sdkRoot.appendingPathComponent("vendor/GhosttyVt.artifactbundle")
     var wasmtimeReady = true
     do { try PluginStaging.run(["stage", "--check"]) } catch { wasmtimeReady = false }
@@ -51,11 +51,11 @@ enum Bootstrap {
 
     if !force,
       FileManager.default.fileExists(atPath: engineDone.path),
-      FileManager.default.fileExists(atPath: guavaUIDone.path),
+      FileManager.default.fileExists(atPath: coveUIDone.path),
       FileManager.default.fileExists(atPath: terminalDone.path),
       wasmtimeReady
     {
-      print("Native deps already built. Run `guava-dev native-bootstrap --force` to rebuild.")
+      print("Native deps already built. Run `cove-dev native-bootstrap --force` to rebuild.")
       return
     }
 
@@ -79,7 +79,7 @@ enum Bootstrap {
     let engineSource = root.appendingPathComponent("Engine/third-party")
     let engineBuild = root.appendingPathComponent("Engine/build/native")
     let installPrefix = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "guava-native-install")
+      "cove-native-install")
 
     print("\n[ Engine ]")
     try Shell.inherit(
@@ -100,6 +100,6 @@ enum Bootstrap {
         "--config", "Release",
       ], environment: environment)
 
-    print("\nDone. Run: ./guava run Editor --mac")
+    print("\nDone. Run: ./cove run Editor --mac")
   }
 }

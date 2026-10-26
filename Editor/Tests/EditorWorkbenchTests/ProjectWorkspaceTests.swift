@@ -1,7 +1,7 @@
 import EditorCore
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import NativeRHI
 import EngineKernel
 import Testing
@@ -14,20 +14,20 @@ private struct IsolatedProjectState {
     let parent: URL
     private let previousState: String?
     private let previousDefaults: [String: Any?]
-    private static let keys = ["GuavaOpenProjects", "GuavaActiveProject"]
+    private static let keys = ["CoveOpenProjects", "CoveActiveProject"]
 
     init(_ label: String) throws {
-        parent = FileManager.default.temporaryDirectory.appendingPathComponent("guava-\(label)-\(UUID())")
+        parent = FileManager.default.temporaryDirectory.appendingPathComponent("cove-\(label)-\(UUID())")
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: false)
-        previousState = ProcessInfo.processInfo.environment["GUAVA_EDITOR_STATE_DIRECTORY"]
+        previousState = ProcessInfo.processInfo.environment["COVE_EDITOR_STATE_DIRECTORY"]
         previousDefaults = Dictionary(uniqueKeysWithValues: Self.keys.map { ($0, UserDefaults.standard.object(forKey: $0)) })
         for key in Self.keys { UserDefaults.standard.removeObject(forKey: key) }
         try #require(WorkbenchUITestSupport.setEnvironmentValue(parent.appendingPathComponent("editor-state").path,
-                                                               for: "GUAVA_EDITOR_STATE_DIRECTORY"))
+                                                               for: "COVE_EDITOR_STATE_DIRECTORY"))
     }
 
     func restore() {
-        #expect(WorkbenchUITestSupport.setEnvironmentValue(previousState, for: "GUAVA_EDITOR_STATE_DIRECTORY"))
+        #expect(WorkbenchUITestSupport.setEnvironmentValue(previousState, for: "COVE_EDITOR_STATE_DIRECTORY"))
         for (key, value) in previousDefaults {
             if let value { UserDefaults.standard.set(value, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) }
         }
@@ -72,7 +72,7 @@ struct ProjectWorkspaceTests {
                                               events: PlatformEventBridge(), shellState: nil)
             defer { context.shutdown() }
             try context.openProject(directory: plain.path)
-            #expect(FileManager.default.fileExists(atPath: plain.appendingPathComponent(".guava/project.json").path))
+            #expect(FileManager.default.fileExists(atPath: plain.appendingPathComponent(".cove/project.json").path))
             #expect(try String(contentsOf: plain.appendingPathComponent("README.md"), encoding: .utf8) == "notes")
             let first = try #require(context.bundle?.app)
             try context.openProject(directory: blank.path)
@@ -112,9 +112,9 @@ struct ProjectWorkspaceTests {
             .first { FileManager.default.isExecutableFile(atPath: $0.path) })
         let sdk = ProjectScriptBuildConfiguration.discover(for: host.resolvingSymlinksInPath(), environment: [:])
         #expect(!sdk.engineModulePaths.isEmpty)
-        let overrides = ["GUAVA_ENGINE_MODULE_PATHS": sdk.engineModulePaths.joined(separator: ","),
-                         "GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS": sdk.clangModuleMapPaths.joined(separator: ","),
-                         "GUAVA_ENGINE_CLANG_INCLUDE_PATHS": sdk.clangIncludePaths.joined(separator: ",")]
+        let overrides = ["COVE_ENGINE_MODULE_PATHS": sdk.engineModulePaths.joined(separator: ","),
+                         "COVE_ENGINE_CLANG_MODULE_MAP_PATHS": sdk.clangModuleMapPaths.joined(separator: ","),
+                         "COVE_ENGINE_CLANG_INCLUDE_PATHS": sdk.clangIncludePaths.joined(separator: ",")]
         let previousOverrides = overrides.keys.map { ($0, ProcessInfo.processInfo.environment[$0]) }
         for (key, value) in overrides { setenv(key, value, 1) }
         defer {

@@ -1,4 +1,4 @@
-import GuavaLogging
+import CoveLogging
 import AIRuntime
 import ContextMemory
 import AssetPipeline
@@ -14,20 +14,20 @@ import SemanticPipeline
 import RenderBackend
 import NativeRHI
 import SceneRuntime
-import GuavaUICompose
-import GuavaUIAgent
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIAgent
+import CoveUIRuntime
 import Foundation
 import SIMDCompat
 
 /// 编辑器应用域：把 `EngineHost`、`EditorStore` 与 `InputState` 汇总成一个对象。
 ///
-/// 与 GuavaUI 配合使用：
+/// 与 CoveUI 配合使用：
 ///   1. 启动时由调用方实例化 `EditorApplication`；
 ///   2. 在 `Application.run` 的 `onTick` 回调里调用 `tick(deltaTime:)` 推进引擎；
 ///   3. 退出主循环后调用 `shutdown()` 清理引擎资源。
 ///
-/// 自身不持有窗口 / native surface — UI 渲染由 GuavaUI 接管，引擎仅负责
+/// 自身不持有窗口 / native surface — UI 渲染由 CoveUI 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
 public final class EditorApplication: @unchecked Sendable {
     public let engine: EngineHost
@@ -125,7 +125,7 @@ public final class EditorApplication: @unchecked Sendable {
         scene.setEditorViewportCameraEnabled(true)
         scene.scriptRuntime.isGameplayExecutionEnabled = false
         let observationDirectory = URL(fileURLWithPath: projectDirectory, isDirectory: true)
-            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent(".cove", isDirectory: true)
             .appendingPathComponent("observation", isDirectory: true)
         try FileManager.default.createDirectory(at: observationDirectory,
                                                 withIntermediateDirectories: true)
@@ -152,7 +152,7 @@ public final class EditorApplication: @unchecked Sendable {
 
         let ps = PerceptionService()
         let contextMemoryURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
-            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent(".cove", isDirectory: true)
             .appendingPathComponent("context_memory.json")
         let contextMemoryInitialization = Self.initializeContextMemory(at: contextMemoryURL)
         let contextMemoryStore = contextMemoryInitialization.store
@@ -381,7 +381,8 @@ public final class EditorApplication: @unchecked Sendable {
                 jointPaletteOverride: jointPalettes,
                 inGameCanvasOverride: state.viewport.mode == .game && state.viewport.gamePreviewHUDEnabled
                     ? scene.currentInGameCanvas() : InGameCanvas(),
-                particleFeedbackHandler: scene.makeParticleSimulationFeedbackHandler()
+                particleFeedbackHandler: scene.makeParticleSimulationFeedbackHandler(),
+                mipmappedViewportOutput: state.viewport.mode == .game && state.viewport.gamePreviewResolution.size != nil
             )
         }
 

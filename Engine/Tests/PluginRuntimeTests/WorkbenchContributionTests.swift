@@ -25,7 +25,7 @@ struct WorkbenchContributionTests {
     @Test("a panel shows either a host view or content its entry point describes")
     func panelContentIsExclusive() throws {
         let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
-            {"guava.ui.panel/v1": [
+            {"cove.ui.panel/v1": [
               {"id": "intent-input", "title": "Harness", "slot": "trailing", "icon": "ai-intent", "view": "agent"},
               {"id": "status", "title": "Status", "entryPoint": "panel"}]}
             """))
@@ -37,7 +37,7 @@ struct WorkbenchContributionTests {
                         #"{"id": "x", "title": "X", "view": "agent", "slot": "middle"}"#,
                         #"{"id": "x", "title": "X", "view": "Agent View"}"#] {
             #expect(throws: PluginManifestValidationError.invalidContribution(PanelContributionPoint.id)) {
-                try PluginManifestValidator.decodeAndValidate(manifest(#"{"guava.ui.panel/v1": [\#(invalid)]}"#))
+                try PluginManifestValidator.decodeAndValidate(manifest(#"{"cove.ui.panel/v1": [\#(invalid)]}"#))
             }
         }
     }
@@ -70,9 +70,9 @@ struct WorkbenchContributionTests {
     @Test("command and panel entry points are called by the editor, never offered to the model")
     func entryPointsStayAwayFromAI() throws {
         let manifest = try PluginManifestValidator.decodeAndValidate(manifest("""
-            {"guava.command/v1": [{"id": "refresh", "title": "Refresh", "entryPoint": "command", "palette": false}],
-             "guava.ui.panel/v1": [{"id": "status", "title": "Status", "entryPoint": "panel"}],
-             "guava.ai.tool/v1": [{"entryPoint": "inspect", "title": "Inspect", "description": "Reads the scene."}]}
+            {"cove.command/v1": [{"id": "refresh", "title": "Refresh", "entryPoint": "command", "palette": false}],
+             "cove.ui.panel/v1": [{"id": "status", "title": "Status", "entryPoint": "panel"}],
+             "cove.ai.tool/v1": [{"entryPoint": "inspect", "title": "Inspect", "description": "Reads the scene."}]}
             """))
         #expect(!manifest.exposesToAI(entryPoint: "command"))
         #expect(!manifest.exposesToAI(entryPoint: "panel"))
@@ -85,10 +85,10 @@ struct WorkbenchContributionTests {
     @Test("menus, the toolbar, document views and AI context are validated")
     func placementsAndViewsAreValidated() throws {
         let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
-            {"guava.ui.menu/v1": [{"command": "refresh", "menu": "run"}],
-             "guava.ui.toolbar/v1": [{"command": "refresh", "icon": "toolbar-arrow-path"}],
-             "guava.ui.documentView/v1": [{"id": "table", "title": "Table", "extensions": ["csv"], "entryPoint": "document"}],
-             "guava.ai.context/v1": [{"id": "summary", "title": "Summary", "entryPoint": "context", "maxBytes": 2048}]}
+            {"cove.ui.menu/v1": [{"command": "refresh", "menu": "run"}],
+             "cove.ui.toolbar/v1": [{"command": "refresh", "icon": "toolbar-arrow-path"}],
+             "cove.ui.documentView/v1": [{"id": "table", "title": "Table", "extensions": ["csv"], "entryPoint": "document"}],
+             "cove.ai.context/v1": [{"id": "summary", "title": "Summary", "entryPoint": "context", "maxBytes": 2048}]}
             """))
         #expect(try valid.contributes.decode(DocumentViewContributionPoint.self).first?.extensions == ["csv"])
         #expect(try valid.contributes.decode(AIContextContributionPoint.self).first?.byteLimit == 2048)
@@ -197,13 +197,13 @@ struct WorkbenchContributionTests {
     @Test("a harness runs an agent's turns, is called with whole turns and never reaches the model")
     func harnessIsValidated() throws {
         let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
-            {"guava.ai.harness/v1": [{"id": "careful", "title": "Careful", "entryPoint": "harness"}],
-             "guava.ai.agent/v1": [{"id": "careful", "title": "Careful", "harness": "careful"}],
-             "guava.ai.tool/v1": [{"entryPoint": "harness", "title": "Harness", "description": "Not a tool."}]}
+            {"cove.ai.harness/v1": [{"id": "careful", "title": "Careful", "entryPoint": "harness"}],
+             "cove.ai.agent/v1": [{"id": "careful", "title": "Careful", "harness": "careful"}],
+             "cove.ai.tool/v1": [{"entryPoint": "harness", "title": "Harness", "description": "Not a tool."}]}
             """))
         #expect(try valid.contributes.decode(AgentContributionPoint.self).first?.harness == "careful")
         #expect(!valid.exposesToAI(entryPoint: "harness"))
-        let package = ValidatedPluginPackage(rootURL: URL(fileURLWithPath: "/careful.guavaplugin"), manifest: valid, runtime: nil)
+        let package = ValidatedPluginPackage(rootURL: URL(fileURLWithPath: "/careful.coveplugin"), manifest: valid, runtime: nil)
         #expect(package.isHostEntryPoint("harness"))
         #expect(!package.isHostEntryPoint("other"))
 
@@ -219,8 +219,8 @@ struct WorkbenchContributionTests {
             try AIHarnessContributionPoint.validateRuntime(AIHarnessContribution(id: "careful", title: "Careful", entryPoint: "other"),
                                                            contract: runtime)
         }
-        for invalid in [#"{"guava.ai.harness/v1": [{"id": "Careful", "title": "Careful", "entryPoint": "harness"}]}"#,
-                        #"{"guava.ai.agent/v1": [{"id": "careful", "title": "Careful", "harness": "Not An Id"}]}"#] {
+        for invalid in [#"{"cove.ai.harness/v1": [{"id": "Careful", "title": "Careful", "entryPoint": "harness"}]}"#,
+                        #"{"cove.ai.agent/v1": [{"id": "careful", "title": "Careful", "harness": "Not An Id"}]}"#] {
             #expect(throws: PluginManifestValidationError.self) { try PluginManifestValidator.decodeAndValidate(manifest(invalid)) }
         }
     }

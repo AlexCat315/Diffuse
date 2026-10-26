@@ -2,7 +2,7 @@ internal import Foundation
 private import ToolSupport
 
 /// `native-demo` — real native Compose/Metal mirror acceptance. Replaces
-/// `GuavaUI/Browser/verify_native_demo.py`; start `GuavaUIDemo --shared-counter`
+/// `CoveUI/Browser/verify_native_demo.py`; start `CoveUIDemo --shared-counter`
 /// first.
 enum NativeDemoOperation {
   static func run(_ arguments: [String]) throws {
@@ -25,7 +25,7 @@ enum NativeDemoOperation {
 
   static func demo(endpoint: String, screenshot: String?, requirePresented: Bool) throws {
     // The client directory is served from the repo-relative path the
-    // reference script builds, `GuavaUI/DevTools/Client/Client`.
+    // reference script builds, `CoveUI/DevTools/Client/Client`.
     let client = Browser.sdkRoot.appendingPathComponent("DevTools/Client/Client")
     let server = try staticServer(directory: client)
     server.start()

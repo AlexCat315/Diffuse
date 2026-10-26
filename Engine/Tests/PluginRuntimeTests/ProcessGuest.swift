@@ -10,12 +10,12 @@ import Testing
 struct ProcessGuestTests {
     @Test("a real Component starts a host-owned process without WASI")
     func invoke() async throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("process-\(UUID()).guavaplugin")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("process-\(UUID()).coveplugin")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let request = #"{"operation":"start","permission":"echo","arguments":["hello"],"environment":{}}"#
         let fixture = try #require(Bundle.module.url(forResource: "scene-query", withExtension: "wat", subdirectory: "Fixtures"))
-        var wat = try String(contentsOf: fixture, encoding: .utf8).replacingOccurrences(of: "guava:scene/query", with: "guava:process/host")
+        var wat = try String(contentsOf: fixture, encoding: .utf8).replacingOccurrences(of: "cove:scene/query", with: "cove:process/host")
         wat = wat.replacingOccurrences(of: #"{\22operation\22:\22snapshot\22}"#, with: request.replacingOccurrences(of: "\"", with: "\\22"))
             .replacingOccurrences(of: "i32.const 24\n", with: "i32.const \(request.utf8.count)\n")
         try EmbeddedWasmtimeComponentRuntime.compileComponentWAT(wat).write(to: root.appendingPathComponent("component.wasm"))
@@ -25,13 +25,13 @@ struct ProcessGuestTests {
           record inspect-input { enabled: bool }
           inspect: func(input: inspect-input) -> string;
         }
-        world plugin { import guava:process/host; export capabilities; }
+        world plugin { import cove:process/host; export capabilities; }
         """
         try Data(wit.utf8).write(to: root.appendingPathComponent("capabilities.wit"))
         var rule = PluginProcessPermission(id: "echo", command: "printf")
         rule.argumentPrefix = ["hello"]; rule.entryPoints = ["inspect"]
         var permissions = PluginHostPermissions(); permissions.processes = [rule]
-        let manifest = GuavaPluginManifest(id: "test.process-guest", version: 1, name: "Process", description: "fixture",
+        let manifest = CovePluginManifest(id: "test.process-guest", version: 1, name: "Process", description: "fixture",
                                           access: .read, imports: [.process], host: permissions)
         try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent("plugin.json"))
         let package = try PluginPackageLoader().load(at: root)

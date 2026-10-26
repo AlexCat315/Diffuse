@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// What the assistant reads about the working tree: the branch, how it stands
 /// against its upstream and the changed files. The editor bounds the length.

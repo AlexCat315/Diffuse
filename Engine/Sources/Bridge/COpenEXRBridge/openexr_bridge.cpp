@@ -24,7 +24,7 @@ static int channelCount(const Imf::ChannelList& channels) {
 
 // ── Writer context ──────────────────────────────────────────────────────────
 
-struct GuavaEXRWriterLayer {
+struct CoveEXRWriterLayer {
     std::string name;
     Imf::Header header;
     Imf::PixelType pixelType;
@@ -32,33 +32,33 @@ struct GuavaEXRWriterLayer {
     std::vector<float> pixels;  // interleaved, always float, in channelOrder sequence
 };
 
-struct GuavaEXRWriterContext {
+struct CoveEXRWriterContext {
     std::string path;
     int width;
     int height;
-    std::vector<GuavaEXRWriterLayer> layers;
+    std::vector<CoveEXRWriterLayer> layers;
 };
 
-GuavaEXRContext guava_exr_writer_create(const char* path,
+CoveEXRContext cove_exr_writer_create(const char* path,
                                         int32_t width,
                                         int32_t height) {
     if (!path || width <= 0 || height <= 0) return nullptr;
-    auto* ctx = new GuavaEXRWriterContext();
+    auto* ctx = new CoveEXRWriterContext();
     ctx->path = path;
     ctx->width = width;
     ctx->height = height;
-    return reinterpret_cast<GuavaEXRContext>(ctx);
+    return reinterpret_cast<CoveEXRContext>(ctx);
 }
 
-void guava_exr_writer_destroy(GuavaEXRContext ctx) {
-    delete reinterpret_cast<GuavaEXRWriterContext*>(ctx);
+void cove_exr_writer_destroy(CoveEXRContext ctx) {
+    delete reinterpret_cast<CoveEXRWriterContext*>(ctx);
 }
 
-bool guava_exr_writer_add_layer(GuavaEXRContext ctx,
-                                const GuavaEXRLayerDesc* layer,
-                                GuavaEXRPixelType pixel_type) {
+bool cove_exr_writer_add_layer(CoveEXRContext ctx,
+                                const CoveEXRLayerDesc* layer,
+                                CoveEXRPixelType pixel_type) {
     if (!ctx || !layer || !layer->name || !layer->channels) return false;
-    auto* w = reinterpret_cast<GuavaEXRWriterContext*>(ctx);
+    auto* w = reinterpret_cast<CoveEXRWriterContext*>(ctx);
 
     Imf::PixelType pt = Imf::FLOAT; // Always use float for simplicity
 
@@ -70,7 +70,7 @@ bool guava_exr_writer_add_layer(GuavaEXRContext ctx,
 
     // Parse channels "R,G,B" → add each; also store original order
     std::string chStr(layer->channels);
-    header.insert("guavaChannelOrder", Imf::StringAttribute(chStr));
+    header.insert("coveChannelOrder", Imf::StringAttribute(chStr));
     std::istringstream ss(chStr);
     std::string ch;
     std::vector<std::string> order;
@@ -81,7 +81,7 @@ bool guava_exr_writer_add_layer(GuavaEXRContext ctx,
         }
     }
 
-    GuavaEXRWriterLayer l;
+    CoveEXRWriterLayer l;
     l.name = layer->name;
     l.header = header;
     l.pixelType = pt;
@@ -93,12 +93,12 @@ bool guava_exr_writer_add_layer(GuavaEXRContext ctx,
     return true;
 }
 
-bool guava_exr_writer_set_layer_pixels(GuavaEXRContext ctx,
+bool cove_exr_writer_set_layer_pixels(CoveEXRContext ctx,
                                        const char* layer_name,
                                        const float* pixels,
                                        int32_t pixel_count) {
     if (!ctx || !layer_name || !pixels) return false;
-    auto* w = reinterpret_cast<GuavaEXRWriterContext*>(ctx);
+    auto* w = reinterpret_cast<CoveEXRWriterContext*>(ctx);
 
     for (auto& layer : w->layers) {
         if (layer.name == layer_name) {
@@ -111,9 +111,9 @@ bool guava_exr_writer_set_layer_pixels(GuavaEXRContext ctx,
     return false;
 }
 
-bool guava_exr_writer_write(GuavaEXRContext ctx) {
+bool cove_exr_writer_write(CoveEXRContext ctx) {
     if (!ctx) return false;
-    auto* w = reinterpret_cast<GuavaEXRWriterContext*>(ctx);
+    auto* w = reinterpret_cast<CoveEXRWriterContext*>(ctx);
     if (w->layers.empty()) return false;
 
     try {
@@ -177,24 +177,24 @@ bool guava_exr_writer_write(GuavaEXRContext ctx) {
 
 // ── Reader context ──────────────────────────────────────────────────────────
 
-struct GuavaEXRReaderLayer {
+struct CoveEXRReaderLayer {
     std::string name;
     std::string channels;
     int channelCount;
 };
 
-struct GuavaEXRReaderContext {
+struct CoveEXRReaderContext {
     Imf::MultiPartInputFile* file;
     int partCount;
-    std::vector<GuavaEXRReaderLayer> layers;
+    std::vector<CoveEXRReaderLayer> layers;
     int width;
     int height;
 };
 
-GuavaEXRContext guava_exr_reader_open(const char* path) {
+CoveEXRContext cove_exr_reader_open(const char* path) {
     if (!path) return nullptr;
     try {
-        auto* ctx = new GuavaEXRReaderContext();
+        auto* ctx = new CoveEXRReaderContext();
         ctx->file = new Imf::MultiPartInputFile(path);
         ctx->partCount = ctx->file->parts();
 
@@ -208,7 +208,7 @@ GuavaEXRContext guava_exr_reader_open(const char* path) {
                 ctx->height = dw.max.y - dw.min.y + 1;
             }
 
-            GuavaEXRReaderLayer layer;
+            CoveEXRReaderLayer layer;
             layer.name = h.hasName() ? h.name() : ("layer_" + std::to_string(i));
             std::string chStr;
             for (auto it = h.channels().begin(); it != h.channels().end(); ++it) {
@@ -219,39 +219,39 @@ GuavaEXRContext guava_exr_reader_open(const char* path) {
             layer.channelCount = channelCount(h.channels());
             ctx->layers.push_back(layer);
         }
-        return reinterpret_cast<GuavaEXRContext>(ctx);
+        return reinterpret_cast<CoveEXRContext>(ctx);
     } catch (const std::exception&) {
         return nullptr;
     }
 }
 
-void guava_exr_reader_close(GuavaEXRContext ctx) {
+void cove_exr_reader_close(CoveEXRContext ctx) {
     if (!ctx) return;
-    auto* r = reinterpret_cast<GuavaEXRReaderContext*>(ctx);
+    auto* r = reinterpret_cast<CoveEXRReaderContext*>(ctx);
     delete r->file;
     delete r;
 }
 
-int32_t guava_exr_reader_get_width(GuavaEXRContext ctx) {
+int32_t cove_exr_reader_get_width(CoveEXRContext ctx) {
     if (!ctx) return 0;
-    return reinterpret_cast<GuavaEXRReaderContext*>(ctx)->width;
+    return reinterpret_cast<CoveEXRReaderContext*>(ctx)->width;
 }
 
-int32_t guava_exr_reader_get_height(GuavaEXRContext ctx) {
+int32_t cove_exr_reader_get_height(CoveEXRContext ctx) {
     if (!ctx) return 0;
-    return reinterpret_cast<GuavaEXRReaderContext*>(ctx)->height;
+    return reinterpret_cast<CoveEXRReaderContext*>(ctx)->height;
 }
 
-int32_t guava_exr_reader_get_layer_count(GuavaEXRContext ctx) {
+int32_t cove_exr_reader_get_layer_count(CoveEXRContext ctx) {
     if (!ctx) return 0;
-    return static_cast<int32_t>(reinterpret_cast<GuavaEXRReaderContext*>(ctx)->layers.size());
+    return static_cast<int32_t>(reinterpret_cast<CoveEXRReaderContext*>(ctx)->layers.size());
 }
 
-bool guava_exr_reader_get_layer_desc(GuavaEXRContext ctx,
+bool cove_exr_reader_get_layer_desc(CoveEXRContext ctx,
                                      int32_t index,
-                                     GuavaEXRLayerDesc* out_desc) {
+                                     CoveEXRLayerDesc* out_desc) {
     if (!ctx || !out_desc || index < 0) return false;
-    auto* r = reinterpret_cast<GuavaEXRReaderContext*>(ctx);
+    auto* r = reinterpret_cast<CoveEXRReaderContext*>(ctx);
     if (static_cast<size_t>(index) >= r->layers.size()) return false;
 
     auto& layer = r->layers[index];
@@ -263,12 +263,12 @@ bool guava_exr_reader_get_layer_desc(GuavaEXRContext ctx,
     return true;
 }
 
-bool guava_exr_reader_read_layer_pixels(GuavaEXRContext ctx,
+bool cove_exr_reader_read_layer_pixels(CoveEXRContext ctx,
                                         const char* layer_name,
                                         float* out_pixels,
                                         int32_t pixel_count) {
     if (!ctx || !layer_name || !out_pixels || pixel_count <= 0) return false;
-    auto* r = reinterpret_cast<GuavaEXRReaderContext*>(ctx);
+    auto* r = reinterpret_cast<CoveEXRReaderContext*>(ctx);
 
     int partIdx = -1;
     for (int i = 0; i < r->partCount; ++i) {
@@ -312,7 +312,7 @@ bool guava_exr_reader_read_layer_pixels(GuavaEXRContext ctx,
         part.readPixels(dw.min.y, dw.max.y);
 
         // Reorder from alphabetical back to original declaration order if available
-        const auto* orderAttr = part.header().findTypedAttribute<Imf::StringAttribute>("guavaChannelOrder");
+        const auto* orderAttr = part.header().findTypedAttribute<Imf::StringAttribute>("coveChannelOrder");
         if (orderAttr) {
             std::string orderStr = orderAttr->value();
             std::vector<std::string> declOrder;

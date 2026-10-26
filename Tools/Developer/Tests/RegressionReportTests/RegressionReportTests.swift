@@ -103,7 +103,7 @@ final class RegressionReportTests: XCTestCase {
 
   private func makeTemporaryDirectory() throws -> URL {
     let directory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("guava-regression-" + UUID().uuidString)
+      .appendingPathComponent("cove-regression-" + UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     return directory
   }

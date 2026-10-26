@@ -1,5 +1,5 @@
 import EditorCore
-import GuavaUIWorkspace
+import CoveUIWorkspace
 
 /// Keeps the editor's content on the center tab being worked in, and brings
 /// that content's sidebar view forward when it changes.

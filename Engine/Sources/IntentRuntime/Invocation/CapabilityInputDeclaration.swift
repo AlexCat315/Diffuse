@@ -354,7 +354,7 @@ extension EntityReference: AnyDeclaredCapabilityField {
 /// A no-second-schema input declaration. Every stored input field must use one
 /// of the field wrappers above. An unwrapped field becomes an open schema node,
 /// causing write-capability registration to fail closed.
-public protocol DeclaredCapabilityInput: GuavaCapabilityInput, CapabilitySchemaValue {
+public protocol DeclaredCapabilityInput: CoveCapabilityInput, CapabilitySchemaValue {
     init()
 }
 

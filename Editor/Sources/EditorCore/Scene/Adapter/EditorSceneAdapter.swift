@@ -1,6 +1,6 @@
 import Foundation
 import AssetPipeline
-import GuavaUIRuntime
+import CoveUIRuntime
 import IntentRuntime
 import RenderBackend
 import SceneRuntime
@@ -54,7 +54,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         registry.registerScriptCodec()
         scene = SceneRuntime(componentRegistry: registry)
         if seedPreviewScene { scene.bootstrapEditorPreviewScene() }
-        scene.setResource(InputActionMap.guavaDefault)
+        scene.setResource(InputActionMap.coveDefault)
         scene.setScriptDriver(scriptRuntime)
         let defaults = scene.resource(SceneBootstrapDefaultsResource.self)
         initialSelectionID = defaults?.defaultSelection?.rawValue
@@ -69,7 +69,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     private func resetToPreviewScene(notify: Bool) {
         scene = SceneRuntime(componentRegistry: scene.componentRegistry)
         scene.bootstrapEditorPreviewScene()
-        scene.setResource(InputActionMap.guavaDefault)
+        scene.setResource(InputActionMap.coveDefault)
         scriptRuntime.reset()
         scene.setScriptDriver(scriptRuntime)
         invalidateParticleFeedback()

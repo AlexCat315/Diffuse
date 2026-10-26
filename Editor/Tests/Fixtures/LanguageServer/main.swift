@@ -1,7 +1,7 @@
 import Dispatch
 import Foundation
-private import GuavaProcess
-private import GuavaFileSystem
+private import CoveProcess
+private import CoveFileSystem
 
 #if canImport(Glibc)
 import Glibc
@@ -20,8 +20,8 @@ if CommandLine.arguments.contains("--help") {
 }
 
 let environment = ProcessInfo.processInfo.environment
-let root = environment["GUAVA_TEST_LSP_ROOT"] ?? ""
-let mode = environment["GUAVA_TEST_LSP_MODE"] ?? "normal"
+let root = environment["COVE_TEST_LSP_ROOT"] ?? ""
+let mode = environment["COVE_TEST_LSP_MODE"] ?? "normal"
 
 func rootFile(_ name: String) -> URL {
     URL(fileURLWithPath: root).appendingPathComponent(name)

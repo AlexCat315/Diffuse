@@ -7,7 +7,7 @@
   "imports": [],
   "composable_host_capabilities": [],
   "contributes": {
-    "guava.language/v1": [
+    "cove.language/v1": [
       {
         "id": "markdown",
         "title": "Markdown",

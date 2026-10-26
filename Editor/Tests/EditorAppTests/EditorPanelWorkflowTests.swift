@@ -3,7 +3,7 @@ import PluginRuntime
 import SceneRuntime
 import EngineKernel
 import Testing
-import GuavaUICompose
+import CoveUICompose
 @testable import EditorUI
 
 private struct WorkflowComponent: RuntimeComponent {}

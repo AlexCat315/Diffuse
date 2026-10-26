@@ -1,7 +1,7 @@
 import Foundation
 
 public enum LanguageContributionPoint: ContributionPointSpec {
-    public static let id = "guava.language/v1"
+    public static let id = "cove.language/v1"
 
     public static func validate(_ language: LanguageContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(language.id), ContributionValidation.title(language.title),

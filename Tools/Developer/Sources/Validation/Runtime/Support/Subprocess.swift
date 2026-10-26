@@ -1,6 +1,6 @@
 internal import Foundation
 internal import ToolSupport
-internal import GuavaProcess
+internal import CoveProcess
 
 /// The validation boundary supplies a deadline and inspects nonzero statuses.
 enum Subprocess {

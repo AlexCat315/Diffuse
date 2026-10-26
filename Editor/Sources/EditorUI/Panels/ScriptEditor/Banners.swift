@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Scripts are native code with the Editor's permissions, so an untrusted
 /// project says why it will not build and offers the one way forward.

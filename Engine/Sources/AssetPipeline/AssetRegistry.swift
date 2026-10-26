@@ -1,6 +1,6 @@
 ﻿import Foundation
-import GuavaLogging
-private import GuavaFileSystem
+import CoveLogging
+private import CoveFileSystem
 import SIMDCompat
 
 public enum AssetRegistryError: Error, CustomStringConvertible {
@@ -158,7 +158,7 @@ public final class AssetRegistry: @unchecked Sendable {
         for candidate in candidates {
             let assetURL = PathIdentity.canonicalURL(candidate.url)
             guard let relativePath = Self.relativePath(of: candidate.url, within: rootURL) else {
-                LogSystem.logger("com.guava.engine.assets")
+                LogSystem.logger("com.cove.engine.assets")
                     .warning("AssetRegistry: skipping path outside project root: \(candidate.url.path)")
                 continue
             }
@@ -206,7 +206,7 @@ public final class AssetRegistry: @unchecked Sendable {
             do {
                 imported = try importMesh(at: candidate.url, kind: kind)
             } catch {
-                LogSystem.logger("com.guava.engine.assets").warning("AssetRegistry: skipping \(candidate.url.lastPathComponent) — \(error)")
+                LogSystem.logger("com.cove.engine.assets").warning("AssetRegistry: skipping \(candidate.url.lastPathComponent) — \(error)")
                 currentPathIndex.removeValue(forKey: relativePath)
                 usedMeshIndices.remove(meshIndex)
                 continue

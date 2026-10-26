@@ -1,6 +1,6 @@
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Scripts follow the component model of mature engines: every bound script
 /// is its own component card, not a row inside a "Scripts" container. The

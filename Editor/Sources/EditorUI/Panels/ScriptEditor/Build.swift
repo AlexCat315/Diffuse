@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The selected script's build state and the button that builds or stops it.
 struct ScriptBuildControl: View {

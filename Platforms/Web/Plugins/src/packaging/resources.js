@@ -1,6 +1,6 @@
 // Cap every core module memory at packaging time. Unbounded memory.grow must
 // never rely on the browser's process limit. Only ordinary unshared wasm32
-// memories are supported by the Guava browser plugin contract.
+// memories are supported by the Cove browser plugin contract.
 class Reader {
   constructor(bytes) { this.bytes = bytes; this.offset = 0; }
   byte() { if (this.offset >= this.bytes.length) throw Error('Truncated Wasm'); return this.bytes[this.offset++]; }

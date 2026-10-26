@@ -6,7 +6,7 @@ import EngineKernel
 import NativeRHI
 import NativeRendererValidation
 import RenderBackend
-@testable import GuavaUIRuntime
+@testable import CoveUIRuntime
 
 private final class HUDSubmissionProbe: InGameUIProviding, @unchecked Sendable {
     enum Failure { case none, recording, submission }

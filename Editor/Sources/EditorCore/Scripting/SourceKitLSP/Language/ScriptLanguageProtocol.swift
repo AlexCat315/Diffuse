@@ -1,6 +1,6 @@
 import LanguageServerRuntime
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 
 /// Builds request payloads understood by SourceKit-LSP.
 ///
@@ -155,7 +155,7 @@ public enum ScriptLanguageReplies {
                 return (value, kind)
             }
             // Legacy `MarkedString`: { language, value }. The language tag only
-            // matters for editors that switch highlighting mid-popup; Guava
+            // matters for editors that switch highlighting mid-popup; Cove
             // renders one font, so the value is enough.
             if let value = object["text"] as? String { return (value, .plaintext) }
             return nil

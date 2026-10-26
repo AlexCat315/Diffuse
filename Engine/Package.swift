@@ -1,21 +1,21 @@
 // swift-tools-version: 6.4
-// GuavaStudioRuntime 0.0.9
+// DiffuseRuntime 0.0.9
 import PackageDescription
 import Foundation
 
 let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../Editor").standardizedFileURL
-let document = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("guava.json"))) as! [String: Any]
+let document = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("cove.json"))) as! [String: Any]
 let requiredSDK = (document["toolchain"] as! [String: String])["sdkVersion"]!
 let environment = ProcessInfo.processInfo.environment
 #if os(Windows)
-let sdkHome = environment["GUAVA_HOME"].map { URL(fileURLWithPath: $0) }
-    ?? URL(fileURLWithPath: environment["LOCALAPPDATA"]!).appendingPathComponent("Guava")
+let sdkHome = environment["COVE_HOME"].map { URL(fileURLWithPath: $0) }
+    ?? URL(fileURLWithPath: environment["LOCALAPPDATA"]!).appendingPathComponent("Cove")
 #elseif os(Linux)
-let sdkHome = environment["GUAVA_HOME"].map { URL(fileURLWithPath: $0) }
-    ?? URL(fileURLWithPath: environment["XDG_DATA_HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share").path).appendingPathComponent("guava")
+let sdkHome = environment["COVE_HOME"].map { URL(fileURLWithPath: $0) }
+    ?? URL(fileURLWithPath: environment["XDG_DATA_HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share").path).appendingPathComponent("cove")
 #else
-let sdkHome = environment["GUAVA_HOME"].map { URL(fileURLWithPath: $0) }
-    ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".guava")
+let sdkHome = environment["COVE_HOME"].map { URL(fileURLWithPath: $0) }
+    ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cove")
 #endif
 func sdkSelection(_ file: URL) -> URL? {
     guard let data = try? Data(contentsOf: file),
@@ -25,12 +25,12 @@ func sdkSelection(_ file: URL) -> URL? {
 }
 func sdkVersion(_ root: URL) -> String? {
     guard FileManager.default.fileExists(atPath: root.appendingPathComponent("Package.swift").path),
-          let data = try? Data(contentsOf: root.appendingPathComponent("Tools/Guava/Sources/GuavaCLI/SDK.json")),
+          let data = try? Data(contentsOf: root.appendingPathComponent("Tools/Cove/Sources/CoveCLI/SDK.json")),
           let value = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return nil }
     return value["version"]
 }
-let overrideSDK = environment["GUAVA_SDK_ROOT"].map { URL(fileURLWithPath: $0) }
-    ?? sdkSelection(directory.appendingPathComponent(".guava/sdk.json"))
+let overrideSDK = environment["COVE_SDK_ROOT"].map { URL(fileURLWithPath: $0) }
+    ?? sdkSelection(directory.appendingPathComponent(".cove/sdk.json"))
 let selectedSDK = sdkSelection(sdkHome.appendingPathComponent("sdk.json"))
 let installedSDKs = (try? FileManager.default.contentsOfDirectory(at: sdkHome.appendingPathComponent("versions"), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
 let candidates = ([selectedSDK].compactMap { $0 } + installedSDKs).filter { sdkVersion($0) != nil }
@@ -38,21 +38,21 @@ let resolvedSDK = overrideSDK ?? (requiredSDK == "latest"
     ? candidates.max { sdkVersion($0)!.compare(sdkVersion($1)!, options: .numeric) == .orderedAscending }
     : candidates.first { sdkVersion($0) == requiredSDK })
 guard let resolvedSDK, let actualSDK = sdkVersion(resolvedSDK),
-      requiredSDK == "latest" || requiredSDK == actualSDK else {
-    fatalError("Install the shared Guava SDK with guava sdk install \(requiredSDK), then select it with guava sdk use VERSION or PATH")
+      environment["COVE_SDK_ROOT"] != nil || requiredSDK == "latest" || requiredSDK == actualSDK else {
+    fatalError("Install the shared Cove SDK with cove sdk install \(requiredSDK), then select it with cove sdk use VERSION or PATH")
 }
 
 let sdkRoot = resolvedSDK.path
 
 // Cross builds stage target archives separately from the host's vendor directory.
-let nativeArtifactRoot = ProcessInfo.processInfo.environment["GUAVA_ENGINE_ARTIFACT_ROOT"] ?? "vendor"
+let nativeArtifactRoot = ProcessInfo.processInfo.environment["COVE_ENGINE_ARTIFACT_ROOT"] ?? "vendor"
 
 // GNU ld resolves static archives in one pass, while SwiftPM's native build
 // system emits artifact-bundle libraries in no dependency order. CI enables
 // this only for native builds; Swift Build already passes the artifacts as
 // ordered absolute paths and would reject the bare -l flags.
 let nativeLinkOrderSettings: [LinkerSetting] =
-    ProcessInfo.processInfo.environment["GUAVA_NATIVE_LINK_ORDER"] == "1"
+    ProcessInfo.processInfo.environment["COVE_NATIVE_LINK_ORDER"] == "1"
         ? [
             .linkedLibrary("plutovg", .when(platforms: [.linux])),
             .linkedLibrary("sharpyuv", .when(platforms: [.linux])),
@@ -85,13 +85,13 @@ let wasmtimeTargets: [Target] = [
             .linkedLibrary("bcrypt", .when(platforms: [.windows])),
         ]
     ),
-    .target(name: "PluginWasmtimeRuntime", dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), "CWasmtimeBridge", "PluginRuntime"]),
+    .target(name: "PluginWasmtimeRuntime", dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "CWasmtimeBridge", "PluginRuntime"]),
     .executableTarget(name: "PluginRuntimeProbe", dependencies: ["PluginWasmtimeRuntime", "PluginRuntime"],
                       path: "Validation/Plugins/Swift"),
 ]
 
 let package = Package(
-    name: "GuavaStudioRuntime",
+    name: "DiffuseRuntime",
     platforms: [.macOS(.v26), .iOS(.v26)],
     products: [
         .library(name: "SIMDCompat", targets: ["SIMDCompat"]),
@@ -124,10 +124,10 @@ let package = Package(
         .executable(name: "PhysicsRuntimeBenchmarks", targets: ["PhysicsRuntimeBenchmarks"]),
         .executable(name: "RenderBackendBenchmarks", targets: ["RenderBackendBenchmarks"]),
         .executable(name: "StylizedCharacterPreviewDemo", targets: ["StylizedCharacterPreviewDemo"]),
-        .executable(name: "GuavaPluginHost", targets: ["GuavaPluginHost"]),
+        .executable(name: "DiffusePluginHost", targets: ["DiffusePluginHost"]),
     ],
     dependencies: [
-        .package(name: "GuavaUI", path: sdkRoot),
+        .package(name: "CoveUI", path: sdkRoot),
         .package(path: "Media"),
         .package(url: "https://github.com/AlexCat315/Natsel.git", branch: "main"),
     ],
@@ -137,7 +137,7 @@ let package = Package(
 
         .target(
             name: "CEngineBridge",
-            dependencies: [.product(name: "CGuavaLog", package: "GuavaUI")],
+            dependencies: [.product(name: "CCoveLog", package: "CoveUI")],
             path: "Sources/Bridge/CEngineBridge",
             publicHeadersPath: "include"
         ),
@@ -159,7 +159,7 @@ let package = Package(
         .target(name: "SIMDCompat"),
 
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
-        .target(name: "EngineKernel", dependencies: [.product(name: "GuavaPlatformCore", package: "GuavaUI")]),
+        .target(name: "EngineKernel", dependencies: [.product(name: "CovePlatformCore", package: "CoveUI")]),
         .target(name: "EngineMath", dependencies: ["SIMDCompat"]),
 
         // MARK: - Rendering
@@ -179,11 +179,11 @@ let package = Package(
         .target(
             name: "AssetPipeline",
             dependencies: [
-                .product(name: "GuavaFileSystem", package: "GuavaUI"),
+                .product(name: "CoveFileSystem", package: "CoveUI"),
                 "SIMDCompat",
                 "SceneRuntime",
-                .product(name: "ImageDecodeBridge", package: "GuavaUI"),
-                .product(name: "GuavaLogging", package: "GuavaUI"),
+                .product(name: "ImageDecodeBridge", package: "CoveUI"),
+                .product(name: "CoveLogging", package: "CoveUI"),
             ],
             linkerSettings: nativeLinkOrderSettings
         ),
@@ -209,18 +209,18 @@ let package = Package(
         .target(
             name: "AudioRuntime",
             dependencies: [
-                .product(name: "GuavaLogging", package: "GuavaUI"),
+                .product(name: "CoveLogging", package: "CoveUI"),
                 "SIMDCompat",
                 "SceneRuntime",
                 // FFmpeg decodes media; SDL3 owns device output.
                 .product(name: "MediaRuntime", package: "Media"),
-                .product(name: "CSDL3", package: "GuavaUI"),
+                .product(name: "CSDL3", package: "CoveUI"),
             ]
         ),
         .target(
             name: "AIRuntime",
             dependencies: [
-                .product(name: "GuavaUIAgentCore", package: "GuavaUI"),
+                .product(name: "CoveUIAgentCore", package: "CoveUI"),
                 "SIMDCompat",
                 "SceneRuntime",
                 "ScriptRuntime",
@@ -233,13 +233,13 @@ let package = Package(
         ),
         .target(
             name: "CapabilityRuntime",
-            dependencies: [.product(name: "GuavaUIAgentCore", package: "GuavaUI")]
+            dependencies: [.product(name: "CoveUIAgentCore", package: "CoveUI")]
         ),
         .target(
             name: "PluginRuntime",
-            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), "CapabilityRuntime", .product(name: "GuavaProcess", package: "GuavaUI"), .product(name: "GuavaLogging", package: "GuavaUI")]
+            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "CapabilityRuntime", .product(name: "CoveProcess", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI")]
         ),
-        .target(name: "LanguageServerRuntime", dependencies: [.product(name: "GuavaProcess", package: "GuavaUI"), .product(name: "GuavaLogging", package: "GuavaUI")]),
+        .target(name: "LanguageServerRuntime", dependencies: [.product(name: "CoveProcess", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI")]),
         .target(
             name: "IntentRuntime",
             dependencies: [
@@ -254,11 +254,11 @@ let package = Package(
         ),
         .target(
             name: "ContextMemory",
-            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), "IntentRuntime"]
+            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "IntentRuntime"]
         ),
         .target(
             name: "PerceptionRuntime",
-            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"),
+            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"),
                 "IntentRuntime",
             ],
             linkerSettings: [
@@ -268,14 +268,14 @@ let package = Package(
         ),
         .target(
             name: "ScriptRuntime",
-            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"),
+            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"),
                 "SIMDCompat",
                 "EngineKernel",
                 "AssetPipeline",
                 "SceneRuntime",
             ]
         ),
-        .target(name: "SemanticPipeline", dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), "IntentRuntime", "PerceptionRuntime"],
+        .target(name: "SemanticPipeline", dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "IntentRuntime", "PerceptionRuntime"],
                 linkerSettings: [
                     .linkedFramework("Vision", .when(platforms: [.macOS])),
                     .linkedFramework("CoreImage", .when(platforms: [.macOS])),
@@ -286,10 +286,10 @@ let package = Package(
                 "SIMDCompat",
                 "EngineKernel",
                 "EngineMath",
-                .product(name: "NativeRHI", package: "GuavaUI"),
+                .product(name: "NativeRHI", package: "CoveUI"),
                 "AssetPipeline",
                 "SceneRuntime",
-                .product(name: "GuavaLogging", package: "GuavaUI"),
+                .product(name: "CoveLogging", package: "CoveUI"),
             ],
             resources: [
                 .copy("Resources/FinalBaseMesh.obj"),
@@ -310,12 +310,12 @@ let package = Package(
         // MARK: - Engine Host (orchestrates all services)
         .target(
             name: "EngineCore",
-            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
+            dependencies: [.product(name: "CoveLogging", package: "CoveUI"),
                 "CTreeSitter",
                 "CTreeSitterSwift",
                 "CEngineBridge",
                 "EngineKernel",
-                .product(name: "NativeRHI", package: "GuavaUI"),
+                .product(name: "NativeRHI", package: "CoveUI"),
                 "RenderBackend",
                 "SceneRuntime",
                 "AssetPipeline",
@@ -325,7 +325,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "SceneRuntimeBenchmarks",
-            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
+            dependencies: [.product(name: "CoveLogging", package: "CoveUI"),
                 "SIMDCompat",
                 "SceneRuntime",
             ],
@@ -333,7 +333,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "PhysicsRuntimeBenchmarks",
-            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
+            dependencies: [.product(name: "CoveLogging", package: "CoveUI"),
                 "SIMDCompat",
                 "SceneRuntime",
             ],
@@ -344,12 +344,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "RenderBackendBenchmarks",
-            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"), "NativeRendererValidation"],
+            dependencies: [.product(name: "CoveLogging", package: "CoveUI"), "NativeRendererValidation"],
             path: "Benchmarks/RenderBackendBenchmarks"
         ),
         .executableTarget(
             name: "StylizedCharacterPreviewDemo",
-            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"),
+            dependencies: [.product(name: "CoveLogging", package: "CoveUI"),
                 "SIMDCompat",
                 "RenderBackend",
                 "SceneRuntime",
@@ -357,8 +357,8 @@ let package = Package(
             path: "Demos/StylizedCharacterPreviewDemo"
         ),
         .executableTarget(
-            name: "GuavaPluginHost",
-            dependencies: [.product(name: "GuavaFileSystem", package: "GuavaUI"), .product(name: "GuavaLogging", package: "GuavaUI"),
+            name: "DiffusePluginHost",
+            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI"),
                 "CapabilityRuntime",
                 "IntentRuntime",
                 "PluginRuntime",
@@ -368,14 +368,14 @@ let package = Package(
             name: "EngineCoreTests",
             dependencies: [
                 "NativeRendererValidation",
-                .product(name: "NativeRHI", package: "GuavaUI"),
+                .product(name: "NativeRHI", package: "CoveUI"),
                 "SIMDCompat",
                 "EngineCore",
                 "EngineKernel",
                 "EngineMath",
                 "RenderBackend",
                 "SceneRuntime",
-                .product(name: "ImageDecodeBridge", package: "GuavaUI"),
+                .product(name: "ImageDecodeBridge", package: "CoveUI"),
             ]
         ),
         .testTarget(
@@ -408,7 +408,7 @@ let package = Package(
                 "ScriptRuntime",
                 "SceneRuntime",
                 "AssetPipeline",
-                .product(name: "ImageDecodeBridge", package: "GuavaUI"),
+                .product(name: "ImageDecodeBridge", package: "CoveUI"),
             ],
             // The test loads compiled Swift scripts with dlopen; the host
             // executable must export the runtime symbols they reference.
@@ -425,7 +425,7 @@ let package = Package(
                 // AssetPipeline imports the CImageDecodeBridge Clang module; test
                 // targets that import AssetPipeline must see it too (the macOS
                 // toolchain requires the Clang module transitively).
-                .product(name: "ImageDecodeBridge", package: "GuavaUI"),
+                .product(name: "ImageDecodeBridge", package: "CoveUI"),
             ]
         ),
         .testTarget(
@@ -457,10 +457,10 @@ let package = Package(
         .testTarget(
             name: "PluginRuntimeTests",
             dependencies: [
-                .product(name: "GuavaLogging", package: "GuavaUI"),
+                .product(name: "CoveLogging", package: "CoveUI"),
                 "CapabilityRuntime",
                 "PluginRuntime",
-                .product(name: "GuavaProcess", package: "GuavaUI"),
+                .product(name: "CoveProcess", package: "CoveUI"),
             ],
             resources: [.copy("Fixtures")]
         ),
@@ -470,7 +470,7 @@ let package = Package(
                 "SIMDCompat",
                 "IntentRuntime",
                 "AssetPipeline",
-                .product(name: "ImageDecodeBridge", package: "GuavaUI"),
+                .product(name: "ImageDecodeBridge", package: "CoveUI"),
                 "CapabilityRuntime",
                 "ObservationBus",
                 "SceneRuntime",
@@ -485,7 +485,7 @@ let package = Package(
                 "SemanticPipeline",
                 // Transitively imports AssetPipeline → the CImageDecodeBridge
                 // Clang module must be a direct test-target dep on macOS.
-                .product(name: "ImageDecodeBridge", package: "GuavaUI"),
+                .product(name: "ImageDecodeBridge", package: "CoveUI"),
             ]
         ),
         .testTarget(
@@ -493,7 +493,7 @@ let package = Package(
             dependencies: [
                 "IntentRuntime",
                 "PerceptionRuntime",
-                .product(name: "ImageDecodeBridge", package: "GuavaUI"),
+                .product(name: "ImageDecodeBridge", package: "CoveUI"),
             ]
         ),
         .testTarget(
@@ -507,7 +507,7 @@ let package = Package(
                 "PluginRuntime",
                 "ScriptRuntime",
                 "SIMDCompat",
-                .product(name: "ImageDecodeBridge", package: "GuavaUI"),
+                .product(name: "ImageDecodeBridge", package: "CoveUI"),
             ]
         ),
         .testTarget(
@@ -515,7 +515,7 @@ let package = Package(
             dependencies: [
                 "ContextMemory",
                 "IntentRuntime",
-                .product(name: "ImageDecodeBridge", package: "GuavaUI"),
+                .product(name: "ImageDecodeBridge", package: "CoveUI"),
             ]
         ),
         .testTarget(
@@ -538,11 +538,11 @@ let package = Package(
             ]
         ),
         .executableTarget(name: "NativeRHIPassProbe",
-            dependencies: [.product(name: "GuavaLogging", package: "GuavaUI"), "NativeRendererValidation"]),
+            dependencies: [.product(name: "CoveLogging", package: "CoveUI"), "NativeRendererValidation"]),
         .target(name: "NativeRendererValidation",
-            dependencies: ["RenderBackend", .product(name: "NativeRHI", package: "GuavaUI"), "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
+            dependencies: ["RenderBackend", .product(name: "NativeRHI", package: "CoveUI"), "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
         .testTarget(name: "NativeRendererTests",
-            dependencies: ["NativeRendererValidation", "RenderBackend", .product(name: "NativeRHI", package: "GuavaUI"), "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
+            dependencies: ["NativeRendererValidation", "RenderBackend", .product(name: "NativeRHI", package: "CoveUI"), "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
 
     ],
     cxxLanguageStandard: .cxx17
@@ -550,7 +550,7 @@ let package = Package(
 
 package.products.append(contentsOf: wasmtimeProducts)
 package.targets.append(contentsOf: wasmtimeTargets)
-for targetName in ["GuavaPluginHost", "PluginRuntimeTests"] {
+for targetName in ["DiffusePluginHost", "PluginRuntimeTests"] {
     package.targets.first(where: { $0.name == targetName })?
         .dependencies.append("PluginWasmtimeRuntime")
 }

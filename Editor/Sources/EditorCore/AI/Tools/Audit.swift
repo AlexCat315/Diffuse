@@ -1,6 +1,6 @@
 import AIRuntime
 import Foundation
-import GuavaLogging
+import CoveLogging
 
 /// Host tool policy for the Editor.
 ///
@@ -14,7 +14,7 @@ enum EditorToolAudit {
         guard let tool = ProjectToolset.definition(named: call.name), !tool.readOnly else {
             return .allow(call)
         }
-        LogSystem.logger("com.guava.editor.tool-audit").info(
+        LogSystem.logger("com.cove.editor.tool-audit").info(
             "Mutating project tool call",
             metadata: [
                 "origin": "\(call.origin == .mcp ? "mcp" : "agent")",

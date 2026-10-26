@@ -1,5 +1,5 @@
 import EditorCore
-import GuavaUI
+import CoveUI
 
 /// Applies the editor's presentation tokens to everything below it.
 ///

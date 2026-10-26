@@ -4,12 +4,12 @@ import XCTest
 
 final class ReleaseInstallValidatorTests: XCTestCase {
     private let bundleBases = [
-        "GuavaStudioEditor_EditorUI",
-        "GuavaStudioEditor_EditorCore",
-        "GuavaStudioRuntime_RenderBackend",
-        "GuavaUI_GuavaUI",
-        "GuavaUI_GuavaUICompose",
-        "GuavaUI_GuavaUIWorkspace",
+        "DiffuseEditor_EditorUI",
+        "DiffuseEditor_EditorCore",
+        "DiffuseRuntime_RenderBackend",
+        "CoveUI_CoveUI",
+        "CoveUI_CoveUICompose",
+        "CoveUI_CoveUIWorkspace",
     ]
 
     func testCompletePortableLayoutPassesOnPOSIXAndWindows() throws {
@@ -36,18 +36,18 @@ final class ReleaseInstallValidatorTests: XCTestCase {
     func testMissingPlayerAndResourceBundleAreReportedTogether() throws {
         #if os(Windows)
         let isWindows = true
-        let playerName = "GuavaPlayer.exe"
+        let playerName = "CovePlayer.exe"
         let editorName = "EditorApp.exe"
         #else
         let isWindows = false
-        let playerName = "GuavaPlayer"
+        let playerName = "CovePlayer"
         let editorName = "EditorApp"
         #endif
         let root = try makeLayout(isWindows: isWindows)
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.removeItem(at: root.appendingPathComponent(playerName))
         try FileManager.default.removeItem(
-            at: root.appendingPathComponent("GuavaUI_GuavaUICompose.bundle")
+            at: root.appendingPathComponent("CoveUI_CoveUICompose.bundle")
         )
 
         XCTAssertThrowsError(try EditorInstallValidator.validateEditorLayout(
@@ -58,16 +58,16 @@ final class ReleaseInstallValidatorTests: XCTestCase {
                 return XCTFail("unexpected error: \(error)")
             }
             XCTAssertTrue(missing.contains(playerName))
-            XCTAssertTrue(missing.contains("GuavaUI_GuavaUICompose.{bundle,resources}"))
+            XCTAssertTrue(missing.contains("CoveUI_CoveUICompose.{bundle,resources}"))
         }
     }
 
     func testMacApplicationBundleLayoutPasses() throws {
         #if os(macOS)
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-app-install-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-app-install-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let app = root.appendingPathComponent("GuavaStudioEditor.app", isDirectory: true)
+        let app = root.appendingPathComponent("DiffuseEditor.app", isDirectory: true)
         let macOS = app.appendingPathComponent("Contents/MacOS", isDirectory: true)
         let helpers = app.appendingPathComponent("Contents/Helpers", isDirectory: true)
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
@@ -75,9 +75,9 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         try writeApplicationInfoPlist(to: app)
         for url in [
             macOS.appendingPathComponent("EditorApp"),
-            macOS.appendingPathComponent("GuavaPlayer"),
-            helpers.appendingPathComponent("GuavaPluginHost"),
-            helpers.appendingPathComponent("GuavaMCP"),
+            macOS.appendingPathComponent("CovePlayer"),
+            helpers.appendingPathComponent("DiffusePluginHost"),
+            helpers.appendingPathComponent("CoveMCP"),
         ] {
             try Data().write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: 0o755],
@@ -100,9 +100,9 @@ final class ReleaseInstallValidatorTests: XCTestCase {
     func testMacApplicationBundleRejectsMissingPluginRuntime() throws {
         #if os(macOS)
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-app-install-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-app-install-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let app = root.appendingPathComponent("GuavaStudioEditor.app", isDirectory: true)
+        let app = root.appendingPathComponent("DiffuseEditor.app", isDirectory: true)
         let macOS = app.appendingPathComponent("Contents/MacOS", isDirectory: true)
         let helpers = app.appendingPathComponent("Contents/Helpers", isDirectory: true)
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
@@ -110,8 +110,8 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         try writeApplicationInfoPlist(to: app)
         for url in [
             macOS.appendingPathComponent("EditorApp"),
-            macOS.appendingPathComponent("GuavaPlayer"),
-            helpers.appendingPathComponent("GuavaMCP"),
+            macOS.appendingPathComponent("CovePlayer"),
+            helpers.appendingPathComponent("CoveMCP"),
         ] {
             try Data().write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: 0o755],
@@ -131,7 +131,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
             guard case let EditorInstallValidationError.missingComponents(missing) = error else {
                 return XCTFail("unexpected error: \(error)")
             }
-            XCTAssertTrue(missing.contains("Contents/Helpers/GuavaPluginHost"))
+            XCTAssertTrue(missing.contains("Contents/Helpers/DiffusePluginHost"))
         }
         #endif
     }
@@ -151,18 +151,18 @@ final class ReleaseInstallValidatorTests: XCTestCase {
     func testMacApplicationBundleRejectsInvalidInfoPlist() throws {
         #if os(macOS)
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-app-install-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-app-install-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let app = root.appendingPathComponent("GuavaStudioEditor.app", isDirectory: true)
+        let app = root.appendingPathComponent("DiffuseEditor.app", isDirectory: true)
         let macOS = app.appendingPathComponent("Contents/MacOS", isDirectory: true)
         let helpers = app.appendingPathComponent("Contents/Helpers", isDirectory: true)
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: helpers, withIntermediateDirectories: true)
         for url in [
             macOS.appendingPathComponent("EditorApp"),
-            macOS.appendingPathComponent("GuavaPlayer"),
-            helpers.appendingPathComponent("GuavaPluginHost"),
-            helpers.appendingPathComponent("GuavaMCP"),
+            macOS.appendingPathComponent("CovePlayer"),
+            helpers.appendingPathComponent("DiffusePluginHost"),
+            helpers.appendingPathComponent("CoveMCP"),
         ] {
             try Data().write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: 0o755],
@@ -194,7 +194,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         #if !os(Windows)
         let root = try makeLayout(isWindows: false)
         defer { try? FileManager.default.removeItem(at: root) }
-        let player = root.appendingPathComponent("GuavaPlayer")
+        let player = root.appendingPathComponent("CovePlayer")
         try FileManager.default.setAttributes([.posixPermissions: 0o644],
                                               ofItemAtPath: player.path)
 
@@ -205,7 +205,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
             guard case let EditorInstallValidationError.missingComponents(missing) = error else {
                 return XCTFail("unexpected error: \(error)")
             }
-            XCTAssertTrue(missing.contains("GuavaPlayer"))
+            XCTAssertTrue(missing.contains("CovePlayer"))
         }
         #endif
     }
@@ -220,7 +220,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
 
     private func makeLayout(isWindows: Bool) throws -> URL {
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-install-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-install-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(
             at: root.appendingPathComponent("Tools", isDirectory: true),
             withIntermediateDirectories: true
@@ -228,9 +228,9 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         let suffix = isWindows ? ".exe" : ""
         for path in [
             "EditorApp\(suffix)",
-            "GuavaPlayer\(suffix)",
-            "Tools/GuavaPluginHost\(suffix)",
-            "Tools/GuavaMCP\(suffix)",
+            "CovePlayer\(suffix)",
+            "Tools/DiffusePluginHost\(suffix)",
+            "Tools/CoveMCP\(suffix)",
         ] {
             let url = root.appendingPathComponent(path)
             try Data().write(to: url)
@@ -251,7 +251,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         let bundle = root.appendingPathComponent("\(base).\(suffix)", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         let info: [String: Any] = [
-            "CFBundleIdentifier": "com.guava.tests.\(base.lowercased().replacingOccurrences(of: "_", with: "-"))",
+            "CFBundleIdentifier": "com.cove.tests.\(base.lowercased().replacingOccurrences(of: "_", with: "-"))",
             "CFBundleName": base,
             "CFBundlePackageType": "BNDL",
         ]

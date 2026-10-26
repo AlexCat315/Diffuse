@@ -1,2 +1,2 @@
-@_exported import GuavaPlatformCore
-public typealias WindowID = GuavaPlatformCore.WindowID
+@_exported import CovePlatformCore
+public typealias WindowID = CovePlatformCore.WindowID

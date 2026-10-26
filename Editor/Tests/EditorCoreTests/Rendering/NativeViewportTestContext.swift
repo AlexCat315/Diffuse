@@ -5,9 +5,9 @@ import NativeRHI
 import NativeRendererValidation
 import RenderBackend
 import XCTest
-@testable import GuavaUIRuntime
-import GuavaUICompose
-import GuavaUI
+@testable import CoveUIRuntime
+import CoveUICompose
+import CoveUI
 
 struct ViewportTestOutput {
     let native: TextureFormat

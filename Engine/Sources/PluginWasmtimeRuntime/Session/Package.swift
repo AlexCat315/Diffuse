@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import CapabilityRuntime
 import Foundation
 import PluginRuntime
@@ -13,7 +13,7 @@ final class ExecutionPackage: @unchecked Sendable {
         let loader = PluginPackageLoader(registry: registry)
         let original = try loader.load(at: source)
         directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("GuavaPlugin-\(UUID().uuidString).guavaplugin", isDirectory: true)
+            .appendingPathComponent("CovePlugin-\(UUID().uuidString).coveplugin", isDirectory: true)
         try FilePermissions.createPrivateDirectory(at: directory, withIntermediateDirectories: false)
         do {
             for name in ["plugin.json", "capabilities.wit", "component.wasm"] + (original.resourceHashes.isEmpty ? [] : ["resources"]) {

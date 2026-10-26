@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUIRuntime
+import CoveUIRuntime
 import SceneRuntime
 import ScriptRuntime
 import SIMDCompat
@@ -17,7 +17,7 @@ struct ScriptInspectorContractTests {
         let adapter = EditorSceneAdapter(seedPreviewScene: false)
         _ = adapter.applyProjectScriptCatalog(.builtIn)
         let entity = adapter.scene.createEntity()
-        #expect(adapter.addScriptBinding(to: entity.rawValue, identifier: "guava.mover"))
+        #expect(adapter.addScriptBinding(to: entity.rawValue, identifier: "cove.mover"))
         let original = try section(adapter, entity)
         #expect(original.groups.count == 1)
         #expect(original.fields.first { $0.id == "script-0-parameters" }?.presentation == .advanced)
@@ -56,8 +56,8 @@ struct ScriptInspectorContractTests {
         let adapter = EditorSceneAdapter(seedPreviewScene: false)
         _ = adapter.applyProjectScriptCatalog(.builtIn)
         let entity = adapter.scene.createEntity()
-        _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "guava.mover")
-        _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "guava.mover")
+        _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "cove.mover")
+        _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "cove.mover")
         let initial = try section(adapter, entity)
         let secondGroupID = initial.groups[1].id
         guard case let .vector3(firstX, _, _)? = initial.fields.first(where: { $0.id == "script-0-property-velocity" })?.value,

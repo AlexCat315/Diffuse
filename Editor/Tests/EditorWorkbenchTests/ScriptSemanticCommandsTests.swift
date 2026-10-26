@@ -1,8 +1,8 @@
 import Foundation
 import Testing
 @testable import EditorCore
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 @testable import EditorUI
 
 @Suite("Swift semantic editor commands")

@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 
 private struct ScriptAnalysisCacheIdentity: Codable, Equatable {

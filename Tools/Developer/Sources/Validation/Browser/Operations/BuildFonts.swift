@@ -2,7 +2,7 @@ internal import Foundation
 private import ToolSupport
 
 /// `build-fonts` — builds the pinned, unmodified FreeType/HarfBuzz submodules
-/// for Swift's WASI SDK. Replaces `GuavaUI/Browser/build_fonts.py`.
+/// for Swift's WASI SDK. Replaces `CoveUI/Browser/build_fonts.py`.
 enum BuildFontsOperation {
   static func run(_ arguments: [String]) throws {
     var parser = FlagParser(arguments, valued: [])
@@ -62,7 +62,7 @@ enum BuildFontsOperation {
         )
       else {
         throw ToolError.message(
-          "Missing \(name): run git submodule update --init GuavaUI/third-party/\(name)")
+          "Missing \(name): run git submodule update --init CoveUI/third-party/\(name)")
       }
       let directory = build.appendingPathComponent(name)
       try Shell.inherit(
@@ -94,7 +94,7 @@ enum BuildFontsOperation {
   // MARK: - Toolchain
 
   private static func sysroot() throws -> String {
-    let sdk = ProcessInfo.processInfo.environment["GUAVA_WASM_SDK"] ?? "swift-6.4.1-RELEASE_wasm"
+    let sdk = ProcessInfo.processInfo.environment["COVE_WASM_SDK"] ?? "swift-6.4.1-RELEASE_wasm"
     let configuration = try Shell.output(["swift", "sdk", "configure", sdk, "--show-configuration"])
     for line in configuration.split(separator: "\n") where line.hasPrefix("sdkRootPath: ") {
       return String(line.dropFirst("sdkRootPath: ".count))

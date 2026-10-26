@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Window-level feedback for what the user just did. Session state only: it is
 /// never persisted, and the console keeps the history of every message.

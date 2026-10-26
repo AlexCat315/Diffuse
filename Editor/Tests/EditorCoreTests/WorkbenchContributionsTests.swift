@@ -199,12 +199,12 @@ struct WorkbenchContributionsTests {
     }
 
     private func package(id: String, panels: String) throws -> URL {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).guavaplugin")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).coveplugin")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try Data("""
         {"id":"\(id)","version":1,"name":"\(id)","description":"Fixture",
          "access":"read","imports":[],"composable_host_capabilities":[],
-         "contributes":{"guava.ui.panel/v1":\(panels)}}
+         "contributes":{"cove.ui.panel/v1":\(panels)}}
         """.utf8).write(to: root.appendingPathComponent("plugin.json"))
         return root
     }

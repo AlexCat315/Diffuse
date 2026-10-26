@@ -5,7 +5,7 @@
   "description": "Git working trees for the Source Control panel, file tree, status bar and agent tools.",
   "access": "read",
   "imports": [
-    "guava:process/host"
+    "cove:process/host"
   ],
   "composable_host_capabilities": [],
   "host": {
@@ -48,7 +48,7 @@
     ]
   },
   "contributes": {
-    "guava.vcs/v1": [
+    "cove.vcs/v1": [
       {
         "id": "git",
         "title": "Git",
@@ -56,7 +56,7 @@
         "ignoreFile": ".gitignore"
       }
     ],
-    "guava.ai.context/v1": [
+    "cove.ai.context/v1": [
       {
         "id": "git",
         "title": "Working Tree",

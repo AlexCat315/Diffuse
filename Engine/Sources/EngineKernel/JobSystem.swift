@@ -34,7 +34,7 @@ public final class JobSystem: @unchecked Sendable {
     public init(
         workerCount: Int = ProcessInfo.processInfo.activeProcessorCount,
         minimumChunkSize: Int = 64,
-        label: String = "com.guava.engine.jobs"
+        label: String = "com.cove.engine.jobs"
     ) {
         self.workerCount = max(workerCount, 1)
         self.minimumChunkSize = max(minimumChunkSize, 1)

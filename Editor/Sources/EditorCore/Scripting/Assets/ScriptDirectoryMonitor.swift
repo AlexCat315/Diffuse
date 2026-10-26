@@ -13,7 +13,7 @@ final class ScriptDirectoryMonitor: @unchecked Sendable {
     }
 
     private let directoryURL: URL
-    private let queue = DispatchQueue(label: "com.guava.editor.script-directory-monitor",
+    private let queue = DispatchQueue(label: "com.cove.editor.script-directory-monitor",
                                       qos: .utility)
     private var timer: DispatchSourceTimer?
     private var previousSnapshot: [String: Entry] = [:]

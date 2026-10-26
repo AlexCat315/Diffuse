@@ -1,5 +1,5 @@
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Paints chrome that hosts its own `.surface` background (the immersive
 /// title bar) on the window canvas, so only panes read as raised blocks.

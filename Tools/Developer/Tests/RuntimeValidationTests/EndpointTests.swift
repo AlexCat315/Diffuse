@@ -4,7 +4,7 @@ internal import XCTest
 
 final class EndpointTests: XCTestCase {
   func testPortsUseTheOptionalProcessToken() throws {
-    let endpoint = try DevToolsEndpoint.resolve("9250", environment: ["GUAVA_DEVTOOLS_TOKEN": "test-token"])
+    let endpoint = try DevToolsEndpoint.resolve("9250", environment: ["COVE_DEVTOOLS_TOKEN": "test-token"])
     XCTAssertEqual(endpoint.port, 9250)
     XCTAssertEqual(URLComponents(url: endpoint, resolvingAgainstBaseURL: false)?.queryItems,
                    [URLQueryItem(name: "token", value: "test-token")])

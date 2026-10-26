@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 public import Foundation
 
 /// How Swift files are edited, for every project on this machine.

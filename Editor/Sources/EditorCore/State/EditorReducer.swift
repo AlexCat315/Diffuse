@@ -1,5 +1,5 @@
-import GuavaLogging
-import GuavaUICompose
+import CoveLogging
+import CoveUICompose
 import Foundation
 import IntentRuntime
 

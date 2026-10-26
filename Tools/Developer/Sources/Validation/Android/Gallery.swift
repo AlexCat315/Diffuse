@@ -4,7 +4,7 @@ internal import ToolSupport
 /// Port of `scripts/android/verify-gallery.py`: renders every repository Gallery
 /// page on Android and checks real pixels and semantics.
 enum GalleryOperation {
-  private static let package = "com.guava.probe"
+  private static let package = "com.cove.probe"
 
   static func run(_ arguments: [String]) throws {
     let parsed = try ParsedArguments.parse(
@@ -59,7 +59,7 @@ enum GalleryOperation {
       var previous: JSON = .null
       do { previous = try read()["session"] } catch { previous = .null }
       _ = try shell([
-        "am", "start", "-W", "-n", "com.guava.probe/.MainActivity", "--es", "mode", "gallery",
+        "am", "start", "-W", "-n", "com.cove.probe/.MainActivity", "--es", "mode", "gallery",
         "--es", "component", page, "--ei", "orientation", 0, "--ez", "snapshots", "true",
       ])
       return try wait { snapshot in
@@ -187,17 +187,17 @@ enum GalleryOperation {
       snapshot = try launch("textField")
       guard
         let field = snapshot["nodes"].elements.first(where: {
-          $0["role"] == .string("textField") && $0["value"] == .string("GuavaUI")
+          $0["role"] == .string("textField") && $0["value"] == .string("CoveUI")
         })
       else {
-        throw ToolError.message("textField: no GuavaUI field")
+        throw ToolError.message("textField: no CoveUI field")
       }
       try tap(snapshot, field)
       _ = try wait { !$0["editor"].isNull }
 
       func action(_ name: String, _ values: [(String, JSON)]) throws {
         var command: [any CustomStringConvertible] = [
-          "am", "broadcast", "-a", "com.guava.probe.DEMO_INPUT",
+          "am", "broadcast", "-a", "com.cove.probe.DEMO_INPUT",
           "-p", package, "--es", "demoAction", name,
         ]
         for (key, value) in values {
@@ -231,7 +231,7 @@ enum GalleryOperation {
         throw ToolError.message("background Gallery keeps submitting frames")
       }
       _ = try shell([
-        "am", "start", "-W", "-n", "com.guava.probe/.MainActivity", "--ez", "snapshots", "true",
+        "am", "start", "-W", "-n", "com.cove.probe/.MainActivity", "--ez", "snapshots", "true",
       ])
       let resumed = try wait { state in
         state["session"] == committed["session"] && state["page"] == .string("textField")
@@ -273,7 +273,7 @@ enum GalleryOperation {
 
     let pid = try shell(["pidof", package]).trimmingCharacters(in: .whitespacesAndNewlines)
     let log = try Command.output(
-      adb + ["logcat", "-d", "--pid=" + pid, "-s", "Guava:I", "AndroidRuntime:E", "*:S"])
+      adb + ["logcat", "-d", "--pid=" + pid, "-s", "Cove:I", "AndroidRuntime:E", "*:S"])
     try Fs.write(log, to: directory.appendingPathComponent("app.log"))
     guard !log.contains("FAIL"), !log.contains("FATAL") else {
       throw ToolError.message(String(log.suffix(4000)))
@@ -287,7 +287,7 @@ enum GalleryOperation {
 
   /// `re.findall(r'\.init\(\.(\w+),', GalleryCatalog.swift)`.
   private static func catalog() throws -> [String] {
-    let url = AndroidTools.guavaSDKRoot.appendingPathComponent(
+    let url = AndroidTools.coveSDKRoot.appendingPathComponent(
       "Examples/Sources/GalleryContent/GalleryCatalog.swift")
     let text = try Fs.text(url)
     let pattern = try NSRegularExpression(pattern: "\\.init\\(\\.(\\w+),")

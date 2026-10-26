@@ -1,7 +1,7 @@
 import Foundation
 import SceneRuntime
-import GuavaUIRuntime
-import GuavaUICompose
+import CoveUIRuntime
+import CoveUICompose
 import ScriptRuntime
 import Testing
 @testable import EditorCore
@@ -10,7 +10,7 @@ import Testing
 @MainActor
 struct EditorProjectLifecycleTests {
     private func parent() throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("guava-project-lifecycle-\(UUID())")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cove-project-lifecycle-\(UUID())")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
         return url.standardizedFileURL.resolvingSymlinksInPath()
     }
@@ -24,8 +24,8 @@ struct EditorProjectLifecycleTests {
         try Data("main".utf8).write(to: folder.appendingPathComponent("main.swift"))
         let adopted = try EditorProjectLifecycle.adopt(folder)
         #expect(adopted.name == "Existing Work")
-        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted() == [".guava", "main.swift"])
-        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.appendingPathComponent(".guava").path) == ["project.json"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted() == [".cove", "main.swift"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.appendingPathComponent(".cove").path) == ["project.json"])
         #expect(try EditorProjectLifecycle.adopt(folder).descriptor == adopted.descriptor)
         let created = try EditorProjectLifecycle.create(name: "Made", parent: parent)
         #expect(try EditorProjectLifecycle.adopt(created.directory).descriptor == created.descriptor)
@@ -82,16 +82,16 @@ struct EditorProjectLifecycleTests {
         defer { try? FileManager.default.removeItem(at: parent) }
         #expect(throws: (any Error).self) { try EditorProjectLifecycle.inspect(parent) }
         #expect(try FileManager.default.contentsOfDirectory(atPath: parent.path).isEmpty)
-        try FileManager.default.createDirectory(at: parent.appendingPathComponent(".guava"), withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(at: parent.appendingPathComponent(".cove"), withIntermediateDirectories: false)
         #expect(try EditorProjectLifecycle.inspect(parent).descriptor == nil)
         let scene = parent.appendingPathComponent(EditorProjectLifecycle.scenePath)
         try Data("corrupt".utf8).write(to: scene)
         #expect(throws: (any Error).self) { try EditorProjectLifecycle.inspect(parent) }
         #expect(try Data(contentsOf: scene) == Data("corrupt".utf8))
-        try FileManager.default.removeItem(at: parent.appendingPathComponent(".guava"))
+        try FileManager.default.removeItem(at: parent.appendingPathComponent(".cove"))
         let outside = try self.parent()
         defer { try? FileManager.default.removeItem(at: outside) }
-        try FileManager.default.createSymbolicLink(at: parent.appendingPathComponent(".guava"), withDestinationURL: outside)
+        try FileManager.default.createSymbolicLink(at: parent.appendingPathComponent(".cove"), withDestinationURL: outside)
         #expect(throws: (any Error).self) { try EditorProjectLifecycle.inspect(parent) }
         #expect(try FileManager.default.contentsOfDirectory(atPath: outside.path).isEmpty)
     }
@@ -135,7 +135,7 @@ struct EditorProjectLifecycleTests {
         try FileManager.default.moveItem(at: trashURL, to: created.directory)
         #expect(try EditorProjectLifecycle.inspect(created.directory, validateScene: false).descriptor == created.descriptor)
         #expect(try Data(contentsOf: created.directory.appendingPathComponent(EditorProjectLifecycle.scenePath)) == corruptScene)
-        try FileManager.default.createDirectory(at: parent.appendingPathComponent(".guava"), withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(at: parent.appendingPathComponent(".cove"), withIntermediateDirectories: false)
         #expect(throws: (any Error).self) { try EditorProjectLifecycle.moveToTrash(parent) }
         #expect(FileManager.default.fileExists(atPath: created.directory.path))
     }

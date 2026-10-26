@@ -15,15 +15,15 @@ runs:
         path: |
           Engine/vendor
           Engine/Media/vendor
-        key: studio-native-v2-${{ runner.os }}-${{ runner.arch }}-6.4.1-${{ steps.sources.outputs.revision }}-${{ hashFiles('GuavaUI/Artifacts/native.json', 'Engine/third-party/CMakeLists.txt', 'Engine/third-party/cmake/**', 'Tools/Developer/Sources/Build/NativeBootstrap/**', 'Tools/Developer/Sources/Build/MediaStaging/**', 'Tools/Developer/Sources/Build/PluginStaging/**', '.github/actions/setup-toolchains/action.yml') }}
+        key: studio-native-v2-${{ runner.os }}-${{ runner.arch }}-6.4.1-${{ steps.sources.outputs.revision }}-${{ hashFiles('CoveUI/Artifacts/native.json', 'Engine/third-party/CMakeLists.txt', 'Engine/third-party/cmake/**', 'Tools/Developer/Sources/Build/NativeBootstrap/**', 'Tools/Developer/Sources/Build/MediaStaging/**', 'Tools/Developer/Sources/Build/PluginStaging/**', '.github/actions/setup-toolchains/action.yml') }}
     - name: Prepare native artifacts
       if: runner.os != 'Windows'
       shell: bash
-      run: ./guava studio native-bootstrap
+      run: ./cove studio native-bootstrap
     - name: Prepare native artifacts (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
-      run: ./guava studio native-bootstrap
+      run: ./cove studio native-bootstrap
     - uses: actions/cache/save@v5
       if: steps.native.outputs.cache-hit != 'true'
       with:

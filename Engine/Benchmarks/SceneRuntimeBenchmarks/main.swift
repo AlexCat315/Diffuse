@@ -1,5 +1,5 @@
 import Foundation
-import GuavaLogging
+import CoveLogging
 private var loggingConfiguration = LoggingConfiguration()
 try loggingConfiguration.applyEnvironment(ProcessInfo.processInfo.environment)
 try LogSystem.bootstrap(configuration: loggingConfiguration)

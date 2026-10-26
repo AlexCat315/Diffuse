@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Shared, bounded controls for the title bar, activity rail and context header.
 struct EditorChromeButtonStyle: ButtonStyle {

@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import CapabilityRuntime
 import Foundation
 import ScriptRuntime
@@ -24,23 +24,23 @@ public struct ProjectScriptBuildConfiguration: Sendable {
     }
 
     /// Finds the SDK beside a development host (both SwiftPM build layouts).
-    /// Installed SDKs can supply the existing GUAVA_ENGINE_* host overrides.
+    /// Installed SDKs can supply the existing COVE_ENGINE_* host overrides.
     public static func discover(for executableURL: URL,
                                 environment: [String: String] = ProcessInfo.processInfo.environment) -> Self {
         func configuredPaths(_ key: String) -> [String]? {
             guard let value = environment[key], !value.isEmpty else { return nil }
             return value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
         }
-        let buildDirectory = environment["GUAVA_BUILD_PRODUCTS_PATH"].map { URL(fileURLWithPath: $0) }
+        let buildDirectory = environment["COVE_BUILD_PRODUCTS_PATH"].map { URL(fileURLWithPath: $0) }
             ?? executableURL.deletingLastPathComponent()
-        let modulePaths = configuredPaths("GUAVA_ENGINE_MODULE_PATHS") ??
+        let modulePaths = configuredPaths("COVE_ENGINE_MODULE_PATHS") ??
             [buildDirectory, buildDirectory.appendingPathComponent("Modules", isDirectory: true)]
                 .filter { directory in
                     ["SceneRuntime", "ScriptRuntime"].allSatisfy {
                         FileManager.default.fileExists(atPath: directory.appendingPathComponent("\($0).swiftmodule").path)
                     }
                 }.map(\.path)
-        var moduleMaps = configuredPaths("GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS") ??
+        var moduleMaps = configuredPaths("COVE_ENGINE_CLANG_MODULE_MAP_PATHS") ??
             SwiftScriptCompiler.discoverClangModuleMapPaths(in: buildDirectory)
         var includePaths = Set(moduleMaps.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path })
         // `umbrella "directory"` and `umbrella header "file.h"` are both valid
@@ -58,7 +58,7 @@ public struct ProjectScriptBuildConfiguration: Sendable {
             let exists = FileManager.default.fileExists(atPath: declared.path, isDirectory: &isDirectory)
             let includeDirectory = exists && isDirectory.boolValue ? declared : declared.deletingLastPathComponent()
             includePaths.insert(includeDirectory.path)
-            if configuredPaths("GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS") == nil {
+            if configuredPaths("COVE_ENGINE_CLANG_MODULE_MAP_PATHS") == nil {
                 let bridgeRoot = includeDirectory.deletingLastPathComponent().deletingLastPathComponent()
                 for bridge in (try? FileManager.default.contentsOfDirectory(at: bridgeRoot, includingPropertiesForKeys: nil)) ?? [] {
                     let moduleMap = bridge.appendingPathComponent("include/module.modulemap")
@@ -70,7 +70,7 @@ public struct ProjectScriptBuildConfiguration: Sendable {
         includePaths.formUnion(moduleMaps.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path })
         return Self(engineModulePaths: modulePaths,
                     clangModuleMapPaths: moduleMaps,
-                    clangIncludePaths: configuredPaths("GUAVA_ENGINE_CLANG_INCLUDE_PATHS") ?? includePaths.sorted(),
+                    clangIncludePaths: configuredPaths("COVE_ENGINE_CLANG_INCLUDE_PATHS") ?? includePaths.sorted(),
                     swiftCompilerPath: (try? SwiftToolchainResolver.resolve(environment: environment))?.compilerURL.path
                         ?? DynamicScriptManager.resolvedCompilerPath(environment: environment))
     }
@@ -161,7 +161,7 @@ public struct ProjectCompiledScripts: Codable, Sendable, Equatable {
                                             clangModuleMapPaths: configuration.clangModuleMapPaths,
                                             clangIncludePaths: configuration.clangIncludePaths,
                                             outputDirectory: compiledDirectory,
-                                            hostModuleName: "GuavaPlayer",
+                                            hostModuleName: "CovePlayer",
                                             environment: toolchain?.environment ?? ProcessInfo.processInfo.environment)
         var entries: [Entry] = []
         for asset in assets {

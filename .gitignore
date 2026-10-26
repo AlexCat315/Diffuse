@@ -68,8 +68,8 @@ zig-out/
 **/*.dylib
 compile_commands.json
 legacy/zig-engine/assets/derived/
-legacy/zig-engine/assets/scenes/editor_autosave.guava_scene
-legacy/zig-engine/assets/scenes/editor_autosave.guava_scene.meta
+legacy/zig-engine/assets/scenes/editor_autosave.cove_scene
+legacy/zig-engine/assets/scenes/editor_autosave.cove_scene.meta
 
 # Temporary files
 *.orig
@@ -101,7 +101,7 @@ examples/csharp/**/obj/
 legacy/react-editor/native/build/
 legacy/react-editor/native/bin/
 legacy/react-editor/dist-package
-.guava_scene
+.cove_scene
 legacy/zig-engine/sdk/csharp/**/**/bin/**
 legacy/zig-engine/sdk/csharp/**/**/obj/**
 
@@ -109,10 +109,12 @@ legacy/zig-engine/sdk/csharp/**/**/obj/**
 Engine/.build/
 Editor/.build/
 
-# Standalone Guava SDK checkout fetched by `./guava` or .github/actions/fetch-sdk
+# Standalone Cove SDK checkout fetched by `./cove` or .github/actions/fetch-sdk
+/CoveUI
 /GuavaUI
 
-# Local SDK selection written by the Guava CLI
+# Local SDK selection written by the Cove CLI
+/.cove/
 /.guava/
 
 # CMake build trees
@@ -133,13 +135,13 @@ Engine/vendor/
 # Reproducible example exports and editor-local observation history
 examples/*/export/
 examples/*/validation/
-examples/*/.guava/observation/
-examples/*/.guava/edit_log.jsonl
-examples/*/.guava/context-memory/
-examples/*/Scripts/.guava/
+examples/*/.cove/observation/
+examples/*/.cove/edit_log.jsonl
+examples/*/.cove/context-memory/
+examples/*/Scripts/.cove/
 
-# Guava CLI generated application outputs
-**/.guava/build/
+# Cove CLI generated application outputs
+**/.cove/build/
 
 # Independent media dependency artifacts
 Engine/Media/vendor/

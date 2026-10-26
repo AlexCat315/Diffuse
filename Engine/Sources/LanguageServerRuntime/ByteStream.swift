@@ -1,5 +1,5 @@
 public import Foundation
-public import GuavaProcess
+public import CoveProcess
 
 public struct LanguageServerTransport: Sendable {
     let events: AsyncThrowingStream<ProcessEvent, Error>

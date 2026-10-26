@@ -43,7 +43,7 @@ public struct LicenseGatePolicy: Sendable, Equatable {
 
     public static let commercialDefault = LicenseGatePolicy(
         allowedCodeLicenses: ["Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "Apple-System"],
-        allowedWeightsLicenses: ["Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "Public-Domain", "Guava-Owned", "Apple-System"],
+        allowedWeightsLicenses: ["Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "Public-Domain", "Cove-Owned", "Apple-System"],
         allowUnknownDatasetLineageInLocalDev: true
     )
 

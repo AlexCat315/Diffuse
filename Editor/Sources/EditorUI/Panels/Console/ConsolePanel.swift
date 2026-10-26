@@ -1,7 +1,7 @@
 import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Searchable, severity-filtered editor output. The controls deliberately
 /// mirror mature engine consoles: filtering never destroys history, counts

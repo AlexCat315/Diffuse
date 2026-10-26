@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-import GuavaLogging
+import CoveLogging
 @testable import EditorCore
 
 final class ConsoleLoggingTests: XCTestCase {
@@ -22,7 +22,7 @@ final class ConsoleLoggingTests: XCTestCase {
         let marker = UUID().uuidString
         let store = EditorStore()
         store.dispatch(.appendConsoleMessage(marker, severity: .warning, detail: "details", target: nil, nextStep: "retry"))
-        LogSystem.logger("com.guava.engine.test").warning("engine-\(marker)")
+        LogSystem.logger("com.cove.engine.test").warning("engine-\(marker)")
         LogSystem.flush()
         let pending = capture.take()
         XCTAssertFalse(pending.contains { $0.message == marker })

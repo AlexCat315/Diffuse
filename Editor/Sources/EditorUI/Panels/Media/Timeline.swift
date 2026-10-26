@@ -1,8 +1,8 @@
 import EditorCore
 import Foundation
 import MediaRuntime
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 struct MediaTimelinePanel: View {
     let model: EditorMediaWorkspace

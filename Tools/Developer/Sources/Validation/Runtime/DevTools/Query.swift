@@ -4,7 +4,7 @@ internal import ToolSupport
 /// Port of `scripts/query-ui-devtools.swift`: invoke the runtime's validated,
 /// read-only AI tools against the actual window.
 enum QueryUI {
-  static let usage = "guava-dev devtools query-ui PORT|@SESSION_FILE --list | TOOL [JSON | @FILE]"
+  static let usage = "cove-dev devtools query-ui PORT|@SESSION_FILE --list | TOOL [JSON | @FILE]"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {

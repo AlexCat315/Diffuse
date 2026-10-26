@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 @testable import EditorCore
 import Foundation
 import Testing
@@ -8,7 +8,7 @@ struct ProjectRuntimeResourcesTests {
     @Test("audio discovery ignores build directory case variants")
     func audioDiscoveryIgnoresBuildDirectories() throws {
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-runtime-resources-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-runtime-resources-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let audio = root.appendingPathComponent("Assets/Audio", isDirectory: true)
         let generated = root.appendingPathComponent("Build/Audio", isDirectory: true)

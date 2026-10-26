@@ -2,9 +2,9 @@ import NativeRHI
 @testable import EditorCore
 import Testing
 import EngineKernel
-import GuavaUIRuntime
+import CoveUIRuntime
 import RenderBackend
-@testable import GuavaUICompose
+@testable import CoveUICompose
 
 /// Drawable-size reporting and UV-cropped compositing of `ViewportHost`:
 /// the host reports physical pixels (logical frame × content scale) and

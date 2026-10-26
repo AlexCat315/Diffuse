@@ -1,7 +1,7 @@
 import Foundation
 import EngineCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// UI-owned syntax snapshot. Editing adjusts its coordinates immediately;
 /// native parsing runs on one serial worker and publishes only the latest root.
@@ -58,7 +58,7 @@ struct ScriptSyntaxReader<Content: View>: View {
 /// The lock protects the pending mailbox only. Parser and native tree handles
 /// belong exclusively to queue; delivery receives an independent tree copy.
 private final class ScriptSyntaxWorker: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "guava.swift-syntax", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "cove.swift-syntax", qos: .userInitiated)
     private let lock = NSLock()
     private let highlighter = TreeSitterHighlighter()
     private var pending: TextBuffer?

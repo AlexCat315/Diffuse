@@ -1192,7 +1192,7 @@ private func makePluginBinding(
     composableHostCapabilities: [String] = [],
     hostGeneration: UInt64
 ) throws -> (binding: PluginExecutionBinding, contract: CapabilityContract) {
-    var manifest = GuavaPluginManifest(
+    var manifest = CovePluginManifest(
         id: pluginID,
         version: 1,
         name: "Test plugin",
@@ -1226,7 +1226,7 @@ private func makePluginBinding(
         authorisedAt: Date(timeIntervalSince1970: 1)
     )
     let pluginPath = FileManager.default.temporaryDirectory
-        .appendingPathComponent("\(pluginID).guavaplugin", isDirectory: true)
+        .appendingPathComponent("\(pluginID).coveplugin", isDirectory: true)
         .path
     return (try PluginExecutionBinding(pluginPath: pluginPath,
                                        inspection: inspection,

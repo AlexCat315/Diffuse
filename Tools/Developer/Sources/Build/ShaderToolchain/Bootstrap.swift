@@ -29,7 +29,7 @@ enum BootstrapCommand {
         throw ToolError.message(
           "Destination exists; choose a new --destination to preserve the installed compiler")
       }
-      let download = try makeTemporaryDirectory(prefix: "guava-slang-download-")
+      let download = try makeTemporaryDirectory(prefix: "cove-slang-download-")
       defer { try? FileManager.default.removeItem(at: download) }
       let archive = download.appendingPathComponent(archiveName)
       try Download.file(from: url, to: archive, sha256: sha256)

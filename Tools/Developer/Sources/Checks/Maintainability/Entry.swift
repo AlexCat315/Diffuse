@@ -35,7 +35,7 @@ package enum Maintainability {
 
   static var usage: String {
     """
-    usage: guava-dev maintainability [-h] [--report]
+    usage: cove-dev maintainability [-h] [--report]
 
     Reject new oversized Swift types and initializers; report existing debt.
     This is a structural guard, not a replacement for Swift's parser or code

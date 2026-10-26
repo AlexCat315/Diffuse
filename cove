@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+COVE_CHECKOUT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -z "${COVE_SDK_ROOT:-}" ]; then
+  COVE_REQUIRED=$(sed -n 's/.*"sdkVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$COVE_CHECKOUT/Editor/cove.json")
+  case "$(uname -s)" in
+    Linux) COVE_INSTALLATION=${COVE_HOME:-"${XDG_DATA_HOME:-$HOME/.local/share}/cove"} ;;
+    *) COVE_INSTALLATION=${COVE_HOME:-"$HOME/.cove"} ;;
+  esac
+  COVE_SELECTED=$(sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$COVE_INSTALLATION/sdk.json" 2>/dev/null | head -n 1)
+  COVE_ACTUAL=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$COVE_SELECTED/Tools/Cove/Sources/CoveCLI/SDK.json" 2>/dev/null | head -n 1)
+  if [ "$COVE_ACTUAL" = "$COVE_REQUIRED" ]; then
+    COVE_SDK_ROOT=$COVE_SELECTED
+  else
+    COVE_SDK_ROOT="$COVE_INSTALLATION/versions/$COVE_REQUIRED"
+  fi
+  if [ ! -f "$COVE_SDK_ROOT/Package.swift" ]; then
+    cove sdk install "$COVE_REQUIRED"
+  fi
+fi
+export COVE_SDK_ROOT
+if [ "${1:-}" = studio ]; then
+  shift
+  COVE_RESULT=$(mktemp)
+  trap 'rm -f "$COVE_RESULT"' EXIT HUP INT TERM
+  "$COVE_SDK_ROOT/cove" internal build-package "$COVE_CHECKOUT/Tools/Developer" --product cove-dev --result-file "$COVE_RESULT" >&2
+  COVE_PRODUCTS=$(sed -n 's/.*"products"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$COVE_RESULT")
+  rm -f "$COVE_RESULT"
+  COVE_ROOT="$COVE_CHECKOUT" exec "$COVE_PRODUCTS/cove-dev" "$@"
+fi
+exec "$COVE_SDK_ROOT/cove" "$@"

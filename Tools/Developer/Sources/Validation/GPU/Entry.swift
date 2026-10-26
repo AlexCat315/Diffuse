@@ -40,15 +40,15 @@ package enum RegressionReport {
   }
 
   static let usage = """
-    guava-dev gpu-regression <operation> [options]
+    cove-dev gpu-regression <operation> [options]
 
-      run     Run the fixed GPU regression inventory in Engine and GuavaUI, then verify it
+      run     Run the fixed GPU regression inventory in Engine and CoveUI, then verify it
       verify  Verify an existing report directory's Swift Testing XML and XCTest logs
 
     run
     verify <report-dir>
 
-    run reads GUAVA_GPU_TEST_OUTPUT_DIR (default Engine/build/gpu-regression)
-    and GUAVA_SWIFT_EXECUTABLE (default swift).
+    run reads COVE_GPU_TEST_OUTPUT_DIR (default Engine/build/gpu-regression)
+    and COVE_SWIFT_EXECUTABLE (default swift).
     """
 }

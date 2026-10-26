@@ -1,6 +1,6 @@
-import GuavaUICompose
+import CoveUICompose
 import EngineKernel
-import GuavaUIRuntime
+import CoveUIRuntime
 
 final class ScriptCanvasModel: _ObservableObject {
     private let publisher = _ObservablePublisher<ScriptCanvasModel>()

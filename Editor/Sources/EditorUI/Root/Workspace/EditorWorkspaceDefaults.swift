@@ -1,6 +1,6 @@
 import EditorCore
-import GuavaUI
-import GuavaUIWorkspace
+import CoveUI
+import CoveUIWorkspace
 
 /// The built-in arrangement: the sidebar, content in the center, its details
 /// on the right and output below.

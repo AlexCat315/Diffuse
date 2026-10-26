@@ -37,7 +37,7 @@ struct Transform3DTests {
         let end = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(0, 1, 0))
         let expected = simd_quatf(angle: .pi / 4, axis: SIMD3<Float>(0, 1, 0))
 
-        let midpoint = guavaSlerp(start, end, 0.5)
+        let midpoint = coveSlerp(start, end, 0.5)
 
         #expect(Swift.abs(simd_dot(midpoint.vector, expected.vector)) > 0.9999)
         #expect(Swift.abs(simd_length(midpoint.vector) - 1) < 0.0001)

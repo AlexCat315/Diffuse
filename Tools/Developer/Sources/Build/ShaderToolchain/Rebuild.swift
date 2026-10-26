@@ -85,7 +85,7 @@ enum RebuildCommand {
       .subtracting(["particle_metadata_reset", "particle_state_finalize"])
     let particleNames = Set(particleKernels.map { $0.0 })
 
-    let staging = try makeTemporaryDirectory(prefix: "guava-native-shaders-")
+    let staging = try makeTemporaryDirectory(prefix: "cove-native-shaders-")
     defer { try? FileManager.default.removeItem(at: staging) }
     var destinations: [Destination] = []
     for target in targets {
@@ -136,9 +136,9 @@ enum RebuildCommand {
 
   private static func buildPrograms(uiOnly: Bool) -> [Program] {
     let renderShaders = Repository.path("Engine/Sources/RenderBackend/Resources/Shaders")
-    let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
-      .map { URL(fileURLWithPath: $0) } ?? Repository.path("GuavaUI")
-    let uiShaders = sdkRoot.appendingPathComponent("Sources/GuavaUIRuntime/Resources/Shaders")
+    let sdkRoot = ProcessInfo.processInfo.environment["COVE_SDK_ROOT"]
+      .map { URL(fileURLWithPath: $0) } ?? Repository.path("CoveUI")
+    let uiShaders = sdkRoot.appendingPathComponent("Sources/CoveUIRuntime/Resources/Shaders")
     var programs: [(String, String, [(String, String)])] = []
     if !uiOnly {
       programs = fixedShaders
@@ -171,7 +171,7 @@ enum RebuildCommand {
     destination: URL, destinations: inout [Destination]
   ) throws {
     var codes: [(String, JSONValue)] = [("64", artifact["code"] ?? .null)]
-    let variantDirectory = try makeTemporaryDirectory(prefix: "guava-dxil-workgroups-")
+    let variantDirectory = try makeTemporaryDirectory(prefix: "cove-dxil-workgroups-")
     defer { try? FileManager.default.removeItem(at: variantDirectory) }
     for size in 1...256 where size != 64 {
       let variant = try compileShader(
@@ -230,7 +230,7 @@ enum RebuildCommand {
       for pair in pairs {
         try Fs.directory(pair.destination.deletingLastPathComponent())
         let pending = pair.destination.deletingLastPathComponent()
-          .appendingPathComponent(".guava-shader-\(UUID().uuidString).tmp")
+          .appendingPathComponent(".cove-shader-\(UUID().uuidString).tmp")
         defer { try? Fs.remove(pending) }
         try Fs.write(try Fs.read(pair.staged), to: pending)
         try Fs.replace(pending, at: pair.destination)

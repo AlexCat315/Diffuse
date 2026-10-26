@@ -19,7 +19,7 @@
       let devices = (try json(["list", "devices", "available", "--json"])["devices"] as? [String: Any]) ?? [:]
       let configuration = try configuration(runtimes: availableRuntimes(), devices: devices)
       let udid = try simctl([
-        "create", "GuavaStudio UI validation", configuration.deviceType, configuration.runtime,
+        "create", "Diffuse UI validation", configuration.deviceType, configuration.runtime,
       ])
       return Device(udid: udid)
     }

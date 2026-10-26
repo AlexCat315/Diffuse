@@ -1,5 +1,5 @@
 internal import EditorCore
-import GuavaUIRuntime
+import CoveUIRuntime
 
 /// Colours shared by every language the host highlights. Parsing lives in
 /// TreeSitterHighlighter and DocumentGrammar.

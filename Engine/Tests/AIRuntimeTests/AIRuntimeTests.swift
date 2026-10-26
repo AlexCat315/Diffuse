@@ -2945,7 +2945,7 @@ final class AIRuntimeTests: XCTestCase {
 
     func testSessionObserveEditSummaryUpdatesRevisionAndTriggersFlush() async throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-session-memory-\(UUID().uuidString)",
+            .appendingPathComponent("cove-session-memory-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let storageURL = directory.appendingPathComponent("context_memory.json")

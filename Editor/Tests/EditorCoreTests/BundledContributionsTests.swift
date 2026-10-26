@@ -16,7 +16,7 @@ struct BundledContributionsTests {
         try git(["init", "--quiet", "--initial-branch=main"], in: project)
         try Data("tracked\n".utf8).write(to: project.appendingPathComponent("tracked.txt"))
         try git(["add", "tracked.txt"], in: project)
-        try git(["-c", "user.name=Guava", "-c", "user.email=guava@example.invalid", "commit", "--quiet", "-m", "Start"], in: project)
+        try git(["-c", "user.name=Cove", "-c", "user.email=cove@example.invalid", "commit", "--quiet", "-m", "Start"], in: project)
         try Data("changed\n".utf8).write(to: project.appendingPathComponent("tracked.txt"))
         try Data("new\n".utf8).write(to: project.appendingPathComponent("notes.txt"))
 
@@ -64,7 +64,7 @@ struct BundledContributionsTests {
     // MARK: Fixtures
 
     private func application(project: URL, plugins: [String]) async throws -> EditorApplication {
-        try FileManager.default.createDirectory(at: project.appendingPathComponent(".guava"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: project.appendingPathComponent(".cove"), withIntermediateDirectories: true)
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false,
                                         trustedPluginHostExecutableURL: try #require(EditorPluginHostLocator.resolve()))
         for id in plugins { await app.setBundledPlugin(try #require(BundledPlugins.plugin(id: id)), enabled: true) }

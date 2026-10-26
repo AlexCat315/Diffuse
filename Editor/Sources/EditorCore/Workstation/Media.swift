@@ -1,8 +1,8 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 import AudioRuntime
 import MediaRuntime
-import GuavaUICompose
+import CoveUICompose
 
 public final class EditorMediaWorkspace: _ObservableObject, @unchecked Sendable {
     private let publisher = _ObservablePublisher<EditorMediaWorkspace>()
@@ -14,7 +14,7 @@ public final class EditorMediaWorkspace: _ObservableObject, @unchecked Sendable 
     public private(set) var error: String?
     public init(root: URL) throws {
         self.root = root.resolvingSymlinksInPath().standardizedFileURL
-        documentURL = self.root.appendingPathComponent(".guava/media.json")
+        documentURL = self.root.appendingPathComponent(".cove/media.json")
         if FileManager.default.fileExists(atPath: documentURL.path) {
             savedData = try Data(contentsOf: documentURL)
             composition = try JSONDecoder().decode(MediaComposition.self, from: savedData!)

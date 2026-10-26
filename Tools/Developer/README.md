@@ -1,4 +1,4 @@
-# GuavaDeveloper (`guava-dev`)
+# CoveDeveloper (`cove-dev`)
 
 First-party Swift replacement for the former `scripts/` directory. Every
 repository task — native bootstrap, media and plugin staging, shader toolchain,
@@ -11,14 +11,14 @@ packages. Vendored third-party source trees retain their upstream files.
 ## Running
 
 ```sh
-./guava studio <command> [options]
+./cove studio <command> [options]
 ```
 
 The executable discovers the checkout by walking up from its current directory,
-or from `GUAVA_ROOT` when set. From another directory, invoke the checkout's
-`guava` wrapper with an absolute path.
+or from `COVE_ROOT` when set. From another directory, invoke the checkout's
+`cove` wrapper with an absolute path.
 
-The standalone SDK CLI lives in the [GuavaUI repository](https://github.com/AlexCat315/GuavaUI). Studio's root wrapper
+The standalone SDK CLI lives in the [CoveUI repository](https://github.com/AlexCat315/Cove). Studio's root wrapper
 dispatches `studio` commands here and forwards application commands to the SDK.
 The SDK has no dependency on Studio tooling.
 
@@ -32,7 +32,7 @@ The SDK has no dependency on Studio tooling.
 | `vulkan bootstrap` | CI / build | Build pinned Vulkan headers/loader |
 | `media [--platform N] [--check]` | CI | Build pinned LGPL FFmpeg |
 | `plugins stage\|prepare\|verify` | CI | Stage Wasmtime and run the portable probe |
-| `native-bootstrap [--force]` | CI / build | Build Engine + GuavaUI native dependencies |
+| `native-bootstrap [--force]` | CI / build | Build Engine + CoveUI native dependencies |
 | `ios-native [--sdk S] [--arch A]` | CI / build | Stage isolated iOS native dependencies |
 | `ios-simulator udid\|validate` | CI | Pick a simulator and verify a built `.app` renders |
 | `validate <operation>` | CI / Manual | MCP protocol, editor loop, Crystal Rush and agent diagnostics |
@@ -52,7 +52,7 @@ Gate legend:
 - **Dev** — a local development or debugging utility; it is not a test.
 - **Build** — a setup/staging step shared by CI and local builds.
 
-`validate mcp-protocol` runs in `ci-guava-mcp.yml`. `editor-loop`,
+`validate mcp-protocol` runs in `ci-cove-mcp.yml`. `editor-loop`,
 `crystal-rush` and `agent-diagnostics` are manual checks. `devtools session`
 is a manual check; `query-ui`, `input-ui`, `capture-ui` and `record-timings`
 are development clients, not validation gates. `android` operations require a
@@ -64,7 +64,7 @@ Only cross-process and cross-device behavior belongs here. Application
 behavior belongs in the application package's tests. If an operation neither
 launches a real artifact nor has a gate, it is a tool, not a validation.
 
-Run `guava-dev --help`, or `guava-dev <command> --help`, for the full flag list.
+Run `cove-dev --help`, or `cove-dev <command> --help`, for the full flag list.
 
 DevTools `input-ui --input` accepts a JSON event array. Pointer `button` may be
 `left`, `middle`, `right`, `back`, `forward`, or the corresponding Web pointer
@@ -74,7 +74,7 @@ capture the rendered UI to verify the action; delivery alone is not a pass.
 
 `query-ui`, `input-ui`, `capture-ui` and `record-timings` also accept
 `@/path/to/.build/devtools/SESSION/session.json` (or `runtime.json`) instead
-of a port. This reads the authenticated endpoint published by `guava run`,
+of a port. This reads the authenticated endpoint published by `cove run`,
 including an Android forwarded port when present, without copying its token
 into commands. `devtools session PROJECT mac|android` shares the same resolver.
 
@@ -82,7 +82,7 @@ into commands. `devtools session PROJECT mac|android` shares the same resolver.
 
 ```text
 Sources/
-  GuavaDev/                  command dispatch and help
+  CoveDev/                  command dispatch and help
   Infrastructure/
     ImageCodec/              Swift screenshot decoding boundary
     CImageDecoder/           thin adapter to the SDK's vendored stb header
@@ -105,7 +105,7 @@ Sources/
 Tests/<Target>Tests/          tests owned by each target
 ```
 
-The package publishes only the `guava-dev` executable. Cross-target entry points
+The package publishes only the `cove-dev` executable. Cross-target entry points
 and shared values use Swift `package` access; implementation details stay
 `internal` or `private`. Imports declare their access explicitly, and generated
 resource accessors use `InternalImportsByDefault`.
@@ -122,7 +122,7 @@ this package's first-party Swift sources.
 Add an operation to its owning domain, rather than creating a target for each
 former script. Put reusable process IO and deadlines in `ToolSupport`; keep
 domain-specific protocol and artifact formats with their owner. Application
-behavior belongs in the application package's tests. Keep `GuavaDev` limited
+behavior belongs in the application package's tests. Keep `CoveDev` limited
 to argument dispatch, and update CI, documentation and templates together.
 
 ## Host support
@@ -133,7 +133,7 @@ browser/device/runtime harnesses are built on macOS and Linux; Windows command
 dispatch reports their host requirement without compiling unsupported APIs.
 DevTools capture and session operations currently require macOS.
 
-Browser checks need an installed Chromium/Chrome; set `GUAVA_CHROMIUM` to an
+Browser checks need an installed Chromium/Chrome; set `COVE_CHROMIUM` to an
 explicit executable if discovery does not find it. Browser CI installs Chrome
 directly instead of depending on a Python browser installation.
 Each verification page owns an isolated browser context, including storage and
@@ -142,13 +142,13 @@ download policy, so one scale/backend check cannot carry state into the next.
 ## Tests
 
 ```sh
-./guava test Tools/Developer
+./cove test Tools/Developer
 
 # Include real Chromium protocol and screenshot checks.
-GUAVA_TEST_CHROMIUM=1 ./guava test Tools/Developer
+COVE_TEST_CHROMIUM=1 ./cove test Tools/Developer
 
 # Include compilation tests against the pinned Slang compiler.
-SLANGC="$PWD/Engine/vendor/slang/bin/slangc" ./guava test Tools/Developer
+SLANGC="$PWD/Engine/vendor/slang/bin/slangc" ./cove test Tools/Developer
 ```
 
 `ci-developer-tools.yml` builds and tests the standalone package on all three

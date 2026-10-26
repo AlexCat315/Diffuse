@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 
 struct ScriptLanguageEditHistory {
     struct Change {

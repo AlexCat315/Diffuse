@@ -6,7 +6,7 @@ import XCTest
 final class EditLogTests: XCTestCase {
     func testAppendCreatesParentAndPreservesJSONLOrder() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-edit-log-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-edit-log-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let log = EditLog(projectDirectory: project.path)
         let first = makeEdit(id: "first", revision: 1)
@@ -15,7 +15,7 @@ final class EditLogTests: XCTestCase {
         try log.append(first)
         try log.append(second)
 
-        let logURL = project.appendingPathComponent(".guava/edit_log.jsonl")
+        let logURL = project.appendingPathComponent(".cove/edit_log.jsonl")
         let lines = try String(contentsOf: logURL, encoding: .utf8)
             .split(separator: "\n")
         let decoder = JSONDecoder()
@@ -26,7 +26,7 @@ final class EditLogTests: XCTestCase {
 
     func testAppendSurfacesUnwritableProjectLayout() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-edit-log-file-\(UUID().uuidString)")
+            .appendingPathComponent("cove-edit-log-file-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: project) }
         try Data("not-a-directory".utf8).write(to: project)
         let log = EditLog(projectDirectory: project.path)

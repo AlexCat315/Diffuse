@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUI
+import CoveUI
 
 func scriptGutterLabels() -> TextGutterLabels {
     var labels = TextGutterLabels()

@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 
 struct ScriptLanguageWorkspace {
@@ -26,7 +26,7 @@ struct ScriptLanguageWorkspace {
     /// state so a project without scripts never grows a `Scripts` folder.
     var rootURL: URL {
         projectRootURL
-            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent(".cove", isDirectory: true)
             .appendingPathComponent("sourcekit-lsp", isDirectory: true)
     }
 
@@ -81,7 +81,7 @@ struct ScriptLanguageWorkspace {
     }
 
     func validateGeneratedLocation(_ url: URL) throws {
-        let failure = ScriptLanguageSupportError.unavailable("The generated Swift analysis workspace must remain inside the project's .guava folder.")
+        let failure = ScriptLanguageSupportError.unavailable("The generated Swift analysis workspace must remain inside the project's .cove folder.")
         func components(_ url: URL) -> [String] {
             #if os(Windows)
             url.standardizedFileURL.pathComponents.map { $0.lowercased() }
@@ -89,7 +89,7 @@ struct ScriptLanguageWorkspace {
             url.standardizedFileURL.pathComponents
             #endif
         }
-        let state = components(projectRootURL.appendingPathComponent(".guava", isDirectory: true))
+        let state = components(projectRootURL.appendingPathComponent(".cove", isDirectory: true))
         let root = components(rootURL), target = components(url)
         guard url.isFileURL, root.count > state.count, root.starts(with: state),
               target.count > root.count, target.starts(with: root) else { throw failure }
@@ -147,7 +147,7 @@ struct ScriptLanguageWorkspace {
         import PackageDescription
 
         let package = Package(
-            name: "GuavaScriptAnalysis",
+            name: "CoveScriptAnalysis",
             platforms: [.macOS(.v26), .iOS(.v26)],
             targets: [
         \(targets)

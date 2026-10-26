@@ -25,50 +25,50 @@ jobs:
   render:
     # Enable scheduled/push runs after connecting a Metal-capable runner.
     # Manual dispatch can be used to verify the runner before enabling them.
-    if: vars.GUAVA_GPU_CI_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, macOS, ARM64, guava-gpu]
+    if: vars.COVE_GPU_CI_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, macOS, ARM64, cove-gpu]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
-      - name: Fetch pinned Guava SDK
+      - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
 
       - name: Verify build tools and hardware
         run: |
-          mkdir -p "$RUNNER_TEMP/guava-gpu-regression"
+          mkdir -p "$RUNNER_TEMP/cove-gpu-regression"
           swift --version
           cmake --version
-          system_profiler SPDisplaysDataType > "$RUNNER_TEMP/guava-gpu-regression/device.log"
-          cat "$RUNNER_TEMP/guava-gpu-regression/device.log"
+          system_profiler SPDisplaysDataType > "$RUNNER_TEMP/cove-gpu-regression/device.log"
+          cat "$RUNNER_TEMP/cove-gpu-regression/device.log"
 
       - name: Build native dependencies
         run: |
           cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
           cmake --build Engine/build/native --parallel --config Release
-          cmake --install Engine/build/native --config Release --prefix "$RUNNER_TEMP/guava-native-install"
+          cmake --install Engine/build/native --config Release --prefix "$RUNNER_TEMP/cove-native-install"
 
       - name: Verify pinned shader toolchain and bundled artifacts
         run: |
-          ./guava studio shader bootstrap-slang --destination "$RUNNER_TEMP/guava-slang"
-          export SLANGC="$RUNNER_TEMP/guava-slang/bin/slangc"
+          ./cove studio shader bootstrap-slang --destination "$RUNNER_TEMP/cove-slang"
+          export SLANGC="$RUNNER_TEMP/cove-slang/bin/slangc"
           swift test --package-path Tools/Developer --filter ShaderToolchainTests
           swift test --package-path Tools/Developer --filter RegressionReportTests
-          ./guava studio shader rebuild --check
+          ./cove studio shader rebuild --check
           SLANGC="$SLANGC" swift test --package-path Engine --filter NativeRHITests
 
       - name: Run actual GPU regressions
         env:
-          GUAVA_GPU_TEST_OUTPUT_DIR: ${{ runner.temp }}/guava-gpu-regression
-        run: ./guava studio gpu-regression run
+          COVE_GPU_TEST_OUTPUT_DIR: ${{ runner.temp }}/cove-gpu-regression
+        run: ./cove studio gpu-regression run
 
       - name: Save pixel captures, test report and device log
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: gpu-regression-${{ github.run_id }}
-          path: ${{ runner.temp }}/guava-gpu-regression
+          path: ${{ runner.temp }}/cove-gpu-regression
           if-no-files-found: warn
           retention-days: 14

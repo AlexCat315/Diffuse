@@ -13,8 +13,8 @@ import SemanticPipeline
 import RenderBackend
 import NativeRHI
 import SceneRuntime
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import Foundation
 import SIMDCompat
 

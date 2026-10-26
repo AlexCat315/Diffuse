@@ -1,6 +1,6 @@
 # Crystal Rush
 
-An editable Guava example game.
+An editable Cove example game.
 
 The launcher compiles the bundled Swift script when it creates this project.
 Open the Scripts panel to see compilation output, then click Play in the editor.

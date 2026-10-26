@@ -1,7 +1,7 @@
-import GuavaLogging
-import GuavaUICompose
+import CoveLogging
+import CoveUICompose
 import Foundation
-import GuavaUIRuntime
+import CoveUIRuntime
 import IntentRuntime
 
 /// 编辑器状态的可观察容器。
@@ -112,7 +112,7 @@ public final class EditorStore: @unchecked Sendable {
             if let target { metadata["target"] = "\(target)" }
             if let nextStep { metadata["next_step"] = "\(nextStep)" }
             let level: Logger.Level = severity == .error ? .error : severity == .warning ? .warning : .info
-            LogSystem.logger("com.guava.editor").log(level: level, "\(message)", metadata: metadata)
+            LogSystem.logger("com.cove.editor").log(level: level, "\(message)", metadata: metadata)
         }
 
         let previous = storage

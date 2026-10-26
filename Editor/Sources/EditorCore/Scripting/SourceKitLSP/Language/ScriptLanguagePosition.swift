@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 
 /// A zero-based `line` / UTF-16 `character` offset — the coordinate space the
 /// Language Server Protocol mandates.

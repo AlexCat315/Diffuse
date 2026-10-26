@@ -29,7 +29,7 @@ func nativeChecks(
     ) {
       Terminal.info(info.prettyText)
     }
-    _ = try? page.screenshot(to: "/tmp/guava-devtools-failure.png", fullPage: true)
+    _ = try? page.screenshot(to: "/tmp/cove-devtools-failure.png", fullPage: true)
     throw error
   }
   try page.locator("#disconnect").click()

@@ -1,5 +1,5 @@
 internal import EngineKernel
-internal import GuavaUICompose
+internal import CoveUICompose
 
 /// Adapts the engine's script canvas to the UI's offscreen view renderer.
 final class InGameViewGraphBridge {

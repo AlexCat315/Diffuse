@@ -1,7 +1,7 @@
 internal import EditorCore
 private import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Project, focus, the Make and Agent switch, package tools and run controls on one 40pt row.
 /// Lower-priority items step down as the window narrows; their order never changes.

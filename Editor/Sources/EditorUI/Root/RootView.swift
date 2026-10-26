@@ -1,8 +1,8 @@
 import EditorCore
 import EngineKernel
-import GuavaUI
-import GuavaUIRuntime
-import GuavaUIWorkspace
+import CoveUI
+import CoveUIRuntime
+import CoveUIWorkspace
 import Foundation
 
 struct EditorRootView: View {

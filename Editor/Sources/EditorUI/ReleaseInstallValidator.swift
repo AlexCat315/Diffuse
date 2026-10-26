@@ -1,4 +1,4 @@
-import GuavaPlatformCore
+import CovePlatformCore
 import Foundation
 import EngineKernel
 
@@ -18,12 +18,12 @@ enum EditorInstallValidationError: Error, Equatable, CustomStringConvertible {
 
 enum EditorInstallValidator {
     private static let resourceBundleBases = [
-        "GuavaStudioEditor_EditorUI",
-        "GuavaStudioEditor_EditorCore",
-        "GuavaStudioRuntime_RenderBackend",
-        "GuavaUI_GuavaUI",
-        "GuavaUI_GuavaUICompose",
-        "GuavaUI_GuavaUIWorkspace",
+        "DiffuseEditor_EditorUI",
+        "DiffuseEditor_EditorCore",
+        "DiffuseRuntime_RenderBackend",
+        "CoveUI_CoveUI",
+        "CoveUI_CoveUICompose",
+        "CoveUI_CoveUIWorkspace",
     ]
 
     static func validateEditorLayout(
@@ -57,22 +57,22 @@ enum EditorInstallValidator {
         let requiredFiles: [(label: String, url: URL, mustBeExecutable: Bool)] = isApplicationBundle
             ? [
                 ("Contents/MacOS/EditorApp", standardizedExecutable, true),
-                ("Contents/MacOS/GuavaPlayer",
-                 executableDirectory.appendingPathComponent("GuavaPlayer"), true),
-                ("Contents/Helpers/GuavaPluginHost",
-                 contentsDirectory.appendingPathComponent("Helpers/GuavaPluginHost"), true),
-                ("Contents/Helpers/GuavaMCP",
-                 contentsDirectory.appendingPathComponent("Helpers/GuavaMCP"), true),
+                ("Contents/MacOS/CovePlayer",
+                 executableDirectory.appendingPathComponent("CovePlayer"), true),
+                ("Contents/Helpers/DiffusePluginHost",
+                 contentsDirectory.appendingPathComponent("Helpers/DiffusePluginHost"), true),
+                ("Contents/Helpers/CoveMCP",
+                 contentsDirectory.appendingPathComponent("Helpers/CoveMCP"), true),
             ]
             : [
                 ("EditorApp\(suffix)",
                  executableDirectory.appendingPathComponent("EditorApp\(suffix)"), true),
-                ("GuavaPlayer\(suffix)",
-                 executableDirectory.appendingPathComponent("GuavaPlayer\(suffix)"), true),
-                ("Tools/GuavaPluginHost\(suffix)",
-                 executableDirectory.appendingPathComponent("Tools/GuavaPluginHost\(suffix)"), true),
-                ("Tools/GuavaMCP\(suffix)",
-                 executableDirectory.appendingPathComponent("Tools/GuavaMCP\(suffix)"), true),
+                ("CovePlayer\(suffix)",
+                 executableDirectory.appendingPathComponent("CovePlayer\(suffix)"), true),
+                ("Tools/DiffusePluginHost\(suffix)",
+                 executableDirectory.appendingPathComponent("Tools/DiffusePluginHost\(suffix)"), true),
+                ("Tools/CoveMCP\(suffix)",
+                 executableDirectory.appendingPathComponent("Tools/CoveMCP\(suffix)"), true),
             ]
         var missing = requiredFiles.compactMap { component in
             let isValid = component.mustBeExecutable

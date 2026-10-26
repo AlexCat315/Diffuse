@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// A text document's body: the editing surface, or a package's view of the
 /// document while the path bar has one switched on.

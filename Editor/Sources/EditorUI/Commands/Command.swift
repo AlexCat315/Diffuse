@@ -1,7 +1,7 @@
 internal import EditorCore
 private import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Every user-invokable editor action. Menus, the title-bar menu, the command
 /// palette and keyboard shortcuts all resolve to these values.

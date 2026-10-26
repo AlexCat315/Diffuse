@@ -71,8 +71,8 @@ final class NativeParticleTests: XCTestCase {
     private func parity(_ api: GraphicsAPI) throws {
         let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: false,framesInFlight: 3))
         let renderer = try NativeRenderer(device: device), reference = try SceneCapture(validation: true, api: api)
-        let textureURL = URL(fileURLWithPath: "/tmp/guava-native-particle-texture.bmp")
-        let retryURL = URL(fileURLWithPath: "/tmp/guava-no-particle-texture")
+        let textureURL = URL(fileURLWithPath: "/tmp/cove-native-particle-texture.bmp")
+        let retryURL = URL(fileURLWithPath: "/tmp/cove-no-particle-texture")
         try? FileManager.default.removeItem(at: retryURL)
         try textureFixture().write(to: textureURL)
         defer { try? FileManager.default.removeItem(at: textureURL); try? FileManager.default.removeItem(at: retryURL) }
@@ -135,7 +135,7 @@ final class NativeParticleTests: XCTestCase {
             XCTAssertEqual(renderer.lastFrameStats.gpuParticleIndirectDrawCount,reference.renderer.lastFrameStats.gpuParticleIndirectDrawCount)
             XCTAssertEqual(renderer.lastFrameUsedOpaqueCache,reference.renderer.lastFrameUsedOpaqueCache)
             if frame == 20 || frame == 21 || frame == 22 { XCTAssertTrue(renderer.lastFrameUsedOpaqueCache) }
-            let directory = URL(fileURLWithPath: "/tmp/guava-native-particles")
+            let directory = URL(fileURLWithPath: "/tmp/cove-native-particles")
             try FileManager.default.createDirectory(at: directory,withIntermediateDirectories: true)
             try GridImage.writePPM(native,size: packet.drawableSize,to: directory.appendingPathComponent("frame-\(frame).ppm"))
             try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("repeat-\(frame).ppm"))

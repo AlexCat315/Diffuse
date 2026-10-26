@@ -1,7 +1,7 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
-internal import GuavaUIWorkspace
+internal import CoveUI
+internal import CoveUIRuntime
+internal import CoveUIWorkspace
 
 /// The one switcher for the left side: each entry picks the sidebar's view,
 /// and picking the showing one again folds the sidebar away.

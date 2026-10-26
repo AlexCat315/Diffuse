@@ -1,6 +1,6 @@
 #if os(macOS) || os(Linux) || os(Windows)
 import Foundation
-private import GuavaLogging
+private import CoveLogging
 
 /// Line framing for stderr chunks delivered by the shared process service.
 final class PluginHostDiagnostics {
@@ -23,7 +23,7 @@ final class PluginHostDiagnostics {
             return lines
         }()
         for line in lines where !line.isEmpty {
-            LogSystem.logger("com.guava.engine.plugin.host").warning("\(String(decoding: line, as: UTF8.self))",
+            LogSystem.logger("com.cove.engine.plugin.host").warning("\(String(decoding: line, as: UTF8.self))",
                 metadata: ["child_pid": "\(pid)", "stream": "stderr"], source: "plugin.stderr")
         }
     }

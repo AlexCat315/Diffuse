@@ -1,5 +1,5 @@
 public import Foundation
-internal import GuavaProcess
+internal import CoveProcess
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif

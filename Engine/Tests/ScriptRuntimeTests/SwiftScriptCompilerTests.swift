@@ -23,9 +23,9 @@ struct SwiftScriptCompilerTests {
             return file.path
         }
         _ = try write("GeneratedModuleMaps/CTestBridge.modulemap", "module CTestBridge { export * }")
-        _ = try write("GuavaStudioRuntime.build/Debug-linux-x86_64/CTestBridge.build/module.modulemap", "module CTestBridge { export * }")
-        _ = try write("GuavaStudioRuntime.build/Debug-linux-x86_64/CNativeBridge.build/module.modulemap", "module CNativeBridge { export * }")
-        _ = try write("GuavaStudioRuntime.build/Release-linux-x86_64/CReleaseBridge.build/module.modulemap", "module CReleaseBridge { export * }")
+        _ = try write("DiffuseRuntime.build/Debug-linux-x86_64/CTestBridge.build/module.modulemap", "module CTestBridge { export * }")
+        _ = try write("DiffuseRuntime.build/Debug-linux-x86_64/CNativeBridge.build/module.modulemap", "module CNativeBridge { export * }")
+        _ = try write("DiffuseRuntime.build/Release-linux-x86_64/CReleaseBridge.build/module.modulemap", "module CReleaseBridge { export * }")
         _ = try write("GeneratedModuleMaps/ContextMemory.modulemap", "module ContextMemory { header \"ContextMemory-Swift.h\" }")
         _ = try write("GeneratedModuleMaps/CRemovedBridge.modulemap", "module CRemovedBridge { umbrella \"removed-include\" export * }")
         let alias = root.appendingPathComponent(".build/debug")
@@ -125,10 +125,10 @@ struct SwiftScriptCompilerTests {
         var moduleMapPaths = SwiftScriptCompiler.discoverClangModuleMapPaths(in: productsDirectory)
 
         // Bridges live in both packages now: engine-owned ones under Engine,
-        // and the shared graphics/image ones under the GuavaUI SDK.
-        let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+        // and the shared graphics/image ones under the CoveUI SDK.
+        let sdkRoot = ProcessInfo.processInfo.environment["COVE_SDK_ROOT"]
             .map { URL(fileURLWithPath: $0).standardizedFileURL }
-            ?? engineRoot.appendingPathComponent("../GuavaUI").standardizedFileURL
+            ?? engineRoot.appendingPathComponent("../CoveUI").standardizedFileURL
         let bridgeRoots = [
             engineRoot.appendingPathComponent("Sources/Bridge", isDirectory: true),
             sdkRoot.appendingPathComponent("Runtime/Sources/Bridge", isDirectory: true),

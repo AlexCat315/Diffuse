@@ -18,7 +18,7 @@ public struct AIToolContribution: Codable, Sendable, Equatable {
 }
 
 public enum AIToolContributionPoint: ContributionPointSpec {
-    public static let id = "guava.ai.tool/v1"
+    public static let id = "cove.ai.tool/v1"
 
     public static func validate(_ tool: AIToolContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(tool.entryPoint), tool.entryPoint != "components",

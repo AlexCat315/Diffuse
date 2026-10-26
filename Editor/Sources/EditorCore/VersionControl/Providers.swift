@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 import PluginRuntime
 
@@ -6,7 +6,7 @@ import PluginRuntime
 /// system, the marker that finds its working trees and the command it runs.
 struct VersionControlProvider: Sendable {
     let system: VersionControlSystem
-    let manifest: GuavaPluginManifest
+    let manifest: CovePluginManifest
     let contribution: VersionControlContribution
     let package: URL
     let process: PluginProcessPermission

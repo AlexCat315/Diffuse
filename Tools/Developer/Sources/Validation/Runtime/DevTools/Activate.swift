@@ -5,7 +5,7 @@ internal import ToolSupport
 /// It needs no visible geometry, so offscreen or virtualized items can be
 /// reached; query the result afterwards like any other input.
 enum ActivateUI {
-  static let usage = "guava-dev devtools activate-ui PORT|@SESSION_FILE NODE_ID [activate|increment|decrement|reveal] (reveal scrolls the node into view without activating it)"
+  static let usage = "cove-dev devtools activate-ui PORT|@SESSION_FILE NODE_ID [activate|increment|decrement|reveal] (reveal scrolls the node into view without activating it)"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {

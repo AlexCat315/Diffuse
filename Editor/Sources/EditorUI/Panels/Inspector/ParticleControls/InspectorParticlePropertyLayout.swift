@@ -1,5 +1,5 @@
 import EditorCore
-import GuavaUI
+import CoveUI
 
 enum InspectorParticlePropertyLayout {
     private struct Group {

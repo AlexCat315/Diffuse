@@ -1,7 +1,7 @@
 import Foundation
-import GuavaUI
-import GuavaUICompose
-import GuavaUIWorkspace
+import CoveUI
+import CoveUICompose
+import CoveUIWorkspace
 import Testing
 @testable import EditorUI
 
@@ -29,7 +29,7 @@ struct EditorPersistenceTests {
     @Test("Invalid persisted state is quarantined instead of deleted")
     func invalidStateIsQuarantined() throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-persistence-\(UUID().uuidString)")
+            .appendingPathComponent("diffuse-persistence-\(UUID().uuidString)")
         let url = directory.appendingPathComponent("editor_shell_state.json")
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -54,7 +54,7 @@ struct EditorPersistenceTests {
     @Test("Quarantine is a no-op when persisted state is absent")
     func absentStateIsIgnored() throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-persistence-absent-\(UUID().uuidString)")
+            .appendingPathComponent("diffuse-persistence-absent-\(UUID().uuidString)")
         let url = directory.appendingPathComponent("state.json")
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

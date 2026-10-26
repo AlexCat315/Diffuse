@@ -4,21 +4,21 @@ import XCTest
 
 final class PlayerInstallValidatorTests: XCTestCase {
     private let resourceBundleBases = [
-        "GuavaStudioEditor_EditorCore",
-        "GuavaStudioRuntime_RenderBackend",
-        "GuavaUI_GuavaUI",
-        "GuavaUI_GuavaUICompose",
-        "GuavaUI_GuavaUIWorkspace",
+        "DiffuseEditor_EditorCore",
+        "DiffuseRuntime_RenderBackend",
+        "CoveUI_CoveUI",
+        "CoveUI_CoveUICompose",
+        "CoveUI_CoveUIWorkspace",
     ]
 
     func testPortableLayoutAcceptsBundleAndResourcesDirectories() throws {
         let root = try makePortableLayout()
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.removeItem(
-            at: root.appendingPathComponent("GuavaUI_GuavaUICompose.bundle")
+            at: root.appendingPathComponent("CoveUI_CoveUICompose.bundle")
         )
         try createResourceBundle(
-            named: "GuavaUI_GuavaUICompose",
+            named: "CoveUI_CoveUICompose",
             in: root,
             suffix: "resources"
         )
@@ -34,10 +34,10 @@ final class PlayerInstallValidatorTests: XCTestCase {
         let root = try makePortableLayout()
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.removeItem(
-            at: root.appendingPathComponent("GuavaStudioRuntime_RenderBackend.bundle")
+            at: root.appendingPathComponent("DiffuseRuntime_RenderBackend.bundle")
         )
         try FileManager.default.removeItem(
-            at: root.appendingPathComponent("GuavaUI_GuavaUI.bundle")
+            at: root.appendingPathComponent("CoveUI_CoveUI.bundle")
         )
 
         XCTAssertThrowsError(try PlayerInstallValidator.validateLayout(
@@ -47,8 +47,8 @@ final class PlayerInstallValidatorTests: XCTestCase {
                 return XCTFail("unexpected error: \(error)")
             }
             XCTAssertEqual(missing, [
-                "GuavaStudioRuntime_RenderBackend.{bundle,resources}",
-                "GuavaUI_GuavaUI.{bundle,resources}",
+                "DiffuseRuntime_RenderBackend.{bundle,resources}",
+                "CoveUI_CoveUI.{bundle,resources}",
             ])
         }
     }
@@ -56,7 +56,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
     func testMacApplicationLooksForResourcesInContentsResources() throws {
         #if os(macOS)
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-player-app-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-player-app-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let app = root.appendingPathComponent("My Game.app", isDirectory: true)
         let executable = app.appendingPathComponent("Contents/MacOS/My Game")
@@ -80,7 +80,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
     func testMacApplicationRejectsMissingInfoPlist() throws {
         #if os(macOS)
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-player-app-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-player-app-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let app = root.appendingPathComponent("My Game.app", isDirectory: true)
         let executable = app.appendingPathComponent("Contents/MacOS/My Game")
@@ -120,7 +120,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
 
     private func makePortableLayout() throws -> URL {
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-player-install-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-player-install-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try makeExecutable(at: root.appendingPathComponent(executableName))
         for base in resourceBundleBases {
@@ -135,7 +135,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
         let bundle = root.appendingPathComponent("\(base).\(suffix)", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         let info: [String: Any] = [
-            "CFBundleIdentifier": "com.guava.tests.\(base.lowercased().replacingOccurrences(of: "_", with: "-"))",
+            "CFBundleIdentifier": "com.cove.tests.\(base.lowercased().replacingOccurrences(of: "_", with: "-"))",
             "CFBundleName": base,
             "CFBundlePackageType": "BNDL",
         ]
@@ -159,9 +159,9 @@ final class PlayerInstallValidatorTests: XCTestCase {
 
     private var executableName: String {
         #if os(Windows)
-        "GuavaPlayer.exe"
+        "CovePlayer.exe"
         #else
-        "GuavaPlayer"
+        "CovePlayer"
         #endif
     }
 

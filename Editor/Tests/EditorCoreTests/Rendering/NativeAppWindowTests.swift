@@ -4,13 +4,13 @@ import AppKit
 import Foundation
 import ImageIO
 import XCTest
-import GuavaUICompose
-import GuavaUIDevTools
+import CoveUICompose
+import CoveUIDevTools
 import NativeRHI
 import NativeRendererValidation
 import RenderBackend
-@testable import GuavaUI
-@testable import GuavaUIRuntime
+@testable import CoveUI
+@testable import CoveUIRuntime
 
 private final class WindowSceneWorker: @unchecked Sendable {
     private let renderer: NativeGridRenderer

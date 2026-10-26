@@ -1,5 +1,5 @@
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Where the command tree appears. macOS owns a native menu bar. Windows and
 /// Linux windows draw an immersive title bar in the client area, where a

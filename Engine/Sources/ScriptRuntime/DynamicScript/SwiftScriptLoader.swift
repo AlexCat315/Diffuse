@@ -15,8 +15,8 @@ import WinSDK
 /// The compiler-generated shim exports authoring metadata and a C factory:
 ///
 /// ```
-/// @_cdecl("guavaCreateScript")
-/// public func guavaCreateScript(_ out: UnsafeMutablePointer<Script>)
+/// @_cdecl("coveCreateScript")
+/// public func coveCreateScript(_ out: UnsafeMutablePointer<Script>)
 /// ```
 ///
 /// The factory writes a fully configured `Script` value into the out-parameter.
@@ -62,8 +62,8 @@ public final class SwiftScriptLoader: @unchecked Sendable {
         // known-good script offline.
         let handle = try openLibrary(path: libraryPath)
 
-        guard let symbol = lookupSymbol(handle: handle, name: "guavaCreateScript") else {
-            throw ScriptLoadError.symbolNotFound("guavaCreateScript")
+        guard let symbol = lookupSymbol(handle: handle, name: "coveCreateScript") else {
+            throw ScriptLoadError.symbolNotFound("coveCreateScript")
         }
 
         // The factory writes a Script value through an out-pointer.
@@ -73,8 +73,8 @@ public final class SwiftScriptLoader: @unchecked Sendable {
         let createScript = unsafeBitCast(symbol, to: CreateScriptFn.self)
         let library = LoadedLibrary(handle: handle)
         // Read metadata without constructing or starting a behavior instance.
-        guard let definitionSymbol = lookupSymbol(handle: handle, name: "guavaScriptDefinition") else {
-            throw ScriptLoadError.symbolNotFound("guavaScriptDefinition")
+        guard let definitionSymbol = lookupSymbol(handle: handle, name: "coveScriptDefinition") else {
+            throw ScriptLoadError.symbolNotFound("coveScriptDefinition")
         }
         var definition = ScriptDefinition()
         let readDefinition = unsafeBitCast(definitionSymbol, to: CreateScriptFn.self)

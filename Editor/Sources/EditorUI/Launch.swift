@@ -1,11 +1,11 @@
-import GuavaLogging
+import CoveLogging
 import Foundation
 import EngineCore
 import EngineKernel
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
-import GuavaUIWorkspace
+import CoveUI
+import CoveUIRuntime
+import CoveUIWorkspace
 import NativeRHI
 import RenderBackend
 import CardBattleRuntime
@@ -39,7 +39,7 @@ private func runEditor() throws {
         FileHandle.standardOutput.write(Data("\(report)\n".utf8))
         return
     }
-    if CommandLine.arguments.contains("--script-editor-demo") || ProcessInfo.processInfo.environment["GUAVA_SCRIPT_EDITOR_DEMO"] == "1" {
+    if CommandLine.arguments.contains("--script-editor-demo") || ProcessInfo.processInfo.environment["COVE_SCRIPT_EDITOR_DEMO"] == "1" {
         try runScriptEditorDemo(backendConfig: launchOptions.backendConfig)
         return
     }
@@ -75,14 +75,14 @@ private func runEditor() throws {
         RunLoop.main.add(simulationTimer, forMode: .default)
         defer { simulationTimer.invalidate() }
         defer { app.shutdown() }
-        LogSystem.logger("com.guava.editor").info("Headless editor ready", metadata: ["project": "\(directory)"])
+        LogSystem.logger("com.cove.editor").info("Headless editor ready", metadata: ["project": "\(directory)"])
         RunLoop.main.run()
         return
     }
-    // The editor runs on the GuavaUICompose + Application stack. The GuavaKit
+    // The editor runs on the CoveUICompose + Application stack. The CoveKit
     // from-scratch rewrite served as the architecture blueprint for the
     // in-place runtime refactor and has been deleted
-    // (docs/guavaui-inplace-architecture-refactor.md §5).
+    // (docs/coveui-inplace-architecture-refactor.md §5).
     try runLegacyEditor(launchOptions: launchOptions)
 }
 
@@ -94,7 +94,7 @@ private func requestedEditorRendererName() throws -> String {
         }
         return CommandLine.arguments[index + 1].lowercased()
     }
-    return ProcessInfo.processInfo.environment["GUAVA_RENDERER"]?.lowercased() ?? "native"
+    return ProcessInfo.processInfo.environment["COVE_RENDERER"]?.lowercased() ?? "native"
 }
 
 private func makeEditorRenderDevice(config: DeviceConfig) throws -> Device {
@@ -117,9 +117,9 @@ private func makeEditorRenderDevice(config: DeviceConfig) throws -> Device {
 @MainActor
 private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     // UI preferences (@AppStorage) live next to the shell-state/layout JSONs
-    // in Application Support/Guava.
+    // in Application Support/Cove.
     AppStorageDefaults.store = FileAppStorageStore(
-        url: FileAppStorageStore.defaultURL(appName: "Guava")
+        url: FileAppStorageStore.defaultURL(appName: "Cove")
     )
     let renderDevice = try makeEditorRenderDevice(config: launchOptions.backendConfig)
     let events = PlatformEventBridge()
@@ -136,7 +136,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
 
     try context.restoreProjects(front: launchOptions.projectDirectory)
 
-    if ProcessInfo.processInfo.environment["GUAVA_EDITOR_SAMPLE_HUD"] == "1" {
+    if ProcessInfo.processInfo.environment["COVE_EDITOR_SAMPLE_HUD"] == "1" {
         let host = inGameUIHost
 
         let initialBattleState = BattleStateMachine.reduce(
@@ -154,7 +154,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     }
 
     try Application.run(
-        config: ApplicationConfiguration(title: "GuavaStudio") {
+        config: ApplicationConfiguration(title: "Diffuse") {
             $0.rendering.clearColor = SIMD4(0x1E / 255, 0x1F / 255, 0x22 / 255, 1)
             $0.window.titleBarStyle = .hiddenInset
         },
@@ -194,7 +194,7 @@ public enum EditorLauncher {
             try runEditor()
         }
         catch {
-            LogSystem.logger("com.guava.editor").error("Editor startup failed", metadata: ["error": "\(error)"])
+            LogSystem.logger("com.cove.editor").error("Editor startup failed", metadata: ["error": "\(error)"])
             LogSystem.flush()
             exit(1)
         }

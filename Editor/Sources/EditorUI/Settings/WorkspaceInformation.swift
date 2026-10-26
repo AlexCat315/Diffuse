@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 private import Foundation
 
 struct AboutSettings: View {
@@ -16,7 +16,7 @@ struct AboutSettings: View {
             Row(alignment: .center, spacing: 12) {
                 SettingsBrandMark(size: 44)
                 Column(alignment: .leading, spacing: 4) {
-                    Text("Guava Studio").font(.headline).foregroundColor(.onSurface)
+                    Text("Cove Studio").font(.headline).foregroundColor(.onSurface)
                     Text(version).font(.caption).foregroundColor(.onSurfaceMuted)
                 }
             }
@@ -26,7 +26,7 @@ struct AboutSettings: View {
             Text(L("Copy application and workspace information for a support request. Credentials are excluded."))
                 .font(.body).foregroundColor(.onSurfaceMuted)
             Button(copied ? L("Copied") : L("Copy diagnostics"), isEnabled: ClipboardHolder.write != nil) {
-                ClipboardHolder.write?("Guava Studio \(version)\nOS: \(ProcessInfo.processInfo.operatingSystemVersionString)\nProject: \(app.projectDirectory)\nContent: \(app.store.content.rawValue)\nTheme: \(app.store.themeMode)\nLanguage: \(app.store.language)\nPlugins: \(app.store.pluginManagement.installed.filter(\.lifecycle.isEnabled).count)")
+                ClipboardHolder.write?("Cove Studio \(version)\nOS: \(ProcessInfo.processInfo.operatingSystemVersionString)\nProject: \(app.projectDirectory)\nContent: \(app.store.content.rawValue)\nTheme: \(app.store.themeMode)\nLanguage: \(app.store.language)\nPlugins: \(app.store.pluginManagement.installed.filter(\.lifecycle.isEnabled).count)")
                 copied = true
             }.buttonStyle(.secondary).debugName("settings-copy-diagnostics")
         }

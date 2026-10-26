@@ -1,7 +1,7 @@
 import Foundation
 
 public enum AIProviderContributionPoint: ContributionPointSpec {
-    public static let id = "guava.ai.provider/v1"
+    public static let id = "cove.ai.provider/v1"
 
     public static func validate(_ provider: AIProviderContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(provider.id), ContributionValidation.title(provider.title),

@@ -26,15 +26,15 @@ struct ScriptCBridgeContextTests {
                         Issue.record("The other scene did not reach its callback")
                         return
                     }
-                    #expect(guavaDeltaTime() == Float(context.deltaTime))
-                    #expect(_guavaCurrentScriptContext === context)
+                    #expect(coveDeltaTime() == Float(context.deltaTime))
+                    #expect(_coveCurrentScriptContext === context)
                 })
                 var scene = SceneRuntime()
                 scene.setScriptDriver(scripts)
                 let entity = scene.createEntity()
                 _ = scene.setComponent(ScriptComponent(handle), for: entity)
                 _ = scene.tick(deltaTime: deltaTime)
-                #expect(_guavaCurrentScriptContext == nil)
+                #expect(_coveCurrentScriptContext == nil)
             }.start()
         }
         #expect(finished.wait(timeout: .now() + 10) == .success)
@@ -46,22 +46,22 @@ struct ScriptCBridgeContextTests {
         let handle = scripts.register(Script().onUpdate { outer in
             let innerScripts = ScriptRuntime()
             let innerHandle = innerScripts.register(Script().onUpdate { _ in
-                #expect(guavaDeltaTime() == 0.5)
+                #expect(coveDeltaTime() == 0.5)
             })
             var inner = SceneRuntime()
             inner.setScriptDriver(innerScripts)
             let innerEntity = inner.createEntity()
             _ = inner.setComponent(ScriptComponent(innerHandle), for: innerEntity)
             _ = inner.tick(deltaTime: 0.5)
-            #expect(_guavaCurrentScriptContext === outer)
-            #expect(guavaDeltaTime() == 0.25)
+            #expect(_coveCurrentScriptContext === outer)
+            #expect(coveDeltaTime() == 0.25)
         })
         var scene = SceneRuntime()
         scene.setScriptDriver(scripts)
         let entity = scene.createEntity()
         _ = scene.setComponent(ScriptComponent(handle), for: entity)
         _ = scene.tick(deltaTime: 0.25)
-        #expect(_guavaCurrentScriptContext == nil)
+        #expect(_coveCurrentScriptContext == nil)
     }
 
     @Test("removed bindings receive a C bridge context in onDestroy")
@@ -70,8 +70,8 @@ struct ScriptCBridgeContextTests {
         let destroyed = ScriptVar(false)
         let handle = scripts.register(Script().onDestroy { context in
             destroyed.value = true
-            #expect(_guavaCurrentScriptContext === context)
-            #expect(guavaDeltaTime() == 0.25)
+            #expect(_coveCurrentScriptContext === context)
+            #expect(coveDeltaTime() == 0.25)
         })
         var scene = SceneRuntime()
         scene.setScriptDriver(scripts)
@@ -81,6 +81,6 @@ struct ScriptCBridgeContextTests {
         _ = scene.removeComponent(ScriptComponent.self, from: entity)
         _ = scene.tick(deltaTime: 0.25)
         #expect(destroyed.value)
-        #expect(_guavaCurrentScriptContext == nil)
+        #expect(_coveCurrentScriptContext == nil)
     }
 }

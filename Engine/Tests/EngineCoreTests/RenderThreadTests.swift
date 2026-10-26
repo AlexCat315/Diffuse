@@ -10,8 +10,8 @@ import SIMDCompat
 @Suite("RenderThread")
 struct RenderThreadTests {
     @Test("RenderThread consumes real packets through the NativeRHI grid renderer",
-          .enabled(if: ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1",
-                   "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"))
+          .enabled(if: ProcessInfo.processInfo.environment["COVE_RUN_GPU_SMOKE_TESTS"] == "1",
+                   "set COVE_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"))
     func nativeGridRenderPacketIntegration() throws {
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal], enableValidation: false))
         let consumer = try NativeGridRenderer(device: device)
@@ -40,8 +40,8 @@ struct RenderThreadTests {
         #expect(resource.texture == consumer.colorTexture)
     }
     @Test("RenderThread consumes indexed scene packets through NativeRenderer",
-          .enabled(if: ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1",
-                   "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"))
+          .enabled(if: ProcessInfo.processInfo.environment["COVE_RUN_GPU_SMOKE_TESTS"] == "1",
+                   "set COVE_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"))
     func nativeSceneRenderPacketIntegration() throws {
         let device = try Device.make(DeviceConfig(preferredBackends: [.metal], enableValidation: false))
         let consumer = try NativeRenderer(device: device)

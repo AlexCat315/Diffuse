@@ -1,7 +1,7 @@
 internal import EditorCore
 private import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The conversation at the center of the agent view, kept to a reading width.
 struct AssistantThread: View {
@@ -169,7 +169,7 @@ struct AssistantThread: View {
         if !app.isAIAvailable { return L("Assistant offline") }
         if !app.isSceneAuthoringEnabled { return L("Stop the game to send a request") }
         if app.store.pendingConfirmationRequest != nil { return L("Review the pending changes first") }
-        if busy { return L("Guava is working") }
+        if busy { return L("Cove is working") }
         return L("Review before applying")
     }
 

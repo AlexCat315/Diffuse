@@ -50,7 +50,7 @@ public enum PluginWITContractDeriver {
 /// Immutable result shown to the user before enabling a plugin. It binds the
 /// exact code, WIT boundary, manifest authority, and AI-visible contracts.
 public struct PluginInspection: Codable, Sendable, Equatable {
-    public var manifest: GuavaPluginManifest
+    public var manifest: CovePluginManifest
     public var componentHash: String?
     public var witHash: String?
     public var resourceHashes: [String: String] = [:]
@@ -65,7 +65,7 @@ public struct PluginInspection: Codable, Sendable, Equatable {
         self.contracts = contracts.sorted { $0.id < $1.id }
     }
 
-    public init(manifest: GuavaPluginManifest,
+    public init(manifest: CovePluginManifest,
                 componentHash: String?,
                 witHash: String?,
                 contracts: [CapabilityContract]) {
@@ -186,7 +186,7 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
         return CapabilityDigest.sha256(data)
     }
 
-    private static func digest(_ manifest: GuavaPluginManifest) -> String {
+    private static func digest(_ manifest: CovePluginManifest) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return CapabilityDigest.sha256(try! encoder.encode(manifest))

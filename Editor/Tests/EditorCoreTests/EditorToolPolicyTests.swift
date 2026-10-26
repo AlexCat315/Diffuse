@@ -57,7 +57,7 @@ struct EditorToolPolicyTests {
     @MainActor
     func projectToolPolicyGatesExecution() async throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-tool-policy-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-tool-policy-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
 

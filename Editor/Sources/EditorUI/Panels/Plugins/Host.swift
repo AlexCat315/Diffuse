@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 internal import PluginRuntime
 
 /// A plugin view, for a panel or a document: the component tree its package

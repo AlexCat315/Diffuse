@@ -70,7 +70,7 @@ final class NativePBRTests: XCTestCase {
             }
             if frame < 7 { XCTAssertTrue(renderer.lastFrameStats.activePasses.contains(.tonemap)) }
             snapshots.append(native)
-            let directory = URL(fileURLWithPath: "/tmp/guava-native-pbr-\(api.rawValue)")
+            let directory = URL(fileURLWithPath: "/tmp/cove-native-pbr-\(api.rawValue)")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try GridImage.writePPM(native,size: packet.drawableSize,to: directory.appendingPathComponent("frame-\(frame).ppm"))
             try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("repeat-\(frame).ppm"))

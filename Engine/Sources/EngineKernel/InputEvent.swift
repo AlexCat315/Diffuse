@@ -1,16 +1,16 @@
-@_exported import GuavaPlatformCore
+@_exported import CovePlatformCore
 
-public typealias KeyModifiers = GuavaPlatformCore.KeyModifiers
-public typealias KeyEvent = GuavaPlatformCore.KeyEvent
-public typealias TextEditingEvent = GuavaPlatformCore.TextEditingEvent
-public typealias TextInputArea = GuavaPlatformCore.TextInputArea
-public typealias MouseButton = GuavaPlatformCore.MouseButton
-public typealias MouseMotionEvent = GuavaPlatformCore.MouseMotionEvent
-public typealias MouseButtonEvent = GuavaPlatformCore.MouseButtonEvent
-public typealias MouseWheelEvent = GuavaPlatformCore.MouseWheelEvent
-public typealias InputEvent = GuavaPlatformCore.InputEvent
-public typealias GamepadButton = GuavaPlatformCore.GamepadButton
-public typealias GamepadAxis = GuavaPlatformCore.GamepadAxis
-public typealias GamepadButtonEvent = GuavaPlatformCore.GamepadButtonEvent
-public typealias GamepadAxisEvent = GuavaPlatformCore.GamepadAxisEvent
-public typealias WindowInputEvent = GuavaPlatformCore.WindowInputEvent
+public typealias KeyModifiers = CovePlatformCore.KeyModifiers
+public typealias KeyEvent = CovePlatformCore.KeyEvent
+public typealias TextEditingEvent = CovePlatformCore.TextEditingEvent
+public typealias TextInputArea = CovePlatformCore.TextInputArea
+public typealias MouseButton = CovePlatformCore.MouseButton
+public typealias MouseMotionEvent = CovePlatformCore.MouseMotionEvent
+public typealias MouseButtonEvent = CovePlatformCore.MouseButtonEvent
+public typealias MouseWheelEvent = CovePlatformCore.MouseWheelEvent
+public typealias InputEvent = CovePlatformCore.InputEvent
+public typealias GamepadButton = CovePlatformCore.GamepadButton
+public typealias GamepadAxis = CovePlatformCore.GamepadAxis
+public typealias GamepadButtonEvent = CovePlatformCore.GamepadButtonEvent
+public typealias GamepadAxisEvent = CovePlatformCore.GamepadAxisEvent
+public typealias WindowInputEvent = CovePlatformCore.WindowInputEvent

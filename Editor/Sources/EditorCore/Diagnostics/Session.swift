@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUIAgent
+import CoveUIAgent
 
 final class EditorDiagnosticSession {
     var ui: UIDiagnostics?

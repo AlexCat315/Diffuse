@@ -1,6 +1,6 @@
 import Foundation
-import GuavaLogging
-import GuavaUIRuntime
+import CoveLogging
+import CoveUIRuntime
 
 final class EditorSubscriptions {
     var events: PlatformEventBridge.SubscriptionToken?

@@ -1,7 +1,7 @@
 @testable import EditorCore
 import EngineKernel
-import GuavaUIRuntime
-import GuavaUICompose
+import CoveUIRuntime
+import CoveUICompose
 import Testing
 
 @Suite("Script HUD canvas", .serialized)

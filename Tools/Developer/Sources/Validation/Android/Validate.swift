@@ -2,10 +2,10 @@ internal import Foundation
 internal import ToolSupport
 
 /// Port of `scripts/android/validate.py`: cross-compiles and runs the strict
-/// NativeRHI/GuavaUI Vulkan probes on an ARM64 device.
+/// NativeRHI/CoveUI Vulkan probes on an ARM64 device.
 enum ValidateOperation {
   private static let expected: Set<String> = [
-    "layout", "transfer", "compute", "raster-1x", "raster-4x", "guavaui-1x", "guavaui-4x",
+    "layout", "transfer", "compute", "raster-1x", "raster-4x", "coveui-1x", "coveui-4x",
   ]
 
   static func run(_ arguments: [String]) throws {
@@ -27,7 +27,7 @@ enum ValidateOperation {
       throw ToolError.message("This validation package currently targets arm64-v8a")
     }
 
-    let products = try AndroidTools.build("GuavaAndroidProbe", ndk)
+    let products = try AndroidTools.build("CoveAndroidProbe", ndk)
     let directory = try AndroidTools.makeRunDirectory("run-")
 
     let properties = [
@@ -50,7 +50,7 @@ enum ValidateOperation {
     let artifacts = directory.appendingPathComponent("Artifacts")
     try Fs.directory(artifacts)
     let slangc = AndroidTools.root.appendingPathComponent("Engine/vendor/slang/bin/slangc")
-    let fixtures = AndroidTools.guavaSDKRoot.appendingPathComponent("Runtime/Tests/NativeRHITests/Fixtures")
+    let fixtures = AndroidTools.coveSDKRoot.appendingPathComponent("Runtime/Tests/NativeRHITests/Fixtures")
     for shader in [
       ("compute", "compute", "computeMain", "compute"),
       ("raster.vertex", "raster", "vertexMain", "vertex"),
@@ -62,20 +62,20 @@ enum ValidateOperation {
         output: artifacts.appendingPathComponent(shader.0 + ".json"), slangc: slangc)
     }
 
-    let remote = "/data/local/tmp/guava-rhi-" + directory.lastPathComponent
+    let remote = "/data/local/tmp/cove-rhi-" + directory.lastPathComponent
     try Command.run(adb + ["shell", "mkdir", "-p", remote])
     let libcxx = try AndroidTools.ndkHost(ndk)
       .appendingPathComponent("sysroot/usr/lib/aarch64-linux-android/libc++_shared.so")
     try Command.run(
       adb + [
         "push",
-        products.appendingPathComponent("GuavaAndroidProbe").path,
-        products.appendingPathComponent("GuavaUI_GuavaUIRuntime.bundle").path,
+        products.appendingPathComponent("CoveAndroidProbe").path,
+        products.appendingPathComponent("CoveUI_CoveUIRuntime.bundle").path,
         artifacts.path, libcxx.path, remote + "/",
       ])
     let command =
-      "cd \(AndroidTools.shellQuote(remote)) && chmod 755 GuavaAndroidProbe"
-      + " && LD_LIBRARY_PATH=. ./GuavaAndroidProbe Artifacts results"
+      "cd \(AndroidTools.shellQuote(remote)) && chmod 755 CoveAndroidProbe"
+      + " && LD_LIBRARY_PATH=. ./CoveAndroidProbe Artifacts results"
     let status = try Command.attempt(adb + ["shell", command], timeout: 120)
     try Fs.write(status.stdout + status.stderr, to: directory.appendingPathComponent("device.log"))
     FileHandle.standardOutput.write(status.stdout)

@@ -6,7 +6,7 @@ import Testing
 struct ProjectResourceWalkerTests {
     @Test("pruning generated folders preserves every unrelated nested resource")
     func siblingDirectories() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-walk-\(UUID())")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-walk-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         for path in ["Build/Generated/ignored.png", "Assets/Audio/theme.wav", "Textures/kept.png"] {
             let url = root.appendingPathComponent(path)
@@ -19,7 +19,7 @@ struct ProjectResourceWalkerTests {
 
     @Test("directory symlinks do not import resources outside the project or form traversal cycles")
     func symlinkBoundary() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-walk-\(UUID())")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-walk-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         let project = root.appendingPathComponent("Project")
         let outside = root.appendingPathComponent("Outside")

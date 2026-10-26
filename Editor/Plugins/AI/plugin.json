@@ -7,14 +7,14 @@
   "imports": [],
   "composable_host_capabilities": [],
   "contributes": {
-    "guava.ai.agent/v1": [
+    "cove.ai.agent/v1": [
       {
         "id": "assistant",
         "title": "Assistant",
         "context": ["scene", "selection", "edits", "memory", "transactions", "workflow", "assets", "git", "lore"]
       }
     ],
-    "guava.ui.panel/v1": [
+    "cove.ui.panel/v1": [
       {
         "id": "intent-input",
         "title": "Assistant",
@@ -23,7 +23,7 @@
         "view": "agent"
       }
     ],
-    "guava.ai.provider/v1": [
+    "cove.ai.provider/v1": [
       {
         "id": "anthropic",
         "title": "Anthropic",

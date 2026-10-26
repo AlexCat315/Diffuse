@@ -5,4 +5,4 @@
 typedef struct {
     ANativeWindow* window;
     void* session;
-} GuavaSurface;
+} CoveSurface;

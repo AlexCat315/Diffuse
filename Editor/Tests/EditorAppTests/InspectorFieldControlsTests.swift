@@ -1,5 +1,5 @@
 import EditorCore
-import GuavaUICompose
+import CoveUICompose
 import SceneRuntime
 import Testing
 @testable import EditorUI

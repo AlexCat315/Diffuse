@@ -21,13 +21,13 @@ enum VerifyOperation {
 
   static func verify(probe: URL) throws {
     let temporary = FileManager.default.temporaryDirectory
-      .appendingPathComponent("guava-plugin-probe-" + UUID().uuidString)
+      .appendingPathComponent("cove-plugin-probe-" + UUID().uuidString)
     try Fs.directory(temporary)
     defer { try? Fs.remove(temporary) }
 
     try PrepareOperation.prepare(probe: probe, output: temporary)
     let components = PrepareOperation.fixtures.map {
-      temporary.appendingPathComponent($0.name + ".guavaplugin/component.wasm").path
+      temporary.appendingPathComponent($0.name + ".coveplugin/component.wasm").path
     }
     for mode in ["native", "pulley"] {
       try Shell.inherit([probe.path] + components + [mode])

@@ -1,5 +1,5 @@
 import Foundation
-import GuavaLogging
+import CoveLogging
 private var loggingConfiguration = LoggingConfiguration()
 try loggingConfiguration.applyEnvironment(ProcessInfo.processInfo.environment)
 try LogSystem.bootstrap(configuration: loggingConfiguration)
@@ -11,7 +11,7 @@ var arguments = Array(CommandLine.arguments.dropFirst())
 if !arguments.contains("--scene") { arguments = ["--scene", "mesh"] + arguments }
 do { try NativePassBenchmark.run(arguments: arguments) }
 catch {
-    LogSystem.logger("com.guava.tools").error("renderer benchmark failed: \(error)")
+    LogSystem.logger("com.cove.tools").error("renderer benchmark failed: \(error)")
         LogSystem.flush()
     exit(1)
 }

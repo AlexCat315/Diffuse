@@ -1,5 +1,5 @@
 import CapabilityRuntime
-import GuavaUIAgent
+import CoveUIAgent
 import Foundation
 
 public enum EditorWorkflowFeature: String, Sendable, Hashable {

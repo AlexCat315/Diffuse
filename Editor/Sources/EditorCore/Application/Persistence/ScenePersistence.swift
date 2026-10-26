@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import AIRuntime
 import ContextMemory
 import AssetPipeline
@@ -14,8 +14,8 @@ import SemanticPipeline
 import RenderBackend
 import NativeRHI
 import SceneRuntime
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import Foundation
 import SIMDCompat
 
@@ -30,8 +30,8 @@ extension EditorApplication {
     @discardableResult
     public func saveSceneManifest() -> URL? {
         do {
-            let guavaDirectory = sceneManifestURL.deletingLastPathComponent()
-            try FileManager.default.createDirectory(at: guavaDirectory,
+            let coveDirectory = sceneManifestURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: coveDirectory,
                                                     withIntermediateDirectories: true)
             let authoredOutput = authoredSceneManifest()
             let encoder = JSONEncoder()
@@ -87,7 +87,7 @@ extension EditorApplication {
     }
 
     /// Loads an Editor scene manifest from an explicit location. Subsequent
-    /// saves still target this project's canonical `.guava` manifest.
+    /// saves still target this project's canonical `.cove` manifest.
     public func openSceneManifest(at url: URL) -> EditorSceneManifest? {
         openSceneManifest(from: url, clearRecoveryOnSuccess: true, logMissing: true)
     }
@@ -205,7 +205,7 @@ extension EditorApplication {
 
     private var sceneManifestURL: URL {
         URL(fileURLWithPath: projectDirectory, isDirectory: true)
-            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent(".cove", isDirectory: true)
             .appendingPathComponent("editor-scene-manifest.json")
     }
 

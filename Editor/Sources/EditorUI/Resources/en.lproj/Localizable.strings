@@ -110,7 +110,7 @@
 "Help" = "Help";
 "New Scene" = "New Scene";
 "Open Scene..." = "Open Scene...";
-"Guava Scene" = "Guava Scene";
+"Cove Scene" = "Cove Scene";
 "Save Scene" = "Save Scene";
 "Import Assets..." = "Import Assets...";
 "Undo" = "Undo";
@@ -122,7 +122,7 @@
 "Build Project" = "Build Project";
 "Build and Run" = "Build and Run";
 "Documentation" = "Documentation";
-"About Guava" = "About Guava";
+"About Cove" = "About Cove";
 "Version" = "Version";
 "Development Build" = "Development Build";
 "An AI-assisted workstation for code, games, animation and video." = "An AI-assisted workstation for code, games, animation and video.";
@@ -144,7 +144,7 @@
 "Bake" = "Bake";
 "Pause" = "Pause";
 "Stop" = "Stop";
-"Guava Make" = "Guava Make";
+"Cove Make" = "Cove Make";
 "Settings" = "Settings";
 "Platforms" = "Platforms";
 "Preset" = "Preset";
@@ -182,7 +182,7 @@
 "Stored credential could not be removed. See Console for details." = "Stored credential could not be removed. See Console for details.";
 "AI Plugins" = "AI Plugins";
 "PluginHost is unavailable. Rebuild or reinstall the Editor." = "PluginHost is unavailable. Rebuild or reinstall the Editor.";
-"Choose .guavaplugin Folder" = "Choose .guavaplugin Folder";
+"Choose .coveplugin Folder" = "Choose .coveplugin Folder";
 "Inspecting plugin without loading it…" = "Inspecting plugin without loading it…";
 "Enabled Plugins" = "Enabled Plugins";
 "Access" = "Access";
@@ -381,7 +381,7 @@
 "Front to Back" = "Front to Back";
 "GPU Preferred" = "GPU Preferred";
 "GPU Required" = "GPU Required";
-"GuavaStudio" = "GuavaStudio";
+"Diffuse" = "Diffuse";
 "Half Extents" = "Half Extents";
 "Half Height" = "Half Height";
 "Height Field" = "Height Field";
@@ -672,7 +672,7 @@
 "Convert the files to a supported model or texture format, then import again." = "Convert the files to a supported model or texture format, then import again.";
 "Open Problems, repair the reported files, then Reload Assets." = "Open Problems, repair the reported files, then Reload Assets.";
 "Check project assets and script trust in Settings, then export again." = "Check project assets and script trust in Settings, then export again.";
-"Build GuavaPlayer or set GUAVA_PLAYER_EXECUTABLE, then export again." = "Build GuavaPlayer or set GUAVA_PLAYER_EXECUTABLE, then export again.";
+"Build CovePlayer or set COVE_PLAYER_EXECUTABLE, then export again." = "Build CovePlayer or set COVE_PLAYER_EXECUTABLE, then export again.";
 "Check Build Output and project assets, fix the errors, then export again." = "Check Build Output and project assets, fix the errors, then export again.";
 "Enter a project-relative path and save scripts referencing this asset before moving it." = "Enter a project-relative path and save scripts referencing this asset before moving it.";
 "Check the destination, file permissions and dependencies, then retry." = "Check the destination, file permissions and dependencies, then retry.";
@@ -754,14 +754,14 @@
 "Session Journal" = "Session Journal";
 "This Session" = "This Session";
 "Project commands" = "Project commands";
-"Tell Guava what you want to do…" = "Tell Guava what you want to do…";
-"Tell Guava what you want to do… (> commands, @ files, # entities)" = "Tell Guava what you want to do… (> commands, @ files, # entities)";
+"Tell Cove what you want to do…" = "Tell Cove what you want to do…";
+"Tell Cove what you want to do… (> commands, @ files, # entities)" = "Tell Cove what you want to do… (> commands, @ files, # entities)";
 "A fresh start" = "A fresh start";
 "Tasks and activity appear here as you work." = "Tasks and activity appear here as you work.";
 "New Task" = "New Task";
 "Clear conversation" = "Clear conversation";
 "What shall we make?" = "What shall we make?";
-"One workspace. A shared scene. Tell Guava what you want to create, change, or understand." = "One workspace. A shared scene. Tell Guava what you want to create, change, or understand.";
+"One workspace. A shared scene. Tell Cove what you want to create, change, or understand." = "One workspace. A shared scene. Tell Cove what you want to create, change, or understand.";
 "Connect an AI provider to start working together." = "Connect an AI provider to start working together.";
 "Set up Assistant" = "Set up Assistant";
 "TRY A STARTING POINT" = "TRY A STARTING POINT";
@@ -770,7 +770,7 @@
 "Find issues in this project" = "Find issues in this project";
 "Review before applying" = "Review before applying";
 "Context" = "Context";
-"Ask Guava" = "Ask Guava";
+"Ask Cove" = "Ask Cove";
 "Open Assistant" = "Open Assistant";
 "Work with the assistant in this context" = "Work with the assistant in this context";
 
@@ -790,7 +790,7 @@
 "Run" = "Run";
 "Space" = "Space";
 "Open Resource..." = "Open Resource...";
-"Ask Guava..." = "Ask Guava...";
+"Ask Cove..." = "Ask Cove...";
 "Play / Pause" = "Play / Pause";
 "Settings..." = "Settings...";
 "Scene Settings" = "Scene Settings";
@@ -798,7 +798,7 @@
 "Hide %@" = "Hide %@";
 "Hide Others" = "Hide Others";
 "Quit %@" = "Quit %@";
-"Guava is working" = "Guava is working";
+"Cove is working" = "Cove is working";
 "Assistant ready" = "Assistant ready";
 "Assistant offline" = "Assistant offline";
 "Select" = "Select";

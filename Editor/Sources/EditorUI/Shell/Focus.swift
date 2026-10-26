@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import StudioDocuments
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// What the window is working on: the open document in text Spaces, the
 /// selected entity in scene Spaces. The title bar, the ⌘K palette and the

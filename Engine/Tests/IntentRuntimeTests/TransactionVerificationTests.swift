@@ -6,7 +6,7 @@ import Testing
 
 @Suite("Transaction verification")
 struct TransactionVerificationTests {
-    private struct RenameInput: GuavaCapabilityInput {
+    private struct RenameInput: CoveCapabilityInput {
         var entityID: UInt64
         var name: String
 
@@ -21,7 +21,7 @@ struct TransactionVerificationTests {
         ], required: ["entity_id", "name"])
     }
 
-    private struct RenameCapability: GuavaCapability {
+    private struct RenameCapability: CoveCapability {
         static let id = "test.rename"
         static let title = "Rename"
         static let description = "Rename an entity"
@@ -39,13 +39,13 @@ struct TransactionVerificationTests {
         }
     }
 
-    private struct UnsafeInput: GuavaCapabilityInput {
+    private struct UnsafeInput: CoveCapabilityInput {
         var payload: String
         static let inputSchema = JSONSchema.object(properties: ["payload": .any()],
                                                    required: ["payload"])
     }
 
-    private struct UnsafeCapability: GuavaCapability {
+    private struct UnsafeCapability: CoveCapability {
         static let id = "test.unsafe"
         static let title = "Unsafe"
         static let description = "Contains an open value"
@@ -74,7 +74,7 @@ struct TransactionVerificationTests {
         init() {}
     }
 
-    private struct DeclaredTransformCapability: GuavaCapability {
+    private struct DeclaredTransformCapability: CoveCapability {
         static let id = "test.declared_transform"
         static let title = "Declared transform"
         static let description = "Exercises generated input metadata"

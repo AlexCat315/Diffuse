@@ -24,12 +24,12 @@ public struct AgentContribution: Codable, Sendable, Equatable {
     /// tools. Absent means every tool the workspace allows.
     public var tools: [String]?
     /// Context the agent sees: host sources (`scene`, `selection`, `edits`,
-    /// `memory`, `transactions`, `workflow`, `assets`) and `guava.ai.context/v1`
+    /// `memory`, `transactions`, `workflow`, `assets`) and `cove.ai.context/v1`
     /// IDs. Absent means every host source and no package context.
     public var context: [String]?
     /// False keeps writes on review even when the user turned automatic approval on.
     public var canAutoApprove: Bool?
-    /// A `guava.ai.harness/v1` that runs the agent's turns; the host's loop when absent.
+    /// A `cove.ai.harness/v1` that runs the agent's turns; the host's loop when absent.
     public var harness: String?
 
     public init(id: String, title: String, instructions: String? = nil, model: ModelPolicy? = nil,
@@ -46,7 +46,7 @@ public struct AgentContribution: Codable, Sendable, Equatable {
 }
 
 public enum AgentContributionPoint: ContributionPointSpec {
-    public static let id = "guava.ai.agent/v1"
+    public static let id = "cove.ai.agent/v1"
 
     public static func validate(_ agent: AgentContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(agent.id), ContributionValidation.title(agent.title),

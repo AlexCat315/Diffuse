@@ -8,7 +8,7 @@ import Testing
 @MainActor
 struct EditorProjectToolsTests {
     private func project() throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("guava-project-tools-\(UUID())")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cove-project-tools-\(UUID())")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
@@ -78,6 +78,6 @@ struct EditorProjectToolsTests {
         }
         _ = try await call(app, "set_playback_state", ["state": "stopped"])
         let saved = try await call(app, "save_scene")
-        #expect(saved["path"] as? String == root.appendingPathComponent(".guava/editor-scene-manifest.json").path)
+        #expect(saved["path"] as? String == root.appendingPathComponent(".cove/editor-scene-manifest.json").path)
     }
 }

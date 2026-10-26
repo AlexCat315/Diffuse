@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUICompose
+internal import CoveUI
+internal import CoveUICompose
 
 /// Who is doing the work decides the window: you, in the canvas, or the agent,
 /// in the conversation. Both views share one project, its files and selection.

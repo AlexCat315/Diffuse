@@ -2,10 +2,10 @@ import PluginRuntime
 @testable import EditorUI
 @testable import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUICompose
-import GuavaUIRuntime
-import GuavaUIWorkspace
+import CoveUI
+import CoveUICompose
+import CoveUIRuntime
+import CoveUIWorkspace
 import Testing
 
 @Suite("Plugin commands and panels", .serialized)
@@ -142,7 +142,7 @@ struct PluginPanelTests {
     /// Commands and described panels need a runtime to load, so the fixture
     /// attaches them to a declarative package's manifest.
     private func install(in app: EditorApplication) throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).guavaplugin")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).coveplugin")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         try Data("""

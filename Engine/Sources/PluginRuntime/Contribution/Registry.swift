@@ -4,7 +4,7 @@ public struct ContributionPointID: RawRepresentable, Hashable, Codable, Sendable
     public let rawValue: String
 
     public init?(rawValue: String) {
-        guard rawValue.range(of: #"^guava\.[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)*/v[1-9][0-9]*$"#,
+        guard rawValue.range(of: #"^cove\.[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)*/v[1-9][0-9]*$"#,
                              options: .regularExpression) != nil else { return nil }
         self.rawValue = rawValue
     }

@@ -1,7 +1,7 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
-internal import GuavaUIWorkspace
+internal import CoveUI
+internal import CoveUIRuntime
+internal import CoveUIWorkspace
 
 /// Above a text document: where it lives, line wrapping, the AI writing
 /// assistant and focus mode. Every text format gets the same bar.

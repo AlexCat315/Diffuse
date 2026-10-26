@@ -21,7 +21,7 @@ package enum MediaStaging {
   static var defaultVendor: URL { Repository.path("Engine/Media/vendor") }
 
   static let usage = """
-    guava-dev media [--platform NAME] [--vendor PATH] [--check]
+    cove-dev media [--platform NAME] [--vendor PATH] [--check]
 
       --platform NAME  Target to stage; defaults to the host target.
       --vendor PATH    Artifact bundle root; defaults to Engine/Media/vendor.

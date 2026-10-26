@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 struct DocumentSyntaxSegment: Sendable, Equatable {
     let range: Range<Int>
@@ -96,7 +96,7 @@ struct DocumentSyntaxReader<Content: View>: View {
 /// The lock protects the pending mailbox only; regex objects stay on the
 /// queue and the delivery handoff is immutable.
 private final class DocumentSyntaxWorker: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "guava.document-syntax", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "cove.document-syntax", qos: .userInitiated)
     private let lock = NSLock()
     private let grammar: DocumentGrammar
     private var pending: TextBuffer?

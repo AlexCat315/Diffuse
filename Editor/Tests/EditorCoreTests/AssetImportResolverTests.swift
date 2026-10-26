@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 @testable import EditorCore
 import Foundation
 import Testing
@@ -8,7 +8,7 @@ struct AssetImportResolverTests {
 
     private func makeTempDir() -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("guava-import-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-import-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

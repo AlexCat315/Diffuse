@@ -86,7 +86,7 @@ public final class DocumentWorkspace: @unchecked Sendable {
         }
     }
     /// Moves a file or folder to recoverable trash and closes documents beneath it.
-    /// Hosts without Foundation's Trash API retain it in `.guava/trash`.
+    /// Hosts without Foundation's Trash API retain it in `.cove/trash`.
     public func remove(_ path: String) throws {
         try withLock {
             _ = try resolve(path)

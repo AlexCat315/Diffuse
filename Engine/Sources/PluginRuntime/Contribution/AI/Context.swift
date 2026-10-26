@@ -23,7 +23,7 @@ public struct AIContextContribution: Codable, Sendable, Equatable {
 }
 
 public enum AIContextContributionPoint: ContributionPointSpec {
-    public static let id = "guava.ai.context/v1"
+    public static let id = "cove.ai.context/v1"
 
     public static func validate(_ context: AIContextContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(context.id), ContributionValidation.title(context.title),

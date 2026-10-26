@@ -1,5 +1,5 @@
-#ifndef GUAVA_MEDIA_BRIDGE_H
-#define GUAVA_MEDIA_BRIDGE_H
+#ifndef COVE_MEDIA_BRIDGE_H
+#define COVE_MEDIA_BRIDGE_H
 #include <stdint.h>
 #include <stddef.h>
 

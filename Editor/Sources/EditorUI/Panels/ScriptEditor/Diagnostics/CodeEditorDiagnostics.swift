@@ -1,5 +1,5 @@
 import EditorCore
-import GuavaUI
+import CoveUI
 
 /// Only rebuild the interval index when its source revision or reply changes.
 final class ScriptCodeEditorDiagnostics {

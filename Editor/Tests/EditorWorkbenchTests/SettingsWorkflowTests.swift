@@ -2,9 +2,9 @@ import PluginRuntime
 @testable import EditorUI
 @testable import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUI
+import CoveUICompose
+import CoveUIRuntime
 import Testing
 
 @Suite("Settings workspace", .serialized)
@@ -21,7 +21,7 @@ struct SettingsWorkflowTests {
         try WorkbenchUITestSupport.withEnvironment { interactions, _ in
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("settings-test-\(UUID())")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let key = "GUAVA_EDITOR_STATE_DIRECTORY"
+            let key = "COVE_EDITOR_STATE_DIRECTORY"
             let previous = ProcessInfo.processInfo.environment[key]
             #expect(WorkbenchUITestSupport.setEnvironmentValue(directory.path, for: key))
             defer {
@@ -213,7 +213,7 @@ struct AgentSurfaceTests {
         try WorkbenchUITestSupport.withEnvironment { _, _ in
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("agent-surface-\(UUID())")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let key = "GUAVA_EDITOR_STATE_DIRECTORY"
+            let key = "COVE_EDITOR_STATE_DIRECTORY"
             let previous = ProcessInfo.processInfo.environment[key]
             #expect(WorkbenchUITestSupport.setEnvironmentValue(directory.path, for: key))
             defer {

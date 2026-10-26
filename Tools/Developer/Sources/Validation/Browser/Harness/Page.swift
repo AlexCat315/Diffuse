@@ -296,7 +296,7 @@ final class Page: ScriptTarget {
 
   func expectDownload(_ action: () throws -> Void) throws -> URL {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "guava-download-\(UUID().uuidString)")
+      "cove-download-\(UUID().uuidString)")
     try Fs.directory(directory)
     try browser.setDownloadDirectory(directory, for: self)
     let before = browser.completedDownloadGuids()

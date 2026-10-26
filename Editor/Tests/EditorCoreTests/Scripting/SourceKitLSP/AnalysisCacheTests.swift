@@ -26,7 +26,7 @@ struct AnalysisCacheTests {
         #expect(!FileManager.default.fileExists(atPath: current.path))
     }
 
-    @Test("rebuilding a Guava module invalidates cached analysis")
+    @Test("rebuilding a Cove module invalidates cached analysis")
     func changedEngineModule() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -60,8 +60,8 @@ struct AnalysisCacheTests {
         let copied = ScriptLanguageWorkspace(scriptsDirectoryURL: root.appendingPathComponent("Second/Scripts"), engineModulePaths: [],
             clangModuleMapPaths: [], clangIncludePaths: [])
         try FileManager.default.createDirectory(at: copied.projectRootURL, withIntermediateDirectories: true)
-        try FileManager.default.copyItem(at: original.projectRootURL.appendingPathComponent(".guava"),
-            to: copied.projectRootURL.appendingPathComponent(".guava"))
+        try FileManager.default.copyItem(at: original.projectRootURL.appendingPathComponent(".cove"),
+            to: copied.projectRootURL.appendingPathComponent(".cove"))
         let next = try copied.prepareScratch(executableURL: executable, environment: [:])
         #expect(!FileManager.default.fileExists(atPath: next.appendingPathComponent("old.swiftmodule").path))
         #expect(FileManager.default.fileExists(atPath: scratch.appendingPathComponent("old.swiftmodule").path))

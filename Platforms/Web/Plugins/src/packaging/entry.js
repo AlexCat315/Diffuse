@@ -10,14 +10,14 @@ const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export async function packageWebPlugin(input, output, host) {
   input = resolve(input); output = resolve(output); host = resolve(host);
   await mkdir(dirname(output), { recursive: true });
-  const temporary = await mkdtemp(join(dirname(output), '.guava-plugin-'));
+  const temporary = await mkdtemp(join(dirname(output), '.cove-plugin-'));
   try {
-    const source = join(temporary, 'source.guavaplugin'); const destination = join(temporary, 'output');
+    const source = join(temporary, 'source.coveplugin'); const destination = join(temporary, 'output');
     await mkdir(source); await mkdir(destination);
     const names = await readdir(input);
     if (!['plugin.json', 'component.wasm', 'capabilities.wit'].every(name => names.includes(name))
         || names.some(name => !['plugin.json', 'component.wasm', 'capabilities.wit', 'resources'].includes(name))) {
-      throw Error('Expected a runtime .guavaplugin package');
+      throw Error('Expected a runtime .coveplugin package');
     }
     for (const name of names) await cp(join(input, name), join(source, name), { dereference: false });
     const descriptor = JSON.parse(execFileSync(host, ['--export-web', source], { maxBuffer: 4 * 1024 * 1024, encoding: 'utf8', timeout: 30000 }));
@@ -62,6 +62,6 @@ export async function packageWebPlugin(input, output, host) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [input, output, host, ...extra] = process.argv.slice(2);
-  if (!host || extra.length) throw Error('Usage: guava-plugin-web <plugin.guavaplugin> <new-output-directory> <GuavaPluginHost>');
+  if (!host || extra.length) throw Error('Usage: cove-plugin-web <plugin.coveplugin> <new-output-directory> <DiffusePluginHost>');
   console.log(await packageWebPlugin(input, output, host));
 }

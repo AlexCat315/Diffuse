@@ -49,14 +49,14 @@ public enum ImageAssetDecoder {
     private static func decode(data: Data, extension ext: String, label: String) throws -> DecodedTextureAsset {
         guard !data.isEmpty else { throw ImageAssetDecoderError.sourceUnreadable(label) }
 
-        var result = GuavaImageDecodeResult()
+        var result = CoveImageDecodeResult()
         let ok = data.withUnsafeBytes { raw -> Bool in
             guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return false }
             return ext.withCString { extC in
-                guava_image_decode_memory(base, data.count, extC, 0, 0, &result)
+                cove_image_decode_memory(base, data.count, extC, 0, 0, &result)
             }
         }
-        defer { guava_image_decode_free(&result) }
+        defer { cove_image_decode_free(&result) }
 
         guard ok, let pixels = result.pixels else {
             let message = result.error_message.map { String(cString: $0) } ?? "native image decoder failed"

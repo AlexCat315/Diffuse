@@ -1,6 +1,6 @@
 internal import EditorCore
 private import Foundation
-internal import GuavaUI
+internal import CoveUI
 
 enum EditorSceneFileCoordinator {
     static func requestOpen(app: EditorApplication) {
@@ -15,9 +15,9 @@ enum EditorSceneFileCoordinator {
             return
         }
         let defaultPath = URL(fileURLWithPath: app.projectDirectory, isDirectory: true)
-            .appendingPathComponent(".guava", isDirectory: true).path
+            .appendingPathComponent(".cove", isDirectory: true).path
         MainActor.assumeIsolated {
-            display.requestOpenFile(filters: [(name: L("Guava Scene"), extensions: ["json"])],
+            display.requestOpenFile(filters: [(name: L("Cove Scene"), extensions: ["json"])],
                                     allowsMultiple: false,
                                     defaultPath: defaultPath) { paths in
                 guard let path = paths.first else { return }

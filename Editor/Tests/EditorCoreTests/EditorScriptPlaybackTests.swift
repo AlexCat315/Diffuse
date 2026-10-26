@@ -26,7 +26,7 @@ struct EditorScriptPlaybackTests {
 
     @Test("gameplay starts only in Play, Pause freezes callbacks, and each Play gets a new lifecycle")
     func scriptPlaybackLifecycle() throws {
-        let project = FileManager.default.temporaryDirectory.appendingPathComponent("guava-script-playback-\(UUID())")
+        let project = FileManager.default.temporaryDirectory.appendingPathComponent("cove-script-playback-\(UUID())")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path)

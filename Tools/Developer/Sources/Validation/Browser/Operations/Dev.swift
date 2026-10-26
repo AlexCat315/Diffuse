@@ -2,7 +2,7 @@ internal import Foundation
 private import ToolSupport
 
 /// `dev` — local Swift/Wasm development server with complete-build reloads and
-/// Server-Sent Events. Replaces `GuavaUI/Browser/dev.py`.
+/// Server-Sent Events. Replaces `CoveUI/Browser/dev.py`.
 enum DevOperation {
   static func run(_ arguments: [String]) throws {
     var parser = FlagParser(arguments, valued: ["--port"])
@@ -33,7 +33,7 @@ enum DevOperation {
     let server = try DevServer(port: port, revision: revision, root: root)
     server.start()
     defer { server.stop() }
-    Terminal.info("GuavaUI dev server: http://127.0.0.1:\(server.port)")
+    Terminal.info("CoveUI dev server: http://127.0.0.1:\(server.port)")
     flushOutput()
     let watcher = Thread { watch(root: root, state: server.state) }
     watcher.stackSize = 1 << 20
@@ -52,7 +52,7 @@ enum DevOperation {
     let revision = String(Int(Date().timeIntervalSince1970 * 1_000_000_000))
     let destination = root.appendingPathComponent(".dev-builds").appendingPathComponent(revision)
     var environment = ProcessInfo.processInfo.environment
-    environment["GUAVA_WASM_OUTPUT"] = destination.path
+    environment["COVE_WASM_OUTPUT"] = destination.path
     let result = try capture(
       try Shell.require("bash"), ["build.sh"], directory: root, environment: environment)
     Terminal.info(result.output)
@@ -186,7 +186,7 @@ final class SSEListener: @unchecked Sendable {
 }
 
 /// The development server: a static file server over `.dev-builds` that redirects
-/// `/` to the latest revision and streams build events at `/__guava_events`.
+/// `/` to the latest revision and streams build events at `/__cove_events`.
 final class DevServer: @unchecked Sendable {
   let server: HTTPServer
   let state: DevState
@@ -209,7 +209,7 @@ final class DevServer: @unchecked Sendable {
     state: DevState, builds: URL
   ) {
     let path = request.rawPath
-    if path == "/__guava_events" {
+    if path == "/__cove_events" {
       serveEvents(response, state: state)
       return
     }

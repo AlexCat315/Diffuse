@@ -6,9 +6,9 @@ import EngineKernel
 import NativeRHI
 import NativeRendererValidation
 import RenderBackend
-import GuavaUICompose
-import GuavaUI
-@testable import GuavaUIRuntime
+import CoveUICompose
+import CoveUI
+@testable import CoveUIRuntime
 
 final class NativeInGameUIIntegrationTests: XCTestCase {
     @MainActor
@@ -74,13 +74,13 @@ final class NativeInGameUIIntegrationTests: XCTestCase {
                     "repeatHUDDrawCalls": stats.passDrawCallCounts[.inGameUI] ?? 0])
                 print("native-in-game-ui post=\(post) scale=\(scale) size=\(size) delta=\(delta)")
                 if post && index == 2 {
-                    try GridImage.writePPM(native, size: size, to: URL(fileURLWithPath: "/tmp/guava-native-hud.ppm"))
-                    try GridImage.writePPM(expected, size: size, to: URL(fileURLWithPath: "/tmp/guava-repeat-hud.ppm"))
+                    try GridImage.writePPM(native, size: size, to: URL(fileURLWithPath: "/tmp/cove-native-hud.ppm"))
+                    try GridImage.writePPM(expected, size: size, to: URL(fileURLWithPath: "/tmp/cove-repeat-hud.ppm"))
                 }
             }
         }
         let report = try JSONSerialization.data(withJSONObject: ["backend": "Metal", "samples": evidence], options: [.prettyPrinted, .sortedKeys])
-        try report.write(to: URL(fileURLWithPath: "/tmp/guava-native-hud-parity.json"))
+        try report.write(to: URL(fileURLWithPath: "/tmp/cove-native-hud-parity.json"))
     }
 
     @MainActor

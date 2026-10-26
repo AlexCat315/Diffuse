@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUI
+import CoveUI
 
 struct EditorAboutView: View {
     private var versionText: String {
@@ -20,7 +20,7 @@ struct EditorAboutView: View {
             alignItems: .center,
             justifyContent: .center,
             spacing: 12) {
-            Text("GuavaStudio")
+            Text("Diffuse")
                 .font(.title)
                 .foregroundColor(.onSurface)
 
@@ -32,7 +32,7 @@ struct EditorAboutView: View {
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
-            Text("© 2026 GuavaStudio")
+            Text("© 2026 Diffuse")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
         }

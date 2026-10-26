@@ -5,7 +5,7 @@ import PluginRuntime
 @testable import PluginWasmtimeRuntime
 import XCTest
 
-/// End-to-end reload coverage: a real `GuavaPluginHost` process, a component
+/// End-to-end reload coverage: a real `DiffusePluginHost` process, a component
 /// compiled from the canonical fixture WAT, and the Editor's mount / reload /
 /// stale-rejection paths.
 @MainActor
@@ -20,7 +20,7 @@ final class EditorPluginReloadTests: XCTestCase {
             defer { try? FileManager.default.removeItem(at: package.deletingLastPathComponent()) }
 
             let project = FileManager.default.temporaryDirectory
-                .appendingPathComponent("guava-plugin-reload-\(UUID().uuidString)", isDirectory: true)
+                .appendingPathComponent("cove-plugin-reload-\(UUID().uuidString)", isDirectory: true)
             defer { try? FileManager.default.removeItem(at: project) }
             try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
 
@@ -216,15 +216,15 @@ final class EditorPluginReloadTests: XCTestCase {
 
     // MARK: - Fixtures
 
-    /// Most recently built `GuavaPluginHost`, matching how PluginRuntimeTests
+    /// Most recently built `DiffusePluginHost`, matching how PluginRuntimeTests
     /// resolves its fixture executable.
     private func pluginHostExecutable() throws -> URL {
         try XCTUnwrap(EditorPluginHostLocator.resolve(),
-                      "GuavaPluginHost is not built; run `guava test Editor --build-only` first.")
+                      "DiffusePluginHost is not built; run `cove test Editor --build-only` first.")
 
     }
 
-    /// Builds `safe.reloadtest.guavaplugin` from the canonical reader fixture
+    /// Builds `safe.reloadtest.coveplugin` from the canonical reader fixture
     /// WAT, mirroring PluginRuntimeTests.makePluginPackage.
     private func makePluginPackage(id: String = "safe.reloadtest",
                                    requires: [PluginRequirement] = []) throws -> URL {
@@ -240,10 +240,10 @@ final class EditorPluginReloadTests: XCTestCase {
 
         let parent = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let root = parent.appendingPathComponent(id + ".guavaplugin", isDirectory: true)
+        let root = parent.appendingPathComponent(id + ".coveplugin", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
-        var manifest = GuavaPluginManifest(id: id,
+        var manifest = CovePluginManifest(id: id,
                                            version: 1,
                                            name: "Reload Test",
                                            description: "Editor reload integration fixture",

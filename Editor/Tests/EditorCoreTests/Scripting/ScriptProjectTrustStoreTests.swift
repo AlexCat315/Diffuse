@@ -6,12 +6,12 @@ import Testing
 struct ScriptProjectTrustStoreTests {
     @Test("isolated editor state persists trust outside the project and keeps explicit storage precedence")
     func isolatedState() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-trust-state-\(UUID())")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-trust-state-\(UUID())")
         let project = root.appendingPathComponent("project")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let state = root.appendingPathComponent("state")
-        let environment = ["GUAVA_EDITOR_STATE_DIRECTORY": state.path]
+        let environment = ["COVE_EDITOR_STATE_DIRECTORY": state.path]
         let store = ScriptProjectTrustStore(environment: environment)
         #expect(store.state(for: project.path) == .untrusted)
         try store.setTrusted(true, projectDirectory: project.path)

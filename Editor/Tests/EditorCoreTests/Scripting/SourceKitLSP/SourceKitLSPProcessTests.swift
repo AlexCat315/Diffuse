@@ -1,7 +1,7 @@
 import LanguageServerRuntime
-internal import GuavaProcess
+internal import CoveProcess
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 import Testing
 @testable import EditorCore
 
@@ -205,12 +205,12 @@ struct LSPProcessFixture {
     let mode: String
     init(mode: String = "normal") throws {
         self.mode = mode
-        root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-lsp-process-\(UUID().uuidString)")
+        root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-lsp-process-\(UUID().uuidString)")
         executable = try LSPFixtureServer.executable()
         try FileManager.default.createDirectory(at: root.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
     }
     func remove() { try? FileManager.default.removeItem(at: root) }
-    var environment: [String: String] { ["GUAVA_TEST_LSP_ROOT": root.path, "GUAVA_TEST_LSP_MODE": mode] }
+    var environment: [String: String] { ["COVE_TEST_LSP_ROOT": root.path, "COVE_TEST_LSP_MODE": mode] }
     func client() -> LSPClient {
         var command = ProcessCommand(executable: executable, directory: root)
         command.environment = ProcessInfo.processInfo.environment.merging(environment) { _, value in value }

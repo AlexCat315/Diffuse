@@ -1,4 +1,4 @@
-import GuavaUIRuntime
+import CoveUIRuntime
 import SceneRuntime
 
 /// Identifies the control that renders a compound inspector field.

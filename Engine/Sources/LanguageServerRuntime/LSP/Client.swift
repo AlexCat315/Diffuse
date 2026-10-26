@@ -1,6 +1,6 @@
 import Foundation
-import GuavaLogging
-internal import GuavaProcess
+import CoveLogging
+internal import CoveProcess
 
 /// Owns one `sourcekit-lsp` child process and speaks JSON-RPC over its pipes.
 ///
@@ -134,7 +134,7 @@ public actor LSPClient {
         let rootURI = configuration.workspace.standardizedFileURL.absoluteString
         var params: [String: Any] = [
             "processId": ProcessInfo.processInfo.processIdentifier,
-            "clientInfo": ["name": "GuavaStudioEditor", "version": "0.0.9"],
+            "clientInfo": ["name": "DiffuseEditor", "version": "0.0.9"],
             "rootUri": rootURI,
             "workspaceFolders": workspaceFolders,
             "capabilities": Self.clientCapabilities,
@@ -270,7 +270,7 @@ public actor LSPClient {
             let response: [String: Any] = [
                 "jsonrpc": "2.0",
                 "id": id,
-                "error": ["code": -32601, "message": "Method not supported by GuavaStudioEditor"],
+                "error": ["code": -32601, "message": "Method not supported by DiffuseEditor"],
             ]
             try write(try LSPJSON.data(response))
             return
@@ -315,9 +315,9 @@ public actor LSPClient {
 
     private func consumeStderr(_ data: Data) {
         if let params = try? LSPJSON.data(["message": String(decoding: data, as: UTF8.self), "type": 4] as [String: Any]) {
-            notificationHandler?(LSPNotification(method: "guava/stderr", params: params))
+            notificationHandler?(LSPNotification(method: "cove/stderr", params: params))
         }
-        LogSystem.logger("com.guava.editor.lsp").debug("\(String(decoding: data, as: UTF8.self))", source: "sourcekit.stderr")
+        LogSystem.logger("com.cove.editor.lsp").debug("\(String(decoding: data, as: UTF8.self))", source: "sourcekit.stderr")
         stderrTail.append(data)
         if stderrTail.count > Self.stderrTailCapacity {
             stderrTail.removeSubrange(..<(stderrTail.count - Self.stderrTailCapacity))

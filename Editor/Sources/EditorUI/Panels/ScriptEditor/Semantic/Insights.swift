@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// One gutter arrow: a declaration and where its hierarchy continues.
 struct ScriptSymbolRelation: Equatable {

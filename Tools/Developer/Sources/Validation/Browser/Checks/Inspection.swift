@@ -7,13 +7,13 @@ func inspectionChecks(page: Page, inspector: Frame) throws {
     """
     window.inspectedNode = name => {
       function find(n) { if(n.debugName===name) return n; for(const c of n.children) {const r=find(c);if(r)return r;} }
-      return find(guavaDebug.snapshot.tree.root);
+      return find(coveDebug.snapshot.tree.root);
     }
     """)
-  let count = try page.evaluate("guavaDebug.snapshot.count").int ?? 0
+  let count = try page.evaluate("coveDebug.snapshot.count").int ?? 0
 
   try inspector.locator("#pickNode").click()
-  try page.waitForFunction("guavaDebug.snapshot.tree.inspection.picking")
+  try page.waitForFunction("coveDebug.snapshot.tree.inspection.picking")
   let button = try page.evaluate("inspectedNode('counter.increment').absoluteFrame")
   try page.locator("#surface").click(
     position: .object([
@@ -21,14 +21,14 @@ func inspectionChecks(page: Page, inspector: Frame) throws {
       "y": .number((button["y"]?.number ?? 0) + (button["h"]?.number ?? 0) / 2),
     ]))
   try page.waitForFunction(
-    "guavaDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.increment').elementID"
+    "coveDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.increment').elementID"
   )
   try ensure(
-    try page.evaluate("guavaDebug.snapshot.count").int == count,
+    try page.evaluate("coveDebug.snapshot.count").int == count,
     "Picking a node changed the counter")
 
   try inspector.locator("#pickNode").click()
-  try page.waitForFunction("guavaDebug.snapshot.tree.inspection.picking")
+  try page.waitForFunction("coveDebug.snapshot.tree.inspection.picking")
   let value = try page.evaluate("inspectedNode('counter.value').absoluteFrame")
   try page.locator("#surface").click(
     position: .object([
@@ -36,14 +36,14 @@ func inspectionChecks(page: Page, inspector: Frame) throws {
       "y": .number((value["y"]?.number ?? 0) + 4),
     ]))
   try page.waitForFunction(
-    "guavaDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.value').elementID")
+    "coveDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.value').elementID")
   try ensure(
     try page.evaluate("inspectedNode('counter.value').flags.hitTestable").bool == false,
     "Text node reported as hit testable")
 
   try inspector.locator("#selectionPath button").filter(text: .contains("counter.card")).click()
   try page.waitForFunction(
-    "guavaDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.card').elementID")
+    "coveDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.card').elementID")
   try inspector.waitForFunction(
     "!inspector.session.tree.pendingSelectionId && inspector.tree.findNode(inspector.session.tree.tree,inspector.session.tree.selectedId)?.debugName === 'counter.card'"
   )
@@ -90,7 +90,7 @@ func inspectionChecks(page: Page, inspector: Frame) throws {
   try waitPixels(
     page,
     .script(
-      "() => { const l=guavaDebug.snapshot.labels.find(l=>l.text===String(guavaDebug.snapshot.count));return [l.x,l.y,l.width,l.size*1.4]; }"
+      "() => { const l=coveDebug.snapshot.labels.find(l=>l.text===String(coveDebug.snapshot.count));return [l.x,l.y,l.width,l.size*1.4]; }"
     )
   ) { pixels in
     pixels.filter { $0.r < 80 && $0.g > 180 && $0.b < 80 }.count > 50
@@ -104,7 +104,7 @@ func inspectionChecks(page: Page, inspector: Frame) throws {
   // Composition retains debug values; clearing restores the latest theme.
   try page.locator("#theme").click()
   try page.waitForFunction(
-    "guavaDebug.snapshot.dark === false && inspectedNode('counter.card').layout.padding.left === 32"
+    "coveDebug.snapshot.dark === false && inspectedNode('counter.card').layout.padding.left === 32"
   )
   try ensure(
     try page.evaluate("inspectedNode('counter.card').style.backgroundColor").string == "#ff2020ff",
@@ -117,7 +117,7 @@ func inspectionChecks(page: Page, inspector: Frame) throws {
 
   let rejected = try page.evaluate(
     """
-    guavaDebug.request({type:'inspect.style.set',id:987,payload:{id:inspectedNode('counter.card').elementID,
+    coveDebug.request({type:'inspect.style.set',id:987,payload:{id:inspectedNode('counter.card').elementID,
       properties:{backgroundColor:'#ffffff',padding:{top:-1,right:0,bottom:0,left:0}}}})
     """)
   try ensure(
@@ -129,22 +129,22 @@ func inspectionChecks(page: Page, inspector: Frame) throws {
 
   try inspector.locator("#clearStyle").click()
   try page.waitForFunction(
-    "guavaDebug.snapshot.tree.inspection.overrideCount===0 && inspectedNode('counter.card').layout.padding.left===20"
+    "coveDebug.snapshot.tree.inspection.overrideCount===0 && inspectedNode('counter.card').layout.padding.left===20"
   )
   try ensure(
     try page.evaluate("inspectedNode('counter.card').style.backgroundColor").string != "#ff2020ff",
     "Cleared style still reports the override")
   try inspector.locator("#undoStyle").click()
-  try page.waitForFunction("guavaDebug.snapshot.tree.inspection.overrideCount===1")
+  try page.waitForFunction("coveDebug.snapshot.tree.inspection.overrideCount===1")
   try inspector.locator("#clearAllStyles").click()
-  try page.waitForFunction("guavaDebug.snapshot.tree.inspection.overrideCount===0")
+  try page.waitForFunction("coveDebug.snapshot.tree.inspection.overrideCount===0")
   try inspector.locator("#backgroundColor").fill("#abcdef")
-  try page.waitForFunction("guavaDebug.snapshot.tree.inspection.overrideCount===1")
+  try page.waitForFunction("coveDebug.snapshot.tree.inspection.overrideCount===1")
   try page.locator("#theme").click()
-  try page.waitForFunction("guavaDebug.snapshot.dark === true")
+  try page.waitForFunction("coveDebug.snapshot.dark === true")
   try inspector.locator("#disconnect").click()
   try page.waitForFunction(
-    "guavaDebug.snapshot.tree.inspection.overrideCount===0 && !guavaDebug.snapshot.tree.inspection.canUndo"
+    "coveDebug.snapshot.tree.inspection.overrideCount===0 && !coveDebug.snapshot.tree.inspection.canUndo"
   )
   try inspector.locator("#connect").click()
   try inspector.locator("#status").filter(text: .contains("Connected")).waitFor()

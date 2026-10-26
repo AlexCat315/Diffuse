@@ -1,5 +1,5 @@
 internal import Foundation
-internal import GuavaUIRuntime
+internal import CoveUIRuntime
 
 /// Thread-safe channel for passing a rendered `DrawListSnapshot` from the
 /// main-thread ViewGraph pipeline to the render-thread `DrawListRenderer`.

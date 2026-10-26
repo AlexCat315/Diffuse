@@ -115,9 +115,9 @@ enum Targets {
         options += ["--extra-cflags=-fvisibility=protected"]
       }
       if name != host() {
-        guard let compiler = environment["GUAVA_FFMPEG_CC"], !compiler.isEmpty else {
+        guard let compiler = environment["COVE_FFMPEG_CC"], !compiler.isEmpty else {
           throw ToolError.message(
-            "Linux cross builds require GUAVA_FFMPEG_CC for the target compiler")
+            "Linux cross builds require COVE_FFMPEG_CC for the target compiler")
         }
         options += ["--enable-cross-compile", "--cc=\(compiler)"]
       }

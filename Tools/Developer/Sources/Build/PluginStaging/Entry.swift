@@ -24,7 +24,7 @@ package enum PluginStaging {
   }
 
   static let usage = """
-    guava-dev plugins <operation> [options]
+    cove-dev plugins <operation> [options]
 
       stage    Stage a pinned Wasmtime runtime independently of the graphics dependencies
       prepare  Build shared Component fixtures using the same Wasmtime C API as production

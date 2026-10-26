@@ -1,8 +1,8 @@
 @testable import EditorUI
 import EditorCore
 import EngineKernel
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import SceneRuntime
 import SIMDCompat
 import Testing

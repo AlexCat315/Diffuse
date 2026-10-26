@@ -4,14 +4,14 @@ import XCTest
 final class EditorAISettingsTests: XCTestCase {
     func testEnvironmentCredentialsUseOnlyTheDeclaredVariable() {
         let credential = AICredentialStore.environmentCredential(
-            variable: "GUAVA_OPENAI_API_KEY",
+            variable: "COVE_OPENAI_API_KEY",
             environment: [
                 "OPENAI_API_KEY": "standard",
-                "GUAVA_OPENAI_API_KEY": "override",
+                "COVE_OPENAI_API_KEY": "override",
             ]
         )
 
-        XCTAssertEqual(credential?.variable, "GUAVA_OPENAI_API_KEY")
+        XCTAssertEqual(credential?.variable, "COVE_OPENAI_API_KEY")
         XCTAssertEqual(credential?.key, "override")
     }
 

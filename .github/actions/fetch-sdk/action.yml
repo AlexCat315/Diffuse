@@ -1,5 +1,5 @@
-name: Fetch Guava SDK
-description: Install the shared versioned Guava SDK.
+name: Fetch Cove SDK
+description: Install the shared versioned Cove SDK.
 runs:
   using: composite
   steps:
@@ -7,18 +7,20 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        version=$(node -p 'JSON.parse(require("fs").readFileSync("Editor/guava.json")).toolchain.sdkVersion')
+        version=$(node -p 'JSON.parse(require("fs").readFileSync("Editor/cove.json")).toolchain.sdkVersion')
+        [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || { echo 'CI requires a fixed SDK release version' >&2; exit 1; }
+        installer="https://raw.githubusercontent.com/AlexCat315/Cove/v$version/Tools/Cove"
         if [ "$RUNNER_OS" = Windows ]; then
-          curl -fsSL https://github.com/AlexCat315/GuavaUI/releases/latest/download/install.ps1 -o "$RUNNER_TEMP/install-guava.ps1"
-          pwsh -NoProfile -File "$RUNNER_TEMP/install-guava.ps1" -Version "$version"
-          sdk="$LOCALAPPDATA/Guava/versions/$version"
-          echo "$LOCALAPPDATA/Guava/bin" >> "$GITHUB_PATH"
+          curl -fsSL --retry 5 --retry-all-errors "$installer/install.ps1" -o "$RUNNER_TEMP/install-cove.ps1"
+          pwsh -NoProfile -File "$RUNNER_TEMP/install-cove.ps1" -Version "$version"
+          sdk="$LOCALAPPDATA/Cove/versions/$version"
+          echo "$LOCALAPPDATA/Cove/bin" >> "$GITHUB_PATH"
         else
-          curl -fsSL https://github.com/AlexCat315/GuavaUI/releases/latest/download/install.sh -o "$RUNNER_TEMP/install-guava.sh"
-          sh "$RUNNER_TEMP/install-guava.sh" --version "$version"
-          sdk="${GUAVA_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/guava}/versions/$version"
-          if [ "$RUNNER_OS" = macOS ]; then sdk="${GUAVA_HOME:-$HOME/.guava}/versions/$version"; fi
+          curl -fsSL --retry 5 --retry-all-errors "$installer/install.sh" -o "$RUNNER_TEMP/install-cove.sh"
+          sh "$RUNNER_TEMP/install-cove.sh" --version "$version"
+          sdk="${COVE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/cove}/versions/$version"
+          if [ "$RUNNER_OS" = macOS ]; then sdk="${COVE_HOME:-$HOME/.cove}/versions/$version"; fi
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         fi
-        echo "GUAVA_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
-        GUAVA_SHARED_SDK="$sdk" node -e 'require("fs").symlinkSync(process.env.GUAVA_SHARED_SDK, "GuavaUI", process.platform === "win32" ? "junction" : "dir")'
+        echo "COVE_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+        COVE_SHARED_SDK="$sdk" node -e 'require("fs").symlinkSync(process.env.COVE_SHARED_SDK, "CoveUI", process.platform === "win32" ? "junction" : "dir")'

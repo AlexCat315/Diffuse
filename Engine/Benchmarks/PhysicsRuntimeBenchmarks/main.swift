@@ -1,5 +1,5 @@
 import Foundation
-import GuavaLogging
+import CoveLogging
 private var loggingConfiguration = LoggingConfiguration()
 try loggingConfiguration.applyEnvironment(ProcessInfo.processInfo.environment)
 try LogSystem.bootstrap(configuration: loggingConfiguration)
@@ -46,14 +46,14 @@ private struct Configuration {
             guard let value = Double(environment[key] ?? ""), value.isFinite, value > 0 else { return fallback }
             return value
         }
-        targetFPS = min(1_000, max(1, positive("GUAVA_PHYSICS_TARGET_FPS", fallback: 120)))
+        targetFPS = min(1_000, max(1, positive("COVE_PHYSICS_TARGET_FPS", fallback: 120)))
         let frameBudgetMS = 1_000 / targetFPS
         // Keep 88% of the frame available to the rest of the engine and game.
-        let physicsBudgetMS = min(frameBudgetMS, positive("GUAVA_PHYSICS_BUDGET_MS", fallback: frameBudgetMS * 0.12))
+        let physicsBudgetMS = min(frameBudgetMS, positive("COVE_PHYSICS_BUDGET_MS", fallback: frameBudgetMS * 0.12))
         maxFrameNanoseconds = UInt64(frameBudgetMS * 1_000_000)
         maxPhysicsNanoseconds = UInt64(physicsBudgetMS * 1_000_000)
-        scenario = Scenario(rawValue: environment["GUAVA_PHYSICS_SCENARIO"] ?? "") ?? .activeGrid
-        backend = PhysicsBackendKind(rawValue: environment["GUAVA_PHYSICS_BACKEND"] ?? "") ?? .preferred
+        scenario = Scenario(rawValue: environment["COVE_PHYSICS_SCENARIO"] ?? "") ?? .activeGrid
+        backend = PhysicsBackendKind(rawValue: environment["COVE_PHYSICS_BACKEND"] ?? "") ?? .preferred
         let defaultBodyCount: Int
         switch scenario {
         case .activeGrid: defaultBodyCount = 10_000
@@ -62,24 +62,24 @@ private struct Configuration {
         case .softBodyInstances: defaultBodyCount = 8
         case .destructionFragments, .destructionIslands: defaultBodyCount = 4_096
         }
-        bodyCount = max(1, Int(environment["GUAVA_PHYSICS_BODIES"] ?? "") ?? defaultBodyCount)
-        warmupFrames = max(0, Int(environment["GUAVA_PHYSICS_WARMUP_FRAMES"] ?? "") ?? 120)
-        sampleFrames = max(1, Int(environment["GUAVA_PHYSICS_SAMPLE_FRAMES"] ?? "") ?? 600)
-        workerThreadCount = Int(environment["GUAVA_PHYSICS_WORKERS"] ?? "") ?? 0
-        maxResidentGrowthBytes = UInt64(environment["GUAVA_PHYSICS_MAX_RSS_GROWTH_BYTES"] ?? "")
+        bodyCount = max(1, Int(environment["COVE_PHYSICS_BODIES"] ?? "") ?? defaultBodyCount)
+        warmupFrames = max(0, Int(environment["COVE_PHYSICS_WARMUP_FRAMES"] ?? "") ?? 120)
+        sampleFrames = max(1, Int(environment["COVE_PHYSICS_SAMPLE_FRAMES"] ?? "") ?? 600)
+        workerThreadCount = Int(environment["COVE_PHYSICS_WORKERS"] ?? "") ?? 0
+        maxResidentGrowthBytes = UInt64(environment["COVE_PHYSICS_MAX_RSS_GROWTH_BYTES"] ?? "")
             ?? 32 * 1_024 * 1_024
-        clothGridSize = Int(environment["GUAVA_PHYSICS_CLOTH_GRID"] ?? "")
+        clothGridSize = Int(environment["COVE_PHYSICS_CLOTH_GRID"] ?? "")
             ?? (scenario == .cloth64 ? 64 : 32)
-        let stepBudgetMS = positive("GUAVA_PHYSICS_SOFT_STEP_BUDGET_MS", fallback: physicsBudgetMS)
-        let streamBudgetMS = positive("GUAVA_PHYSICS_VERTEX_STREAM_BUDGET_MS", fallback: physicsBudgetMS * 0.1)
+        let stepBudgetMS = positive("COVE_PHYSICS_SOFT_STEP_BUDGET_MS", fallback: physicsBudgetMS)
+        let streamBudgetMS = positive("COVE_PHYSICS_VERTEX_STREAM_BUDGET_MS", fallback: physicsBudgetMS * 0.1)
         maxSoftBodyStepNanoseconds = UInt64(max(0, stepBudgetMS) * 1_000_000)
         maxVertexStreamNanoseconds = UInt64(max(0, streamBudgetMS) * 1_000_000)
         let destructionBudgetMS = Double(
-            environment["GUAVA_PHYSICS_DESTRUCTION_ACTIVATION_BUDGET_MS"] ?? ""
+            environment["COVE_PHYSICS_DESTRUCTION_ACTIVATION_BUDGET_MS"] ?? ""
         ) ?? frameBudgetMS
         maxDestructionActivationNanoseconds = UInt64(max(0, destructionBudgetMS) * 1_000_000)
         let destructionStepBudgetMS = Double(
-            environment["GUAVA_PHYSICS_DESTRUCTION_STEP_BUDGET_MS"] ?? ""
+            environment["COVE_PHYSICS_DESTRUCTION_STEP_BUDGET_MS"] ?? ""
         ) ?? physicsBudgetMS
         maxDestructionStepNanoseconds = UInt64(max(0, destructionStepBudgetMS) * 1_000_000)
     }
@@ -517,6 +517,6 @@ if initialResident > 0,
     failures.append("Sustained resident-memory growth exceeded the configured budget")
 }
 print("gate_status=\(failures.isEmpty ? "passed" : "failed") failed_checks=\(failures.count)")
-for failure in failures { LogSystem.logger("com.guava.tools").error("Physics benchmark gate failed: \(failure)") }
+for failure in failures { LogSystem.logger("com.cove.tools").error("Physics benchmark gate failed: \(failure)") }
 LogSystem.flush()
 if !failures.isEmpty { exit(1) }

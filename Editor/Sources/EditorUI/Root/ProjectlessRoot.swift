@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The agent view while no project is open: the same title bar, task column and
 /// composer, with nothing in them yet. Projects are added from the column's

@@ -1,7 +1,7 @@
 import EditorCore
 import EngineKernel
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Resolves a destructive document action by saving, discarding, or cancelling.
 struct UnsavedChangesDialog: View {

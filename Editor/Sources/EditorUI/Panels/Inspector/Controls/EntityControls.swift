@@ -1,5 +1,5 @@
 import EditorCore
-import GuavaUI
+import CoveUI
 
 extension EditorInspectorFieldControlRegistry {
     /// Entity references resolve names from the options that travel with the field.

@@ -1,5 +1,5 @@
 import Testing
-import GuavaUICompose
+import CoveUICompose
 @testable import EditorUI
 
 @Suite("Swift script syntax highlighting")

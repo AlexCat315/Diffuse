@@ -16,7 +16,7 @@ public enum EditorPluginCapabilityError: Error, Sendable, Equatable, LocalizedEr
     public var errorDescription: String? {
         switch self {
         case .pluginHostUnavailable:
-            return "The trusted GuavaPluginHost executable is unavailable. Rebuild or reinstall the Editor."
+            return "The trusted DiffusePluginHost executable is unavailable. Rebuild or reinstall the Editor."
         case .pluginUpdateInProgress:
             return "Wait for the current plugin update to finish."
         case let .pluginNotEnabled(id):

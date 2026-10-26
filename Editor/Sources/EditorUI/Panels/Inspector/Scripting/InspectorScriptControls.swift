@@ -1,6 +1,6 @@
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// The trailing half of a script row: status, the on/off switch and one menu
 /// for everything else (open, change, remove). Independent hit targets,

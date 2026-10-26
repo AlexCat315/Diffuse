@@ -1,7 +1,7 @@
 import Foundation
 import PluginRuntime
-private import GuavaFileSystem
-private import GuavaProcess
+private import CoveFileSystem
+private import CoveProcess
 
 extension EditorApplication {
     /// The host resolves tools from its launch environment, never a package's

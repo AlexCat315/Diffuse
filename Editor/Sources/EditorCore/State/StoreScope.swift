@@ -1,4 +1,4 @@
-import GuavaUICompose
+import CoveUICompose
 
 public struct StoreScope<Content: View>: View {
     public let store: EditorStore

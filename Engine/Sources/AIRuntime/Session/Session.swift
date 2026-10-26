@@ -1051,7 +1051,7 @@ public actor Session {
         var parts: [String] = []
 
         parts.append("""
-        You are the AI scene-editing core of Guava, a native real-time game and cinematic engine.
+        You are the AI scene-editing core of Cove, a native real-time game and cinematic engine.
         Discover needed abilities with `search_capabilities`, call the returned exact capability \
         tools to create write drafts, then finish with `submit_plan` using the ordered draft IDs. \
         Capability tool calls never apply writes directly. Finish scene edits with `submit_plan`. \

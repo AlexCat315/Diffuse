@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 
 /// Project-stable identity for a Swift script asset.
@@ -31,7 +31,7 @@ struct ResolvedScriptAsset: Sendable, Equatable {
 }
 
 /// Persistent identity map stored with the project at
-/// `.guava/script-assets.json`.
+/// `.cove/script-assets.json`.
 ///
 /// A content fingerprint is only a rename-reconciliation hint. Identity never
 /// derives from the fingerprint: ambiguous matches receive a new UUID instead
@@ -59,7 +59,7 @@ final class ScriptAssetRegistry: @unchecked Sendable {
         let projectURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
         self.scriptsDirectoryURL = projectURL.appendingPathComponent("Scripts", isDirectory: true)
         self.storageURL = projectURL
-            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent(".cove", isDirectory: true)
             .appendingPathComponent("script-assets.json")
     }
 

@@ -1,4 +1,4 @@
-internal import GuavaUIRuntime
+internal import CoveUIRuntime
 
 /// Active viewports follow display callbacks when VSync is enabled. Idle
 /// workspaces return to event-driven updates; uncapped mode stays explicit.

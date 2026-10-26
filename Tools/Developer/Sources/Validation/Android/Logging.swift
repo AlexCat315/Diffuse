@@ -33,7 +33,7 @@ enum LoggingOperation {
 
     /// The Python `finally` foregrounds the app on every exit path.
     func restart() {
-      _ = try? shell(["am", "start", "-n", package + "/com.guava.probe.MainActivity"])
+      _ = try? shell(["am", "start", "-n", package + "/com.cove.probe.MainActivity"])
     }
 
     func records() throws -> [JSON] {
@@ -59,8 +59,8 @@ enum LoggingOperation {
     guard Set(initial.map { $0["process"]["runID"].stringValue ?? "" }).count == 1 else {
       throw ToolError.message("Startup logs kept a provisional run ID")
     }
-    guard initial.contains(where: { $0["label"] == .string("com.guava.engine.rhi") }) else {
-      throw ToolError.message("No com.guava.engine.rhi record")
+    guard initial.contains(where: { $0["label"] == .string("com.cove.engine.rhi") }) else {
+      throw ToolError.message("No com.cove.engine.rhi record")
     }
     let java = initial.filter { $0["metadata"]["origin"] == .string("java") }
     guard !java.isEmpty,

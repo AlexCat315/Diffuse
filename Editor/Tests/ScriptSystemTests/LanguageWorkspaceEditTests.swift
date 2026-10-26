@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 import ScriptRuntime
 import Testing
 @testable import EditorCore
@@ -7,7 +7,7 @@ import Testing
 @Suite("Atomic language workspace edits", .serialized)
 struct LanguageWorkspaceEditTests {
     private func withWorkspace(_ body: (ScriptWorkspaceModel, DynamicScriptManager) throws -> Void) throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-workspace-edit-\(UUID().uuidString)")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-workspace-edit-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let manager = DynamicScriptManager(projectDirectory: root.path, scriptRuntime: ScriptRuntime(), engineModulePaths: [],
             scriptTrustStorageURL: root.appendingPathComponent("trust.json"))

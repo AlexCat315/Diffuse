@@ -18,7 +18,7 @@ public struct AIHarnessContribution: Codable, Sendable, Equatable {
 }
 
 public enum AIHarnessContributionPoint: ContributionPointSpec {
-    public static let id = "guava.ai.harness/v1"
+    public static let id = "cove.ai.harness/v1"
 
     public static func validate(_ harness: AIHarnessContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(harness.id), ContributionValidation.title(harness.title),

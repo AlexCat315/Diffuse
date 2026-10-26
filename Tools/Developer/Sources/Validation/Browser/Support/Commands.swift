@@ -50,7 +50,7 @@ enum BrowserExecutable {
     if let url = Bundle.main.executableURL, FileManager.default.isExecutableFile(atPath: url.path) {
       return url
     }
-    if let url = Shell.executable("guava-dev") { return url }
-    throw ToolError.message("Cannot locate the guava-dev executable")
+    if let url = Shell.executable("cove-dev") { return url }
+    throw ToolError.message("Cannot locate the cove-dev executable")
   }
 }

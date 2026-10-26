@@ -17,7 +17,7 @@ public enum LSPClientError: Error, LocalizedError, Sendable, Equatable {
     public var errorDescription: String? {
         switch self {
         case let .executableNotFound(path):
-            return "Could not locate sourcekit-lsp at '\(path)'. Set GUAVA_SOURCEKIT_LSP_PATH to the toolchain executable."
+            return "Could not locate sourcekit-lsp at '\(path)'. Set COVE_SOURCEKIT_LSP_PATH to the toolchain executable."
         case let .launchFailed(message):
             return "Could not start sourcekit-lsp: \(message)"
         case let .protocolViolation(message):

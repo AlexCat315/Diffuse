@@ -4,7 +4,7 @@ import SceneRuntime
 import ScriptRuntime
 import SIMDCompat
 
-/// Crystal Rush: a complete tiny game using Guava's real input, scene and HUD.
+/// Crystal Rush: a complete tiny game using Cove's real input, scene and HUD.
 struct GameScript: ScriptBehavior, ScriptAuthoring {
     static var definition: ScriptDefinition {
         ScriptDefinition(properties: [
@@ -41,7 +41,7 @@ struct GameScript: ScriptBehavior, ScriptAuthoring {
         startingHearts = Int(context.doubleParameter("startingHearts") ?? 3)
         remaining = roundDuration
         hearts = startingHearts
-        var input = InputActionMap.guavaDefault
+        var input = InputActionMap.coveDefault
         input.bind("start", to: .key(Scancode.space))
         input.bind("restart", to: .key(Scancode.r))
         input.bind("sprint", to: .key(Scancode.lshift))

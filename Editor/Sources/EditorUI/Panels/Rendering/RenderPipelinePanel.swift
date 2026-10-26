@@ -1,7 +1,7 @@
 import CinematicRenderer
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 import Foundation
 
 /// Offline render panel: resolution/SPP fields, primary Render action, and a
@@ -127,7 +127,7 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
         }
 
         let outputDirectory = URL(fileURLWithPath: app.projectDirectory, isDirectory: true)
-            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent(".cove", isDirectory: true)
             .appendingPathComponent("renders", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: outputDirectory,
@@ -139,7 +139,7 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
         }
         let timestamp = Int(Date().timeIntervalSince1970 * 1000)
         let output = outputDirectory
-            .appendingPathComponent("guava_render_\(timestamp).exr")
+            .appendingPathComponent("cove_render_\(timestamp).exr")
             .path
 
         isRendering = true

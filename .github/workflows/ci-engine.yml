@@ -1,4 +1,4 @@
-name: GuavaStudioRuntime CI
+name: DiffuseRuntime CI
 
 on:
   push:
@@ -11,9 +11,9 @@ on:
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
       - '.github/actions/build-cache/**'
-      - 'Editor/guava.json'
-      - 'guava'
-      - 'guava.cmd'
+      - 'Editor/cove.json'
+      - 'cove'
+      - 'cove.cmd'
       - 'Tools/Developer/Package.swift'
       - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
@@ -26,9 +26,9 @@ on:
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
       - '.github/actions/build-cache/**'
-      - 'Editor/guava.json'
-      - 'guava'
-      - 'guava.cmd'
+      - 'Editor/cove.json'
+      - 'cove'
+      - 'cove.cmd'
       - 'Tools/Developer/Package.swift'
       - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
@@ -43,7 +43,7 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 60
     env:
-      GUAVA_NATIVE_LINK_ORDER: '1'
+      COVE_NATIVE_LINK_ORDER: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
-      - name: Fetch pinned Guava SDK
+      - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
 
       - uses: ./.github/actions/build-cache
@@ -97,7 +97,7 @@ jobs:
       - name: Test shared system contracts
         timeout-minutes: 5
         shell: bash
-        run: ./guava test GuavaUI/System --no-parallel --timeout 120
+        run: ./cove test CoveUI/System --no-parallel --timeout 120
 
       - name: Prepare cached native dependencies
         uses: ./.github/actions/native-dependencies
@@ -106,7 +106,7 @@ jobs:
       - name: Build runtime products and tests
         timeout-minutes: 25
         shell: bash
-        run: ./guava test Engine --build-only
+        run: ./cove test Engine --build-only
 
       - uses: actions/cache/save@v5
         if: steps.build-cache.outputs.hit != 'true'
@@ -114,31 +114,31 @@ jobs:
           key: ${{ steps.build-cache.outputs.key }}
           path: |
             Tools/Developer/.build
-            GuavaUI/Tools/Guava/.build
-            GuavaUI/System/.build
+            CoveUI/Tools/Cove/.build
+            CoveUI/System/.build
             Editor/.build
             Engine/.build
 
       - name: Run XCTest
         if: runner.os != 'Windows'
         shell: bash
-        run: ./guava test Engine --skip-build --no-parallel --testing-library xctest --timeout 300
+        run: ./cove test Engine --skip-build --no-parallel --testing-library xctest --timeout 300
 
       - name: Run XCTest with hang diagnostics
         if: runner.os == 'Windows'
         timeout-minutes: 6
         shell: pwsh
-        run: ./GuavaUI/Tools/Testing/Windows.ps1 -Package Engine -Library xctest -Timeout 300 -SkipBuild -Output test-results/xctest
+        run: ./CoveUI/Tools/Testing/Windows.ps1 -Package Engine -Library xctest -Timeout 300 -SkipBuild -Output test-results/xctest
 
       - name: Run Swift Testing
         if: runner.os != 'Windows'
         shell: bash
-        run: ./guava test Engine --skip-build --no-parallel --testing-library swift-testing --timeout 600 --event-output test-results/events.jsonl
+        run: ./cove test Engine --skip-build --no-parallel --testing-library swift-testing --timeout 600 --event-output test-results/events.jsonl
 
       - name: Run Swift Testing with hang diagnostics
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./GuavaUI/Tools/Testing/Windows.ps1 -Package Engine -SkipBuild -Output test-results
+        run: ./CoveUI/Tools/Testing/Windows.ps1 -Package Engine -SkipBuild -Output test-results
 
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -159,23 +159,23 @@ jobs:
         run: |
           npm ci --prefix Platforms/Web/Plugins --ignore-scripts
           npm test --prefix Platforms/Web/Plugins
-          cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/macos-arm64"
+          cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe -DCOVE_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/macos-arm64"
           cmake --build Engine/build/plugin-probe --parallel 4
           host_bin=$(swift build --package-path Engine --show-bin-path)
-          ./guava studio browser web-plugins --host "$host_bin/GuavaPluginHost" --probe Engine/build/plugin-probe/GuavaPluginProbe
+          ./cove studio browser web-plugins --host "$host_bin/DiffusePluginHost" --probe Engine/build/plugin-probe/CovePluginProbe
 
       - name: Run M7 destruction performance gates
         if: runner.os == 'macOS'
         shell: bash
         working-directory: Engine
         run: |
-          GUAVA_PHYSICS_SCENARIO=destruction-fragments \
-          GUAVA_PHYSICS_BODIES=4096 \
-          GUAVA_PHYSICS_WARMUP_FRAMES=30 \
-          GUAVA_PHYSICS_SAMPLE_FRAMES=120 \
+          COVE_PHYSICS_SCENARIO=destruction-fragments \
+          COVE_PHYSICS_BODIES=4096 \
+          COVE_PHYSICS_WARMUP_FRAMES=30 \
+          COVE_PHYSICS_SAMPLE_FRAMES=120 \
           swift run -c release PhysicsRuntimeBenchmarks
-          GUAVA_PHYSICS_SCENARIO=destruction-islands \
-          GUAVA_PHYSICS_BODIES=4096 \
-          GUAVA_PHYSICS_WARMUP_FRAMES=30 \
-          GUAVA_PHYSICS_SAMPLE_FRAMES=120 \
+          COVE_PHYSICS_SCENARIO=destruction-islands \
+          COVE_PHYSICS_BODIES=4096 \
+          COVE_PHYSICS_WARMUP_FRAMES=30 \
+          COVE_PHYSICS_SAMPLE_FRAMES=120 \
           swift run -c release PhysicsRuntimeBenchmarks

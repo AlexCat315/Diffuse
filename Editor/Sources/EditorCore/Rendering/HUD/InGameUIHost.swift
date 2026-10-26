@@ -1,9 +1,9 @@
 public import EngineKernel
-public import GuavaUICompose
+public import CoveUICompose
 public import NativeRHI
 public import RenderBackend
 
-/// High-level in-game UI host that wires the full GuavaUI `ViewGraph` pipeline
+/// High-level in-game UI host that wires the full CoveUI `ViewGraph` pipeline
 /// for rendering 2-D HUD overlays on top of a 3-D scene.
 ///
 /// ## Usage
@@ -39,7 +39,7 @@ public final class InGameUIHost: InGameUIProviding, @unchecked Sendable {
 
     // MARK: - Main-thread API
 
-    /// Install a GuavaUI `View` tree as the in-game HUD.
+    /// Install a CoveUI `View` tree as the in-game HUD.
     /// Call once before the first `tick`. Ignored on subsequent calls.
     public func setRootView<V: View>(_ view: V) {
         bridge.setRootView(view)

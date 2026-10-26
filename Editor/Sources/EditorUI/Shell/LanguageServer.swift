@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The Swift language service in the status bar: a dot for its state, and a
 /// card that says why it is in that state, what it covers and how to change it.

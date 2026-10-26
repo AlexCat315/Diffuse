@@ -5,9 +5,9 @@ Both backends use 1 or 7 physics workers, 60 warm-up frames and 180 measured fra
 The runs execute serially after compilation and tests finish. These are local
 measurements, with fewer sample frames than the benchmark's default 600.
 
-Validation used SDK 0.1.7 at GuavaUI commit `b1ac164`, matching
-`Editor/guava.json`, and Natsel revision
-`87a0f0d49f7211e84bd79bb0cb7bbfdff4697361`. Set `GUAVA_SDK_ROOT` to a matching
+Validation used SDK 0.1.7 at CoveUI commit `b1ac164`, matching
+`Editor/cove.json`, and Natsel revision
+`87a0f0d49f7211e84bd79bb0cb7bbfdff4697361`. Set `COVE_SDK_ROOT` to a matching
 SDK checkout to repeat the build when the selected local SDK has a different version.
 
 ## What was fixed
@@ -42,14 +42,14 @@ and backend-step, synchronization and vertex-stream timings.
 Build with the repository CLI:
 
 ```sh
-./guava internal build-package Engine --product PhysicsRuntimeBenchmarks --release
+./cove internal build-package Engine --product PhysicsRuntimeBenchmarks --release
 ```
 
 The following results were captured before Jolt was removed. Jolt comparisons
 require the migration commit `6cddabbb`; the current engine runs Natsel. Use the
 following scenarios to reproduce Natsel measurements:
 
-| Scenario | `GUAVA_PHYSICS_BODIES` | Geometry |
+| Scenario | `COVE_PHYSICS_BODIES` | Geometry |
 | --- | ---: | --- |
 | `active-grid` | 10000 | Moving boxes without contacts |
 | `dense-contact` | 2000 | Stacked boxes with contacts |
@@ -58,9 +58,9 @@ following scenarios to reproduce Natsel measurements:
 For example:
 
 ```sh
-GUAVA_PHYSICS_BACKEND=natsel GUAVA_PHYSICS_SCENARIO=active-grid \
-  GUAVA_PHYSICS_BODIES=10000 GUAVA_PHYSICS_WORKERS=1 \
-  GUAVA_PHYSICS_WARMUP_FRAMES=60 GUAVA_PHYSICS_SAMPLE_FRAMES=180 \
+COVE_PHYSICS_BACKEND=natsel COVE_PHYSICS_SCENARIO=active-grid \
+  COVE_PHYSICS_BODIES=10000 COVE_PHYSICS_WORKERS=1 \
+  COVE_PHYSICS_WARMUP_FRAMES=60 COVE_PHYSICS_SAMPLE_FRAMES=180 \
   Engine/.build/out/Products/Release/PhysicsRuntimeBenchmarks
 ```
 
@@ -77,8 +77,8 @@ P95 and P99 for every scenario. At least 100 measured frames are required.
 | 144 | 6.94 ms | 0.833 ms |
 | 240 | 4.17 ms | 0.5 ms |
 
-Use `GUAVA_PHYSICS_TARGET_FPS` to choose the target. The physics budget reserves
-12% of that frame and can be explicitly set with `GUAVA_PHYSICS_BUDGET_MS`.
+Use `COVE_PHYSICS_TARGET_FPS` to choose the target. The physics budget reserves
+12% of that frame and can be explicitly set with `COVE_PHYSICS_BUDGET_MS`.
 It includes preparation, stepping, writeback, spatial-index maintenance and trigger
 detection. Vertex streaming defaults to 10% of the physics budget. Destruction
 activation defaults to the CPU tick ceiling. Dropped steps and backend errors fail
@@ -110,7 +110,7 @@ exclusions, and partitions large single-body detection with ordered result mergi
 The isolated Natsel `cloth_self64` harness uses the same authored cloth vertex
 order and material settings. It runs 60 warm-up steps and 180 measured steps.
 The old single-worker baseline has one run; each optimized worker configuration
-has three runs. These timings exclude GuavaStudio and use four rigid substeps;
+has three runs. These timings exclude Diffuse and use four rigid substeps;
 the integration benchmark uses one, so they are a separate measurement.
 
 | Natsel version / workers | Step P95 |
@@ -125,7 +125,7 @@ produced the same final vertex checksum `772246b7f26de325`, including the old
 baseline. The old C-compatible world hash does not include soft-only positions;
 the new harness prints a separate cloth checksum. Full Natsel validation passes
 518 tests, including exact single-cloth vertex comparisons with 1/2/4/8 workers.
-GuavaStudio's complete Engine test run passes, including 344 SceneRuntime tests;
+Diffuse's complete Engine test run passes, including 344 SceneRuntime tests;
 the Editor macOS Debug application also builds with the pinned dependency.
 
 ## Integrated results after shared runtime optimization

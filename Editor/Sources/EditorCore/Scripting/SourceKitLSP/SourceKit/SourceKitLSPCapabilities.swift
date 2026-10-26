@@ -1,4 +1,4 @@
-internal import GuavaProcess
+internal import CoveProcess
 import Foundation
 
 /// Optional command-line flags supported by a particular `sourcekit-lsp` build.

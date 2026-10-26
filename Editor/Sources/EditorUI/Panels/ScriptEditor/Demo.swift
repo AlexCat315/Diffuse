@@ -1,8 +1,8 @@
 import Foundation
 import EditorCore
 import ScriptRuntime
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 import NativeRHI
 #if os(macOS)
 import Darwin
@@ -15,18 +15,18 @@ func runScriptEditorDemo(backendConfig: DeviceConfig) throws {
     // A profiling run can retain the existing runtime FPS output when launched
     // as a native .app, whose output would otherwise belong to LaunchServices.
     #if os(macOS)
-    if let path = ProcessInfo.processInfo.environment["GUAVA_SCRIPT_EDITOR_DEMO_LOG_PATH"], let file = fopen(path, "a") {
+    if let path = ProcessInfo.processInfo.environment["COVE_SCRIPT_EDITOR_DEMO_LOG_PATH"], let file = fopen(path, "a") {
         _ = dup2(fileno(file), STDOUT_FILENO); _ = dup2(fileno(file), STDERR_FILENO); fclose(file)
     }
     #endif
-    let root = FileManager.default.temporaryDirectory.appendingPathComponent("GuavaScriptEditorDemo-\(UUID().uuidString)", isDirectory: true)
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("CoveScriptEditorDemo-\(UUID().uuidString)", isDirectory: true)
     let session = try ScriptEditorDemoSession(directory: root)
     let oldStore = AppStorageDefaults.store; AppStorageDefaults.store = MemoryAppStorageStore()
     defer {
         session.shutdown(); AppStorageDefaults.store = oldStore
         try? FileManager.default.removeItem(at: root)
     }
-    try Application.run(config: ApplicationConfiguration(title: "Guava — Swift Code Editor") { $0.rendering.device = backendConfig }) {
+    try Application.run(config: ApplicationConfiguration(title: "Cove — Swift Code Editor") { $0.rendering.device = backendConfig }) {
             ScriptEditorDemoView(session: session)
         }
 }
@@ -54,7 +54,7 @@ private final class ScriptEditorDemoSession: _ObservableObject, @unchecked Senda
         }
 
         let count: Int = "Change me to an integer"
-        let message = greet(name: "Guava")
+        let message = greet(name: "Cove")
         let upper = message.
         """
     init(directory: URL) throws {

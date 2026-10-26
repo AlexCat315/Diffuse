@@ -1,7 +1,7 @@
 import EngineKernel
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import Testing
 #if os(Windows)
 import WinSDK

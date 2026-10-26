@@ -145,7 +145,7 @@ private func composedTransformMatrix(
 
 /// Typed host primitives. Each type is the sole declaration of its decoder,
 /// JSON Schema, provider/MCP contract, and pure preparation behavior.
-public struct SetNameCapability: GuavaCapability {
+public struct SetNameCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -180,7 +180,7 @@ public struct SetNameCapability: GuavaCapability {
     }
 }
 
-public struct DeleteEntityCapability: GuavaCapability {
+public struct DeleteEntityCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -209,7 +209,7 @@ public struct DeleteEntityCapability: GuavaCapability {
     }
 }
 
-public struct DuplicateEntityCapability: GuavaCapability {
+public struct DuplicateEntityCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -250,7 +250,7 @@ public struct DuplicateEntityCapability: GuavaCapability {
     }
 }
 
-public struct SetTransformCapability: GuavaCapability {
+public struct SetTransformCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.localTransform])
         public var entity_id: SceneEntityRef
@@ -338,7 +338,7 @@ public enum CapabilityLightType: String, CapabilitySchemaValue, CaseIterable {
     }
 }
 
-public struct SetLightTypeCapability: GuavaCapability {
+public struct SetLightTypeCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.light])
         public var entity_id: SceneEntityRef
@@ -370,7 +370,7 @@ public struct SetLightTypeCapability: GuavaCapability {
     }
 }
 
-public struct SetLightIntensityCapability: GuavaCapability {
+public struct SetLightIntensityCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.light])
         public var entity_id: SceneEntityRef
@@ -402,7 +402,7 @@ public struct SetLightIntensityCapability: GuavaCapability {
     }
 }
 
-public struct SetLightColorCapability: GuavaCapability {
+public struct SetLightColorCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.light])
         public var entity_id: SceneEntityRef
@@ -434,7 +434,7 @@ public struct SetLightColorCapability: GuavaCapability {
     }
 }
 
-public struct SetLightRangeCapability: GuavaCapability {
+public struct SetLightRangeCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.light])
         public var entity_id: SceneEntityRef
@@ -466,7 +466,7 @@ public struct SetLightRangeCapability: GuavaCapability {
     }
 }
 
-public struct SetLightSpotAnglesCapability: GuavaCapability {
+public struct SetLightSpotAnglesCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.light])
         public var entity_id: SceneEntityRef
@@ -521,7 +521,7 @@ public struct SetLightSpotAnglesCapability: GuavaCapability {
     }
 }
 
-public struct SetLightCastShadowsCapability: GuavaCapability {
+public struct SetLightCastShadowsCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.light])
         public var entity_id: SceneEntityRef

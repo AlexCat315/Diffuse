@@ -1,5 +1,5 @@
 public import Foundation
-internal import GuavaProcess
+internal import CoveProcess
 import ScriptRuntime
 
 public struct SwiftToolchain: Sendable, Equatable {
@@ -32,7 +32,7 @@ public enum SwiftToolchainResolver {
     public static func resolve(compilerOverride: String? = nil,
                                environment: [String: String] = ProcessInfo.processInfo.environment,
                                preferences: SwiftToolchainPreferences = .load()) throws -> SwiftToolchain {
-        let explicit = [compilerOverride, environment["GUAVA_SWIFTC_PATH"], environment["GUAVA_SWIFT_TOOLCHAIN_PATH"],
+        let explicit = [compilerOverride, environment["COVE_SWIFTC_PATH"], environment["COVE_SWIFT_TOOLCHAIN_PATH"],
                         preferences.selectedPath].compactMap { value -> String? in
             guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
             return value

@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The project's tasks, as the plugin that contributes them for this kind of
 /// project describes them: build, test and run from the toolbar, then the

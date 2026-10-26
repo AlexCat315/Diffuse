@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import AssetPipeline
 import Foundation
 import ScriptRuntime
@@ -21,7 +21,7 @@ public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
         case let .missingAsset(path):
             return "export asset is missing: \(path)"
         case let .missingPlayerExecutable(path):
-            return "GuavaPlayer executable is missing or not executable: \(path)"
+            return "CovePlayer executable is missing or not executable: \(path)"
         case let .unsafeRelativePath(path):
             return "export asset path escapes the bundle: \(path)"
         case let .conflictingAssetDestination(path):
@@ -51,7 +51,7 @@ public struct ProjectExportDescriptor: Codable, Sendable, Equatable {
     public var exportedAt: String
     public var entityCount: Int
     public var assetCount: Int
-    /// Save slot the scene was written to — the slot GuavaPlayer's project loader reads.
+    /// Save slot the scene was written to — the slot CovePlayer's project loader reads.
     public var sceneSlot: Int
 
     public init(schemaVersion: Int, appName: String, exportedAt: String,
@@ -95,12 +95,12 @@ public struct ProjectExportAssetList: Codable, Sendable, Equatable {
 }
 
 /// Writes a self-contained, platform-agnostic project export bundle. The layout is exactly
-/// what `GuavaPlayer --project <dir>` expects to load, so the bundle is immediately runnable:
+/// what `CovePlayer --project <dir>` expects to load, so the bundle is immediately runnable:
 ///
 ///     build.json                     descriptor / metadata
 ///     assets.json                    referenced asset list
 ///     Scripts/scripts.json           optional project script aliases and defaults
-///     .guava/game-saves/slot-0.json  scene captured as a GameSaveDocument
+///     .cove/game-saves/slot-0.json  scene captured as a GameSaveDocument
 ///     <project-relative paths>        asset files and external model dependencies
 ///
 /// When a `playerExecutableURL` is supplied, the export also contains a runnable
@@ -233,7 +233,7 @@ public enum ProjectExporter {
         try process.run()
         process.waitUntilExit()
         let report = String(decoding: try Data(contentsOf: logURL), as: UTF8.self)
-        guard process.terminationStatus == 0, report.contains("GuavaPlayer project validation passed") else {
+        guard process.terminationStatus == 0, report.contains("CovePlayer project validation passed") else {
             throw ProjectExporterError.scriptPlayerValidationFailed(String(report.suffix(8192)))
         }
     }
@@ -321,7 +321,7 @@ public enum ProjectExporter {
         let contentsURL = appURL.appendingPathComponent("Contents", isDirectory: true)
         let macOSURL = contentsURL.appendingPathComponent("MacOS", isDirectory: true)
         let resourcesURL = contentsURL.appendingPathComponent("Resources", isDirectory: true)
-        let bundledProjectURL = resourcesURL.appendingPathComponent("GuavaProject", isDirectory: true)
+        let bundledProjectURL = resourcesURL.appendingPathComponent("CoveProject", isDirectory: true)
         try fileManager.createDirectory(at: macOSURL, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: bundledProjectURL, withIntermediateDirectories: true)
 
@@ -364,7 +364,7 @@ public enum ProjectExporter {
         let info: [String: Any] = [
             "CFBundleDisplayName": appName,
             "CFBundleExecutable": safeName,
-            "CFBundleIdentifier": "com.guava.export.\(bundleIdentifierSuffix(safeName))",
+            "CFBundleIdentifier": "com.cove.export.\(bundleIdentifierSuffix(safeName))",
             "CFBundleInfoDictionaryVersion": "6.0",
             "CFBundleName": appName,
             "CFBundlePackageType": "APPL",
@@ -422,9 +422,9 @@ public enum ProjectExporter {
 
     private static var playerExecutableName: String {
         #if os(Windows)
-        "GuavaPlayer.exe"
+        "CovePlayer.exe"
         #else
-        "GuavaPlayer"
+        "CovePlayer"
         #endif
     }
 
@@ -437,7 +437,7 @@ public enum ProjectExporter {
         }
         let sanitized = String(sanitizedScalars)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return sanitized.isEmpty ? "Guava Game" : sanitized
+        return sanitized.isEmpty ? "Cove Game" : sanitized
     }
 
     private static func bundleIdentifierSuffix(_ value: String) -> String {
@@ -484,7 +484,7 @@ public enum ProjectExporter {
 
     private static let audioExtensions: Set<String> = ["wav", "mp3", "m4a", "aiff", "aif", "caf", "ogg"]
     private static let excludedResourceDirectories: Set<String> = [
-        ".git", ".guava", ".build", "build", "export", "node_modules", ".gradle",
+        ".git", ".cove", ".build", "build", "export", "node_modules", ".gradle",
     ]
 
     private static func copyAudioResources(from sourceDirectory: URL,

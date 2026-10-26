@@ -7,7 +7,7 @@ import XCTest
 final class PluginStagingTests: XCTestCase {
   func testVariantsAndIntegrity() throws {
     let root = FileManager.default.temporaryDirectory
-      .appendingPathComponent("guava-staging-" + UUID().uuidString)
+      .appendingPathComponent("cove-staging-" + UUID().uuidString)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
 

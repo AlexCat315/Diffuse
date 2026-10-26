@@ -6,10 +6,10 @@ internal import ToolSupport
 /// writes into.
 enum AndroidTools {
   static var root: URL { Repository.root }
-  static var guavaSDKRoot: URL {
-    ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+  static var coveSDKRoot: URL {
+    ProcessInfo.processInfo.environment["COVE_SDK_ROOT"]
       .map { URL(fileURLWithPath: $0).standardizedFileURL }
-      ?? root.appendingPathComponent("GuavaUI")
+      ?? root.appendingPathComponent("CoveUI")
   }
 
   /// `OUTPUT = ROOT / 'Engine/build/android-validation'`.
@@ -70,15 +70,15 @@ enum AndroidTools {
 
   /// `build`: cross-compiles one Android product through the Swift CLI and
   /// returns the staged products directory. Production build ownership lives
-  /// in `guava internal android-compile`; this only drives it.
+  /// in `cove internal android-compile`; this only drives it.
   static func build(_ product: String, _ ndk: URL, configuration: String = "debug") throws -> URL {
     try Fs.directory(output)
     let result = output.appendingPathComponent("compile-\(UUID().uuidString).json")
     FileManager.default.createFile(atPath: result.path, contents: Data())
     defer { try? Fs.remove(result) }
     try Command.run([
-      guavaSDKRoot.appendingPathComponent("guava").path,
-      "internal", "android-compile", "--sdk-root", guavaSDKRoot.path,
+      coveSDKRoot.appendingPathComponent("cove").path,
+      "internal", "android-compile", "--sdk-root", coveSDKRoot.path,
       "--product", product,
       "--ndk", ndk.path, "--" + configuration, "--result-file", result.path,
     ])

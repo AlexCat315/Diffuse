@@ -5,7 +5,7 @@
   "description": "Swift language service through SourceKit-LSP, and building, testing and running Swift packages.",
   "access": "read",
   "imports": [
-    "guava:process/host"
+    "cove:process/host"
   ],
   "composable_host_capabilities": [],
   "host": {
@@ -31,7 +31,7 @@
           "SWIFTLY_BIN_DIR",
           "SWIFTLY_HOME_DIR",
           "SWIFTLY_TOOLCHAINS_DIR",
-          "GUAVA_LOG_RUN_ID"
+          "COVE_LOG_RUN_ID"
         ],
         "entryPoints": [
           "language-server"
@@ -67,7 +67,7 @@
     ]
   },
   "contributes": {
-    "guava.language/v1": [
+    "cove.language/v1": [
       {
         "id": "swift",
         "title": "Swift",
@@ -91,14 +91,14 @@
         }
       }
     ],
-    "guava.tasks/v1": [
+    "cove.tasks/v1": [
       {
         "id": "swiftpm",
         "title": "Swift Package",
         "marker": "Package.swift"
       }
     ],
-    "guava.ui.documentView/v1": [
+    "cove.ui.documentView/v1": [
       {
         "id": "dependencies",
         "title": "Dependencies",

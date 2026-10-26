@@ -1,7 +1,7 @@
 @testable import EditorCore
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import SceneRuntime
 import ScriptRuntime
 import SIMDCompat
@@ -22,8 +22,8 @@ struct EditorInspectorSectionsTests {
                 field(adapter, id, section: "scripts", field: "script-0-identifier") else {
             Issue.record("expected script catalog selector"); return
         }
-        #expect(identifier.wrappedValue == "guava.rotator")
-        #expect(options.contains { $0.value == "guava.character-controller" })
+        #expect(identifier.wrappedValue == "cove.rotator")
+        #expect(options.contains { $0.value == "cove.character-controller" })
 
         adapter.registerDynamicScriptOption(identifier: "scripts.player-movement",
                                             displayName: "PlayerMovement")
@@ -35,9 +35,9 @@ struct EditorInspectorSectionsTests {
             $0.value == "scripts.player-movement" && $0.label == "PlayerMovement · Swift"
         })
 
-        identifier.wrappedValue = "guava.mover"
+        identifier.wrappedValue = "cove.mover"
         #expect(adapter.scene.component(ScriptComponent.self, for: entity)?.bindings.first?.identifier
-                == "guava.mover")
+                == "cove.mover")
 
         guard case let .action(_, _, add) =
                 field(adapter, id, section: "scripts", field: "script-add") else {

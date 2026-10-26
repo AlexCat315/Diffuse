@@ -1,4 +1,4 @@
-import GuavaLogging
+import CoveLogging
 import Foundation
 import IntentRuntime
 

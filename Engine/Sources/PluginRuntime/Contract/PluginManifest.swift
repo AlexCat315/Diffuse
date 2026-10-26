@@ -2,11 +2,11 @@ import CapabilityRuntime
 import Foundation
 
 public enum PluginImportPermission: String, Codable, Sendable, CaseIterable, Hashable {
-    case sceneQuery = "guava:scene/query"
-    case selectionQuery = "guava:selection/query"
-    case assetMetadataQuery = "guava:asset/metadata-query"
-    case process = "guava:process/host"
-    case http = "guava:http/host"
+    case sceneQuery = "cove:scene/query"
+    case selectionQuery = "cove:selection/query"
+    case assetMetadataQuery = "cove:asset/metadata-query"
+    case process = "cove:process/host"
+    case http = "cove:http/host"
 
     public var isSnapshot: Bool { self != .process && self != .http }
 
@@ -55,7 +55,7 @@ public struct PluginResourceLimits: Codable, Sendable, Equatable {
 
 /// `plugin.json` contains package identity and authority only. Capability input
 /// types are deliberately absent: `capabilities.wit` owns that contract.
-public struct GuavaPluginManifest: Codable, Sendable, Equatable {
+public struct CovePluginManifest: Codable, Sendable, Equatable {
     public var id: String
     public var version: Int
     public var name: String
@@ -176,7 +176,7 @@ public enum PluginManifestValidator {
 
     public static func decodeAndValidate(_ data: Data,
                                          registry: CapabilityRegistry = .default,
-                                         contributions: ContributionPointRegistry = .standard) throws -> GuavaPluginManifest {
+                                         contributions: ContributionPointRegistry = .standard) throws -> CovePluginManifest {
         let raw = try JSONSerialization.jsonObject(with: data)
         guard let object = raw as? [String: Any] else {
             throw PluginManifestValidationError.invalidIdentifier
@@ -187,12 +187,12 @@ public enum PluginManifestValidator {
         if let unknown = object.keys.first(where: { !allowedFields.contains($0) }) {
             throw PluginManifestValidationError.forbiddenMetadataField(unknown)
         }
-        let decoded = try JSONDecoder().decode(GuavaPluginManifest.self, from: data)
+        let decoded = try JSONDecoder().decode(CovePluginManifest.self, from: data)
         try validate(decoded, registry: registry, contributions: contributions)
         return decoded
     }
 
-    public static func validate(_ manifest: GuavaPluginManifest,
+    public static func validate(_ manifest: CovePluginManifest,
                                 registry: CapabilityRegistry = .default,
                                 contributions: ContributionPointRegistry = .standard) throws {
         try manifest.host.validate(imports: manifest.imports)

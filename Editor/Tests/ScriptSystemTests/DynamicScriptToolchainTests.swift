@@ -7,13 +7,13 @@ struct DynamicScriptToolchainTests {
     func compilerSelection() {
         #expect(DynamicScriptManager.resolvedCompilerPath(environment: [:]) == "swiftc")
         #expect(DynamicScriptManager.resolvedCompilerPath(environment: [
-            "GUAVA_SWIFTC_PATH": "/host/toolchain/swiftc"
+            "COVE_SWIFTC_PATH": "/host/toolchain/swiftc"
         ]) == "/host/toolchain/swiftc")
         #expect(DynamicScriptManager.resolvedCompilerPath(override: "/explicit/swiftc", environment: [
-            "GUAVA_SWIFTC_PATH": "/host/toolchain/swiftc"
+            "COVE_SWIFTC_PATH": "/host/toolchain/swiftc"
         ]) == "/explicit/swiftc")
         #expect(DynamicScriptManager.resolvedCompilerPath(environment: [
-            "GUAVA_SWIFTC_PATH": "  "
+            "COVE_SWIFTC_PATH": "  "
         ]) == "swiftc")
     }
 }

@@ -30,7 +30,7 @@ enum Verification {
     try verifyCases(engine, suites: engineSuites, methods: engineMethods)
     try verifyCases(ui, suites: uiSuites, methods: uiMethods)
     Terminal.info(
-      "GPU regression verified: \(engine.count) Engine and \(ui.count) GuavaUI test functions executed"
+      "GPU regression verified: \(engine.count) Engine and \(ui.count) CoveUI test functions executed"
     )
   }
 

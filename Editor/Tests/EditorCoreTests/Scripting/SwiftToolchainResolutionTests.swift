@@ -6,7 +6,7 @@ import Testing
 @Suite("Paired Swift toolchain resolution")
 struct SwiftToolchainResolutionTests {
     private func withToolchain(_ body: (URL, [String: String]) throws -> Void) throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-toolchain-\(UUID().uuidString)")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-toolchain-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let binaries = root.appendingPathComponent("usr/bin")
         let resources = root.appendingPathComponent("usr/lib/swift")
@@ -14,7 +14,7 @@ struct SwiftToolchainResolutionTests {
         try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
         let reply = try JSONSerialization.data(withJSONObject: ["compilerVersion": "Swift version 6.4.1", "paths": ["runtimeResourcePath": resources.path]])
         let compiler = binaries.appendingPathComponent("swiftc")
-        try Data(("#!/bin/sh\ncat <<'GUAVA_TOOLCHAIN_REPLY'\n" + String(decoding: reply, as: UTF8.self) + "\nGUAVA_TOOLCHAIN_REPLY\n").utf8).write(to: compiler)
+        try Data(("#!/bin/sh\ncat <<'COVE_TOOLCHAIN_REPLY'\n" + String(decoding: reply, as: UTF8.self) + "\nCOVE_TOOLCHAIN_REPLY\n").utf8).write(to: compiler)
         let server = binaries.appendingPathComponent("sourcekit-lsp")
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: server)
         for executable in [compiler, server] { try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path) }
@@ -49,7 +49,7 @@ struct SwiftToolchainResolutionTests {
             let toolchain = try SwiftToolchainResolver.resolve(compilerOverride: root.path, environment: environment, preferences: preferences)
             #expect(toolchain.rootURL.path == root.path)
             var mismatched = environment
-            mismatched["GUAVA_SOURCEKIT_LSP_PATH"] = "/bin/sh"
+            mismatched["COVE_SOURCEKIT_LSP_PATH"] = "/bin/sh"
             #expect(throws: SwiftToolchainError.self) {
                 try SwiftToolchainResolver.resolve(compilerOverride: root.path, environment: mismatched, preferences: .init())
             }

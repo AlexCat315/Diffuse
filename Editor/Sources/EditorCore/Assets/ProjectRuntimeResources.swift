@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import AudioRuntime
 import AssetPipeline
 import Foundation
@@ -10,7 +10,7 @@ public enum ProjectRuntimeResources {
         "wav", "mp3", "m4a", "aiff", "aif", "caf", "ogg",
     ]
     private static let excludedDirectories: Set<String> = [
-        ".git", ".guava", ".build", "build", "export", "node_modules", ".gradle",
+        ".git", ".cove", ".build", "build", "export", "node_modules", ".gradle",
     ]
 
     /// Registers the project root and every directory containing an audio clip.

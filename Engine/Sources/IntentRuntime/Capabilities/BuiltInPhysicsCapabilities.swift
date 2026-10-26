@@ -55,7 +55,7 @@ public enum CapabilityRigidBodyMotionType: String, CapabilitySchemaValue, CaseIt
     }
 }
 
-public struct SetRigidBodyMotionTypeCapability: GuavaCapability {
+public struct SetRigidBodyMotionTypeCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -87,7 +87,7 @@ public struct SetRigidBodyMotionTypeCapability: GuavaCapability {
     }
 }
 
-public struct SetRigidBodyMassCapability: GuavaCapability {
+public struct SetRigidBodyMassCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -119,7 +119,7 @@ public struct SetRigidBodyMassCapability: GuavaCapability {
     }
 }
 
-public struct SetRigidBodyGravityScaleCapability: GuavaCapability {
+public struct SetRigidBodyGravityScaleCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -151,7 +151,7 @@ public struct SetRigidBodyGravityScaleCapability: GuavaCapability {
     }
 }
 
-public struct SetRigidBodyAllowSleepCapability: GuavaCapability {
+public struct SetRigidBodyAllowSleepCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -203,7 +203,7 @@ public enum CapabilityColliderShape: String, CapabilitySchemaValue, CaseIterable
     }
 }
 
-public struct SetColliderShapeCapability: GuavaCapability {
+public struct SetColliderShapeCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -278,7 +278,7 @@ public struct SetColliderShapeCapability: GuavaCapability {
     }
 }
 
-public struct SetColliderBoxExtentsCapability: GuavaCapability {
+public struct SetColliderBoxExtentsCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -313,7 +313,7 @@ public struct SetColliderBoxExtentsCapability: GuavaCapability {
     }
 }
 
-public struct SetColliderSphereRadiusCapability: GuavaCapability {
+public struct SetColliderSphereRadiusCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -346,7 +346,7 @@ public struct SetColliderSphereRadiusCapability: GuavaCapability {
     }
 }
 
-public struct SetColliderCapsuleCapability: GuavaCapability {
+public struct SetColliderCapsuleCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -396,7 +396,7 @@ public struct SetColliderCapsuleCapability: GuavaCapability {
     }
 }
 
-public struct SetColliderMaterialCapability: GuavaCapability {
+public struct SetColliderMaterialCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -443,7 +443,7 @@ public struct SetColliderMaterialCapability: GuavaCapability {
     }
 }
 
-public struct SetColliderTriggerCapability: GuavaCapability {
+public struct SetColliderTriggerCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -473,7 +473,7 @@ public struct SetColliderTriggerCapability: GuavaCapability {
     }
 }
 
-public struct SetColliderLayerCapability: GuavaCapability {
+public struct SetColliderLayerCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef

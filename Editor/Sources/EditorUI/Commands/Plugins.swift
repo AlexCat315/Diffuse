@@ -1,5 +1,5 @@
 internal import EditorCore
-internal import GuavaUI
+internal import CoveUI
 internal import PluginRuntime
 
 /// Runs a package's command. The editor carries out its effects; a failure

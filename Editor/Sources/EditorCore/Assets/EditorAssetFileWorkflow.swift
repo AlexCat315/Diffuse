@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 
 /// Project-contained file operations with reference rewrites and rollback.
@@ -150,7 +150,7 @@ public enum EditorAssetFileWorkflow {
 
     private static func textFiles(in root: URL) -> [URL] {
         let excluded: Set<String> = [".git", ".build", "build", "vendor", "node_modules", "export", "compiled", "script-cache"]
-        let extensions: Set<String> = ["json", "gltf", "obj", "mtl", "swift", "guavascene"]
+        let extensions: Set<String> = ["json", "gltf", "obj", "mtl", "swift", "covescene"]
         guard let enumerator = FileManager.default.enumerator(at: root,
             includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey], options: []) else { return [] }
         var result: [URL] = []
@@ -173,7 +173,7 @@ public enum EditorAssetFileWorkflow {
         let oldRelative = relativePath(source, from: owner.deletingLastPathComponent())
         let newRelative = relativePath(destination, from: owner.deletingLastPathComponent())
         var matched = false
-        if ["json", "gltf", "guavascene"].contains(owner.pathExtension.lowercased()),
+        if ["json", "gltf", "covescene"].contains(owner.pathExtension.lowercased()),
            let json = try? JSONSerialization.jsonObject(with: data) {
             func transform(_ value: Any, key: String = "") -> Any {
                 if let array = value as? [Any] { return array.map { transform($0, key: key) } }

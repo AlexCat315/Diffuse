@@ -2,9 +2,9 @@
 import EditorCore
 import EngineKernel
 import Foundation
-import GuavaUI
-import GuavaUICompose
-import GuavaUIWorkspace
+import CoveUI
+import CoveUICompose
+import CoveUIWorkspace
 import RenderBackend
 import Testing
 
@@ -104,7 +104,7 @@ struct EditorProductivityWorkflowTests {
 
     @Test("local commands work with no AI provider and reveal a collapsed panel during navigation")
     func commandsWithoutAI() throws {
-        let project = FileManager.default.temporaryDirectory.appendingPathComponent("guava-local-commands-\(UUID())")
+        let project = FileManager.default.temporaryDirectory.appendingPathComponent("cove-local-commands-\(UUID())")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false)

@@ -10,7 +10,7 @@ internal import ToolSupport
 /// list through its renderer's DevTools mirror. Also called in-process by the
 /// editor loop.
 enum CaptureUI {
-  static let usage = "guava-dev devtools capture-ui PORT|@SESSION_FILE OUTPUT.jpg [--settle-ms 0...2000] [--scale 1...3] [--node NODE_ID | --region X,Y,W,H] (--node crops to the node's visible frame plus 12 pt; --region crops logical points; combine with --scale 2 to inspect type, hairlines and radii close up)"
+  static let usage = "cove-dev devtools capture-ui PORT|@SESSION_FILE OUTPUT.jpg [--settle-ms 0...2000] [--scale 1...3] [--node NODE_ID | --region X,Y,W,H] (--node crops to the node's visible frame plus 12 pt; --region crops logical points; combine with --scale 2 to inspect type, hairlines and radii close up)"
 
   static func run(_ arguments: [String]) throws {
     if arguments.contains("-h") || arguments.contains("--help") {

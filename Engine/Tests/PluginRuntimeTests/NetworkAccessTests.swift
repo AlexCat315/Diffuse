@@ -7,7 +7,7 @@ struct PluginHTTPTests {
     private func manifest(_ host: String) -> Data {
         Data("""
         {"id": "test.net", "version": 1, "name": "Net", "description": "fixture", "access": "read",
-         "imports": ["guava:http/host"], "composable_host_capabilities": [],
+         "imports": ["cove:http/host"], "composable_host_capabilities": [],
          "host": \(host), "contributes": {}}
         """.utf8)
     }
@@ -26,7 +26,7 @@ struct PluginHTTPTests {
         #expect(throws: PluginManifestValidationError.invalidHostPermissions) {
             try PluginManifestValidator.decodeAndValidate(Data("""
             {"id": "test.net", "version": 1, "name": "Net", "description": "fixture", "access": "read",
-             "imports": ["guava:http/host"], "composable_host_capabilities": [],
+             "imports": ["cove:http/host"], "composable_host_capabilities": [],
              "host": {"http": []}, "contributes": {}}
             """.utf8))
         }
@@ -66,7 +66,7 @@ struct PluginHTTPTests {
             """.utf8)
         }
         let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
-            {"guava.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "instructions": "Be brief.",
+            {"cove.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "instructions": "Be brief.",
               "model": {"preferred": "claude-sonnet-4-6", "maxOutputTokens": 4096},
               "tools": ["read_file", "scene.set_name"], "context": ["scene", "git-summary"]}]}
             """))
@@ -74,11 +74,11 @@ struct PluginHTTPTests {
         #expect(agents.first?.model?.preferred == "claude-sonnet-4-6")
         #expect(agents.first?.context == ["scene", "git-summary"])
 
-        for invalid in [#"{"guava.ai.agent/v1": [{"id": "Assistant", "title": "Assistant"}]}"#,
-                        #"{"guava.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "model": {"preferred": ""}}]}"#,
-                        #"{"guava.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "tools": ["Read File"]}]}"#,
-                        #"{"guava.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "context": ["scene", "scene"]}]}"#] {
-            #expect(throws: PluginManifestValidationError.invalidContribution("guava.ai.agent/v1")) {
+        for invalid in [#"{"cove.ai.agent/v1": [{"id": "Assistant", "title": "Assistant"}]}"#,
+                        #"{"cove.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "model": {"preferred": ""}}]}"#,
+                        #"{"cove.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "tools": ["Read File"]}]}"#,
+                        #"{"cove.ai.agent/v1": [{"id": "assistant", "title": "Assistant", "context": ["scene", "scene"]}]}"#] {
+            #expect(throws: PluginManifestValidationError.invalidContribution("cove.ai.agent/v1")) {
                 try PluginManifestValidator.decodeAndValidate(manifest(invalid))
             }
         }

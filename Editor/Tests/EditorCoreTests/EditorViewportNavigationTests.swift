@@ -1,6 +1,6 @@
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import SceneRuntime
 import SIMDCompat
 import Testing
@@ -172,7 +172,7 @@ struct EditorViewportNavigationTests {
 
     @Test("snap settings persist per project and grid changes request a display refresh")
     func snapProjectPersistence() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-snap-\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cove-snap-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path)
@@ -197,7 +197,7 @@ struct EditorViewportNavigationTests {
         #expect(try sceneContent() == scene)
         #expect(!app.hasUnsavedSceneChanges)
         let settings = EditorViewportSnapSettings(state: app.store.state)
-        let url = directory.appendingPathComponent(".guava/editor-snap-settings.json")
+        let url = directory.appendingPathComponent(".cove/editor-snap-settings.json")
         #expect(try JSONDecoder().decode(EditorViewportSnapSettings.self, from: Data(contentsOf: url)) == settings)
         app.shutdown()
         let reopened = try EditorApplication(projectDirectory: directory.path)
@@ -207,7 +207,7 @@ struct EditorViewportNavigationTests {
 
     @Test("front, side, and top asset drops follow the editor reference plane")
     func orthographicDropPlanes() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-ortho-drop-\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cove-ortho-drop-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path)

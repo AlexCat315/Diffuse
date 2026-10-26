@@ -11,7 +11,7 @@ enum StepOutcome {
 
 /// The editor half of the step protocol: the plugin decides each command, the
 /// editor runs it through the plugin's process permission and calls back with
-/// its output until the plugin returns a result. See GuavaPluginKit's `Steps`
+/// its output until the plugin returns a result. See CovePluginKit's `Steps`
 /// for the plugin half.
 ///
 /// Output goes to the plugin a window at a time. The plugin answers each
@@ -201,7 +201,7 @@ extension StepPlugin {
         }
     }
 
-    /// Process requests reach `guava:process/host` through the plugin, which
+    /// Process requests reach `cove:process/host` through the plugin, which
     /// forwards the text after `{"process":` unparsed; the host checks it
     /// against the manifest.
     private func process(_ request: PluginProcessRequest) async throws -> PluginProcessUpdate {

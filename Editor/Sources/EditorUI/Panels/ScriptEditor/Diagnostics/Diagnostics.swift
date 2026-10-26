@@ -1,6 +1,6 @@
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Swift diagnostics for the selected script.
 ///

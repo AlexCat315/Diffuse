@@ -45,7 +45,7 @@ public enum PluginCompositionError: Error, Sendable, Equatable, CustomStringConv
 
 public enum PluginCompositionValidator {
     public static func validate(_ calls: [HostCapabilityCall],
-                                manifest: GuavaPluginManifest,
+                                manifest: CovePluginManifest,
                                 registry: CapabilityRegistry = .default,
                                 limits: PluginResourceLimits = .secureDefault) throws -> [HostCapabilityCall] {
         try PluginManifestValidator.validate(manifest, registry: registry)

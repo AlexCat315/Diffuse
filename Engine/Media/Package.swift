@@ -2,9 +2,9 @@
 import Foundation
 import PackageDescription
 
-let artifacts = ProcessInfo.processInfo.environment["GUAVA_MEDIA_ARTIFACT_ROOT"] ?? "vendor"
+let artifacts = ProcessInfo.processInfo.environment["COVE_MEDIA_ARTIFACT_ROOT"] ?? "vendor"
 let package = Package(
-    name: "GuavaMedia",
+    name: "CoveMedia",
     platforms: [.macOS(.v26), .iOS(.v26)],
     products: [.library(name: "MediaRuntime", targets: ["MediaRuntime"])],
     targets: [

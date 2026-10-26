@@ -18,9 +18,9 @@ struct CrystalRushGameplayTests {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let bundle = Bundle(for: CrystalRushTestBundle.self).bundleURL
         let playerBinary = try #require([bundle, bundle.deletingLastPathComponent()]
-            .map { $0.appendingPathComponent("GuavaPlayer") }
+            .map { $0.appendingPathComponent("CovePlayer") }
             .first { FileManager.default.isExecutableFile(atPath: $0.path) })
-        let project = FileManager.default.temporaryDirectory.appendingPathComponent("guava-crystal-rules-\(UUID())")
+        let project = FileManager.default.temporaryDirectory.appendingPathComponent("cove-crystal-rules-\(UUID())")
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         let manager = DynamicScriptManager(projectDirectory: project.path, scriptRuntime: ScriptRuntime(), engineModulePaths: [])

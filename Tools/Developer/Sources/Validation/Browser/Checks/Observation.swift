@@ -72,7 +72,7 @@ func nativeObservationChecks(page: Page, screenshot: String?) throws {
     "Scope filter did not narrow the registry")
   let uri = try page.locator("#addSourceBreakpoint").attribute("href") ?? ""
   try ensure(
-    uri.hasPrefix("vscode://guava.guavaui-devtools/breakpoint?file=") && uri.contains("&line="),
+    uri.hasPrefix("vscode://cove.coveui-devtools/breakpoint?file=") && uri.contains("&line="),
     "Breakpoint URI is malformed: \(uri)")
   _ = try page.evaluate(
     "document.querySelector('#addSourceBreakpoint').addEventListener('click', e => { e.preventDefault(); window.breakpointClick=e.currentTarget.href; })"
@@ -121,7 +121,7 @@ func nativeObservationChecks(page: Page, screenshot: String?) throws {
 /// Wasm Inspector observation over the shared browser transport.
 func wasmObservationChecks(page: Page, inspector: Frame) throws {
   let baseline = try page.evaluate(
-    "({count:guavaDebug.snapshot.count, dark:guavaDebug.snapshot.dark, note:guavaDebug.snapshot.note})"
+    "({count:coveDebug.snapshot.count, dark:coveDebug.snapshot.dark, note:coveDebug.snapshot.note})"
   )
   try inspector.locator("#registeredStates").filter(text: .contains("count")).waitFor()
   try ensure(
@@ -166,7 +166,7 @@ func wasmObservationChecks(page: Page, inspector: Frame) throws {
     "Scope filter discarded a registered state")
   try ensure(
     try inspector.locator("#addSourceBreakpoint").attribute("href")?.hasPrefix(
-      "vscode://guava.guavaui-devtools/breakpoint?") == true,
+      "vscode://cove.coveui-devtools/breakpoint?") == true,
     "Breakpoint URI is malformed")
   try inspector.locator("#stopTimeline").click()
   try inspector.waitForFunction(
@@ -195,10 +195,10 @@ func wasmObservationChecks(page: Page, inspector: Frame) throws {
     try inspector.locator("#startTimeline").isEnabled(),
     "Timeline did not re-enable after reconnect")
   _ = try page.evaluate(
-    "s=>guavaDebug.request({type:'state.restore',id:994,payload:{count:String(s.count),dark:String(s.dark),note:s.note}})",
+    "s=>coveDebug.request({type:'state.restore',id:994,payload:{count:String(s.count),dark:String(s.dark),note:s.note}})",
     argument: baseline)
   try page.waitForFunction(
-    "s=>guavaDebug.snapshot.count===s.count && guavaDebug.snapshot.note===s.note",
+    "s=>coveDebug.snapshot.count===s.count && coveDebug.snapshot.note===s.note",
     argument: baseline)
   Terminal.info(
     "Wasm observation: explicit/private State, real updates, all CPU stages, component navigation, trace export, stop and reconnect cleanup passed"

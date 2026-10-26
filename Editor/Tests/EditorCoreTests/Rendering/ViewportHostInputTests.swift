@@ -1,9 +1,9 @@
 @testable import EditorCore
 import Testing
 import EngineKernel
-import GuavaUIRuntime
+import CoveUIRuntime
 import RenderBackend
-@testable import GuavaUICompose
+@testable import CoveUICompose
 
 @Suite("ViewportHost Input", .serialized)
 struct ViewportHostInputTests {

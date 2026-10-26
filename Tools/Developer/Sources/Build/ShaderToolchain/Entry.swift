@@ -11,7 +11,7 @@ package enum ShaderToolchain {
     let rest = Array(arguments.dropFirst())
     switch operation {
     case "--help", "-h":
-      Terminal.info("guava-dev shader <compile|rebuild|bootstrap-slang> [options]")
+      Terminal.info("cove-dev shader <compile|rebuild|bootstrap-slang> [options]")
     case "compile": try CompileCommand.run(rest)
     case "rebuild": try RebuildCommand.run(rest)
     case "bootstrap-slang": try BootstrapCommand.run(rest)

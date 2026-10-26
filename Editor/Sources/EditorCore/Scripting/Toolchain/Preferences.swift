@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 public import Foundation
 
 public struct SwiftToolchainPreferences: Codable, Sendable, Equatable {
@@ -18,7 +18,7 @@ public struct SwiftToolchainPreferences: Codable, Sendable, Equatable {
     public static var directory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share")
-        return base.appendingPathComponent("GuavaStudio/SwiftToolchains", isDirectory: true)
+        return base.appendingPathComponent("Diffuse/SwiftToolchains", isDirectory: true)
     }
 
     public static func load(from directory: URL = Self.directory) -> Self {

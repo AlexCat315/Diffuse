@@ -1,6 +1,6 @@
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 enum EditorVisualTheme {
     static func make(dark: Bool, themeID: String = EditorThemeCatalog.defaultThemeID) -> Theme {

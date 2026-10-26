@@ -1,5 +1,5 @@
 public import Foundation
-internal import GuavaProcess
+internal import CoveProcess
 
 extension SwiftToolchain {
     public func validateAnalysis(engineModulePaths: [String], clangModuleMapPaths: [String],
@@ -9,20 +9,20 @@ extension SwiftToolchain {
             guard engineModulePaths.contains(where: {
                 fileManager.fileExists(atPath: URL(fileURLWithPath: $0).appendingPathComponent("\(module).swiftmodule").path)
             }) else {
-                throw SwiftToolchainError.unavailable("The Guava SDK is missing \(module).swiftmodule. Build the Editor with guava or configure GUAVA_ENGINE_MODULE_PATHS.")
+                throw SwiftToolchainError.unavailable("The Cove SDK is missing \(module).swiftmodule. Build the Editor with cove or configure COVE_ENGINE_MODULE_PATHS.")
             }
         }
         for path in clangModuleMapPaths where !fileManager.fileExists(atPath: path) {
-            throw SwiftToolchainError.unavailable("A Guava SDK Clang module map is missing: \(path)")
+            throw SwiftToolchainError.unavailable("A Cove SDK Clang module map is missing: \(path)")
         }
         for path in clangIncludePaths where !fileManager.fileExists(atPath: path) {
-            throw SwiftToolchainError.unavailable("A Guava SDK include directory is missing: \(path)")
+            throw SwiftToolchainError.unavailable("A Cove SDK include directory is missing: \(path)")
         }
-        let directory = fileManager.temporaryDirectory.appendingPathComponent("guava-swift-preflight-\(UUID().uuidString)")
+        let directory = fileManager.temporaryDirectory.appendingPathComponent("cove-swift-preflight-\(UUID().uuidString)")
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: directory) }
         let source = directory.appendingPathComponent("Environment.swift")
-        try Data("import Swift\nimport ScriptRuntime\nimport SceneRuntime\nlet guavaStandardLibraryProbe: String = \"ready\"\n".utf8)
+        try Data("import Swift\nimport ScriptRuntime\nimport SceneRuntime\nlet coveStandardLibraryProbe: String = \"ready\"\n".utf8)
             .write(to: source)
         let moduleCache = SwiftToolchainPreferences.directory.appendingPathComponent("ModuleCache", isDirectory: true)
         try fileManager.createDirectory(at: moduleCache, withIntermediateDirectories: true)
@@ -45,7 +45,7 @@ extension SwiftToolchain {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw SwiftToolchainError.unavailable("Swift analysis environment validation failed. The selected compiler, platform SDK and Guava modules must match.\n\(error.localizedDescription)")
+            throw SwiftToolchainError.unavailable("Swift analysis environment validation failed. The selected compiler, platform SDK and Cove modules must match.\n\(error.localizedDescription)")
         }
     }
 }

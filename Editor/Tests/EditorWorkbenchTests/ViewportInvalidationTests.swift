@@ -7,7 +7,7 @@ struct ViewportInvalidationTests {
     @Test("grid toggles request a frame without changing the scene")
     func gridToggleRequestsDisplay() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-grid-invalidation-\(UUID().uuidString)")
+            .appendingPathComponent("cove-grid-invalidation-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path)
@@ -30,7 +30,7 @@ struct ViewportInvalidationTests {
     @Test("a new drawable size schedules a frame, identical reports do not")
     func drawableSizeRequestsDisplay() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-viewport-invalidation-\(UUID().uuidString)")
+            .appendingPathComponent("cove-viewport-invalidation-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)

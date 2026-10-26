@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 internal import PluginRuntime
 
 /// Draws a plugin's component tree with the editor's own controls. Controls

@@ -19,7 +19,7 @@ struct EditorCoreResourceBundleTests {
         let root = bundle.url(forResource: "Plugins", withExtension: nil)
             ?? bundle.bundleURL.appendingPathComponent("Plugins", isDirectory: true)
         let packages = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "guavaplugin" }
+            .filter { $0.pathExtension == "coveplugin" }
         #expect(!packages.isEmpty, "No plugins in \(root.path); bundle resources: \(String(describing: bundle.resourceURL))")
         for package in packages {
             let loaded = try PluginPackageLoader().load(at: package)

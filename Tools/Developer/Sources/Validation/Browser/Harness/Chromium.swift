@@ -27,7 +27,7 @@ final class ChromiumBrowser: @unchecked Sendable {
     }
     let port = try freePort()
     let userData = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "guava-chromium-\(UUID().uuidString)")
+      "cove-chromium-\(UUID().uuidString)")
     try Fs.reset(userData)
     let process = try SpawnedProcess(
       executable: binary,
@@ -196,10 +196,10 @@ enum Chromium {
   }
 
   static func locate() throws -> URL {
-    if let override = ProcessInfo.processInfo.environment["GUAVA_CHROMIUM"], !override.isEmpty {
+    if let override = ProcessInfo.processInfo.environment["COVE_CHROMIUM"], !override.isEmpty {
       let url = URL(fileURLWithPath: override)
       guard FileManager.default.isExecutableFile(atPath: url.path) else {
-        throw ToolError.message("GUAVA_CHROMIUM is not executable: \(override)")
+        throw ToolError.message("COVE_CHROMIUM is not executable: \(override)")
       }
       return url
     }
@@ -210,7 +210,7 @@ enum Chromium {
       if let url = Shell.executable(name) { return url }
     }
     throw ToolError.message(
-      "Chromium not found; set GUAVA_CHROMIUM to a Chromium or Chrome executable")
+      "Chromium not found; set COVE_CHROMIUM to a Chromium or Chrome executable")
   }
 
   static func candidates() -> [String] {

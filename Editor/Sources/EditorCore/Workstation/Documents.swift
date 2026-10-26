@@ -1,6 +1,6 @@
 import Foundation
 public import StudioDocuments
-import GuavaUICompose
+import CoveUICompose
 
 public final class EditorDocumentWorkspace: _ObservableObject, @unchecked Sendable {
     private let publisher = _ObservablePublisher<EditorDocumentWorkspace>()

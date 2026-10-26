@@ -24,7 +24,7 @@ public struct CommandContribution: Codable, Sendable, Equatable {
 }
 
 public enum CommandContributionPoint: ContributionPointSpec {
-    public static let id = "guava.command/v1"
+    public static let id = "cove.command/v1"
 
     public static func validate(_ command: CommandContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(command.id), ContributionValidation.title(command.title),

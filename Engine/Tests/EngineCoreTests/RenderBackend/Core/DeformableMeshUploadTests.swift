@@ -7,7 +7,7 @@ import Testing
 @testable import RenderBackend
 
 private let deformableGPUSmokeEnabled =
-    ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1"
+    ProcessInfo.processInfo.environment["COVE_RUN_GPU_SMOKE_TESTS"] == "1"
 
 @Suite("DeformableMeshUpload", .serialized)
 struct DeformableMeshUploadTests {
@@ -38,7 +38,7 @@ struct DeformableMeshUploadTests {
         "uploads deformable GPU buffers once per content revision",
         .enabled(
             if: deformableGPUSmokeEnabled,
-            "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU smoke test"
+            "set COVE_RUN_GPU_SMOKE_TESTS=1 to run the real GPU smoke test"
         )
     )
     func uploadsOncePerRevision() throws {

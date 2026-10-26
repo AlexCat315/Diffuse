@@ -15,7 +15,7 @@ public struct AgentDescriptor: Sendable, Equatable, Identifiable {
     /// Nil means every host source and no package context.
     public let context: Set<String>?
     public let canAutoApprove: Bool
-    /// The `guava.ai.harness/v1` running this agent's turns; nil for the built-in loop.
+    /// The `cove.ai.harness/v1` running this agent's turns; nil for the built-in loop.
     public let harness: String?
 
     public init(pluginID: String, contribution: AgentContribution) {

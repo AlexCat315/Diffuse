@@ -1,5 +1,5 @@
 import Foundation
-private import GuavaProcess
+private import CoveProcess
 
 /// A located command-line tool for a contribution and the environment it may run with.
 struct ContributionTool: Sendable {
@@ -8,7 +8,7 @@ struct ContributionTool: Sendable {
 
     /// GUI apps start with a minimal PATH, so the usual install locations are
     /// searched too: Homebrew, `~/.local/bin` (Lore's installer) and the system.
-    /// `GUAVA_<COMMAND>_EXECUTABLE` names a specific build.
+    /// `COVE_<COMMAND>_EXECUTABLE` names a specific build.
     static func locate(_ command: String,
                        environment: [String: String] = ProcessInfo.processInfo.environment) -> ContributionTool? {
         #if os(Windows)
@@ -24,7 +24,7 @@ struct ContributionTool: Sendable {
         var seen = Set<String>()
         let directories = (path + common).filter { seen.insert($0).inserted }
         let inherited = ProcessEnvironment.setting(directories.joined(separator: String(separator)), for: "PATH", in: environment)
-        let override = ProcessEnvironment.value("GUAVA_\(command.uppercased())_EXECUTABLE", in: environment)
+        let override = ProcessEnvironment.value("COVE_\(command.uppercased())_EXECUTABLE", in: environment)
         guard let executable = ToolLocator.executable(override ?? command, environment: inherited) else { return nil }
         return ContributionTool(executable: executable, environment: inherited)
 

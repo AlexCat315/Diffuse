@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import AIRuntime
 import CapabilityRuntime
 import Foundation
@@ -108,7 +108,7 @@ public enum AICredentialSource: Sendable, Equatable {
 }
 
 /// Provider credentials in one file only the user can read
-/// (`~/Library/Application Support/GuavaStudio/Credentials/ai-providers.json`,
+/// (`~/Library/Application Support/Diffuse/Credentials/ai-providers.json`,
 /// mode 0600 inside a 0700 folder), one value per auth field the provider
 /// declares. Values are never written to project files, settings JSON,
 /// prompts, logs, or plugins; a field's environment variable fills in a value
@@ -120,7 +120,7 @@ public enum AICredentialStore {
     static var fileURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share")
-        return base.appendingPathComponent("GuavaStudio/Credentials/ai-providers.json")
+        return base.appendingPathComponent("Diffuse/Credentials/ai-providers.json")
     }
 
     /// Stores the given fields' values; an empty value removes that field.

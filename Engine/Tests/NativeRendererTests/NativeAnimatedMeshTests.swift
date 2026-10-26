@@ -175,7 +175,7 @@ final class NativeAnimatedMeshTests: XCTestCase {
         let expected = try reference.readback(), delta = try GridImage.difference(native,expected)
         XCTAssertLessThan(delta.meanAbsoluteChannelError,0.5,"\(label): \(delta)")
         XCTAssertLessThan(delta.pixelsOverThree,max(1,delta.pixelCount/100),"\(label): \(delta)")
-        let directory = URL(fileURLWithPath: "/tmp/guava-native-animation")
+        let directory = URL(fileURLWithPath: "/tmp/cove-native-animation")
         try FileManager.default.createDirectory(at: directory,withIntermediateDirectories: true)
         try GridImage.writePPM(native,size: packet.drawableSize,to: directory.appendingPathComponent("\(label).ppm"))
         try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("repeat-\(label).ppm"))

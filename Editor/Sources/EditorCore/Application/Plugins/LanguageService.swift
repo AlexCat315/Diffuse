@@ -1,7 +1,7 @@
 import Foundation
 import PluginRuntime
 import LanguageServerRuntime
-internal import GuavaProcess
+internal import CoveProcess
 
 final class PluginLanguageService: @unchecked Sendable {
     /// The plugin whose language server this session drives.

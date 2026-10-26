@@ -1,7 +1,7 @@
 import EditorCore
 import EngineKernel
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 import RenderBackend
 
 struct EditorViewportWorkspacePanel: View {

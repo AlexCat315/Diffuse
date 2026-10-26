@@ -1,9 +1,9 @@
 import SceneRuntime
 
 public extension InputActionMap {
-    /// Standard bindings used by Guava's built-in character and camera scripts.
+    /// Standard bindings used by Cove's built-in character and camera scripts.
     /// Projects may replace the resource with their own map at any time.
-    static var guavaDefault: InputActionMap {
+    static var coveDefault: InputActionMap {
         var map = InputActionMap()
 
         map.bind("move_forward", to: .key(Scancode.w))

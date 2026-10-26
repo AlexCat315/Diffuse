@@ -6,10 +6,10 @@ internal import ToolSupport
 ///
 /// Replaces `scripts/bootstrap-ios.py`: it stages the pinned FFmpeg variant for
 /// the requested iOS SDK/arch, then configures and builds the Engine and
-/// GuavaUI third-party CMake graphs into `build/ios-*/` with an iOS sysroot.
+/// CoveUI third-party CMake graphs into `build/ios-*/` with an iOS sysroot.
 package enum IOSStaging {
   static let usage = """
-    guava-dev ios-native [--sdk iphoneos|iphonesimulator] [--arch arm64|x86_64] [--plugins|--no-plugins]
+    cove-dev ios-native [--sdk iphoneos|iphonesimulator] [--arch arm64|x86_64] [--plugins|--no-plugins]
 
       --sdk      iOS SDK to target; defaults to iphonesimulator.
       --arch     Architecture to build; defaults to arm64. Devices require arm64.
@@ -56,9 +56,9 @@ package enum IOSStaging {
         throw ToolError.message("iOS builds require macOS; devices require arm64")
       }
       let root = Repository.root
-      let sdkRoot = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
+      let sdkRoot = ProcessInfo.processInfo.environment["COVE_SDK_ROOT"]
         .map { URL(fileURLWithPath: $0).standardizedFileURL }
-        ?? root.appendingPathComponent("GuavaUI")
+        ?? root.appendingPathComponent("CoveUI")
       let engineRoot = root.appendingPathComponent("Engine")
       let variant = "ios-\(arch)" + (sdk == "iphonesimulator" ? "-simulator" : "")
       let vendor = Repository.path("Engine/Media/vendor")
@@ -66,7 +66,7 @@ package enum IOSStaging {
         try MediaStaging.run(["--platform", variant])
       }
       let sysroot = try Shell.output(["xcrun", "--sdk", sdk, "--show-sdk-path"])
-      try Shell.inherit([sdkRoot.appendingPathComponent("guava").path, "setup", "--ios", "--sdk", sdk, "--arch", arch])
+      try Shell.inherit([sdkRoot.appendingPathComponent("cove").path, "setup", "--ios", "--sdk", sdk, "--arch", arch])
       for package in [engineRoot] {
         let build = package.appendingPathComponent("build/\(variant)")
         var command = [
@@ -75,12 +75,12 @@ package enum IOSStaging {
           "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_SYSTEM_NAME=iOS",
           "-DCMAKE_OSX_SYSROOT=\(sysroot)", "-DCMAKE_OSX_ARCHITECTURES=\(arch)",
           "-DCMAKE_OSX_DEPLOYMENT_TARGET=26.0",
-          "-DGUAVA_VENDOR_DIR=\(build.appendingPathComponent("vendor").path)",
+          "-DCOVE_VENDOR_DIR=\(build.appendingPathComponent("vendor").path)",
         ]
         var targets: [String]
         if package == engineRoot {
           command += [
-            "-DGUAVA_STAGE_WASMTIME=" + (plugins ? "ON" : "OFF"),
+            "-DCOVE_STAGE_WASMTIME=" + (plugins ? "ON" : "OFF"),
           ]
           // The Engine package resolves ocio_openexr from the staged artifact
           // root, so iOS must build and stage the EXR stack like every other

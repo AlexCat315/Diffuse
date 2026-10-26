@@ -1,8 +1,8 @@
 import CapabilityRuntime
 import Foundation
 
-extension GuavaPluginManifest {
-    /// Only capabilities a `guava.ai.tool/v1` names reach the model; everything
+extension CovePluginManifest {
+    /// Only capabilities a `cove.ai.tool/v1` names reach the model; everything
     /// else a package exports is called by the editor alone.
     public func exposesToAI(entryPoint: String) -> Bool {
         aiTool(entryPoint: entryPoint) != nil

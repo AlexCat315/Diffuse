@@ -1,6 +1,6 @@
 import Foundation
 import AssetPipeline
-import GuavaUIRuntime
+import CoveUIRuntime
 import IntentRuntime
 import RenderBackend
 import SceneRuntime
@@ -126,7 +126,7 @@ extension EditorSceneAdapter {
         if let particleScalabilityPolicy = manifest.particleScalabilityPolicy {
             restoredScene.setResource(particleScalabilityPolicy.policy)
         }
-        restoredScene.setResource(InputActionMap.guavaDefault)
+        restoredScene.setResource(InputActionMap.coveDefault)
         for originalID in manifest.lockedEntityIDs ?? [] {
             if let entity = idMap[originalID] {
                 _ = restoredScene.setComponent(EditorHierarchyLockComponent(), for: entity)

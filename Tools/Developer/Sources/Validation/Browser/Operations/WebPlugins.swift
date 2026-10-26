@@ -28,7 +28,7 @@ enum WebPluginsOperation {
   static func webPlugins(host: URL, probe: URL) throws {
     let package = Repository.path("Platforms/Web/Plugins")
     let temporary = FileManager.default.temporaryDirectory
-      .appendingPathComponent("guava-web-plugin-\(UUID().uuidString)")
+      .appendingPathComponent("cove-web-plugin-\(UUID().uuidString)")
     try Fs.directory(temporary)
     defer { try? Fs.remove(temporary) }
 
@@ -36,7 +36,7 @@ enum WebPluginsOperation {
       package.appendingPathComponent("src/runtime"), to: temporary.appendingPathComponent("runtime")
     )
     try Fs.write(
-      "<!doctype html><title>Guava plugin runtime gate</title>",
+      "<!doctype html><title>Cove plugin runtime gate</title>",
       to: temporary.appendingPathComponent("index.html"))
     try Shell.inherit([
       try BrowserExecutable.current().path, "plugins", "prepare",
@@ -46,7 +46,7 @@ enum WebPluginsOperation {
       try Shell.run(
         [
           "node", package.appendingPathComponent("src/packaging/entry.js").path,
-          temporary.appendingPathComponent(name + ".guavaplugin").path,
+          temporary.appendingPathComponent(name + ".coveplugin").path,
           temporary.appendingPathComponent(name).path,
           host.path,
         ], capture: true, echo: false)
@@ -101,7 +101,7 @@ enum WebPluginsOperation {
       await rejects(() => WebPluginSession.open('/reader/plugin.web.json', {integrity: catalog.reader, authorization: 'changed'}), 'authorization');
       const query = await open('scene-query');
       await rejects(() => query.prepare('safe.reader.inspect', {enabled: true}), 'missing query');
-      const snapshot = { sceneRevision: 42, values: {'guava:scene/query': {entities: [], revision: 42}} };
+      const snapshot = { sceneRevision: 42, values: {'cove:scene/query': {entities: [], revision: 42}} };
       const value = (await query.prepare('safe.reader.inspect', {enabled: true}, {snapshot})).value;
       check(value.revision === 42 && value.entities.length === 0, 'query snapshot');
       const loop = await open('infinite');

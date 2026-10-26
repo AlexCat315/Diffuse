@@ -73,13 +73,13 @@
       "initializer_assignments": 25,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "GuavaUI/Sources/GuavaUICompose/Theme/Tokens/ColorScheme.swift::ColorScheme": {
+    "CoveUI/Sources/CoveUICompose/Theme/Tokens/ColorScheme.swift::ColorScheme": {
       "stored_properties": 30,
       "initializer_parameters": 30,
       "initializer_assignments": 30,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     },
-    "GuavaUI/Sources/GuavaUIRuntime/Core/SDL3PlatformHost.swift::SDL3PlatformHost": {
+    "CoveUI/Sources/CoveUIRuntime/Core/SDL3PlatformHost.swift::SDL3PlatformHost": {
       "stored_properties": 27,
       "reason": "Existing declaration: split by responsibility before adding more fields or constructor inputs."
     }

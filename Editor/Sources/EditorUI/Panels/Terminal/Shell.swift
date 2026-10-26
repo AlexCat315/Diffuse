@@ -1,7 +1,7 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
-internal import GuavaUITerminal
+internal import CoveUI
+internal import CoveUIRuntime
+internal import CoveUITerminal
 private import Foundation
 
 /// One shell per project window, started in the project folder, and a tab

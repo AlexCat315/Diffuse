@@ -1,6 +1,6 @@
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// One bottom workbench for runtime logs, project diagnostics, and compiler
 /// output. The script editor keeps its full height for source editing.

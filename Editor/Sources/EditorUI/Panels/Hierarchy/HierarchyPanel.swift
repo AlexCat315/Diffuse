@@ -1,8 +1,8 @@
 import EditorCore
 import EngineKernel
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 struct HierarchyPanel: View {
     let store: EditorStore

@@ -29,6 +29,7 @@ public struct RenderPacket: Sendable {
     public var simulationTimeSeconds: Double
     public var jointPaletteMap: JointPaletteMap
     public var inGameCanvas: InGameCanvas
+    public var mipmappedViewportOutput: Bool = false
 
     public init(
         frameIndex: Int,

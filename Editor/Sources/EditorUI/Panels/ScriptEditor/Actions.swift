@@ -1,6 +1,6 @@
 internal import EditorCore
 internal import Foundation
-internal import GuavaUI
+internal import CoveUI
 #if canImport(AppKit)
 private import AppKit
 #endif

@@ -144,7 +144,7 @@ final class NativeParticleInstanceTests: XCTestCase {
         packet.renderSettings.viewport.gridEnabled = false; packet.renderSettings.shading.debugViewMode = .unlit
         packet.scene.camera = RenderCamera(eye: SIMD3(0,1,5),target: SIMD3(0,0.4,0),near: 0.1,far: 100)
         packet.scene.particles = [RenderParticle(position: SIMD3(0.6,0.4,0.5),size: 0.3,color: SIMD4(0.4,0.8,1,0.6),blendMode: .additive)]
-        let atlasURL = FileManager.default.temporaryDirectory.appendingPathComponent("guava-particle-atlas-\(UUID().uuidString).bmp")
+        let atlasURL = FileManager.default.temporaryDirectory.appendingPathComponent("cove-particle-atlas-\(UUID().uuidString).bmp")
         try atlasFixture().write(to: atlasURL)
         defer { try? FileManager.default.removeItem(at: atlasURL) }
         var snapshots: [Data] = []

@@ -13,6 +13,7 @@ struct SimulationFrameRequest: Sendable {
     let inputEvents: [InputEvent]
     let drawableSize: RenderDrawableSize
     let shouldRender: Bool
+    let mipmappedViewportOutput: Bool
     let renderSettings: RenderSettings
     let renderSceneOverride: RenderScene?
     let sceneSnapshotOverride: SceneRuntimeSnapshot?
@@ -29,13 +30,15 @@ struct SimulationFrameRequest: Sendable {
         renderSceneOverride: RenderScene? = nil,
         sceneSnapshotOverride: SceneRuntimeSnapshot? = nil,
         jointPaletteOverride: JointPaletteMap? = nil,
-        inGameCanvasOverride: InGameCanvas? = nil
+        inGameCanvasOverride: InGameCanvas? = nil,
+        mipmappedViewportOutput: Bool = false
     ) {
         self.frameIndex = frameIndex
         self.deltaTime = deltaTime
         self.inputEvents = inputEvents
         self.drawableSize = drawableSize
         self.shouldRender = shouldRender
+        self.mipmappedViewportOutput = mipmappedViewportOutput
         self.renderSettings = renderSettings
         self.renderSceneOverride = renderSceneOverride
         self.sceneSnapshotOverride = sceneSnapshotOverride
@@ -56,7 +59,7 @@ struct SimulationFrameReport: Sendable {
 final class SimulationThread: @unchecked Sendable {
     private let runtime: any EngineRuntime
     private let packetBuffer: LatestValueBuffer<RenderPacket>
-    private let queue = DispatchQueue(label: "com.guava.engine.simulation", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "com.cove.engine.simulation", qos: .userInitiated)
     private let onKernelPhase: @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void
     private let onFrameReady: @Sendable (SimulationFrameReport) -> Void
     private let onParticleSimulationEventsApplied: @Sendable (ParticleSimulationEventApplyReport) -> Void
@@ -154,7 +157,7 @@ final class SimulationThread: @unchecked Sendable {
             let canvas = request.inGameCanvasOverride
                 ?? sceneRuntime.resource(InGameCanvas.self)
                 ?? InGameCanvas()
-            let packet = RenderPacket(
+            var packet = RenderPacket(
                 frameIndex: request.frameIndex,
                 deltaTime: request.deltaTime,
                 drawableSize: request.drawableSize,
@@ -165,6 +168,7 @@ final class SimulationThread: @unchecked Sendable {
                 jointPaletteMap: paletteMap,
                 inGameCanvas: canvas
             )
+            packet.mipmappedViewportOutput = request.mipmappedViewportOutput
             packetBuffer.publish(packet)
             onPacketPublished()
         }

@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// Pushes the current branch, publishing it to `origin` when it has no upstream yet.
 func push(_ request: StepRequest) -> Step {

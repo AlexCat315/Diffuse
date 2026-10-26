@@ -11,7 +11,7 @@ enum PrepareOperation {
 
   static let fixtures = [
     Fixture(name: "reader", capability: "inspect", imports: []),
-    Fixture(name: "scene-query", capability: "inspect", imports: ["guava:scene/query"]),
+    Fixture(name: "scene-query", capability: "inspect", imports: ["cove:scene/query"]),
     Fixture(name: "infinite", capability: "loop", imports: []),
   ]
 
@@ -42,7 +42,7 @@ enum PrepareOperation {
 
   static func prepare(probe: URL, output: URL) throws {
     for fixture in fixtures {
-      let package = output.appendingPathComponent(fixture.name + ".guavaplugin")
+      let package = output.appendingPathComponent(fixture.name + ".coveplugin")
       try Fs.directory(package)
       try Shell.inherit([
         probe.path, "--compile",

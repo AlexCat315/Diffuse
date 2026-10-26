@@ -41,7 +41,7 @@ public struct PanelContribution: Codable, Sendable, Equatable {
 }
 
 public enum PanelContributionPoint: ContributionPointSpec {
-    public static let id = "guava.ui.panel/v1"
+    public static let id = "cove.ui.panel/v1"
 
     public static func validate(_ panel: PanelContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(panel.id), ContributionValidation.title(panel.title),

@@ -1,10 +1,10 @@
 import CapabilityRuntime
 import Foundation
-private import GuavaFileSystem
+private import CoveFileSystem
 
 public struct ValidatedPluginPackage: Sendable, Equatable {
     public var rootURL: URL
-    public var manifest: GuavaPluginManifest
+    public var manifest: CovePluginManifest
     public var runtime: ValidatedPluginComponent?
     public var resourceHashes: [String: String] = [:]
 
@@ -44,7 +44,7 @@ public enum PluginPackageError: Error, Sendable, Equatable, CustomStringConverti
 
     public var description: String {
         switch self {
-        case .invalidExtension: return "plugin package must end in .guavaplugin"
+        case .invalidExtension: return "plugin package must end in .coveplugin"
         case .packageNotDirectory: return "plugin package is not a directory"
         case let .missingFile(name): return "plugin package is missing \(name)"
         case let .symbolicLinkNotAllowed(name): return "symbolic links are not allowed for \(name)"
@@ -73,7 +73,7 @@ public struct PluginPackageLoader: Sendable {
 
     public func load(at packageURL: URL) throws -> ValidatedPluginPackage {
         let root = packageURL.standardizedFileURL
-        guard root.pathExtension == "guavaplugin" else { throw PluginPackageError.invalidExtension }
+        guard root.pathExtension == "coveplugin" else { throw PluginPackageError.invalidExtension }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory),
               isDirectory.boolValue else { throw PluginPackageError.packageNotDirectory }

@@ -1,5 +1,5 @@
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Icon buttons for language commands. Each tooltip names the command and its
 /// chord, so the toolbar teaches the shortcut it stands for.

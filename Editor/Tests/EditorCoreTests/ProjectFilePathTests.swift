@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 import Testing
 @testable import EditorCore
@@ -7,7 +7,7 @@ import Testing
 struct ProjectFilePathTests {
     @Test("new paths inherit their canonical parent without accepting prefix siblings")
     func nonexistentPaths() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-path-\(UUID())")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-path-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         let project = root.appendingPathComponent("Project", isDirectory: true)
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -21,7 +21,7 @@ struct ProjectFilePathTests {
 
     @Test("dangling script symlinks cannot redirect a future write outside the project")
     func danglingSymlink() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-path-\(UUID())")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-path-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         let project = root.appendingPathComponent("Project")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

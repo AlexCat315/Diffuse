@@ -49,7 +49,7 @@ public struct EditProvenance: Sendable, Equatable, Codable {
 /// An applied World change — the atomic unit of training data and audit history.
 ///
 /// Every successful `TransactionExecutor.apply()` produces one Edit. The edit log
-/// at `<project>/.guava/edit_log.jsonl` is the append-only stream of these records.
+/// at `<project>/.cove/edit_log.jsonl` is the append-only stream of these records.
 public struct Edit: Sendable, Equatable, Codable {
     public var id: String
     public var transactionID: String

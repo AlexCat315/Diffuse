@@ -1,6 +1,6 @@
 import Foundation
-import GuavaUIRuntime
-import GuavaUICompose
+import CoveUIRuntime
+import CoveUICompose
 
 public enum ScriptDocumentBuildState: Sendable, Equatable {
     case idle

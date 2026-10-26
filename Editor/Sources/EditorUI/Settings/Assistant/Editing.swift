@@ -1,5 +1,5 @@
 internal import EditorCore
-internal import GuavaUI
+internal import CoveUI
 private import Foundation
 
 /// Editing a provider is explicit; the active client only changes on Apply.

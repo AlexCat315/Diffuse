@@ -22,7 +22,7 @@ and compound child IDs. It supports rigid bodies, CCD, compound edits, material
 and layer filters, seven joint configurations, break events, virtual characters,
 wheeled/tracked/motorcycle vehicles, and surface/tetrahedral soft bodies. Queries
 share the simulation world. AABB overlaps use narrow-phase box geometry, and sweep
-positions report the query origin at impact, matching the existing Guava API.
+positions report the query origin at impact, matching the existing Cove API.
 
 `capacity.maxBodies`, worker selection, gravity, sleep and collision steps apply to
 Natsel. Natsel caps workers at 32. Deterministic replay is checked within the same
@@ -54,25 +54,25 @@ backend and build, including worker-count determinism in native solver tests.
 Run through the repository CLI:
 
 ```sh
-./guava test Engine --filter SceneRuntimeTests
-./guava test Engine
-./guava build Editor --debug
-./guava internal build-package Engine --product PhysicsRuntimeBenchmarks --release
+./cove test Engine --filter SceneRuntimeTests
+./cove test Engine
+./cove build Editor --debug
+./cove internal build-package Engine --product PhysicsRuntimeBenchmarks --release
 ```
 
 The physics benchmark defaults to Natsel. For example, after the
 release build on macOS:
 
 ```sh
-GUAVA_PHYSICS_BACKEND=natsel GUAVA_PHYSICS_SCENARIO=active-grid \
-  GUAVA_PHYSICS_BODIES=10000 GUAVA_PHYSICS_WORKERS=1 \
+COVE_PHYSICS_BACKEND=natsel COVE_PHYSICS_SCENARIO=active-grid \
+  COVE_PHYSICS_BODIES=10000 COVE_PHYSICS_WORKERS=1 \
   Engine/.build/out/Products/Release/PhysicsRuntimeBenchmarks
 ```
 
 Keep frame counts, worker counts and build configuration equal for comparisons.
 The benchmark defaults to a 120 FPS target: 8.33 ms for the CPU tick and a separate
-1 ms physics CPU budget. `GUAVA_PHYSICS_TARGET_FPS` changes the target; the default
-physics allocation is 12% of the frame and can be set with `GUAVA_PHYSICS_BUDGET_MS`.
+1 ms physics CPU budget. `COVE_PHYSICS_TARGET_FPS` changes the target; the default
+physics allocation is 12% of the frame and can be set with `COVE_PHYSICS_BUDGET_MS`.
 Both P95 and P99 are checked, with at least 100 measured frames required.
 
 `physics_cpu_ms` includes complete preparation, step, writeback, spatial-index and

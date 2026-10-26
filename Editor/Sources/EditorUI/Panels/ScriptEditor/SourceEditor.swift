@@ -1,7 +1,7 @@
 import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// The Swift editing surface shared by document tabs and the Scripts panel:
 /// the selected script with completion, hover and diagnostics, hierarchy

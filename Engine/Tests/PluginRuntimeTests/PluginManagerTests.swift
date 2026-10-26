@@ -27,9 +27,9 @@ struct PluginManagerTests {
 
     private func package(id: String = "fixture.lazy", runtime: Bool = true,
                          events: [String] = [], requires: [PluginRequirement] = []) throws -> URL {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".guavaplugin")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".coveplugin")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        var manifest = GuavaPluginManifest(id: id, version: 1, name: id, description: "Fixture", access: .read,
+        var manifest = CovePluginManifest(id: id, version: 1, name: id, description: "Fixture", access: .read,
                                           requires: requires)
         manifest.activation = events
         if !runtime {
@@ -158,7 +158,7 @@ struct PluginManagerTests {
         _ = try await manager.enable(at: url, authorization: authorize(url))
         #expect(manager.statuses.first?.phase == .activated)
         #expect(PluginManager.matches("onWorkspaceContains:**/Package.*", "onWorkspaceContains:App/Package.swift"))
-        #expect(!PluginManager.matches("onURI:guava", "onURI:other"))
+        #expect(!PluginManager.matches("onURI:cove", "onURI:other"))
         #expect(!PluginActivationEvent.isValid("onView:"))
     }
 

@@ -5,7 +5,11 @@ import NativeRHI
 public final class ViewportImage: @unchecked Sendable {
     // The resource is immutable; Device serializes access and destruction.
     public let resource: TextureResource
-    public init(resource: TextureResource) { self.resource = resource }
+    public let mipmaps: [TextureResource]
+    public init(resource: TextureResource, mipmaps: [TextureResource] = []) {
+        self.resource = resource
+        self.mipmaps = mipmaps
+    }
 }
 
 /// Render-thread publication state, separate from authored render settings.
@@ -13,12 +17,14 @@ struct ViewportSurfacePublication {
     private(set) var state = ViewportSurfaceState()
     private var nextID: UInt64 = 0
 
-    mutating func publish(resource: TextureResource, region: ViewportSamplingRegion) {
-        if state.image?.resource === resource {
+    mutating func publish(resource: TextureResource, mipmaps: [TextureResource] = [], region: ViewportSamplingRegion) {
+        let previous = state.image?.mipmaps ?? []
+        if state.image?.resource === resource, previous.count == mipmaps.count,
+           zip(previous, mipmaps).allSatisfy({ $0 === $1 }) {
             state.region = region
         } else {
             nextID += 1
-            state = ViewportSurfaceState(surfaceID: nextID, image: ViewportImage(resource: resource), region: region)
+            state = ViewportSurfaceState(surfaceID: nextID, image: ViewportImage(resource: resource, mipmaps: mipmaps), region: region)
         }
     }
 

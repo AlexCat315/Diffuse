@@ -1,6 +1,6 @@
 @testable import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Frozen pre-plugin behavior used to verify the resource migration.
 enum OriginalDefaultTheme {

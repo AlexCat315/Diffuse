@@ -6,7 +6,7 @@ import PluginRuntime
 /// Polling is intentional, mirroring `ScriptDirectoryMonitor`: builds replace
 /// package files atomically, which invalidates file-descriptor watchers, and a
 /// snapshot behaves consistently on macOS, Linux, and Windows. Watching is
-/// opt-in (`--watch-plugins` / `GUAVA_WATCH_PLUGINS`) and never authorizes a
+/// opt-in (`--watch-plugins` / `COVE_WATCH_PLUGINS`) and never authorizes a
 /// changed package on its own.
 final class PluginPackageMonitor: @unchecked Sendable {
     private struct Entry: Equatable {
@@ -17,7 +17,7 @@ final class PluginPackageMonitor: @unchecked Sendable {
         var files: [String: File]
     }
 
-    private let queue = DispatchQueue(label: "com.guava.editor.plugin-package-monitor",
+    private let queue = DispatchQueue(label: "com.cove.editor.plugin-package-monitor",
                                       qos: .utility)
     private var timer: DispatchSourceTimer?
     private var packages: [String: URL] = [:]
@@ -80,7 +80,7 @@ final class PluginPackageMonitor: @unchecked Sendable {
         for (pluginID, url) in packages {
             var files: [String: Entry.File] = [:]
             let manifest = try? Data(contentsOf: url.appendingPathComponent("plugin.json"))
-            let resources = manifest.flatMap { try? JSONDecoder().decode(GuavaPluginManifest.self, from: $0) }?
+            let resources = manifest.flatMap { try? JSONDecoder().decode(CovePluginManifest.self, from: $0) }?
                 .resources.map(\.path).filter(PluginResource.isValidPath) ?? []
             for name in ["plugin.json", "capabilities.wit", "component.wasm"] + resources {
                 let fileURL = url.appendingPathComponent(name)

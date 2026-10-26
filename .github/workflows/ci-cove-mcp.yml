@@ -1,0 +1,95 @@
+name: cove-mcp CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'CoveMcp/**'
+      - 'Tools/Developer/Sources/Validation/Runtime/**'
+      - 'Engine/**'
+      - '.github/workflows/ci-cove-mcp.yml'
+      - '.github/actions/setup-toolchains/**'
+      - '.github/actions/native-dependencies/**'
+      - '.github/actions/fetch-sdk/**'
+      - 'Editor/cove.json'
+      - 'cove'
+      - 'cove.cmd'
+      - 'Tools/Developer/Package.swift'
+      - 'Tools/Developer/Sources/Build/**'
+      - 'cmake/**'
+  pull_request:
+    paths:
+      - 'CoveMcp/**'
+      - 'Tools/Developer/Sources/Validation/Runtime/**'
+      - 'Engine/**'
+      - '.github/workflows/ci-cove-mcp.yml'
+      - '.github/actions/setup-toolchains/**'
+      - '.github/actions/native-dependencies/**'
+      - '.github/actions/fetch-sdk/**'
+      - 'Editor/cove.json'
+      - 'cove'
+      - 'cove.cmd'
+      - 'Tools/Developer/Package.swift'
+      - 'Tools/Developer/Sources/Build/**'
+      - 'cmake/**'
+
+# SwiftPM validates every Engine binary target even when CoveMCP only
+# imports Swift products. Bootstrap native artifacts before package resolution.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            runs-on: xcode-27
+          - name: Linux
+            runs-on: ubuntu-latest
+          - name: Windows
+            runs-on: windows-2025-vs2026
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: recursive
+      - name: Fetch pinned Cove SDK
+        uses: ./.github/actions/fetch-sdk
+
+      - name: Set up build toolchains
+        uses: ./.github/actions/setup-toolchains
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libdbus-1-dev libdrm-dev libegl1-mesa-dev \
+            libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libibus-1.0-dev \
+            libjack-jackd2-dev libpipewire-0.3-dev libpulse-dev libsndio-dev \
+            libudev-dev libwayland-dev libx11-dev libxcursor-dev libxext-dev \
+            libxfixes-dev libxi-dev libxinerama-dev libxkbcommon-dev \
+            libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
+            mesa-common-dev ninja-build
+
+      - name: Prepare cached native dependencies
+        uses: ./.github/actions/native-dependencies
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build (release)
+        working-directory: CoveMcp
+        run: swift build -c release
+
+      - name: Verify stdio protocol contract
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          COVE_MCP_EXECUTABLE: ${{ github.workspace }}/CoveMcp/.build/release/CoveMCP
+        run: ./cove studio validate mcp-protocol

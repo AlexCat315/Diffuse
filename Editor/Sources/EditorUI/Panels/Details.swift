@@ -1,5 +1,5 @@
 internal import EditorCore
-internal import GuavaUI
+internal import CoveUI
 
 /// The right side follows the content: properties of the selection for a
 /// scene or timeline, the outline of the open file for files.

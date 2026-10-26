@@ -1,4 +1,4 @@
-import GuavaUICompose
+import CoveUICompose
 
 /// Reads a type declaration's inheritance clause straight from source, for
 /// when the server's index has no type hierarchy (types from binary modules).

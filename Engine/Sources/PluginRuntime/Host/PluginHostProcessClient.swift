@@ -1,7 +1,7 @@
 #if os(macOS) || os(Linux) || os(Windows)
 public import Foundation
-private import GuavaProcess
-private import GuavaLogging
+private import CoveProcess
+private import CoveLogging
 
 public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConvertible {
     case launchFailed(String)
@@ -13,12 +13,12 @@ public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConve
 
     public var description: String {
         switch self {
-        case let .launchFailed(message): return "could not launch GuavaPluginHost: \(message)"
-        case .communicationFailed: return "GuavaPluginHost pipe communication failed"
-        case .timedOut: return "GuavaPluginHost did not respond before the request deadline"
-        case let .hostRestarted(generation): return "GuavaPluginHost restarted; invalidate plugin plans at generation \(generation)"
-        case .mismatchedResponse: return "GuavaPluginHost returned a mismatched response id"
-        case let .requestRejected(reason): return "GuavaPluginHost rejected the request: \(reason)"
+        case let .launchFailed(message): return "could not launch DiffusePluginHost: \(message)"
+        case .communicationFailed: return "DiffusePluginHost pipe communication failed"
+        case .timedOut: return "DiffusePluginHost did not respond before the request deadline"
+        case let .hostRestarted(generation): return "DiffusePluginHost restarted; invalidate plugin plans at generation \(generation)"
+        case .mismatchedResponse: return "DiffusePluginHost returned a mismatched response id"
+        case let .requestRejected(reason): return "DiffusePluginHost rejected the request: \(reason)"
         }
     }
 }
@@ -93,7 +93,7 @@ public final class PluginHostProcessClient: @unchecked Sendable {
             directory: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         command.arguments = launchArguments
         command.environment = ProcessInfo.processInfo.environment
-        command.environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
+        command.environment["COVE_LOG_RUN_ID"] = LogSystem.launch.runID
         var budget = ProcessBudget()
         budget.outputBytes = PluginHostFrameCodec.maximumFrameBytes + 4
         budget.pendingInputBytes = PluginHostFrameCodec.maximumFrameBytes + 4

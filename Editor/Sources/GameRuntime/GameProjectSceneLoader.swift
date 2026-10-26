@@ -27,7 +27,7 @@ public enum GameProjectSceneLoadError: Error, CustomStringConvertible, Equatable
 /// Loads the startup scene for both exported bundles and development projects.
 /// Exported bundles are strict: their descriptor, declared save, slot and entity
 /// count must agree. Development projects without `build.json` retain the
-/// optional slot-0 behavior used by GuavaPlayer during authoring.
+/// optional slot-0 behavior used by CovePlayer during authoring.
 public enum GameProjectSceneLoader {
     public static func load(projectDirectory: URL,
                             fileManager: FileManager = .default) throws -> EditorSceneManifest? {

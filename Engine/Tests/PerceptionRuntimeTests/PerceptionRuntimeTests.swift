@@ -10,8 +10,8 @@ final class PerceptionRuntimeTests: XCTestCase {
             task: .objectDetection,
             backendFamily: "test",
             runtime: PerceptionRuntimeConfig(preferredRuntime: "onnxruntime"),
-            inputContract: "guava.perception.input.rgb_image.v1",
-            outputContract: "guava.perception.output.detections.v1",
+            inputContract: "cove.perception.input.rgb_image.v1",
+            outputContract: "cove.perception.output.detections.v1",
             license: PerceptionLicenseMetadata(
                 codeLicense: "Apache-2.0",
                 weightsLicense: "CC-BY-NC-4.0",
@@ -113,8 +113,8 @@ final class PerceptionRuntimeTests: XCTestCase {
 
     func testAppleVisionWorkerRunsAgainstFixtureImage() throws {
         #if canImport(Vision)
-        guard ProcessInfo.processInfo.environment["GUAVA_RUN_VISION_SMOKE_TESTS"] == "1" else {
-            throw XCTSkip("set GUAVA_RUN_VISION_SMOKE_TESTS=1 to run the Apple Vision smoke test")
+        guard ProcessInfo.processInfo.environment["COVE_RUN_VISION_SMOKE_TESTS"] == "1" else {
+            throw XCTSkip("set COVE_RUN_VISION_SMOKE_TESTS=1 to run the Apple Vision smoke test")
         }
         let testFile = URL(fileURLWithPath: #filePath)
         let engineRoot = testFile
@@ -442,7 +442,7 @@ extension PerceptionRuntimeTests {
 extension PerceptionRuntimeTests {
     func testArtifactStoreWritesAndResolvesBlob() async throws {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava_artifact_test_\(UUID().uuidString)")
+            .appendingPathComponent("cove_artifact_test_\(UUID().uuidString)")
         let store = try LocalArtifactStore(baseURL: dir)
         defer { try? FileManager.default.removeItem(at: dir) }
 
@@ -462,7 +462,7 @@ extension PerceptionRuntimeTests {
 
     func testArtifactStoreIsIdempotentForSameContent() async throws {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava_artifact_idem_\(UUID().uuidString)")
+            .appendingPathComponent("cove_artifact_idem_\(UUID().uuidString)")
         let store = try LocalArtifactStore(baseURL: dir)
         defer { try? FileManager.default.removeItem(at: dir) }
 
@@ -486,7 +486,7 @@ extension PerceptionRuntimeTests {
     func testSchemaValidatorRejectsUnknownVersion() {
         var manifest = validManifest()
         manifest = PerceptionModelManifest(
-            schemaVersion: "guava.perception.model_manifest.v99",
+            schemaVersion: "cove.perception.model_manifest.v99",
             modelID: manifest.modelID,
             displayName: manifest.displayName,
             task: manifest.task,
@@ -507,7 +507,7 @@ extension PerceptionRuntimeTests {
 
     func testManifestScannerPicksUpManifestJSON() throws {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava_manifest_scan_\(UUID().uuidString)")
+            .appendingPathComponent("cove_manifest_scan_\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
@@ -523,7 +523,7 @@ extension PerceptionRuntimeTests {
 
     func testManifestScannerCollectsErrorsForInvalidJSON() throws {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava_manifest_err_\(UUID().uuidString)")
+            .appendingPathComponent("cove_manifest_err_\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
@@ -542,8 +542,8 @@ extension PerceptionRuntimeTests {
             task: .classification,
             backendFamily: "test",
             runtime: PerceptionRuntimeConfig(preferredRuntime: "none"),
-            inputContract: "guava.perception.input.rgb_image.v1",
-            outputContract: "guava.perception.output.classifications.v1",
+            inputContract: "cove.perception.input.rgb_image.v1",
+            outputContract: "cove.perception.output.classifications.v1",
             license: PerceptionLicenseMetadata(
                 codeLicense: "MIT",
                 weightsLicense: "MIT",
@@ -568,8 +568,8 @@ extension PerceptionRuntimeTests {
             task: .classification,
             backendFamily: "test",
             runtime: PerceptionRuntimeConfig(preferredRuntime: "none"),
-            inputContract: "guava.perception.input.rgb_image.v1",
-            outputContract: "guava.perception.output.classifications.v1",
+            inputContract: "cove.perception.input.rgb_image.v1",
+            outputContract: "cove.perception.output.classifications.v1",
             license: PerceptionLicenseMetadata(codeLicense: "MIT", weightsLicense: "MIT",
                                                commercialUse: "allowed",
                                                redistribution: "allowed")
@@ -585,8 +585,8 @@ extension PerceptionRuntimeTests {
             task: .classification,
             backendFamily: "onnxruntime",
             runtime: PerceptionRuntimeConfig(preferredRuntime: "onnxruntime"),
-            inputContract: "guava.perception.input.rgb_image.v1",
-            outputContract: "guava.perception.output.classifications.v1",
+            inputContract: "cove.perception.input.rgb_image.v1",
+            outputContract: "cove.perception.output.classifications.v1",
             license: PerceptionLicenseMetadata(codeLicense: "MIT", weightsLicense: "MIT",
                                                commercialUse: "allowed",
                                                redistribution: "allowed")

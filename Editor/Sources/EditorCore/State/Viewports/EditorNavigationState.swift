@@ -1,4 +1,4 @@
-import GuavaUICompose
+import CoveUICompose
 import Foundation
 import IntentRuntime
 

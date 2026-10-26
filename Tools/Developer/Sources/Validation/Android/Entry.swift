@@ -24,10 +24,10 @@ package enum AndroidValidation {
   }
 
   static let usage = """
-    guava-dev android <operation> …
+    cove-dev android <operation> …
 
       validate [--android-sdk S] [--ndk D] [--serial S]
-          cross-compile and run the strict NativeRHI/GuavaUI Vulkan probes
+          cross-compile and run the strict NativeRHI/CoveUI Vulkan probes
       demo [--android-sdk S] [--serial S]
           validate the SharedCounter APK: pixels, touch, IME, recreation
       gallery [--android-sdk S] [--serial S] [--pages P …] [--interactions-only]

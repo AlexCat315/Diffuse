@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUIRuntime
+import CoveUIRuntime
 import IntentRuntime
 import SceneRuntime
 

@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The review of a package opened with `--review-plugin`, over the editor
 /// window, so a plugin author can approve it and use it in one launch. It is

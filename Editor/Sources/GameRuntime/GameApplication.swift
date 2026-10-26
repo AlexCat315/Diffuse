@@ -1,4 +1,4 @@
-import GuavaLogging
+import CoveLogging
 import EditorCore
 import EngineCore
 import EngineKernel
@@ -194,6 +194,6 @@ public final class GameApplication: @unchecked Sendable {
     }
 
     private static func reportDiagnostic(_ message: String) {
-        LogSystem.logger("com.guava.player.scripting").warning("\(message)")
+        LogSystem.logger("com.cove.player.scripting").warning("\(message)")
     }
 }

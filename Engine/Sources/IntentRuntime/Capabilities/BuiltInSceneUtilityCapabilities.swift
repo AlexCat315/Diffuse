@@ -41,7 +41,7 @@ public enum CapabilitySpawnKind: String, CapabilitySchemaValue, CaseIterable {
     public static var capabilityPlaceholder: CapabilitySpawnKind { .mesh }
 }
 
-public struct SpawnEntityCapability: GuavaCapability {
+public struct SpawnEntityCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @AIField(description: "Entity display name.", minLength: 1, maxLength: 256)
         public var label: String?
@@ -144,7 +144,7 @@ public struct SpawnEntityCapability: GuavaCapability {
     }
 }
 
-public struct ReparentEntityCapability: GuavaCapability {
+public struct ReparentEntityCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -187,7 +187,7 @@ public struct ReparentEntityCapability: GuavaCapability {
     }
 }
 
-public struct SnapToGroundCapability: GuavaCapability {
+public struct SnapToGroundCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.localTransform])
         public var entity_id: SceneEntityRef
@@ -219,7 +219,7 @@ public struct SnapToGroundCapability: GuavaCapability {
     }
 }
 
-public struct SetMeshColorCapability: GuavaCapability {
+public struct SetMeshColorCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.renderMesh])
         public var entity_id: SceneEntityRef
@@ -253,7 +253,7 @@ public struct SetMeshColorCapability: GuavaCapability {
     }
 }
 
-public struct SetMeshVisibilityCapability: GuavaCapability {
+public struct SetMeshVisibilityCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.renderMesh])
         public var entity_id: SceneEntityRef
@@ -287,7 +287,7 @@ public struct SetMeshVisibilityCapability: GuavaCapability {
     }
 }
 
-public struct SetConstraintEnabledCapability: GuavaCapability {
+public struct SetConstraintEnabledCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.constraint])
         public var entity_id: SceneEntityRef
@@ -321,7 +321,7 @@ public struct SetConstraintEnabledCapability: GuavaCapability {
     }
 }
 
-public struct SetAudioSourceCapability: GuavaCapability {
+public struct SetAudioSourceCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -479,7 +479,7 @@ public enum CapabilityScriptValue: CapabilitySchemaValue, Equatable {
     }
 }
 
-public struct SetScriptPropertyCapability: GuavaCapability {
+public struct SetScriptPropertyCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -566,7 +566,7 @@ public struct SetScriptPropertyCapability: GuavaCapability {
     }
 }
 
-public struct SetScriptBindingsCapability: GuavaCapability {
+public struct SetScriptBindingsCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef
@@ -625,7 +625,7 @@ public struct SetScriptBindingsCapability: GuavaCapability {
     }
 }
 
-public struct SetAnimationPlayerCapability: GuavaCapability {
+public struct SetAnimationPlayerCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef

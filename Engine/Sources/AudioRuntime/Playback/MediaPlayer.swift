@@ -67,10 +67,10 @@ private final class PlaybackAudioSink {
     private let stream: OpaquePointer
     private let outputBytesPerSecond: Double
     init() throws {
-        guard SDL_InitSubSystem(GUAVA_SDL_INIT_AUDIO) else { throw MediaError.decoding("Audio device initialization failed") }
+        guard SDL_InitSubSystem(COVE_SDL_INIT_AUDIO) else { throw MediaError.decoding("Audio device initialization failed") }
         var spec = SDL_AudioSpec(); spec.freq = 48000; spec.channels = 2; spec.format = SDL_AUDIO_F32
-        guard let stream = SDL_OpenAudioDeviceStream(GUAVA_SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nil, nil) else {
-            SDL_QuitSubSystem(GUAVA_SDL_INIT_AUDIO)
+        guard let stream = SDL_OpenAudioDeviceStream(COVE_SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nil, nil) else {
+            SDL_QuitSubSystem(COVE_SDL_INIT_AUDIO)
             throw MediaError.decoding("Audio output device is unavailable")
         }
         self.stream = stream
@@ -78,7 +78,7 @@ private final class PlaybackAudioSink {
         _ = SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(stream), &output, nil)
         outputBytesPerSecond = Double(max(1, output.freq)) * Double(max(1, output.channels)) * Double(max(1, Int(output.format.rawValue & 0xFF) / 8))
     }
-    deinit { SDL_DestroyAudioStream(stream); SDL_QuitSubSystem(GUAVA_SDL_INIT_AUDIO) }
+    deinit { SDL_DestroyAudioStream(stream); SDL_QuitSubSystem(COVE_SDL_INIT_AUDIO) }
     var queuedSeconds: Double {
         Double(max(0, SDL_GetAudioStreamQueued(stream))) / (48000 * 8)
             + Double(max(0, SDL_GetAudioStreamAvailable(stream))) / outputBytesPerSecond

@@ -6,7 +6,7 @@ import Testing
 @Suite("EditorAssetFileWorkflow", .serialized)
 struct EditorAssetFileWorkflowTests {
     private func temporaryDirectory() throws -> URL {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("guava-file-workflow-\(UUID())")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("cove-file-workflow-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
     }
@@ -25,7 +25,7 @@ struct EditorAssetFileWorkflowTests {
         try write(#"{"buffers":[{"uri":"mesh.bin"}],"images":[{"uri":"textures/color.png"}]}"#, to: source)
         try write("mesh", to: source.deletingLastPathComponent().appendingPathComponent("mesh.bin"))
         try write("image", to: source.deletingLastPathComponent().appendingPathComponent("textures/color.png"))
-        let scene = root.appendingPathComponent(".guava/scene.json")
+        let scene = root.appendingPathComponent(".cove/scene.json")
         try write("{\"assetID\":\"Content/old/model.gltf\",\"absolutePath\":\"\(source.path)\"}", to: scene)
         let script = root.appendingPathComponent("Scripts/Spawn.swift")
         try write(#"let asset = "Content/old/model.gltf""#, to: script)

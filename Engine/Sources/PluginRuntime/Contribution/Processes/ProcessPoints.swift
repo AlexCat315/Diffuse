@@ -1,5 +1,5 @@
 public enum VersionControlContributionPoint: ContributionPointSpec {
-    public static let id = "guava.vcs/v1"
+    public static let id = "cove.vcs/v1"
 
     public static func validate(_ value: VersionControlContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(value.id), ContributionValidation.title(value.title),
@@ -18,7 +18,7 @@ public enum VersionControlContributionPoint: ContributionPointSpec {
 }
 
 public enum TaskContributionPoint: ContributionPointSpec {
-    public static let id = "guava.tasks/v1"
+    public static let id = "cove.tasks/v1"
 
     public static func validate(_ value: TaskContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(value.id), ContributionValidation.title(value.title),

@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 final class LanguageToolchainSession: _ObservableObject, @unchecked Sendable {
     enum Confirmation { case install, remove }

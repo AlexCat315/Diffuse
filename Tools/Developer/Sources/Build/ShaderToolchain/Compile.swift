@@ -26,7 +26,7 @@ func compileShader(_ request: CompileRequest) throws -> JSONValue {
     throw ToolError.message("Expected Slang \(slangVersion), got '\(version)'")
   }
   let source = request.source.resolvingSymlinksInPath().path
-  let temp = try makeTemporaryDirectory(prefix: "guava-rhi-shader-")
+  let temp = try makeTemporaryDirectory(prefix: "cove-rhi-shader-")
   defer { try? FileManager.default.removeItem(at: temp) }
 
   let codeName: String

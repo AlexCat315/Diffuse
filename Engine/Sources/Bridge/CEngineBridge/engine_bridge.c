@@ -1,4 +1,4 @@
-#include "GuavaLog.h"
+#include "CoveLog.h"
 #include "engine_bridge.h"
 
 #include <math.h>
@@ -44,7 +44,7 @@ static bool ensure_initialized(const char *fn_name) {
         return true;
     }
 
-    GUAVA_LOGF(GUAVA_LOG_WARNING, "com.guava.engine.bridge", "[CEngineBridge] %s ignored: runtime is not initialized\n", fn_name);
+    COVE_LOGF(COVE_LOG_WARNING, "com.cove.engine.bridge", "[CEngineBridge] %s ignored: runtime is not initialized\n", fn_name);
     return false;
 }
 
@@ -70,12 +70,12 @@ static bool should_emit_log(uint64_t frame_count) {
 
 void engine_init(void) {
     if (g_engine.initialized) {
-        GUAVA_LOGF(GUAVA_LOG_WARNING, "com.guava.engine.bridge", "[CEngineBridge] init called twice; keeping existing runtime\n");
+        COVE_LOGF(COVE_LOG_WARNING, "com.cove.engine.bridge", "[CEngineBridge] init called twice; keeping existing runtime\n");
         return;
     }
 
     g_engine.initialized = true;
-    GUAVA_LOGF(GUAVA_LOG_DEBUG, "com.guava.engine.bridge","[CEngineBridge] init: runtime ready\n");
+    COVE_LOGF(COVE_LOG_DEBUG, "com.cove.engine.bridge","[CEngineBridge] init: runtime ready\n");
 }
 
 void engine_tick_input(double delta_time) {
@@ -83,7 +83,7 @@ void engine_tick_input(double delta_time) {
         return;
     }
     if (!can_tick_input()) {
-        GUAVA_LOGF(GUAVA_LOG_WARNING, "com.guava.engine.bridge",
+        COVE_LOGF(COVE_LOG_WARNING, "com.cove.engine.bridge",
                 "[CEngineBridge] engine_tick_input ignored: input=%llu sim=%llu\n",
                 (unsigned long long)g_engine.input_frame_count,
                 (unsigned long long)g_engine.sim_frame_count);
@@ -99,7 +99,7 @@ void engine_tick_sim(double delta_time) {
         return;
     }
     if (!can_tick_sim()) {
-        GUAVA_LOGF(GUAVA_LOG_WARNING, "com.guava.engine.bridge",
+        COVE_LOGF(COVE_LOG_WARNING, "com.cove.engine.bridge",
                 "[CEngineBridge] engine_tick_sim ignored: input=%llu sim=%llu\n",
                 (unsigned long long)g_engine.input_frame_count,
                 (unsigned long long)g_engine.sim_frame_count);
@@ -116,7 +116,7 @@ void engine_tick_render_prepare(double delta_time) {
         return;
     }
     if (!can_tick_render_prepare()) {
-        GUAVA_LOGF(GUAVA_LOG_WARNING, "com.guava.engine.bridge",
+        COVE_LOGF(COVE_LOG_WARNING, "com.cove.engine.bridge",
                 "[CEngineBridge] engine_tick_render_prepare ignored: sim=%llu prepared=%llu\n",
                 (unsigned long long)g_engine.sim_frame_count,
                 (unsigned long long)g_engine.prepared_frame_count);
@@ -125,7 +125,7 @@ void engine_tick_render_prepare(double delta_time) {
 
     g_engine.last_delta_time = sanitize_delta_time(delta_time);
     if (should_emit_log(g_engine.prepared_frame_count)) {
-        GUAVA_LOGF(GUAVA_LOG_DEBUG, "com.guava.engine.bridge","[CEngineBridge] prepare frame=%llu\n",
+        COVE_LOGF(COVE_LOG_DEBUG, "com.cove.engine.bridge","[CEngineBridge] prepare frame=%llu\n",
                (unsigned long long)g_engine.prepared_frame_count);
     }
     g_engine.prepared_frame_count += 1;
@@ -136,7 +136,7 @@ void engine_tick_render_submit(double delta_time) {
         return;
     }
     if (!can_tick_render_submit()) {
-        GUAVA_LOGF(GUAVA_LOG_WARNING, "com.guava.engine.bridge",
+        COVE_LOGF(COVE_LOG_WARNING, "com.cove.engine.bridge",
                 "[CEngineBridge] engine_tick_render_submit ignored: prepared=%llu submitted=%llu\n",
                 (unsigned long long)g_engine.prepared_frame_count,
                 (unsigned long long)g_engine.submitted_frame_count);
@@ -145,7 +145,7 @@ void engine_tick_render_submit(double delta_time) {
 
     g_engine.last_delta_time = sanitize_delta_time(delta_time);
     if (should_emit_log(g_engine.submitted_frame_count)) {
-        GUAVA_LOGF(GUAVA_LOG_DEBUG, "com.guava.engine.bridge","[CEngineBridge] submit frame=%llu\n",
+        COVE_LOGF(COVE_LOG_DEBUG, "com.cove.engine.bridge","[CEngineBridge] submit frame=%llu\n",
                (unsigned long long)g_engine.submitted_frame_count);
     }
     g_engine.submitted_frame_count += 1;
@@ -153,11 +153,11 @@ void engine_tick_render_submit(double delta_time) {
 
 void engine_shutdown(void) {
     if (!g_engine.initialized) {
-        GUAVA_LOGF(GUAVA_LOG_WARNING, "com.guava.engine.bridge", "[CEngineBridge] shutdown ignored: runtime is not initialized\n");
+        COVE_LOGF(COVE_LOG_WARNING, "com.cove.engine.bridge", "[CEngineBridge] shutdown ignored: runtime is not initialized\n");
         return;
     }
 
-    GUAVA_LOGF(GUAVA_LOG_DEBUG, "com.guava.engine.bridge",
+    COVE_LOGF(COVE_LOG_DEBUG, "com.cove.engine.bridge",
         "[CEngineBridge] shutdown: input=%llu sim=%llu prepared=%llu submitted=%llu simulated=%.3fs\n",
         (unsigned long long)g_engine.input_frame_count,
         (unsigned long long)g_engine.sim_frame_count,

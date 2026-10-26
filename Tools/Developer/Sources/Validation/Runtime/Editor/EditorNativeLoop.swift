@@ -9,7 +9,7 @@ internal import ToolSupport
 /// a new temporary directory that is kept and printed.
 enum EditorNativeLoop {
   static let usage = """
-    guava-dev validate editor-loop [--mode both|event-driven|continuous] [--renderer native|metal]
+    cove-dev validate editor-loop [--mode both|event-driven|continuous] [--renderer native|metal]
                                    [--configuration debug|release] [--timing-frames N]
 
       --mode            Which frame loops to run; defaults to both.
@@ -69,7 +69,7 @@ enum EditorNativeLoop {
         throw ToolError.message("--timing-frames requires a positive count and --mode continuous")
       }
 
-      let directory = try Temp.directory(prefix: "guava-native-validation-")
+      let directory = try Temp.directory(prefix: "cove-native-validation-")
       Terminal.info("Validation artifacts: \(directory.path)")
       let modes = [false, true].filter { mode == "both" || (mode == "continuous") == $0 }
       let rendererDirectory = directory.appendingPathComponent(renderer)
@@ -92,13 +92,13 @@ enum EditorNativeLoop {
     let editor = try BuildProducts.executable(
       package: "Editor", name: "EditorApp", configuration: configuration)
     let player = try BuildProducts.executable(
-      package: "Editor", name: "GuavaPlayer", configuration: configuration)
-    let server = try BuildProducts.executable(package: "GuavaMcp", name: "GuavaMCP")
+      package: "Editor", name: "CovePlayer", configuration: configuration)
+    let server = try BuildProducts.executable(package: "CoveMcp", name: "CoveMCP")
     let root = Repository.root
 
     let project = directory.appendingPathComponent("Crystal Rush")
     let scripts = project.appendingPathComponent("Scripts")
-    let metadata = project.appendingPathComponent(".guava")
+    let metadata = project.appendingPathComponent(".cove")
     try Fs.directory(scripts)
     try Fs.directory(metadata)
     let resources = root.appendingPathComponent(
@@ -113,7 +113,7 @@ enum EditorNativeLoop {
       resources.appendingPathComponent("crystal-rush.script-assets.json"),
       to: metadata.appendingPathComponent("script-assets.json"))
 
-    let bundleIdentifier = "org.guava.native-validation.\(UUID().uuidString.lowercased())"
+    let bundleIdentifier = "org.cove.native-validation.\(UUID().uuidString.lowercased())"
     let macOS = try assembleBundle(
       directory: directory, editor: editor, bundleIdentifier: bundleIdentifier)
 
@@ -128,18 +128,18 @@ enum EditorNativeLoop {
     let port = try FreePort.reserve()
     let devtoolsPort = try FreePort.reserve()
     var environment = ProcessInfo.processInfo.environment
-    environment["GUAVA_MCP_PORT"] = String(port)
-    environment["GUAVA_EDITOR_STATE_DIRECTORY"] = state.path
-    environment["GUAVA_PLAYER_EXECUTABLE"] = player.path
-    environment["GUAVAUI_FORCE_CONTINUOUS_FRAMES"] = continuous ? "1" : "0"
-    environment["GUAVA_DEVTOOLS"] = "1"
-    environment["GUAVA_DEVTOOLS_PORT"] = String(devtoolsPort)
-    environment["GUAVA_DEVTOOLS_AUTO_LOG_TAP"] = "0"
+    environment["COVE_MCP_PORT"] = String(port)
+    environment["COVE_EDITOR_STATE_DIRECTORY"] = state.path
+    environment["COVE_PLAYER_EXECUTABLE"] = player.path
+    environment["COVEUI_FORCE_CONTINUOUS_FRAMES"] = continuous ? "1" : "0"
+    environment["COVE_DEVTOOLS"] = "1"
+    environment["COVE_DEVTOOLS_PORT"] = String(devtoolsPort)
+    environment["COVE_DEVTOOLS_AUTO_LOG_TAP"] = "0"
 
     let log = directory.appendingPathComponent("editor.log")
     let logHandle = try openForWriting(log)
     let child = try ChildProcess(
-      macOS.appendingPathComponent("GuavaNativeValidation"),
+      macOS.appendingPathComponent("CoveNativeValidation"),
       ["--project-dir", project.path, "--renderer", renderer],
       environment: environment, stdout: .file(logHandle), stderr: .file(logHandle))
     var client: MCPClient?
@@ -263,13 +263,13 @@ enum EditorNativeLoop {
   private static func assembleBundle(directory: URL, editor: URL, bundleIdentifier: String) throws
     -> URL
   {
-    let bundle = directory.appendingPathComponent("GuavaNativeValidation.app")
+    let bundle = directory.appendingPathComponent("CoveNativeValidation.app")
     let macOS = bundle.appendingPathComponent("Contents/MacOS")
     try Fs.directory(macOS)
-    try Fs.copy(editor, to: macOS.appendingPathComponent("GuavaNativeValidation"))
+    try Fs.copy(editor, to: macOS.appendingPathComponent("CoveNativeValidation"))
     let plist: [String: Any] = [
-      "CFBundleExecutable": "GuavaNativeValidation",
-      "CFBundleName": "GuavaNativeValidation",
+      "CFBundleExecutable": "CoveNativeValidation",
+      "CFBundleName": "CoveNativeValidation",
       "CFBundleIdentifier": bundleIdentifier,
       "CFBundlePackageType": "APPL",
       "CFBundleVersion": "1",
@@ -377,8 +377,8 @@ enum EditorNativeLoop {
     try Check.require(try JSON.boolean(exported["runnable"], "runnable"), JSON.text(exported))
     let executable = try JSON.string(exported["executable"], "executable")
     var isolated = ProcessInfo.processInfo.environment
-    isolated["PATH"] = "/guava-no-toolchain"
-    isolated.removeValue(forKey: "GUAVA_PROJECT_DIR")
+    isolated["PATH"] = "/cove-no-toolchain"
+    isolated.removeValue(forKey: "COVE_PROJECT_DIR")
     let validation = try Subprocess.run(
       URL(fileURLWithPath: executable),
       arguments: ["--validate-project", "--simulation-frames", "120"],

@@ -1,4 +1,4 @@
-name: GuavaStudioEditor CI
+name: DiffuseEditor CI
 
 on:
   push:
@@ -11,9 +11,9 @@ on:
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
       - '.github/actions/build-cache/**'
-      - 'Editor/guava.json'
-      - 'guava'
-      - 'guava.cmd'
+      - 'Editor/cove.json'
+      - 'cove'
+      - 'cove.cmd'
       - 'Tools/Developer/Package.swift'
       - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
@@ -26,9 +26,9 @@ on:
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
       - '.github/actions/build-cache/**'
-      - 'Editor/guava.json'
-      - 'guava'
-      - 'guava.cmd'
+      - 'Editor/cove.json'
+      - 'cove'
+      - 'cove.cmd'
       - 'Tools/Developer/Package.swift'
       - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
@@ -43,7 +43,7 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 60
     env:
-      GUAVA_NATIVE_LINK_ORDER: '1'
+      COVE_NATIVE_LINK_ORDER: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
-      - name: Fetch pinned Guava SDK
+      - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
 
       - name: Install Linux system dependencies
@@ -87,7 +87,7 @@ jobs:
       - name: Test shared system contracts
         timeout-minutes: 5
         shell: bash
-        run: ./guava test GuavaUI/System --no-parallel --timeout 120
+        run: ./cove test CoveUI/System --no-parallel --timeout 120
 
       - name: Prepare cached native dependencies
         uses: ./.github/actions/native-dependencies
@@ -96,7 +96,7 @@ jobs:
       - name: Build Editor, Player, Plugin Host and tests
         timeout-minutes: 25
         shell: bash
-        run: ./guava test Editor --build-only
+        run: ./cove test Editor --build-only
 
       - uses: actions/cache/save@v5
         if: steps.build-cache.outputs.hit != 'true'
@@ -104,8 +104,8 @@ jobs:
           key: ${{ steps.build-cache.outputs.key }}
           path: |
             Tools/Developer/.build
-            GuavaUI/Tools/Guava/.build
-            GuavaUI/System/.build
+            CoveUI/Tools/Cove/.build
+            CoveUI/System/.build
             Editor/.build
             Engine/.build
 
@@ -113,25 +113,25 @@ jobs:
         if: runner.os != 'Windows'
         timeout-minutes: 6
         shell: bash
-        run: ./guava test Editor --skip-build --no-parallel --testing-library xctest --timeout 300
+        run: ./cove test Editor --skip-build --no-parallel --testing-library xctest --timeout 300
 
       - name: Run XCTest with hang diagnostics
         if: runner.os == 'Windows'
         timeout-minutes: 6
         shell: pwsh
-        run: ./GuavaUI/Tools/Testing/Windows.ps1 -Package Editor -Library xctest -Timeout 300 -SkipBuild -Output test-results/xctest
+        run: ./CoveUI/Tools/Testing/Windows.ps1 -Package Editor -Library xctest -Timeout 300 -SkipBuild -Output test-results/xctest
 
       - name: Run Swift Testing
         if: runner.os != 'Windows'
         timeout-minutes: 11
         shell: bash
-        run: ./guava test Editor --skip-build --no-parallel --testing-library swift-testing --timeout 600 --event-output test-results/events.jsonl
+        run: ./cove test Editor --skip-build --no-parallel --testing-library swift-testing --timeout 600 --event-output test-results/events.jsonl
 
       - name: Run Swift Testing with hang diagnostics
         if: runner.os == 'Windows'
         timeout-minutes: 11
         shell: pwsh
-        run: ./GuavaUI/Tools/Testing/Windows.ps1 -Package Editor -SkipBuild -Output test-results
+        run: ./CoveUI/Tools/Testing/Windows.ps1 -Package Editor -SkipBuild -Output test-results
 
       - uses: actions/upload-artifact@v4
         if: failure()

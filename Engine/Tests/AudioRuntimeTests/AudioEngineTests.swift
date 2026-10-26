@@ -67,7 +67,7 @@ struct AudioEngineTests {
     /// the mock backend then "loads" them without touching a decoder.
     private func makeClipDir(_ names: [String]) throws -> URL {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-audio-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-audio-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for name in names {
             FileManager.default.createFile(atPath: dir.appendingPathComponent("\(name).wav").path,
@@ -260,7 +260,7 @@ struct AudioEngineTests {
         let mock = MockAudioBackend()
         let engine = AudioEngine(backend: mock)
         engine.addSearchURL(FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-audio-nonexistent-\(UUID().uuidString)"))
+            .appendingPathComponent("cove-audio-nonexistent-\(UUID().uuidString)"))
 
         var scene = SceneRuntime()
         let e = scene.createEntity()
@@ -274,7 +274,7 @@ struct AudioEngineTests {
     @Test("supports aif clips and rejects clip names that escape search roots")
     func portableClipLookupStaysWithinSearchRoot() throws {
         let parent = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-audio-paths-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-audio-paths-\(UUID().uuidString)", isDirectory: true)
         let clips = parent.appendingPathComponent("clips", isDirectory: true)
         try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: parent) }

@@ -6,8 +6,8 @@ import Testing
 @testable import RenderBackend
 
 @Suite("Native renderer GPU regression", .serialized,
-    .enabled(if: ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1",
-        "set GUAVA_RUN_GPU_SMOKE_TESTS=1 for GPU regression"))
+    .enabled(if: ProcessInfo.processInfo.environment["COVE_RUN_GPU_SMOKE_TESTS"] == "1",
+        "set COVE_RUN_GPU_SMOKE_TESTS=1 for GPU regression"))
 struct RenderBackendGPUSmokeTests {
     @Test("all production scene passes render readable, nonuniform pixels",
         arguments: ["mesh", "pbr", "post", "stylized", "particles", "simulation", "animated"])
@@ -40,7 +40,7 @@ struct RenderBackendGPUSmokeTests {
         #expect(stats.drawCallCount > 0)
         #expect(renderer.currentViewportSurfaceState().isValid)
         let pixels = try GridImage.readback(device: device, texture: #require(renderer.colorTexture), size: size)
-        if let output = ProcessInfo.processInfo.environment["GUAVA_GPU_TEST_OUTPUT_DIR"] {
+        if let output = ProcessInfo.processInfo.environment["COVE_GPU_TEST_OUTPUT_DIR"] {
             try GridImage.writePPM(pixels, size: size, to: URL(fileURLWithPath: output).appendingPathComponent("\(scene).ppm"))
         }
         #expect(pixels.count == Int(size.width * size.height * 4))

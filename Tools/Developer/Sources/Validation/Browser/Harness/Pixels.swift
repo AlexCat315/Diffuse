@@ -89,13 +89,13 @@ func waitPixels(
     case .script(let expression):
       rect = ((try? page.evaluate(expression))?.array ?? []).compactMap(\.number)
     }
-    backend = (try? page.evaluate("guavaDebug.backend").string) ?? ""
+    backend = (try? page.evaluate("coveDebug.backend").string) ?? ""
     let selector = backend == "webgpu" ? "#gpu" : "#fallback"
     guard let image = try? page.elementImage(selector) else {
       page.waitForTimeout(50)
       continue
     }
-    let logicalWidth = (try? page.evaluate("guavaDebug.snapshot.width").number) ?? 0
+    let logicalWidth = (try? page.evaluate("coveDebug.snapshot.width").number) ?? 0
     let ratio = logicalWidth > 0 ? Double(image.width) / logicalWidth : 1
     let x = rect.count > 0 ? rect[0] : 0
     let y = rect.count > 1 ? rect[1] : 0
@@ -107,7 +107,7 @@ func waitPixels(
     if predicate(pixels) { return }
     page.waitForTimeout(50)
   }
-  let gpu = (try? page.evaluate("guavaDebug.gpuInfo"))?.serialized ?? "null"
+  let gpu = (try? page.evaluate("coveDebug.gpuInfo"))?.serialized ?? "null"
   throw ToolError.message(
     "Expected displayed canvas pixels in \(region.description); backend=\(backend), gpu=\(gpu)")
 }

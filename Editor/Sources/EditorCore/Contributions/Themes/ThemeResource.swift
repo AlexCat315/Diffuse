@@ -1,7 +1,7 @@
 import Foundation
 import PluginRuntime
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 
 struct ThemeResource: Decodable, Sendable {
     let version: Int

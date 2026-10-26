@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 private import Foundation
 
 /// Installed plugins as one list of rows, a switch each; adding a package

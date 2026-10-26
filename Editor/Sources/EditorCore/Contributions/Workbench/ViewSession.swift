@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 import PluginRuntime
 
 /// One plugin view: the state its entry point last returned, the component

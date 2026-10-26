@@ -1,5 +1,5 @@
 import Foundation
-internal import GuavaProcess
+internal import CoveProcess
 
 final class LSPConnection: @unchecked Sendable {
     let id = UUID()

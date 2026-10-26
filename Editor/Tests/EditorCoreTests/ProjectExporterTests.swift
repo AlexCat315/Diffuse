@@ -71,7 +71,7 @@ struct ProjectExporterTests {
 
     private func tempDir() -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("guava-export-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-export-\(UUID().uuidString)", isDirectory: true)
         return url
     }
 
@@ -363,16 +363,16 @@ struct ProjectExporterTests {
         }
         try FileManager.default.createDirectory(at: playerDirectory,
                                                 withIntermediateDirectories: true)
-        let player = playerDirectory.appendingPathComponent("GuavaPlayer")
+        let player = playerDirectory.appendingPathComponent("CovePlayer")
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: player)
         try FileManager.default.setAttributes([.posixPermissions: 0o755],
                                               ofItemAtPath: player.path)
-        let resourceBundle = playerDirectory.appendingPathComponent("GuavaUI_Test.bundle",
+        let resourceBundle = playerDirectory.appendingPathComponent("CoveUI_Test.bundle",
                                                                     isDirectory: true)
         try FileManager.default.createDirectory(at: resourceBundle,
                                                 withIntermediateDirectories: true)
         try Data("resource".utf8).write(to: resourceBundle.appendingPathComponent("marker.txt"))
-        let resourceDirectory = playerDirectory.appendingPathComponent("GuavaUI_Test.resources",
+        let resourceDirectory = playerDirectory.appendingPathComponent("CoveUI_Test.resources",
                                                                        isDirectory: true)
         try FileManager.default.createDirectory(at: resourceDirectory,
                                                 withIntermediateDirectories: true)
@@ -390,18 +390,18 @@ struct ProjectExporterTests {
         #expect(FileManager.default.isExecutableFile(atPath: executable.path))
         #expect(FileManager.default.fileExists(
             atPath: app.appendingPathComponent(
-                "Contents/Resources/GuavaUI_Test.bundle/marker.txt"
+                "Contents/Resources/CoveUI_Test.bundle/marker.txt"
             ).path
         ))
         #expect(FileManager.default.fileExists(
             atPath: app.appendingPathComponent(
-                "Contents/Resources/GuavaUI_Test.resources/marker.txt"
+                "Contents/Resources/CoveUI_Test.resources/marker.txt"
             ).path
         ))
         #expect(FileManager.default.fileExists(
             atPath: app.appendingPathComponent("Contents/MacOS/runtime.dylib").path
         ))
-        let embeddedProject = app.appendingPathComponent("Contents/Resources/GuavaProject",
+        let embeddedProject = app.appendingPathComponent("Contents/Resources/CoveProject",
                                                          isDirectory: true)
         #expect(FileManager.default.fileExists(
             atPath: embeddedProject.appendingPathComponent("build.json").path

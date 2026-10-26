@@ -1,6 +1,6 @@
 @testable import EditorCore
 import Foundation
-import GuavaUIRuntime
+import CoveUIRuntime
 import SceneRuntime
 import Testing
 

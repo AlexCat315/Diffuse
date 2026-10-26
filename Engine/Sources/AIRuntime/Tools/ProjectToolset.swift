@@ -24,7 +24,7 @@ public enum ProjectToolset {
         AgentTool(name: "add_media_clip", description: "Append a project video file to the timeline after inspecting its streams and duration.", schema: object(["path": projectPath], required: ["path"]), readOnly: false),
         AgentTool(name: "trim_media_clip", description: "Set a clip's source in-point and duration in seconds.", schema: object(["index": .integer(minimum: 0, maximum: 255), "start": .number(minimum: 0), "duration": .number(minimum: 0.001)], required: ["index", "start", "duration"]), readOnly: false),
         AgentTool(name: "remove_media_clip", description: "Remove one cut from the timeline; source media is preserved.", schema: object(["index": .integer(minimum: 0, maximum: 255)], required: ["index"]), readOnly: false),
-        AgentTool(name: "save_media_timeline", description: "Save authored cuts to .guava/media.json.", schema: object(), readOnly: false),
+        AgentTool(name: "save_media_timeline", description: "Save authored cuts to .cove/media.json.", schema: object(), readOnly: false),
         AgentTool(name: "export_media", description: "Render the current cuts with FFmpeg to a new MP4 in Exports. Returns the actual output path or error.", schema: object(), readOnly: false),
         AgentTool(name: "get_project_info", description: "Read project, playback, AI availability, script trust and pending review status.", schema: object(), readOnly: true),
         AgentTool(name: "get_scripting_api", description: "Read the supported Swift gameplay API and usage examples before authoring scripts.", schema: object(), readOnly: true),

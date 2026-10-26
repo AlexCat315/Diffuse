@@ -1,6 +1,6 @@
 @testable import EditorCore
 import Testing
-@testable import GuavaUIRuntime
+@testable import CoveUIRuntime
 
 @Suite("In-game atlas delivery")
 struct InGameDrawListSourceTests {

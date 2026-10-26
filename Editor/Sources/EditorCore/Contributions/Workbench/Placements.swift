@@ -15,7 +15,7 @@ public struct ContributedToolbarItem: Sendable, Equatable {
     public let icon: String
 }
 
-/// One enabled `guava.ui.documentView/v1` contribution.
+/// One enabled `cove.ui.documentView/v1` contribution.
 public struct ContributedDocumentView: Sendable, Equatable, Identifiable {
     public let pluginID: String
     public let id: String

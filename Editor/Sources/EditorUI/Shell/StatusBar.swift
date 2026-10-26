@@ -1,8 +1,8 @@
 internal import EditorCore
 internal import StudioDocuments
-internal import GuavaUI
-internal import GuavaUIRuntime
-internal import GuavaUIWorkspace
+internal import CoveUI
+internal import CoveUIRuntime
+internal import CoveUIWorkspace
 
 /// Live, compact status on the same surface as the title bar: problems and
 /// document state on the left; background work and the Agent on the right.

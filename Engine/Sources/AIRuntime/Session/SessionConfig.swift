@@ -1,6 +1,6 @@
 import Foundation
 
-@_exported import GuavaUIAgentCore
+@_exported import CoveUIAgentCore
 
 /// Named assets available in the project, surfaced in the system prompt so Claude
 /// can use correct clip/mesh names rather than guessing.

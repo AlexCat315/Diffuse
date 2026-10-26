@@ -1,5 +1,5 @@
-#ifndef GUAVA_TREE_SITTER_SWIFT_H
-#define GUAVA_TREE_SITTER_SWIFT_H
+#ifndef COVE_TREE_SITTER_SWIFT_H
+#define COVE_TREE_SITTER_SWIFT_H
 #ifdef __cplusplus
 extern "C" {
 #endif

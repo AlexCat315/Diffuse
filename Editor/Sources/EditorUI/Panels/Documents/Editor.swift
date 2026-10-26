@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import StudioDocuments
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The text and code editor: one tab per open document, a path bar with the
 /// document's facts and actions, then the editing surface. Choosing files

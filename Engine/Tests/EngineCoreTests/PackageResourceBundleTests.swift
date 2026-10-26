@@ -1,4 +1,4 @@
-import GuavaPlatformCore
+import CovePlatformCore
 import EngineKernel
 import Foundation
 import Testing
@@ -8,7 +8,7 @@ struct PackageResourceBundleTests {
     @Test("locates resource bundles in an explicit application resources root")
     func locatesApplicationResourceBundle() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "guava-package-resources-\(UUID().uuidString)",
+            "cove-package-resources-\(UUID().uuidString)",
             isDirectory: true
         )
         defer { try? FileManager.default.removeItem(at: root) }
@@ -24,7 +24,7 @@ struct PackageResourceBundleTests {
     @Test("supports SwiftPM resources directories and reports missing bundles")
     func locatesResourcesDirectory() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "guava-package-resources-\(UUID().uuidString)",
+            "cove-package-resources-\(UUID().uuidString)",
             isDirectory: true
         )
         defer { try? FileManager.default.removeItem(at: root) }
@@ -38,7 +38,7 @@ struct PackageResourceBundleTests {
     @Test("supports target bundles renamed by an aggregate package")
     func locatesFirstAvailableBundleName() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "guava-package-resources-\(UUID().uuidString)",
+            "cove-package-resources-\(UUID().uuidString)",
             isDirectory: true
         )
         defer { try? FileManager.default.removeItem(at: root) }
@@ -60,7 +60,7 @@ struct PackageResourceBundleTests {
         let bundle = root.appendingPathComponent("\(name).\(suffix)", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         let info: [String: Any] = [
-            "CFBundleIdentifier": "com.guava.tests.\(name.lowercased())",
+            "CFBundleIdentifier": "com.cove.tests.\(name.lowercased())",
             "CFBundleName": name,
             "CFBundlePackageType": "BNDL",
         ]

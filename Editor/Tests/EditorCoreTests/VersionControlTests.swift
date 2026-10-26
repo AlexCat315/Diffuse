@@ -188,7 +188,7 @@ struct VersionControlTests {
         #expect(model.snapshot.repository?.system == .git)
         // Commits need an identity, and restored files must keep their bytes even where
         // Git for Windows defaults to autocrlf; keep both local to this repository.
-        for (key, value) in [("user.name", "Guava Tests"), ("user.email", "tests@guava.invalid"), ("core.autocrlf", "false")] {
+        for (key, value) in [("user.name", "Cove Tests"), ("user.email", "tests@cove.invalid"), ("core.autocrlf", "false")] {
             let process = Process()
             process.executableURL = git.executable
             process.arguments = ["config", key, value]

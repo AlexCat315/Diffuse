@@ -1,5 +1,5 @@
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Text field that edits a local draft and writes the binding once, on blur
 /// or Return — instead of per keystroke. Model-side normalization (e.g.

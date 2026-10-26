@@ -1,6 +1,6 @@
 # Crystal Rush / 晶体冲刺
 
-用 GuavaStudio 的真实 Swift 脚本、输入、实体、灯光和 HUD 实现的小型游戏。源码写入、脚本编译、场景草稿、脚本绑定、场景保存、播放查询和独立导出均已通过真实 `GuavaMCP` stdio 服务执行。
+用 Diffuse 的真实 Swift 脚本、输入、实体、灯光和 HUD 实现的小型游戏。源码写入、脚本编译、场景草稿、脚本绑定、场景保存、播放查询和独立导出均已通过真实 `CoveMCP` stdio 服务执行。
 
 ## 试玩
 
@@ -21,14 +21,14 @@ open examples/CrystalRush/export/CrystalRush.app
 Android ARM64 / Vulkan 真机也已接入。完成 [Android 工具链安装](../../Platforms/Android/README.md)后，在仓库根目录导出：
 
 ```bash
-./guava export game examples/CrystalRush --android \
-  --id com.guava.game.crystalrush \
+./cove export game examples/CrystalRush --android \
+  --id com.cove.game.crystalrush \
   --output Engine/build/android-validation/CrystalRush.apk
 adb -s DEVICE_SERIAL install -r Engine/build/android-validation/CrystalRush.apk
-adb -s DEVICE_SERIAL shell am start -W -n com.guava.game.crystalrush/com.guava.probe.MainActivity
+adb -s DEVICE_SERIAL shell am start -W -n com.cove.game.crystalrush/com.cove.probe.MainActivity
 ```
 
-屏幕底部提供移动、加速、开始和重开按钮。项目脚本与播放器静态链接，场景、资源和中文 GuavaUI HUD 一起打包；暂停与旋转保留当前游戏会话。`guava-dev android game` 验收真实场景绘制、触摸输入和生命周期，Release 与生产签名选项见 Android 接入说明。
+屏幕底部提供移动、加速、开始和重开按钮。项目脚本与播放器静态链接，场景、资源和中文 CoveUI HUD 一起打包；暂停与旋转保留当前游戏会话。`cove-dev android game` 验收真实场景绘制、触摸输入和生命周期，Release 与生产签名选项见 Android 接入说明。
 
 ## 编辑与重新导出
 
@@ -44,9 +44,9 @@ swift run --package-path Editor EditorApp --project-dir "$PWD/examples/CrystalRu
 
 ```bash
 swift build --package-path Editor
-swift build --package-path GuavaMcp
-swift run --package-path Tools/Developer guava-dev validate mcp-protocol
-swift run --package-path Tools/Developer guava-dev validate crystal-rush
+swift build --package-path CoveMcp
+swift run --package-path Tools/Developer cove-dev validate mcp-protocol
+swift run --package-path Tools/Developer cove-dev validate crystal-rush
 ```
 
 验证脚本会为这个样例启动独立的无窗口编辑器，显式信任样例脚本、确认可撤销的场景草稿，在随机本机端口上通过 MCP 编译和导出，最后让打包后的 Player 模拟 120 帧。完整请求和结果保存在 `validation/mcp-transcript.json`。

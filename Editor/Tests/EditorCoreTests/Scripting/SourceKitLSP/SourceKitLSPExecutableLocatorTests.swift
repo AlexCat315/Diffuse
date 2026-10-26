@@ -103,7 +103,7 @@ struct SourceKitLSPExecutableLocatorTests {
 
     private func makeStubExecutable(contents: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-lsp-stub-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-lsp-stub-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         #if os(Windows)
         let url = directory.appendingPathComponent("sourcekit-lsp.exe")

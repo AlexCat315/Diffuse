@@ -15,10 +15,10 @@ package struct DecodedImage: Sendable {
     var width: Int32 = 0
     var height: Int32 = 0
     let buffer = data.withUnsafeBytes { bytes in
-      guava_tool_decode_image(bytes.bindMemory(to: UInt8.self).baseAddress, count, &width, &height)
+      cove_tool_decode_image(bytes.bindMemory(to: UInt8.self).baseAddress, count, &width, &height)
     }
     guard let buffer else { throw ToolError.message("Cannot decode screenshot image") }
-    defer { guava_tool_free_image(buffer) }
+    defer { cove_tool_free_image(buffer) }
     self.width = Int(width)
     self.height = Int(height)
     pixels = Array(UnsafeBufferPointer(start: buffer, count: Int(width) * Int(height) * 4))

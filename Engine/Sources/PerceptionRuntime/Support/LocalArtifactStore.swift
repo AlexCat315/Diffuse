@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 
 /// Content-addressed store for large binary artifacts (embeddings, masks, depth maps).

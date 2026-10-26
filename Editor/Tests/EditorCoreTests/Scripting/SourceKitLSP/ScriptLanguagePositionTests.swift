@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import GuavaUICompose
+import CoveUICompose
 @testable import EditorCore
 
 @Suite("Editor index ↔ LSP position conversion")

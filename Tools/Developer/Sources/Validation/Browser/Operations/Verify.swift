@@ -6,7 +6,7 @@ private import ToolSupport
 #endif
 
 /// `verify` — real browser verification for the Wasm prototype and the native
-/// WebSocket Inspector. Replaces `GuavaUI/Browser/verify.py`.
+/// WebSocket Inspector. Replaces `CoveUI/Browser/verify.py`.
 enum VerifyOperation {
   static func run(_ arguments: [String]) throws {
     var parser = FlagParser(
@@ -42,7 +42,7 @@ enum VerifyOperation {
       ? URL(fileURLWithPath: dist).standardizedFileURL
       : root.appendingPathComponent(dist).standardizedFileURL
     if !nativeOnly
-      && !FileManager.default.fileExists(atPath: distURL.appendingPathComponent("guava.wasm").path)
+      && !FileManager.default.fileExists(atPath: distURL.appendingPathComponent("cove.wasm").path)
     {
       throw ToolError.message("Run npm ci and npm run build first")
     }
@@ -67,7 +67,7 @@ enum VerifyOperation {
           "--package-path",
           root.deletingLastPathComponent()
             .appendingPathComponent("Portable").path,
-          "GuavaUIDevToolsProbe", String(port),
+          "CoveUIDevToolsProbe", String(port),
         ])
       native = process
       let deadline = Date(timeIntervalSinceNow: 15)
@@ -114,7 +114,7 @@ enum VerifyOperation {
 
   /// The extra Chromium flags the reference script reads from the environment.
   private static func chromiumArguments() -> [String] {
-    let raw = ProcessInfo.processInfo.environment["GUAVA_CHROMIUM_ARGS"] ?? "[]"
+    let raw = ProcessInfo.processInfo.environment["COVE_CHROMIUM_ARGS"] ?? "[]"
     guard let value = try? JSON.parse(raw), let items = value.array else { return [] }
     return items.compactMap(\.string)
   }
@@ -124,8 +124,8 @@ enum VerifyOperation {
     let page = try browser.newPage()
     defer { try? page.close() }
     try page.goto(baseURL + "?renderer=webgpu", waitUntil: .networkIdle)
-    try page.waitForFunction("window.guavaDebug?.snapshot != null", timeout: 30)
-    let info = try page.evaluate("guavaDebug.gpuInfo")
+    try page.waitForFunction("window.coveDebug?.snapshot != null", timeout: 30)
+    let info = try page.evaluate("coveDebug.gpuInfo")
     let present = !info.isNull && info.object?.isEmpty == false
     try ensure(
       present && info["isFallbackAdapter"]?.bool == false && !(info["lost"]?.isTruthy ?? true),

@@ -1,6 +1,6 @@
 import AssetPipeline
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 import SIMDCompat
 
 public struct EditorAsset: Identifiable, Sendable, Equatable {

@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// A change in the editor's diff tab: the file's path, area and actions on the
 /// bar, then the unified diff with old and new line numbers. Rows are

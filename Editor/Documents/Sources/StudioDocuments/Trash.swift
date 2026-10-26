@@ -5,7 +5,7 @@ public enum WorkspaceTrash {
     public static func remove(_ path: String, in root: URL) throws {
         let components = path.split(separator: "/")
         guard !components.isEmpty, !path.hasPrefix("/"), !path.contains("\\"), !path.contains(":"),
-              !components.contains(where: { $0 == "." || $0 == ".." }), components.first != ".guava" else {
+              !components.contains(where: { $0 == "." || $0 == ".." }), components.first != ".cove" else {
             throw DocumentError.invalidPath
         }
         var source = root.standardizedFileURL
@@ -20,7 +20,7 @@ public enum WorkspaceTrash {
         try FileManager.default.trashItem(at: source, resultingItemURL: nil)
         #else
         var trash = root
-        for component in [".guava", "trash"] {
+        for component in [".cove", "trash"] {
             trash.appendPathComponent(component)
             guard (try? trash.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true else {
                 throw DocumentError.invalidPath

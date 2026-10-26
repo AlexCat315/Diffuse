@@ -1,8 +1,8 @@
 internal import Foundation
 internal import EditorCore
 internal import StudioDocuments
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The front document's headings and counts. Choosing a heading puts the
 /// caret on it; the heading under the caret is not tracked, only listed.

@@ -23,7 +23,7 @@ public enum CameraMaterialCapabilityPreparationError: Error, Sendable, Equatable
     }
 }
 
-public struct SetCameraPoseCapability: GuavaCapability {
+public struct SetCameraPoseCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.camera])
         public var entity_id: SceneEntityRef
@@ -70,7 +70,7 @@ public struct SetCameraPoseCapability: GuavaCapability {
     }
 }
 
-public struct SetCameraFOVCapability: GuavaCapability {
+public struct SetCameraFOVCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.camera])
         public var entity_id: SceneEntityRef
@@ -102,7 +102,7 @@ public struct SetCameraFOVCapability: GuavaCapability {
     }
 }
 
-public struct SetCameraAspectRatioCapability: GuavaCapability {
+public struct SetCameraAspectRatioCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.camera])
         public var entity_id: SceneEntityRef
@@ -137,7 +137,7 @@ public struct SetCameraAspectRatioCapability: GuavaCapability {
     }
 }
 
-public struct SetCameraActiveCapability: GuavaCapability {
+public struct SetCameraActiveCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference(requires: [.camera])
         public var entity_id: SceneEntityRef
@@ -169,7 +169,7 @@ public struct SetCameraActiveCapability: GuavaCapability {
     }
 }
 
-public struct SetMaterialCapability: GuavaCapability {
+public struct SetMaterialCapability: CoveCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
         public var entity_id: SceneEntityRef

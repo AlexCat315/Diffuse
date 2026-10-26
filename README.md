@@ -1,10 +1,10 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# GuavaStudio
+# Diffuse
 
 An **AI agent driven workstation** written in Swift, bringing text/code editing, game development, animation and video editing into a shared workspace.
 
-Guava's core thesis: **creative intent, world state, runtime execution, and AI understanding are not four layers — they are four views of the same thing.** Humans and AI authors share the exact same world-mutation primitives; every interaction is a training signal by default; and the world is a continuously maintained semantic graph, not a serialized snapshot.
+Cove's core thesis: **creative intent, world state, runtime execution, and AI understanding are not four layers — they are four views of the same thing.** Humans and AI authors share the exact same world-mutation primitives; every interaction is a training signal by default; and the world is a continuously maintained semantic graph, not a serialized snapshot.
 
 - 🇨🇳 **中文版**: [README.zh.md](README.zh.md)
 
@@ -25,11 +25,11 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 Studio contains the Engine and Editor packages plus an MCP server; the SDK is an independent repository:
 
 - **`Engine/`** — rendering, scene, simulation, asset pipeline, AI runtime kernels, observation bus, film pipeline (EXR / color / denoise / render farm).
-- **`GuavaUI/`** — the [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) is installed globally at the version pinned by `Editor/guava.json`; projects share its framework sources, native libraries and CLI. CI uses this path as a link to the shared SDK.
-- **`Editor/`** — the desktop editor application. Hosts the engine, mounts GuavaUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
-- **`GuavaMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
+- **`CoveUI/`** — the [CoveUI SDK](https://github.com/AlexCat315/Cove) is installed globally at the version pinned by `Editor/cove.json`; projects share its framework sources, native libraries and CLI. CI uses this path as a link to the shared SDK.
+- **`Editor/`** — the desktop editor application. Hosts the engine, mounts CoveUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
+- **`CoveMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Cove capabilities to LLM agents over stdio / WebSocket.
 
-CI installs the SDK release pinned by `Editor/guava.json`. For local development before that SDK version is released, set `GUAVA_SDK_ROOT` to the matching SDK checkout.
+CI installs the SDK release pinned by `Editor/cove.json`. For local development before that SDK version is released, set `COVE_SDK_ROOT` to the matching SDK checkout.
 
 ---
 
@@ -39,15 +39,15 @@ CI installs the SDK release pinned by `Editor/guava.json`. For local development
 Editor (top-level app)
  ├─ EditorCore (state machine, panel registry, transaction host, AI UI)
  │  ├───► Engine (SceneRuntime, AssetPipeline, ObservationBus, CapabilityGraph)
- │  └───► GuavaUI (Compose API + NativeRHI renderer, shared NativeRHI Device with Engine)
+ │  └───► CoveUI (Compose API + NativeRHI renderer, shared NativeRHI Device with Engine)
  │
- GuavaUI SDK
+ CoveUI SDK
  ├── UI framework / platform hosts / CLI
  └── NativeRHI / PlatformShell / logging / platform values
 
  Engine (core)
  ├── RenderBackend / SceneRuntime / ScriptRuntime
- ├───► GuavaUI SDK's NativeRHI and platform services
+ ├───► CoveUI SDK's NativeRHI and platform services
  ├── AIRuntime (Session, WorldView, Signal, Proposal, Edit)
  ├── ObservationBus (event bus, cross-process bridge at M11)
  └── (film) SequenceRuntime, CinematicRenderer, ColorPipeline, ImageIO, RenderFarm
@@ -67,7 +67,7 @@ Full design (in Chinese): [`docs/architecture.md`](https://github.com/AlexCat315
 
 - **M0 – foundation** ✅ three packages build cleanly with `swift build`.
 - **M1 – first 3D frame + UI data layer** ✅ first real GPU scene; NodeTree + Recomposer.
-- **M2 – visible UI frame** ✅ GuavaUI window renders real rectangles + text.
+- **M2 – visible UI frame** ✅ CoveUI window renders real rectangles + text.
 - **M3 – editor UI takes shape** ✅ Hierarchy / Inspector / Console; theme & default styles system complete.
 - **M4 – full editing workflow** ✅ asset browser + viewport + gizmo; multi-threaded rendering.
 - **M5 – in-game UI + asset pipeline** ✅ GLTF import; `InGameUIProviding` protocol injection.
@@ -98,32 +98,32 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
 ### First build
 
 ```bash
-git clone https://github.com/AlexCat315/GuavaStudio.git
-cd GuavaStudio
+git clone https://github.com/AlexCat315/Diffuse.git
+cd Diffuse
 git submodule update --init --recursive
-./guava studio native-bootstrap
-./guava build Editor
+./cove studio native-bootstrap
+./cove build Editor
 ```
 
-`./guava` uses the shared Guava SDK declared by `Editor/guava.json`, or `GUAVA_SDK_ROOT` for a local development checkout. `guava studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg and OpenEXR/Imath dependencies, and stages the pinned Wasmtime runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
+`./cove` uses the shared Cove SDK declared by `Editor/cove.json`, or `COVE_SDK_ROOT` for a local development checkout. `cove studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg and OpenEXR/Imath dependencies, and stages the pinned Wasmtime runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
 
 After the first bootstrap, day-to-day development only needs:
 
 ```bash
-./guava build Editor
+./cove build Editor
 ```
 
-> **Force rebuild of native deps:** `./guava studio native-bootstrap --force`
+> **Force rebuild of native deps:** `./cove studio native-bootstrap --force`
 
 ### Individual packages
 
 ```bash
-./guava internal build-package Engine   # engine + renderers
-./guava build Editor   # editor (run: ./guava run Editor)
-./guava internal build-package GuavaMcp --product GuavaMCP # MCP server
+./cove internal build-package Engine   # engine + renderers
+./cove build Editor   # editor (run: ./cove run Editor)
+./cove internal build-package CoveMcp --product CoveMCP # MCP server
 ```
 
-The SDK's portable core, DevTools server, browser prototype and examples live in the [GuavaUI repository](https://github.com/AlexCat315/GuavaUI).
+The SDK's portable core, DevTools server, browser prototype and examples live in the [CoveUI repository](https://github.com/AlexCat315/Cove).
 
 ---
 
@@ -147,7 +147,7 @@ The pattern is uniform: each SPM package owns its native deps under `<package>/t
 ## Project Structure
 
 ```
-GuavaStudio/
+Diffuse/
 ├── Engine/Sources/
 │   ├── AIRuntime/            (Session, WorldView, Signal, Proposal, RetryPolicy)
 │   ├── AssetPipeline/        (asset import, registry, loader)
@@ -169,7 +169,7 @@ GuavaStudio/
 │   ├── SemanticPipeline/     (structure extraction, fingerprinting, analysis, memory)
 │   ├── SequenceRuntime/      (SequenceDocument, ShotEvaluator, ClipScheduler)
 │   └── SIMDCompat/           (cross-platform SIMD helpers)
-├── GuavaUI/                   (external SDK checkout, ignored; src/ at the GuavaUI repository)
+├── CoveUI/                   (external SDK checkout, ignored; src/ at the CoveUI repository)
 ├── Platforms/Android/         (JNI/Java surface host, APK tools, launch contract)
 ├── Editor/Sources/
 │   ├── EditorApp/             (thin executable launcher)
@@ -177,7 +177,7 @@ GuavaStudio/
 │   ├── EditorCore/            (editor project/application domain)
 │   └── GameRuntime/           (project simulation and player services)
 ├── examples/                  (CrystalRush game content)
-├── GuavaMcp/Sources/GuavaMCP/  (MCP server exposing Guava capabilities)
+├── CoveMcp/Sources/CoveMCP/  (MCP server exposing Cove capabilities)
 └── .github/workflows/        (CI matrices for engine / editor / MCP + release)
 ```
 
@@ -191,10 +191,10 @@ GitHub Actions workflows live under `.github/workflows/`:
 
 - `ci-engine.yml` — Engine package matrix.
 - `ci-editor.yml` — Editor package.
-- `ci-guava-mcp.yml` — MCP server package.
+- `ci-cove-mcp.yml` — MCP server package.
 - `release.yml` — release builds.
 
-The SDK's own CI lives in the [GuavaUI repository](https://github.com/AlexCat315/GuavaUI).
+The SDK's own CI lives in the [CoveUI repository](https://github.com/AlexCat315/Cove).
 
 ---
 
@@ -211,9 +211,9 @@ The SDK's own CI lives in the [GuavaUI repository](https://github.com/AlexCat315
 
 ## License
 
-GuavaStudio is open source under the [Apache License 2.0](LICENSE). Third-party dependencies retain their upstream licenses; see [NOTICE](NOTICE) for attribution.
+Diffuse is open source under the [Apache License 2.0](LICENSE). Third-party dependencies retain their upstream licenses; see [NOTICE](NOTICE) for attribution.
 
 
-The product is GuavaStudio. Runtime modules under `Engine/` remain reusable building blocks. The Editor adds independent text/code documents and a video timeline with cuts, ordering, frame preview, playback, and MP4 export. See [workstation boundaries](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/architecture/workstation.md), [media](Engine/Media/README.md), and [component standards](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/components/standard.md).
+The product is Diffuse. Runtime modules under `Engine/` remain reusable building blocks. The Editor adds independent text/code documents and a video timeline with cuts, ordering, frame preview, playback, and MP4 export. See [workstation boundaries](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/architecture/workstation.md), [media](Engine/Media/README.md), and [component standards](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/components/standard.md).
 
-New CLI applications include an iOS/iPadOS Xcode host alongside desktop and Android. `guava build MyApp --ios` builds for Simulator; `guava run MyApp --ios --simulator UDID` installs and launches. Devices require `--device ID --team TEAM_ID`. Native Metal/SDL and Wasmtime/Pulley artifacts are staged separately from desktop dependencies.
+New CLI applications include an iOS/iPadOS Xcode host alongside desktop and Android. `cove build MyApp --ios` builds for Simulator; `cove run MyApp --ios --simulator UDID` installs and launches. Devices require `--device ID --team TEAM_ID`. Native Metal/SDL and Wasmtime/Pulley artifacts are staged separately from desktop dependencies.

@@ -1,6 +1,6 @@
 import AssetPipeline
 import Foundation
-import GuavaLogging
+import CoveLogging
 import NativeRHI
 import SIMDCompat
 
@@ -9,7 +9,7 @@ import SIMDCompat
 /// HDR sky/tonemap, stylized materials/outline/paper, post-processing effects, temporal
 /// history/cache, the grid, CPU-authored particle draws and resident GPU particle
 /// physics/events, GPU sorting, simulated-particle instance conversion and
-/// the installed GuavaUI HUD provider after scene post-processing.
+/// the installed CoveUI HUD provider after scene post-processing.
 /// RenderThread owns all mutable renderer state.
 public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     private let inGameUI: (any InGameUIProviding)?
@@ -29,6 +29,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     private let windowTarget: NativeWindowTarget?
     private var targets: NativeRenderTargets?
     private var targetSizing = ViewportTargetSizing()
+    private var viewportMips: NativeViewportMipChain?
     private var viewportPublication = ViewportSurfacePublication()
     public private(set) var lastFrameStats = RenderFrameStats()
     public private(set) var lastError: String?
@@ -225,11 +226,16 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             passTimes[.inGameUI] = DispatchTime.now().uptimeNanoseconds - uiStart
             passDraws[.inGameUI] = ui.drawCallCount
         }
+        var mipmaps: [TextureResource] = []
+        if packet.mipmappedViewportOutput, let output = targets.color {
+            if viewportMips == nil { viewportMips = try NativeViewportMipChain(device: device) }
+            mipmaps = try viewportMips!.record(source: output, used: packet.drawableSize, into: commands)
+        } else { viewportMips = nil }
         let encoded = DispatchTime.now().uptimeNanoseconds
         try device.submit(commands); ui?.didSubmit()
         deformables.commit(dynamic); particleSimulation.commit(simulation); frameState = nextFrame
         if let output = targets.color {
-            viewportPublication.publish(resource: output,
+            viewportPublication.publish(resource: output, mipmaps: mipmaps,
                 region: ViewportSamplingRegion(size: packet.drawableSize, capacity: targets.size))
         } else { viewportPublication.clear() }
         if let image { try device.present(image) }

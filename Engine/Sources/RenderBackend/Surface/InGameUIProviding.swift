@@ -32,7 +32,7 @@ public final class InGameUIRecording {
     }
 }
 
-/// Engine owns the GPU frame; GuavaUI supplies its most recent HUD geometry.
+/// Engine owns the GPU frame; CoveUI supplies its most recent HUD geometry.
 /// Called even when script canvas commands are empty: declarative HUDs can
 /// still have content. Recording errors abort the entire scene submission.
 public protocol InGameUIProviding: AnyObject, Sendable {

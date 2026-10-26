@@ -271,9 +271,9 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
                         script: Script?,
                         context: ScriptContext) {
         guard let script, let handler = script[keyPath: keyPath] else { return }
-        let previousContext = _guavaCurrentScriptContext
-        guavaSetCurrentScriptContext(context)
-        defer { guavaSetCurrentScriptContext(previousContext) }
+        let previousContext = _coveCurrentScriptContext
+        coveSetCurrentScriptContext(context)
+        defer { coveSetCurrentScriptContext(previousContext) }
         handler(context)
     }
 

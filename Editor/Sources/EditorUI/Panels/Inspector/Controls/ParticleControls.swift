@@ -1,5 +1,5 @@
 import EditorCore
-import GuavaUI
+import CoveUI
 import SceneRuntime
 
 extension EditorInspectorFieldControlRegistry {

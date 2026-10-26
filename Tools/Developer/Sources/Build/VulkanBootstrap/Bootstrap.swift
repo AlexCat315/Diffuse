@@ -48,7 +48,7 @@ extension VulkanBootstrap {
       }
 
       let temporary = FileManager.default.temporaryDirectory
-        .appendingPathComponent("guava-vulkan-build-" + UUID().uuidString)
+        .appendingPathComponent("cove-vulkan-build-" + UUID().uuidString)
       try Fs.directory(temporary)
       defer { try? Fs.remove(temporary) }
 

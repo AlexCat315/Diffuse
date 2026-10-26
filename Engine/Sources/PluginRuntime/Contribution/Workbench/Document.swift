@@ -24,7 +24,7 @@ public struct DocumentViewContribution: Codable, Sendable, Equatable {
 }
 
 public enum DocumentViewContributionPoint: ContributionPointSpec {
-    public static let id = "guava.ui.documentView/v1"
+    public static let id = "cove.ui.documentView/v1"
 
     public static func validate(_ view: DocumentViewContribution, host: PluginHostPermissions) throws {
         guard ContributionValidation.identifier(view.id), ContributionValidation.title(view.title),

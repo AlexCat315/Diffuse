@@ -12,7 +12,7 @@ enum GameOperation {
         OptionDefinition("--android-sdk", arity: 1),
         OptionDefinition("--package", arity: 1),
       ], positionals: 0)
-    let package = parsed.value("--package") ?? "com.guava.game.crystalrush"
+    let package = parsed.value("--package") ?? "com.cove.game.crystalrush"
     let adb = try AndroidTools.adbDevice(
       AndroidTools.sdkRoot(parsed.value("--android-sdk")), parsed.value("--serial"))
     let directory = try AndroidTools.makeRunDirectory("game-run-")
@@ -59,7 +59,7 @@ enum GameOperation {
 
     func action(_ name: String, _ scancode: Int) throws {
       _ = try shell([
-        "am", "broadcast", "-a", "com.guava.probe.DEMO_INPUT", "-p", package,
+        "am", "broadcast", "-a", "com.cove.probe.DEMO_INPUT", "-p", package,
         "--es", "demoAction", name, "--ei", "scancode", scancode,
       ])
     }
@@ -71,7 +71,7 @@ enum GameOperation {
     var previous: JSON = .null
     do { previous = try read()["session"] } catch { previous = .null }
     _ = try shell([
-      "am", "start", "-W", "-S", "-n", package + "/com.guava.probe.MainActivity",
+      "am", "start", "-W", "-S", "-n", package + "/com.cove.probe.MainActivity",
       "--ei", "orientation", 0, "--ez", "snapshots", "true",
     ])
     let ready = try wait(
@@ -84,8 +84,8 @@ enum GameOperation {
     }
     try screenshot("ready")
 
-    _ = try shell(["uiautomator", "dump", "/data/local/tmp/guava-game-ui.xml"])
-    let buttons = try parseButtons(try shell(["cat", "/data/local/tmp/guava-game-ui.xml"]))
+    _ = try shell(["uiautomator", "dump", "/data/local/tmp/cove-game-ui.xml"])
+    let buttons = try parseButtons(try shell(["cat", "/data/local/tmp/cove-game-ui.xml"]))
     guard let start = buttons["start"] else {
       throw ToolError.message("game HUD has no Start button")
     }
@@ -112,7 +112,7 @@ enum GameOperation {
       throw ToolError.message("background keeps ticking the game")
     }
     _ = try shell([
-      "am", "start", "-W", "-n", package + "/com.guava.probe.MainActivity", "--ez", "snapshots",
+      "am", "start", "-W", "-n", package + "/com.cove.probe.MainActivity", "--ez", "snapshots",
       "true",
     ])
     let resumed = try wait(
@@ -125,7 +125,7 @@ enum GameOperation {
     }
 
     _ = try shell([
-      "am", "start", "-W", "-n", package + "/com.guava.probe.MainActivity", "--ei", "orientation",
+      "am", "start", "-W", "-n", package + "/com.cove.probe.MainActivity", "--ei", "orientation",
       1, "--ez", "snapshots", "true",
     ])
     _ = try wait(
@@ -135,7 +135,7 @@ enum GameOperation {
       }, "rotation rebuilds Vulkan surface and retains simulation")
     try screenshot("portrait")
     _ = try shell([
-      "am", "start", "-W", "-n", package + "/com.guava.probe.MainActivity", "--ei", "orientation",
+      "am", "start", "-W", "-n", package + "/com.cove.probe.MainActivity", "--ei", "orientation",
       0, "--ez", "snapshots", "true",
     ])
     _ = try wait(
@@ -153,7 +153,7 @@ enum GameOperation {
 
     let pid = try shell(["pidof", package]).trimmingCharacters(in: .whitespacesAndNewlines)
     let log = try Command.output(
-      adb + ["logcat", "-d", "--pid=" + pid, "-s", "Guava:I", "AndroidRuntime:E", "*:S"])
+      adb + ["logcat", "-d", "--pid=" + pid, "-s", "Cove:I", "AndroidRuntime:E", "*:S"])
     try Fs.write(log, to: directory.appendingPathComponent("app.log"))
     guard !log.contains("FAIL"), !log.contains("FATAL") else {
       throw ToolError.message(String(log.suffix(4000)))

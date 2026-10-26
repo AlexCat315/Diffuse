@@ -11,9 +11,9 @@ import Foundation
 /// them rely on the slot declared here.
 
 /// The script context for the callback currently executing on this thread.
-private let scriptContextThreadKey = "com.guava.script-runtime.current-context"
+private let scriptContextThreadKey = "com.cove.script-runtime.current-context"
 
-var _guavaCurrentScriptContext: ScriptContext? {
+var _coveCurrentScriptContext: ScriptContext? {
     Thread.current.threadDictionary[scriptContextThreadKey] as? ScriptContext
 }
 
@@ -21,7 +21,7 @@ var _guavaCurrentScriptContext: ScriptContext? {
 /// `ScriptRuntime` calls this before invoking a script callback and passes
 /// `nil` afterwards so stray calls from background threads fail safely.
 @_spi(ScriptCBridge)
-public func guavaSetCurrentScriptContext(_ context: ScriptContext?) {
+public func coveSetCurrentScriptContext(_ context: ScriptContext?) {
     if let context {
         Thread.current.threadDictionary[scriptContextThreadKey] = context
     } else {

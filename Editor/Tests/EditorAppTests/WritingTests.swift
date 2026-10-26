@@ -1,6 +1,6 @@
 import EditorCore
 @testable import EditorUI
-import GuavaUICompose
+import CoveUICompose
 import Testing
 
 private func apply(_ format: MarkdownFormat, to text: String, _ selection: Range<Int>) -> (String, Int) {

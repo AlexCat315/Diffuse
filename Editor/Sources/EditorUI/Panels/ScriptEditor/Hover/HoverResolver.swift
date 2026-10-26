@@ -1,6 +1,6 @@
 import EditorCore
 import Foundation
-import GuavaUI
+import CoveUI
 
 /// Monotonic request counter shared between the panel and any in-flight hover
 /// task.

@@ -21,8 +21,8 @@ public final class AppleVisionPerceptionWorker: PerceptionWorker, @unchecked Sen
             runtime: PerceptionRuntimeConfig(preferredRuntime: "apple_vision",
                                              fallbackRuntimes: [],
                                              devicePolicy: ["system"]),
-            inputContract: "guava.perception.input.rgb_image.v1",
-            outputContract: "guava.perception.output.classifications.v1",
+            inputContract: "cove.perception.input.rgb_image.v1",
+            outputContract: "cove.perception.output.classifications.v1",
             license: PerceptionLicenseMetadata(
                 codeLicense: "Apple-System",
                 weightsLicense: "Apple-System",

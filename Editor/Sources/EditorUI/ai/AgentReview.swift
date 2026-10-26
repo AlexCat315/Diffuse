@@ -1,6 +1,6 @@
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 import IntentRuntime
 
 /// Review belongs to the conversation that requested the change.

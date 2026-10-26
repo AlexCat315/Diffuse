@@ -21,7 +21,7 @@ func logPanelChecks(page: Page, target: any ScriptTarget) throws {
   _ = try target.evaluate(
     """
     () => {
-        const record = {sequence:90000, timestamp:Date.now()/1000, level:'error', label:'com.guava.test.logs',
+        const record = {sequence:90000, timestamp:Date.now()/1000, level:'error', label:'com.cove.test.logs',
           message:'<script>literal text</script>', metadata:{nested:{value:'search-needle'}},
           location:{source:'acceptance',file:'LogCheck.swift',function:'check()',line:42},
           process:{pid:42,name:'acceptance',runID:'inspector-acceptance'}};
@@ -38,7 +38,7 @@ func logPanelChecks(page: Page, target: any ScriptTarget) throws {
     "Duplicate records were not coalesced")
 
   try target.locator("#pauseLog").click()
-  try target.locator("#logModule").fill("com.guava.test")
+  try target.locator("#logModule").fill("com.cove.test")
   try target.locator("#logLevel").selectOption("error")
   try target.locator("#logSearch").fill("search-needle")
   try target.locator("#log summary").filter(text: .contains("<script>literal text</script>"))

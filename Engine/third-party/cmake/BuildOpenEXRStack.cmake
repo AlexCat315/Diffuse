@@ -7,8 +7,8 @@
 
 include(ExternalProject)
 
-set(OCIO_OPENEXR_BUNDLE  ${GUAVA_VENDOR_DIR}/ocio_openexr.artifactbundle)
-set(OCIO_OPENEXR_VARIANT ${OCIO_OPENEXR_BUNDLE}/${GUAVA_TRIPLE})
+set(OCIO_OPENEXR_BUNDLE  ${COVE_VENDOR_DIR}/ocio_openexr.artifactbundle)
+set(OCIO_OPENEXR_VARIANT ${OCIO_OPENEXR_BUNDLE}/${COVE_TRIPLE})
 set(IMATH_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/imath-install)
 
 if(WIN32)
@@ -31,7 +31,7 @@ ExternalProject_Add(imath_ep
         -DCMAKE_INSTALL_PREFIX=${IMATH_INSTALL_PREFIX}
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-        ${GUAVA_PLATFORM_CMAKE_ARGS}
+        ${COVE_PLATFORM_CMAKE_ARGS}
         -DBUILD_SHARED_LIBS=OFF
         -DBUILD_TESTING=OFF
         -DIMATH_BUILD_TESTING=OFF
@@ -53,7 +53,7 @@ ExternalProject_Add(openexr_ep
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DCMAKE_PREFIX_PATH=${IMATH_INSTALL_PREFIX}
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-        ${GUAVA_PLATFORM_CMAKE_ARGS}
+        ${COVE_PLATFORM_CMAKE_ARGS}
         -DBUILD_SHARED_LIBS=OFF
         ${OPENEXR_MSVC_RUNTIME_ARG}
         -DBUILD_TESTING=OFF
@@ -152,13 +152,13 @@ file(WRITE \"${OCIO_OPENEXR_BUNDLE}/info.json\"
       \\\"version\\\": \\\"3.5.2\\\",
       \\\"variants\\\": [
         {
-          \\\"path\\\": \\\"${GUAVA_TRIPLE}/lib/${OPENEXR_COMBINED_LIB_NAME}\\\",
-          \\\"supportedTriples\\\": [\\\"${GUAVA_SPM_TRIPLE}\\\"],
+          \\\"path\\\": \\\"${COVE_TRIPLE}/lib/${OPENEXR_COMBINED_LIB_NAME}\\\",
+          \\\"supportedTriples\\\": [\\\"${COVE_SPM_TRIPLE}\\\"],
           \\\"staticLibraryMetadata\\\": {
             \\\"headerPaths\\\": [
-              \\\"${GUAVA_TRIPLE}/include\\\",
-              \\\"${GUAVA_TRIPLE}/include/OpenEXR\\\",
-              \\\"${GUAVA_TRIPLE}/include/Imath\\\"
+              \\\"${COVE_TRIPLE}/include\\\",
+              \\\"${COVE_TRIPLE}/include/OpenEXR\\\",
+              \\\"${COVE_TRIPLE}/include/Imath\\\"
             ]
           }
         }
@@ -169,13 +169,13 @@ file(WRITE \"${OCIO_OPENEXR_BUNDLE}/info.json\"
 \")
 ")
 
-guava_git_revision(IMATH_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/imath")
-guava_git_revision(OPENEXR_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/openexr")
-guava_add_artifact_build_manifest(
+cove_git_revision(IMATH_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/imath")
+cove_git_revision(OPENEXR_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/openexr")
+cove_add_artifact_build_manifest(
     ARTIFACT_NAME "ocio_openexr"
     VERSION "3.5.2"
     BUNDLE_DIR ${OCIO_OPENEXR_BUNDLE}
-    LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${OPENEXR_COMBINED_LIB_NAME}"
+    LIB_REL_PATH "${COVE_TRIPLE}/lib/${OPENEXR_COMBINED_LIB_NAME}"
     BUILD_SYSTEM "CMake ExternalProject"
     SOURCE_KIND "git-submodule"
     SOURCE_URL "Engine/third-party/openexr,Engine/third-party/imath"

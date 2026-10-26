@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 import PluginRuntime
 
@@ -43,7 +43,7 @@ public final class EditorPluginAuthorizationStore: @unchecked Sendable {
 
     public init(projectDirectory: String) {
         let storageURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
-            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent(".cove", isDirectory: true)
             .appendingPathComponent("plugin_authorizations.json")
         self.storageURL = storageURL
         do {

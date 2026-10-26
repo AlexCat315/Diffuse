@@ -1,9 +1,9 @@
 import EditorCore
 import EngineKernel
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
-import GuavaUIWorkspace
+import CoveUI
+import CoveUIRuntime
+import CoveUIWorkspace
 
 /// Owns the window-sized animation layer; the centered barrier is absolute
 /// and cannot give an intrinsically sized animation host its height.
@@ -59,7 +59,7 @@ struct CommandPaletteOverlay: View {
                     let scope = EditorPaletteScope(query: app.store.commandPaletteQuery.stringValue)
                     Icon(scope.icon, size: 16, color: scope == .intent ? EditorThemeTokens.assistantColor : .onSurfaceVariant)
                         .debugName("command-palette-scope")
-                    TextField(L("Tell Guava what you want to do… (> commands, @ files, # entities)"), text: Binding(get: { app.store.commandPaletteQuery }, set: {
+                    TextField(L("Tell Cove what you want to do… (> commands, @ files, # entities)"), text: Binding(get: { app.store.commandPaletteQuery }, set: {
                             selectedIndex = 0
                             resultsOffset = .zero
                             app.store.dispatch(.setCommandPaletteQuery($0))
@@ -204,7 +204,7 @@ struct CommandPaletteOverlay: View {
         }.prefix(60).map { $0.0 }
         if !commandsOnly && !resourcesOnly && !entitiesOnly && app.isAgentEnabled {
             let text = raw
-            let intent = ResultItem(id: "agent.intent", title: text.isEmpty ? L("Open Assistant") : L("Ask Guava") + ": " + text,
+            let intent = ResultItem(id: "agent.intent", title: text.isEmpty ? L("Open Assistant") : L("Ask Cove") + ": " + text,
                 detail: app.isAIAvailable ? L("Work with the assistant in this context") : L("Set an AI provider in Settings to enable."),
                 shortcut: "↵", enabled: true, searchText: "", perform: {
                     EditorCommandDispatcher.handle(.showView(.agent), app: app, controller: controller,

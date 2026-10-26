@@ -6,7 +6,7 @@ import Testing
 struct ProjectListTests {
     @Test("paths are normalized and deduplicated, and the front project must be one of them")
     func savedProjects() throws {
-        let domain = "GuavaProjectListTests.\(UUID())"
+        let domain = "CoveProjectListTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: domain))
         defer { defaults.removePersistentDomain(forName: domain) }
         let parent = FileManager.default.temporaryDirectory.appendingPathComponent(domain)

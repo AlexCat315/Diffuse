@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 
 /// A point-in-time snapshot of the runtime scene, suitable for game progress saves.
@@ -7,7 +7,7 @@ import Foundation
 /// running (after physics, animations, etc. have modified entity transforms). Loading
 /// a save replaces the current scene with this snapshot.
 ///
-/// Files are stored under `.guava/game-saves/slot-{slot}.json`.
+/// Files are stored under `.cove/game-saves/slot-{slot}.json`.
 public struct GameSaveDocument: Codable, Sendable, Equatable {
     public static let currentSchemaVersion = 2
     public var schemaVersion: Int
@@ -31,7 +31,7 @@ extension GameSaveDocument {
     /// Returns the file URL for `slot` relative to `projectDirectory`.
     public static func url(slot: Int, projectDirectory: String) -> URL {
         URL(fileURLWithPath: projectDirectory, isDirectory: true)
-            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent(".cove", isDirectory: true)
             .appendingPathComponent("game-saves", isDirectory: true)
             .appendingPathComponent("slot-\(slot).json")
     }

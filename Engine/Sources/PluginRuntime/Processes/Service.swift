@@ -1,5 +1,5 @@
 public import Foundation
-private import GuavaProcess
+private import CoveProcess
 
 /// Stores native resources outside short-lived WASM Stores. Every operation is
 /// scoped to an approved mount generation; unload invalidates all its handles.

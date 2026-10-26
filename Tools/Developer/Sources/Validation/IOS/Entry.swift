@@ -10,7 +10,7 @@ internal import Foundation
   /// helper. The first token of `arguments` selects the operation.
   package enum IOSSimulator {
     static let usage = """
-      guava-dev ios-simulator <operation> [options]
+      cove-dev ios-simulator <operation> [options]
 
         udid [--prefix NAME]      Print the UDID of an available simulator device
         validate APP [--simulator UDID]
@@ -69,7 +69,7 @@ internal import Foundation
       try device.install(app)
       try device.launch(identifier)
       let directory = FileManager.default.temporaryDirectory
-        .appendingPathComponent("guava-ios-frame-\(UUID().uuidString)")
+        .appendingPathComponent("cove-ios-frame-\(UUID().uuidString)")
       try Fs.directory(directory)
       defer { try? Fs.remove(directory) }
       let screenshot = directory.appendingPathComponent("frame.png")

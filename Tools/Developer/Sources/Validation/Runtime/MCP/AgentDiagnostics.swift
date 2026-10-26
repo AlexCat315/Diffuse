@@ -5,10 +5,10 @@ internal import ToolSupport
 /// through the portable TCP transport into the headless editor's tools.
 enum AgentDiagnostics {
   static let usage = """
-    guava-dev validate agent-diagnostics
+    cove-dev validate agent-diagnostics
 
-    Launches the headless editor in a temporary project and drives GuavaMCP
-    over stdio against it. Needs a built EditorApp and GuavaMCP.
+    Launches the headless editor in a temporary project and drives CoveMCP
+    over stdio against it. Needs a built EditorApp and CoveMCP.
     """
 
   static func run(_ arguments: [String]) throws {
@@ -22,9 +22,9 @@ enum AgentDiagnostics {
 
     let port = try FreePort.reserve()
     var environment = ProcessInfo.processInfo.environment
-    environment["GUAVA_MCP_PORT"] = String(port)
+    environment["COVE_MCP_PORT"] = String(port)
 
-    let directory = try Temp.directory(prefix: "guava-agent-diagnostics-")
+    let directory = try Temp.directory(prefix: "cove-agent-diagnostics-")
     defer { try? Fs.remove(directory) }
     let log = directory.appendingPathComponent("editor.log")
     let logHandle = try openForWriting(log)
@@ -46,7 +46,7 @@ enum AgentDiagnostics {
 
     try waitForTransport(child: child, port: port, log: log)
     mcp = try ChildProcess(
-      try BuildProducts.executable(package: "GuavaMcp", name: "GuavaMCP"),
+      try BuildProducts.executable(package: "CoveMcp", name: "CoveMCP"),
       environment: environment, stdin: .pipe, stdout: .pipe, stderr: .file(logHandle))
     try inspect(mcp!)
     Terminal.info(
@@ -94,7 +94,7 @@ enum AgentDiagnostics {
     let definitions = try JSON.objects(try request("tools/list")["tools"], "tools")
     try Check.require(
       definitions.contains { $0["name"] as? String == "query_ui_nodes" },
-      "GuavaMCP is missing query_ui_nodes")
+      "CoveMCP is missing query_ui_nodes")
 
     let report = try tool("get_diagnostics")
     try Check.equal(try JSON.boolean(report["isError"], "isError"), false, JSON.text(report))

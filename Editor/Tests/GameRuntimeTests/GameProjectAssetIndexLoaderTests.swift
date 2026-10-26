@@ -7,7 +7,7 @@ import Testing
 struct GameProjectAssetIndexLoaderTests {
     private func temporaryProject() throws -> URL {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-player-assets-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-player-assets-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

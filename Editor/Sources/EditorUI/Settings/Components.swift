@@ -1,5 +1,5 @@
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 struct SettingsBrandMark: View {
     var size: Float = 30

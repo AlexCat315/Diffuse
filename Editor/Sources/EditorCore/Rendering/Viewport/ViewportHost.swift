@@ -1,9 +1,9 @@
-import GuavaUICompose
+import CoveUICompose
 import EngineKernel
-import GuavaUIRuntime
+import CoveUIRuntime
 import RenderBackend
 
-/// Displays a renderer-produced framebuffer inside GuavaUI layout and forwards
+/// Displays a renderer-produced framebuffer inside CoveUI layout and forwards
 /// viewport-local input to the owner.
 /// Screen-space rect of the viewport surface, in window/event coordinates.
 public struct ViewportScreenFrame: Equatable, Sendable {
@@ -174,17 +174,23 @@ package struct ViewportHost<Overlay: View>: _PrimitiveView {
                existing.output === output {
                 cache = existing
             } else {
-                guard let image = try? TextureImage(texture: output.resource) else { return }
+                guard let image = try? TextureImage(texture: output.resource, mipmaps: output.mipmaps) else { return }
                 cache = ImageCache(output: output, image: image)
                 node.attachments["__viewport_image"] = cache
             }
-            list.retainResource(cache.image)
+            let selected = cache.image.resolution(for: SIMD2(rect.width, rect.height) * max(1, list.pixelScale),
+                source: SIMD2(Float(snap.surface.region.size.width), Float(snap.surface.region.size.height)))
+            list.retainResource(selected)
             // The engine renders into the top-left sub-region of a grow-only
             // allocated texture; crop to the used extent.
             let extent = snap.surface.region.uvMax
             let uvMax = (x: extent.x, y: extent.y)
-            list.addClampedImageQuad(rect: rect, textureID: cache.image.textureID,
-                texelSize: (1 / Float(snap.surface.region.capacity.width), 1 / Float(snap.surface.region.capacity.height)), uvMax: uvMax)
+            if selected === cache.image {
+                list.addClampedImageQuad(rect: rect, textureID: selected.textureID,
+                    texelSize: (1 / Float(snap.surface.region.capacity.width), 1 / Float(snap.surface.region.capacity.height)), uvMax: uvMax)
+            } else {
+                list.addImageQuad(rect: rect, textureID: selected.textureID)
+            }
 
             snap.onDrawOverlay?(list, screenFrame)
         }

@@ -236,7 +236,7 @@ struct PluginRuntimeTests {
         let call = HostCapabilityCall(capabilityID: contract.id,
                                       version: contract.version,
                                       arguments: arguments)
-        let manifest = GuavaPluginManifest(id: "safe.layout",
+        let manifest = CovePluginManifest(id: "safe.layout",
                                            version: 1,
                                            name: "Safe layout",
                                            description: "Layout helper",
@@ -246,7 +246,7 @@ struct PluginRuntimeTests {
             try PluginCompositionValidator.validate([call], manifest: manifest)
         }
 
-        let understated = GuavaPluginManifest(
+        let understated = CovePluginManifest(
             id: "safe.layout",
             version: 1,
             name: "Safe layout",
@@ -273,7 +273,7 @@ struct PluginRuntimeTests {
             isAIExposed: true
         )
         let registry = CapabilityRegistry(capabilities: [primitive])
-        let manifest = GuavaPluginManifest(
+        let manifest = CovePluginManifest(
             id: "safe.layout",
             version: 1,
             name: "Layout",
@@ -303,7 +303,7 @@ struct PluginRuntimeTests {
     func packageLoaderValidatesComponentModelHeader() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("guavaplugin")
+            .appendingPathExtension("coveplugin")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let manifest = """
@@ -386,14 +386,14 @@ struct PluginRuntimeTests {
         }
     }
 
-    @Test("isolated GuavaPluginHost loads and invokes a real Component over RPC")
+    @Test("isolated DiffusePluginHost loads and invokes a real Component over RPC")
     func pluginHostEndToEnd() throws {
         let package = try makePluginPackage(
             componentWAT: try Self.constantResultComponentWAT,
             imports: []
         )
         defer { try? FileManager.default.removeItem(at: package.rootURL) }
-        let executable = try #require(builtExecutable(named: "GuavaPluginHost"))
+        let executable = try #require(builtExecutable(named: "DiffusePluginHost"))
         let client = PluginHostProcessClient(executableURL: executable)
         defer { client.stop() }
 
@@ -518,8 +518,8 @@ struct PluginRuntimeTests {
     @Test("plugin authorization binds code, WIT, permissions, and schemas")
     func pluginAuthorizationInvalidatesEveryAuthorityChange() throws {
         let package = ValidatedPluginPackage(
-            rootURL: URL(fileURLWithPath: "/safe.reader.guavaplugin"),
-            manifest: GuavaPluginManifest(
+            rootURL: URL(fileURLWithPath: "/safe.reader.coveplugin"),
+            manifest: CovePluginManifest(
                 id: "safe.reader",
                 version: 1,
                 name: "Reader",
@@ -527,10 +527,10 @@ struct PluginRuntimeTests {
                 access: .read,
                 imports: [.sceneQuery]
             ),
-            runtime: ValidatedPluginComponent(componentURL: URL(fileURLWithPath: "/safe.reader.guavaplugin/component.wasm"),
-            witURL: URL(fileURLWithPath: "/safe.reader.guavaplugin/capabilities.wit"),
+            runtime: ValidatedPluginComponent(componentURL: URL(fileURLWithPath: "/safe.reader.coveplugin/component.wasm"),
+            witURL: URL(fileURLWithPath: "/safe.reader.coveplugin/capabilities.wit"),
             witContract: WITContract(worldName: "plugin",
-                                     imports: ["guava:scene/query"],
+                                     imports: ["cove:scene/query"],
                                      exports: [],
                                      capabilityInputs: [
                                          WITCapabilityInput(
@@ -781,9 +781,9 @@ struct PluginRuntimeTests {
                                    inputFields: String = "enabled: bool,") throws -> ValidatedPluginPackage {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("guavaplugin")
+            .appendingPathExtension("coveplugin")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let manifest = GuavaPluginManifest(
+        let manifest = CovePluginManifest(
             id: "safe.reader",
             version: 1,
             name: "Reader",

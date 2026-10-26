@@ -11,8 +11,8 @@ public actor MediaExporter {
         guard output.isFileURL, output.pathExtension.lowercased() == "mp4" else { throw MediaError.invalid("Export destination must be a local .mp4 file") }
         guard !FileManager.default.fileExists(atPath: output.path) else { throw MediaError.export("Export destination already exists") }
         let args = try ExportPlan.arguments(composition, root: projectRoot)
-        let temporary = output.deletingLastPathComponent().appendingPathComponent(".guava-\(UUID().uuidString).mp4")
-        let log = FileManager.default.temporaryDirectory.appendingPathComponent("guava-media-\(UUID().uuidString).log")
+        let temporary = output.deletingLastPathComponent().appendingPathComponent(".cove-\(UUID().uuidString).mp4")
+        let log = FileManager.default.temporaryDirectory.appendingPathComponent("cove-media-\(UUID().uuidString).log")
         FileManager.default.createFile(atPath: log.path, contents: nil)
         let errors = try FileHandle(forWritingTo: log)
         defer { try? errors.close(); try? FileManager.default.removeItem(at: log); try? FileManager.default.removeItem(at: temporary) }

@@ -8,6 +8,6 @@ interface capabilities {
 }
 
 world plugin {
-  import guava:process/host;
+  import cove:process/host;
   export capabilities;
 }

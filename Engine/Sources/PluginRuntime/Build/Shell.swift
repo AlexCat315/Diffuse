@@ -11,7 +11,7 @@ public enum PluginComponentBuild {
         /// Component text with a placeholder core module.
         public var wat: String
         /// Guest exports in Swift that adapt the canonical ABI to plain
-        /// functions, one per capability, for GuavaPluginKit packages.
+        /// functions, one per capability, for CovePluginKit packages.
         public var bindings: String
     }
 

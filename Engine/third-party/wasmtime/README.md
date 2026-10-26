@@ -7,22 +7,22 @@
 在仓库根目录独立准备当前主机依赖：
 
 ```sh
-swift run --package-path Tools/Developer guava-dev plugins stage
-swift run --package-path Tools/Developer guava-dev plugins stage --check
+swift run --package-path Tools/Developer cove-dev plugins stage
+swift run --package-path Tools/Developer cove-dev plugins stage --check
 ```
 
 指定其他目标或交叉构建输出目录：
 
 ```sh
-swift run --package-path Tools/Developer guava-dev plugins stage --platform android-arm64 --vendor Engine/build/android-validation/native/vendor
+swift run --package-path Tools/Developer cove-dev plugins stage --platform android-arm64 --vendor Engine/build/android-validation/native/vendor
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-arm64
-swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-arm64-simulator
+swift run --package-path Tools/Developer cove-dev plugins stage --platform ios-arm64
+swift run --package-path Tools/Developer cove-dev plugins stage --platform ios-arm64-simulator
 ```
 
 普通桌面/Android构建需要 CMake 和 curl。iOS 构建另外需要 macOS、Xcode、Rust/Cargo 及所选 iOS Rust target；构建使用源码自带的 Cargo.lock，原生预编译包不需要 Rust。
 
-产物位于 `Engine/vendor/Wasmtime.artifactbundle`；各平台 variant 可同时存在。每个 variant 自带源码来源、归档 SHA256、静态库 SHA256 和执行方式的 `provenance.json`。`--vendor` 对应 SwiftPM 的 `GUAVA_ENGINE_ARTIFACT_ROOT`，该环境变量必须是相对 Engine 包根目录的路径。全量 `swift run --package-path Tools/Developer guava-dev native-bootstrap`、Engine CMake 和 Guava Android CLI 使用同一套 staging 实现。旧的动态 XCFramework 不再保留。
+产物位于 `Engine/vendor/Wasmtime.artifactbundle`；各平台 variant 可同时存在。每个 variant 自带源码来源、归档 SHA256、静态库 SHA256 和执行方式的 `provenance.json`。`--vendor` 对应 SwiftPM 的 `COVE_ENGINE_ARTIFACT_ROOT`，该环境变量必须是相对 Engine 包根目录的路径。全量 `swift run --package-path Tools/Developer cove-dev native-bootstrap`、Engine CMake 和 Cove Android CLI 使用同一套 staging 实现。旧的动态 XCFramework 不再保留。
 
 | 平台 | 可用目标 | 执行方式 |
 | --- | --- | --- |
@@ -33,18 +33,18 @@ swift run --package-path Tools/Developer guava-dev plugins stage --platform ios-
 | iOS 26+ | arm64；arm64/x86_64 Simulator | 强制 Pulley |
 | 浏览器 | 独立 Web 交付流程 | 见 [插件执行说明](../../../../docs/architecture/plugin-execution.md) |
 
-此表描述插件运行库的目标，其他 Engine/GuavaUI 模块和应用构建命令仍以各自支持矩阵为准。预编译 Linux 包使用 glibc，不包括 musl；Android UI 工具链目前仍以 arm64 为应用目标。
+此表描述插件运行库的目标，其他 Engine/CoveUI 模块和应用构建命令仍以各自支持矩阵为准。预编译 Linux 包使用 glibc，不包括 musl；Android UI 工具链目前仍以 arm64 为应用目标。
 
-静态链接后，发行包只交付 `GuavaPluginHost` 可执行文件，不再另外复制 `libwasmtime.dylib` 或 Wasmtime DLL/so。桌面继续使用独立宿主进程。iOS/Android 应用可使用 `EmbeddedPluginSession`；两种入口复用同一插件契约、授权指纹、查询快照和输出校验。
+静态链接后，发行包只交付 `DiffusePluginHost` 可执行文件，不再另外复制 `libwasmtime.dylib` 或 Wasmtime DLL/so。桌面继续使用独立宿主进程。iOS/Android 应用可使用 `EmbeddedPluginSession`；两种入口复用同一插件契约、授权指纹、查询快照和输出校验。
 
 可执行验证：
 
 ```sh
 cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe \
-  -DGUAVA_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/macos-arm64"
+  -DCOVE_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/macos-arm64"
 cmake --build Engine/build/plugin-probe
-swift run --package-path Tools/Developer guava-dev plugins verify --probe Engine/build/plugin-probe/GuavaPluginProbe
-swift build --package-path Engine --product GuavaPluginHost
+swift run --package-path Tools/Developer cove-dev plugins verify --probe Engine/build/plugin-probe/CovePluginProbe
+swift build --package-path Engine --product DiffusePluginHost
 swift test --package-path Engine --filter PluginRuntimeTests
 ```
 

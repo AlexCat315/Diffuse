@@ -4,7 +4,7 @@ import ObservationBus
 
 /// Local semantic state shared by AI providers and local perception workers.
 ///
-/// This keeps Guava's AI-visible world available even when no remote text
+/// This keeps Cove's AI-visible world available even when no remote text
 /// provider is configured. Remote `Session` instances can be seeded from it.
 public actor AIWorldContext {
     private var worldView: WorldView

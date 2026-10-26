@@ -92,7 +92,7 @@ struct DumpPackage {
 /// override variables are stripped from the inherited environment and applied
 /// only by the checks that configure an application.
 struct ManifestLoader {
-  static let androidOverrides = ["GUAVA_ANDROID_UI_PACKAGE", "GUAVA_ANDROID_GAME_PACKAGE"]
+  static let androidOverrides = ["COVE_ANDROID_UI_PACKAGE", "COVE_ANDROID_GAME_PACKAGE"]
 
   private let root: URL
   private let executable: String
@@ -104,7 +104,7 @@ struct ManifestLoader {
     for key in Self.androidOverrides { environment.removeValue(forKey: key) }
     self.root = root
     self.environment = environment
-    self.executable = environment["GUAVA_SWIFT_EXECUTABLE"] ?? "swift"
+    self.executable = environment["COVE_SWIFT_EXECUTABLE"] ?? "swift"
   }
 
   mutating func manifest(at location: URL, overrides: [String: String] = [:]) throws -> DumpPackage {

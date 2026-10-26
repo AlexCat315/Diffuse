@@ -152,7 +152,7 @@ public enum PluginRequirementResolver {
     /// Enabled plugins that require this plugin or one of its exact contracts.
     public static func dependents(of pluginID: String,
                                   providing capabilityIDs: Set<String>,
-                                  among manifests: [String: GuavaPluginManifest]) -> [String] {
+                                  among manifests: [String: CovePluginManifest]) -> [String] {
         manifests.compactMap { id, manifest in
             guard id != pluginID,
                   manifest.requires.contains(where: {

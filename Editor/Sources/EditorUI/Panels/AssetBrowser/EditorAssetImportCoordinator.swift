@@ -1,8 +1,8 @@
 import AssetPipeline
 import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Shared asset-import workflow used by both the Content Browser and the
 /// application File menu. Keeping the picker and copy path together prevents

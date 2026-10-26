@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import GuavaLogging
+import CoveLogging
 @testable import PluginRuntime
 
 private final class DiagnosticRecords: @unchecked Sendable {

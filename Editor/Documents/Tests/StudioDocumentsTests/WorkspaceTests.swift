@@ -13,7 +13,7 @@ import StudioDocuments
     try workspace.remove("notes/设计.md")
     try WorkspaceTrash.remove(".gitignore", in: root)
     #expect(workspace.documents.isEmpty && workspace.files().isEmpty)
-    let trash = root.appendingPathComponent(".guava/trash")
+    let trash = root.appendingPathComponent(".cove/trash")
     let entries = try FileManager.default.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil)
     let stored = try #require(entries.map { $0.appendingPathComponent("notes/设计.md") }
         .first { FileManager.default.fileExists(atPath: $0.path) })
@@ -61,7 +61,7 @@ import StudioDocuments
     for path in ["../outside", "/tmp/file", ".git/config", "a/../../file", "C:\\file"] {
         #expect(throws: DocumentError.invalidPath) { try workspace.open(path) }
     }
-    for path in ["../outside", "/tmp/file", "a/../../file", "C:\\file", ".guava/trash"] {
+    for path in ["../outside", "/tmp/file", "a/../../file", "C:\\file", ".cove/trash"] {
         #expect(throws: DocumentError.invalidPath) { try WorkspaceTrash.remove(path, in: root) }
     }
     try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("outside"), withDestinationURL: root.deletingLastPathComponent())

@@ -1,5 +1,5 @@
 internal import EngineKernel
-internal import GuavaUI
+internal import CoveUI
 
 /// Key chords that reach the window: everything on Windows and Linux, and on
 /// macOS whatever the native menu bar did not already claim. Chords come from

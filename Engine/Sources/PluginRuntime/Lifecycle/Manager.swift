@@ -63,7 +63,7 @@ public final class PluginManager: @unchecked Sendable {
     }
 
     public var enabledInspections: [PluginInspection] { statuses.filter(\.isEnabled).map(\.inspection) }
-    public var enabledManifests: [String: GuavaPluginManifest] {
+    public var enabledManifests: [String: CovePluginManifest] {
         Dictionary(uniqueKeysWithValues: enabledInspections.map { ($0.manifest.id, $0.manifest) })
     }
     public var activeBindings: [String: PluginExecutionBinding] {

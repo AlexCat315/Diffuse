@@ -1,6 +1,6 @@
 internal import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Markdown formatting commands as pure edits on a buffer and selection, so
 /// the toolbar, shortcuts and tests share one implementation.

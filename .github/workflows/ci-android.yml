@@ -2,9 +2,9 @@ name: Android application build
 on:
   push:
     branches: [main]
-    paths: ['Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
+    paths: ['Editor/cove.json', 'Platforms/Android/**', 'cove', 'cove.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
   pull_request:
-    paths: ['Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
+    paths: ['Editor/cove.json', 'Platforms/Android/**', 'cove', 'cove.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -47,14 +47,14 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
       - uses: actions/cache@v5
         with:
-          path: GuavaUI/build/android-validation
-          key: android-native-v1-${{ runner.os }}-ndk30-${{ hashFiles('Editor/guava.json') }}
-      - name: Build a standalone arm64 application through Guava CLI
+          path: CoveUI/build/android-validation
+          key: android-native-v1-${{ runner.os }}-ndk30-${{ hashFiles('Editor/cove.json') }}
+      - name: Build a standalone arm64 application through Cove CLI
         shell: bash
         run: |
-          ./guava doctor --android
-          ./guava create app "$RUNNER_TEMP/guava-android-application" --id com.guava.ci.android --platforms android
-          ./guava build "$RUNNER_TEMP/guava-android-application" --android --release --output "$RUNNER_TEMP/android/Application.apk"
+          ./cove doctor --android
+          ./cove create app "$RUNNER_TEMP/cove-android-application" --id com.cove.ci.android --platforms android
+          ./cove build "$RUNNER_TEMP/cove-android-application" --android --release --output "$RUNNER_TEMP/android/Application.apk"
       - name: Verify the APK signature and native payload
         shell: bash
         run: |
@@ -63,7 +63,7 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const files = new Set(fs.readFileSync(process.env.RUNNER_TEMP + '/android/contents.txt', 'utf8').trim().split('\n'));
-          for (const file of ['lib/arm64-v8a/libGuavaAndroidApp.so', 'lib/arm64-v8a/libc++_shared.so', 'assets/launch.json']) {
+          for (const file of ['lib/arm64-v8a/libCoveAndroidApp.so', 'lib/arm64-v8a/libc++_shared.so', 'assets/launch.json']) {
             if (!files.has(file)) throw new Error('Missing APK payload: ' + file);
           }
           NODE

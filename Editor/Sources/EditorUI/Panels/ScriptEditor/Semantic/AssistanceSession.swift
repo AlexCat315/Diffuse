@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 enum ScriptSemanticCommand: CaseIterable, Equatable {
     case definition, implementations, supertypes, references, rename, codeActions, signature, symbols, format,

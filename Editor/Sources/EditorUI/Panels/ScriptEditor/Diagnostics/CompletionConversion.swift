@@ -1,6 +1,6 @@
 import Foundation
 import EditorCore
-import GuavaUI
+import CoveUI
 
 enum ScriptCompletionConversion {
     static func items(_ result: ScriptCompletionResult, for request: TextCompletionRequest) -> [TextCompletionItem] {

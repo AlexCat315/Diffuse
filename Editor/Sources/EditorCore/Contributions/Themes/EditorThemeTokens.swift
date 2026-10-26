@@ -1,5 +1,5 @@
-public import GuavaUICompose
-public import GuavaUIRuntime
+public import CoveUICompose
+public import CoveUIRuntime
 
 public struct EditorThemeTokens: ThemeExtension {
     public internal(set) var assistant = Color(red: 0xF0, green: 0x7D, blue: 0x96)

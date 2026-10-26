@@ -1,4 +1,4 @@
-import GuavaLogging
+import CoveLogging
 import EngineKernel
 import Foundation
 import NativeRHI
@@ -149,7 +149,7 @@ public final class EngineHost: @unchecked Sendable {
             do {
                 consumer = try NativeRenderer(device: device, surface: renderSurface, inGameUI: inGameUI)
             } catch {
-                LogSystem.logger("com.guava.engine.host").error("Renderer initialization failed", metadata: ["error": "\(error)"])
+                LogSystem.logger("com.cove.engine.host").error("Renderer initialization failed", metadata: ["error": "\(error)"])
                 consumer = nil
             }
         } else {
@@ -203,7 +203,8 @@ public final class EngineHost: @unchecked Sendable {
         sceneSnapshotOverride: SceneRuntimeSnapshot? = nil,
         jointPaletteOverride: JointPaletteMap? = nil,
         inGameCanvasOverride: InGameCanvas? = nil,
-        particleFeedbackHandler: (@Sendable ([GPUParticleSimulationEventSnapshot]) -> Void)? = nil
+        particleFeedbackHandler: (@Sendable ([GPUParticleSimulationEventSnapshot]) -> Void)? = nil,
+        mipmappedViewportOutput: Bool = false
     ) {
         let request = state.withLock { state -> SimulationFrameRequest? in
             guard state.started else { return nil }
@@ -227,7 +228,8 @@ public final class EngineHost: @unchecked Sendable {
                 renderSceneOverride: renderSceneOverride,
                 sceneSnapshotOverride: sceneSnapshotOverride,
                 jointPaletteOverride: jointPaletteOverride,
-                inGameCanvasOverride: inGameCanvasOverride
+                inGameCanvasOverride: inGameCanvasOverride,
+                mipmappedViewportOutput: mipmappedViewportOutput
             )
         }
         guard let request, let simulationThread else { return }

@@ -1,5 +1,5 @@
 internal import EditorCore
-internal import GuavaUI
+internal import CoveUI
 
 struct LanguageServerLogView: View {
     let details: ScriptLanguageServiceDetails?

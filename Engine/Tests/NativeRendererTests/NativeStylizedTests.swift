@@ -151,7 +151,7 @@ final class NativeStylizedTests: XCTestCase {
         try renderer.renderChecked(packet: packet); _ = try reference.render(packet: packet)
         let native = try GridImage.readback(device: renderer.device,texture: XCTUnwrap(renderer.colorTexture),size: packet.drawableSize)
         let expected = try reference.readback(), delta = try GridImage.difference(native,expected)
-        let directory = URL(fileURLWithPath: "/tmp/guava-native-stylized")
+        let directory = URL(fileURLWithPath: "/tmp/cove-native-stylized")
         try FileManager.default.createDirectory(at: directory,withIntermediateDirectories: true)
         try GridImage.writePPM(native,size: packet.drawableSize,to: directory.appendingPathComponent("\(label).ppm"))
         try GridImage.writePPM(expected,size: packet.drawableSize,to: directory.appendingPathComponent("repeat-\(label).ppm"))

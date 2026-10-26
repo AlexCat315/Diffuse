@@ -11,10 +11,10 @@
 ## 阶段 1：纯资源包与默认主题
 
 - [x] 1.1 `PluginPackageLoader` 允许纯声明包，资源哈希进入 inspection / authorization。
-- [x] 1.2 `BundledPlugins` 增加 `.declarative` 宿主，按 manifest 与包内容分类，不经过 `GuavaPluginHost`。
+- [x] 1.2 `BundledPlugins` 增加 `.declarative` 宿主，按 manifest 与包内容分类，不经过 `DiffusePluginHost`。
 - [x] 1.3 `enableBundledPlugins` / `setBundledPlugin` / `isBundledPluginEnabled` 支持声明式插件，不创建 host binding。
-- [x] 1.4 定义 `guava.theme/v1` descriptor、资源 schema、领域校验与 `ThemeCatalog` 快照。
-- [x] 1.5 把 `EditorVisualTheme.make` 的默认值迁移到 `Editor/Plugins/Themes/Default/theme.json`，生成随包 `DefaultTheme.guavaplugin`。
+- [x] 1.4 定义 `cove.theme/v1` descriptor、资源 schema、领域校验与 `ThemeCatalog` 快照。
+- [x] 1.5 把 `EditorVisualTheme.make` 的默认值迁移到 `Editor/Plugins/Themes/Default/theme.json`，生成随包 `DefaultTheme.coveplugin`。
 - [x] 1.6 `EditorThemeCatalog` 接入 `EditorLaunchRoot` / `EditorPresentationBoundary` / Settings；主题 ID 持久化，切换、停用、重载立即生效。
 - [x] 1.7 测试：纯声明包加载、主题 JSON 与当前默认主题逐项一致、切换/停用/重载、FileIcon/EditorUI 构建。
 
@@ -30,7 +30,7 @@
 
 ## 阶段 3：AI provider / agent 插件化
 
-- [x] 3.1 定义 `guava.ai.provider/v1` / `guava.ai.agent/v1` / `guava.ai.tool/v1` / `guava.ai.context/v1` descriptor 与校验；capability 只有被 `guava.ai.tool/v1` 声明才提供给模型。
+- [x] 3.1 定义 `cove.ai.provider/v1` / `cove.ai.agent/v1` / `cove.ai.tool/v1` / `cove.ai.context/v1` descriptor 与校验；capability 只有被 `cove.ai.tool/v1` 声明才提供给模型。
 - [x] 3.2 新增 `AIProviderCatalog`，合并随包 provider 插件与已启用运行时插件，发布只读快照。
 - [x] 3.3 删除 `EditorAIProvider` enum；`EditorAISettings` 改为 `providerID` / `modelID` / `agentID`。
 - [x] 3.4 `AICredentialStore` 按 provider ID 与 auth field 存取；默认 provider 插件声明自己的认证字段。
@@ -41,33 +41,33 @@
 
 ## 阶段 4：AI agent / harness / 面板
 
-- [x] 4.1 默认 AI agent 迁移为随包 `guava.ai.agent/v1` 插件。
-- [x] 4.2 宿主 `Session` 消费 agent profile：instructions / model policy / tool allowlist / context allowlist（宿主来源与 `guava.ai.context/v1`）。
-- [x] 4.3 定义 `guava.ai.harness/v1` 输入输出；宿主执行 tool calls 与审批，harness 只返回建议。agent 用 `harness` 指定。界面上的助手由 "Harness" 改名为 "Assistant"（助手）。
-- [x] 4.4 默认 AI 面板迁移到 `guava.ui.panel/v1`（宿主视图 `agent`）；宿主渲染外壳，插件提供内容配置。
+- [x] 4.1 默认 AI agent 迁移为随包 `cove.ai.agent/v1` 插件。
+- [x] 4.2 宿主 `Session` 消费 agent profile：instructions / model policy / tool allowlist / context allowlist（宿主来源与 `cove.ai.context/v1`）。
+- [x] 4.3 定义 `cove.ai.harness/v1` 输入输出；宿主执行 tool calls 与审批，harness 只返回建议。agent 用 `harness` 指定。界面上的助手由 "Harness" 改名为 "Assistant"（助手）。
+- [x] 4.4 默认 AI 面板迁移到 `cove.ui.panel/v1`（宿主视图 `agent`）；宿主渲染外壳，插件提供内容配置。
 - [ ] 4.5 测试：agent profile 生效、工具白名单、harness 不能绕过审批、面板启用/停用。
 
 ## 阶段 5：UI 与内置功能迁移
 
-- [x] 5.1 定义 `guava.command/v1` 与 `guava.ui.panel/v1`；面板内容采用宿主渲染的声明式 view model（宿主视图或入口返回的 `PanelModel`）。
-- [x] 5.1b 定义 `guava.ui.menu/v1` / `guava.ui.toolbar/v1` / `guava.ui.documentView/v1`。
+- [x] 5.1 定义 `cove.command/v1` 与 `cove.ui.panel/v1`；面板内容采用宿主渲染的声明式 view model（宿主视图或入口返回的 `PanelModel`）。
+- [x] 5.1b 定义 `cove.ui.menu/v1` / `cove.ui.toolbar/v1` / `cove.ui.documentView/v1`。
 - [x] 5.2 把 Git / Swift Support / Languages 的 manifest 迁到新贡献点键。
 - [x] 5.3 把默认主题、默认 AI provider、默认 agent、AI 面板纳入同一 `BundledPlugins` 目录。
 - [x] 5.4 移除 `EditorVisualTheme.make` 中的默认主题硬编码，只保留回退值。
 - [x] 5.5 管理面板显示插件贡献点、激活状态、资源哈希与失败原因。
 - [x] 5.6 文档：更新 `docs/architecture/plugin-execution.md` 与 `extension-lifecycle.md`。
-- [x] 5.7 插件界面改为通用组件树 + 状态往返的视图协议（面板与文档视图共用），命令改为返回效果；`GuavaPluginKit` 提供 `UI` 构造与事件解析；真实用法：Swift Support 的 `Package.resolved` 依赖视图、Git 与 Lore 的助手上下文。
+- [x] 5.7 插件界面改为通用组件树 + 状态往返的视图协议（面板与文档视图共用），命令改为返回效果；`CovePluginKit` 提供 `UI` 构造与事件解析；真实用法：Swift Support 的 `Package.resolved` 依赖视图、Git 与 Lore 的助手上下文。
 
 ## 验证
 
-- [x] `./guava build Editor --debug`
-- [x] `./guava build GuavaUI/Examples --debug`
-- [x] `./guava test Editor --filter PluginPlatformTests`
-- [x] `./guava test Editor --filter BundledLanguagesTests`
-- [x] `./guava test Editor --filter FileIconTests`
-- [x] `./guava test Engine --filter WorkbenchContributionTests`
-- [x] `./guava test Editor --filter "WorkbenchContributionsTests|PluginPanelTests"`
-- [x] 随包插件：`./guava test Editor --filter BundledContributionsTests`（真实 Git 仓库与本仓库的 Package.resolved）
+- [x] `./cove build Editor --debug`
+- [x] `./cove build CoveUI/Examples --debug`
+- [x] `./cove test Editor --filter PluginPlatformTests`
+- [x] `./cove test Editor --filter BundledLanguagesTests`
+- [x] `./cove test Editor --filter FileIconTests`
+- [x] `./cove test Engine --filter WorkbenchContributionTests`
+- [x] `./cove test Editor --filter "WorkbenchContributionsTests|PluginPanelTests"`
+- [x] 随包插件：`./cove test Editor --filter BundledContributionsTests`（真实 Git 仓库与本仓库的 Package.resolved）
 - [ ] 手动：纯资源主题安装/切换/停用/重载；AI provider 切换；`.tex` 着色/提纲/格式化不回退。
 
 ## 本轮落地
@@ -82,6 +82,6 @@
 
 插件设置新增按贡献点推导的分类筛选，一个插件可以属于多个分类；显示启用、运行、失败与关闭状态，外部插件关闭后在当前会话保留条目，可重新启用或卸载。格式化与进程入口不会因使用 WIT 而暴露给 AI；主题/语言变化保留 AI 会话和聊天，AI 工具变化只替换会话能力与待执行草案，选中 provider 变化才重建模型会话。
 
-新增覆盖：分类筛选、混合贡献、声明注册回滚、逆序清理、并发需求只激活一次、退出期间激活不能复活、依赖激活/失效、关闭后重新启用/卸载、格式化惰性激活与聊天保留。验证均通过 `./guava` 执行；agent profile、harness 与插件化 UI 面板保持待办。
+新增覆盖：分类筛选、混合贡献、声明注册回滚、逆序清理、并发需求只激活一次、退出期间激活不能复活、依赖激活/失效、关闭后重新启用/卸载、格式化惰性激活与聊天保留。验证均通过 `./cove` 执行；agent profile、harness 与插件化 UI 面板保持待办。
 
-本轮验证：Engine 插件/能力相关 70 项测试通过；Editor 的插件生命周期、分类筛选、主题重绘、格式化、任务/VCS、MCP 与工具策略回归通过。已用 `./guava run Editor --devtools --no-open` 启动真实编辑器，实际切换到主题分类并核对结果。
+本轮验证：Engine 插件/能力相关 70 项测试通过；Editor 的插件生命周期、分类筛选、主题重绘、格式化、任务/VCS、MCP 与工具策略回归通过。已用 `./cove run Editor --devtools --no-open` 启动真实编辑器，实际切换到主题分类并核对结果。

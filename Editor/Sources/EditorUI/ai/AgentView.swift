@@ -1,8 +1,8 @@
 internal import EditorCore
 private import Foundation
-internal import GuavaUI
-internal import GuavaUIRuntime
-internal import GuavaUIWorkspace
+internal import CoveUI
+internal import CoveUIRuntime
+internal import CoveUIWorkspace
 
 /// The agent view: projects and their tasks on the left, the conversation at
 /// the center. The canvas joins only for what the agent is working on, or when

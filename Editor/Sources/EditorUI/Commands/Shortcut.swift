@@ -1,5 +1,5 @@
 internal import EngineKernel
-internal import GuavaUI
+internal import CoveUI
 
 /// A key chord declared once in the command catalog. The same value feeds the
 /// native menu key equivalent, the title-bar and palette labels, and the

@@ -1,7 +1,7 @@
 import Foundation
 import AssetPipeline
-import GuavaUIRuntime
-import GuavaUICompose
+import CoveUIRuntime
+import CoveUICompose
 import RenderBackend
 import SceneRuntime
 import SIMDCompat

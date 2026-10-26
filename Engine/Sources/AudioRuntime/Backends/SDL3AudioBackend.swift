@@ -1,7 +1,7 @@
 #if canImport(CSDL3)
 import Foundation
 import MediaRuntime
-import GuavaLogging
+import CoveLogging
 
 // SDL3 is an implementation detail of this backend. The access level is load
 // bearing: it confines SDL declarations to this file, so any other file in
@@ -27,18 +27,18 @@ public final class SDL3AudioBackend: AudioBackend, @unchecked Sendable {
     private let chunkFrames = 2048
 
     public init?() {
-        guard SDL_InitSubSystem(GUAVA_SDL_INIT_AUDIO) else { return nil }
+        guard SDL_InitSubSystem(COVE_SDL_INIT_AUDIO) else { return nil }
     }
     deinit {
         stopAll()
-        SDL_QuitSubSystem(GUAVA_SDL_INIT_AUDIO)
+        SDL_QuitSubSystem(COVE_SDL_INIT_AUDIO)
     }
 
     public func loadClip(name: String, url: URL) -> Bool {
         if clips[name] != nil { return true }
         do { clips[name] = try AudioFile.decode(url); return true }
         catch {
-            LogSystem.logger("com.guava.audio").error("Audio decoding failed", metadata: ["file": "\(url.lastPathComponent)", "error": "\(error)"])
+            LogSystem.logger("com.cove.audio").error("Audio decoding failed", metadata: ["file": "\(url.lastPathComponent)", "error": "\(error)"])
             return false
         }
     }
@@ -101,7 +101,7 @@ public final class SDL3AudioBackend: AudioBackend, @unchecked Sendable {
         guard clips[clip] != nil else { return nil }
         var spec = SDL_AudioSpec()
         spec.freq = 48000; spec.channels = 2; spec.format = SDL_AUDIO_F32
-        guard let stream = SDL_OpenAudioDeviceStream(GUAVA_SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nil, nil) else { return nil }
+        guard let stream = SDL_OpenAudioDeviceStream(COVE_SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nil, nil) else { return nil }
         _ = SDL_SetAudioStreamGain(stream, volume.isFinite ? max(0, volume) : 0)
         _ = SDL_SetAudioStreamFrequencyRatio(stream, pitch.isFinite ? min(100, max(0.01, pitch)) : 1)
         var voice = Voice(stream: stream, clip: clip, loop: loop)

@@ -1,7 +1,7 @@
 import Swift
 
 /// The step protocol behind contributions whose plugin decides each command
-/// (`contributes["guava.vcs/v1"]`, `contributes["guava.tasks/v1"]`).
+/// (`contributes["cove.vcs/v1"]`, `contributes["cove.tasks/v1"]`).
 ///
 /// The editor sends an operation such as `{"op":"status"}`. The plugin
 /// answers with one step: a command to run, paths to move to the Trash, or
@@ -15,10 +15,10 @@ import Swift
 public enum Steps {
     /// Serves one call of the contribution's entry point. `stdout` is a window of the previous
     /// command's standard output. Process requests the editor routes through
-    /// the plugin go to `guava:process/host` without being parsed.
+    /// the plugin go to `cove:process/host` without being parsed.
     public static func serve(request: String, stdout: String,
                              _ respond: (StepRequest) -> Step) -> String {
-        if let process = processRequest(request) { return GuavaHost.process(process) }
+        if let process = processRequest(request) { return CoveHost.process(process) }
         guard let object = JSON.parse(request)?.object else {
             return Step.failure("The editor sent a malformed request.").json.serialized
         }

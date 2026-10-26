@@ -1,7 +1,7 @@
 internal import EditorCore
 internal import StudioDocuments
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The project's text files as a folder tree. Opening a file here selects it
 /// in the editor; open and modified files are marked in place. Given the

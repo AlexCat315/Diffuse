@@ -1,5 +1,5 @@
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// The authored property stays serialized JSON; the editing surface owns a
 /// persistent Rope and materializes it only when JSON validation commits.

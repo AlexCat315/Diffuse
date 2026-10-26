@@ -7,7 +7,7 @@ struct EditorAssetReloadTests {
     @Test("asset reload invalidates subscribed editor UI")
     func reloadInvalidatesUI() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-asset-reload-\(UUID().uuidString)",
+            .appendingPathComponent("cove-asset-reload-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project,

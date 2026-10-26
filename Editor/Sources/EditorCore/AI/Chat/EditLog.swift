@@ -1,18 +1,18 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 import IntentRuntime
 
 /// Append-only JSONL log of every applied Edit.
-/// Written to `<project>/.guava/edit_log.jsonl`.
+/// Written to `<project>/.cove/edit_log.jsonl`.
 public final class EditLog: @unchecked Sendable {
     private let fileURL: URL
     private let lock = NSLock()
     private let encoder: JSONEncoder
 
     public init(projectDirectory: String) {
-        let guavaDir = URL(fileURLWithPath: projectDirectory)
-            .appendingPathComponent(".guava", isDirectory: true)
-        self.fileURL = guavaDir.appendingPathComponent("edit_log.jsonl")
+        let coveDir = URL(fileURLWithPath: projectDirectory)
+            .appendingPathComponent(".cove", isDirectory: true)
+        self.fileURL = coveDir.appendingPathComponent("edit_log.jsonl")
         let enc = JSONEncoder()
         enc.outputFormatting = []
         enc.dateEncodingStrategy = .iso8601

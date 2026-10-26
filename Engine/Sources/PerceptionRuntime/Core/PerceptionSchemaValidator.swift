@@ -2,10 +2,10 @@ import Foundation
 
 public enum PerceptionSchemaValidator {
     private static let supportedResultSchemas: Set<String> = [
-        "guava.perception.result.v1",
+        "cove.perception.result.v1",
     ]
     private static let supportedManifestSchemas: Set<String> = [
-        "guava.perception.model_manifest.v1",
+        "cove.perception.model_manifest.v1",
     ]
 
     public enum ValidationError: Error, CustomStringConvertible, Sendable {

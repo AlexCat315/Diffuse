@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 func status(_ request: StepRequest) -> Step {
     guard let output = request.output else {

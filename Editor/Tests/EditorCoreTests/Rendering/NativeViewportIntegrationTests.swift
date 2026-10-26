@@ -5,9 +5,9 @@ import XCTest
 import NativeRHI
 import NativeRendererValidation
 import RenderBackend
-import GuavaUICompose
-import GuavaUI
-@testable import GuavaUIRuntime
+import CoveUICompose
+import CoveUI
+@testable import CoveUIRuntime
 
 final class NativeViewportIntegrationTests: XCTestCase {
     func testSceneAndPostViewportRemainVisibleAfterResize() throws {

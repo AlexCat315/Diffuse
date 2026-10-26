@@ -18,7 +18,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
         XCTAssertNil(EditorPluginHostLocator.resolve(injectedURL: directory))
 
         #if !os(Windows)
-        let executable = directory.appendingPathComponent("GuavaPluginHost")
+        let executable = directory.appendingPathComponent("DiffusePluginHost")
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o700],
                                               ofItemAtPath: executable.path)
@@ -138,7 +138,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: missing) }
         XCTAssertThrowsError(try PluginPackageLoader().load(at: missing)) { error in
             XCTAssertEqual(error as? PluginManifestValidationError,
-                           .invalidContribution("guava.language/v1"))
+                           .invalidContribution("cove.language/v1"))
         }
 
         let wrongInput = try makeFormattingPackage(wit: """
@@ -154,7 +154,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: wrongInput) }
         XCTAssertThrowsError(try PluginPackageLoader().load(at: wrongInput)) { error in
             XCTAssertEqual(error as? PluginManifestValidationError,
-                           .invalidContribution("guava.language/v1"))
+                           .invalidContribution("cove.language/v1"))
         }
     }
 
@@ -167,7 +167,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
             "access": "read",
             "imports": [],
             "composable_host_capabilities": [],
-            "contributes": ["guava.language/v1": [language]],
+            "contributes": ["cove.language/v1": [language]],
         ]
         return (try? JSONSerialization.data(withJSONObject: manifest)) ?? Data()
     }
@@ -178,7 +178,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
         XCTAssertThrowsError(try PluginManifestValidator.decodeAndValidate(validManifest(language: language)),
                              file: file, line: line) { error in
             XCTAssertEqual(error as? PluginManifestValidationError,
-                           .invalidContribution("guava.language/v1"),
+                           .invalidContribution("cove.language/v1"),
                            file: file, line: line)
         }
     }
@@ -186,7 +186,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
     private func makeFormattingPackage(wit: String) throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-            .appendingPathExtension("guavaplugin")
+            .appendingPathExtension("coveplugin")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let language: [String: Any] = [
             "id": "latex",
@@ -203,7 +203,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
 
     private func makeSummary() -> EditorPluginInspectionSummary {
         let pluginID = "safe.management"
-        let manifest = GuavaPluginManifest(id: pluginID,
+        let manifest = CovePluginManifest(id: pluginID,
                                            version: 1,
                                            name: "Management",
                                            description: "Test",

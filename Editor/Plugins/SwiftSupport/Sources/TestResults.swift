@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// Test identifiers are `Module.Suite/test` or, from the language server's
 /// index, `Suite/test`; `--filter` matches either. XCTest reports `-[Module.Suite test]`; Swift

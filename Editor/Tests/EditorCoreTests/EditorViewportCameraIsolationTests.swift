@@ -1,6 +1,6 @@
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import RenderBackend
 import SceneRuntime
 import SIMDCompat
@@ -65,7 +65,7 @@ struct EditorViewportCameraIsolationTests {
 
     @Test("play and pause use the game camera and stopping restores the editor view")
     func playbackRestoresEditorView() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-camera-\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cove-camera-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: true)

@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Shown when the project has no working tree, or its tool is not installed:
 /// start a Git repository here, or create a Lore repository on a server.

@@ -1,4 +1,4 @@
-import GuavaUIRuntime
+import CoveUIRuntime
 /// Retains atlas planes consumed from the snapshot channel until a renderer
 /// accepts ownership. Upload/record/submit retries then belong to that renderer.
 struct InGameUIAtlasDelivery {

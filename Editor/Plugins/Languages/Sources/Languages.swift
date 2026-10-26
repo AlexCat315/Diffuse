@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// Formats a LaTeX document: LF line endings, no trailing spaces or tabs,
 /// at most one blank line in a row, and one final newline.

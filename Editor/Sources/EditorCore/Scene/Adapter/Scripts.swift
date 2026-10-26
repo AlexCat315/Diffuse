@@ -103,10 +103,10 @@ extension EditorSceneAdapter {
     }
 
     var defaultScriptIdentifier: String {
-        if scriptRuntime.handle(named: "guava.rotator") != nil {
-            return "guava.rotator"
+        if scriptRuntime.handle(named: "cove.rotator") != nil {
+            return "cove.rotator"
         }
-        return scriptCatalogEntries.first?.identifier ?? "guava.rotator"
+        return scriptCatalogEntries.first?.identifier ?? "cove.rotator"
     }
 
     public func unresolvedScriptBindingDescriptions(onlyEnabled: Bool = false) -> [String] {

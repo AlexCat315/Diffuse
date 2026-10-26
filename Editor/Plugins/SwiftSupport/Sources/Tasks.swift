@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// SwiftPM through the `package` permission. Builds, tests and programs run
 /// streamed, so the editor shows their output as it arrives; once one exits,

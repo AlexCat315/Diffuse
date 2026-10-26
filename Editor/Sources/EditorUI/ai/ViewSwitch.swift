@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Workbench or Agent, centered in the title bar. The Agent side carries the
 /// agent's state, so it reads from the workbench without taking room there.

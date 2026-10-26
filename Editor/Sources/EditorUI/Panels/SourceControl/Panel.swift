@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// Git or Lore for the project: branch and sync in the toolbar, a commit
 /// composer with an AI-drafted message, staged and unstaged changes (a click

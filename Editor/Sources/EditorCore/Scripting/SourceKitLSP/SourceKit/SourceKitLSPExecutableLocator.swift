@@ -1,4 +1,4 @@
-internal import GuavaProcess
+internal import CoveProcess
 import LanguageServerRuntime
 import Foundation
 import ScriptRuntime
@@ -10,7 +10,7 @@ import ScriptRuntime
 /// currently points at. Keeping this outside ``LSPClient`` lets the
 /// lookup be exercised without spawning a process.
 public enum SourceKitLSPExecutableLocator {
-    public static let overrideEnvironmentKey = "GUAVA_SOURCEKIT_LSP_PATH"
+    public static let overrideEnvironmentKey = "COVE_SOURCEKIT_LSP_PATH"
 
     public static func resolveExecutableURL(
         environment: [String: String] = ProcessInfo.processInfo.environment

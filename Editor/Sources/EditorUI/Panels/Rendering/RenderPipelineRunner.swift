@@ -23,7 +23,7 @@ final class RenderPipelineRunner: @unchecked Sendable {
         var samplesPerPixel: Int = 64
         var maxBounces: Int = 4
         var outputPath: String = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava_render.exr")
+            .appendingPathComponent("cove_render.exr")
             .path
     }
 
@@ -34,7 +34,7 @@ final class RenderPipelineRunner: @unchecked Sendable {
     }
 
     private let config: Config
-    private let queue = DispatchQueue(label: "com.guava.renderpipeline")
+    private let queue = DispatchQueue(label: "com.cove.renderpipeline")
     private let stateLock = NSLock()
     private var isCancelled = false
 

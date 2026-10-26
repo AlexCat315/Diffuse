@@ -7,7 +7,7 @@ struct AssetImportFileCopierTests {
     @Test("Re-import replaces an existing asset only after staging succeeds")
     func replacesExistingAsset() throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-asset-reimport-\(UUID().uuidString)")
+            .appendingPathComponent("cove-asset-reimport-\(UUID().uuidString)")
         let source = directory.appendingPathComponent("source/model.glb")
         let destination = directory.appendingPathComponent("project/model.glb")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -31,7 +31,7 @@ struct AssetImportFileCopierTests {
     @Test("A failed re-import preserves the existing asset")
     func failedCopyPreservesExistingAsset() throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-asset-reimport-failure-\(UUID().uuidString)")
+            .appendingPathComponent("cove-asset-reimport-failure-\(UUID().uuidString)")
         let missingSource = directory.appendingPathComponent("missing/model.glb")
         let destination = directory.appendingPathComponent("project/model.glb")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -50,7 +50,7 @@ struct AssetImportFileCopierTests {
     @Test("First import creates nested destination directories")
     func createsNestedDestination() throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-asset-first-import-\(UUID().uuidString)")
+            .appendingPathComponent("cove-asset-first-import-\(UUID().uuidString)")
         let source = directory.appendingPathComponent("source.png")
         let destination = directory.appendingPathComponent("project/textures/ui/source.png")
         defer { try? FileManager.default.removeItem(at: directory) }

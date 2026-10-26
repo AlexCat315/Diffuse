@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// `swift package describe --type json`, as the editor shows a project:
 /// what can run, and the products, targets and dependencies.

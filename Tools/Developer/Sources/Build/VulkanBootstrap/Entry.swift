@@ -16,7 +16,7 @@ package enum VulkanBootstrap {
   ]
 
   static let usage = """
-    guava-dev vulkan bootstrap [--destination PATH]
+    cove-dev vulkan bootstrap [--destination PATH]
 
       --destination PATH  Defaults to Engine/vendor/vulkan-sdk; the path must not exist.
     """

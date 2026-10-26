@@ -1,5 +1,5 @@
-import GuavaUIRuntime
-import GuavaUI
+import CoveUIRuntime
+import CoveUI
 import CardBattleRuntime
 
 /// In-game HUD overlay drawn on top of the 3D viewport.

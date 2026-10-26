@@ -9,9 +9,9 @@ import Foundation
 public enum EditorPluginHostLocator {
     public static var executableName: String {
         #if os(Windows)
-        "GuavaPluginHost.exe"
+        "DiffusePluginHost.exe"
         #else
-        "GuavaPluginHost"
+        "DiffusePluginHost"
         #endif
     }
 

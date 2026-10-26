@@ -1,7 +1,7 @@
 import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 import RenderBackend
 import SceneRuntime
 

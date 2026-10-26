@@ -20,10 +20,10 @@ enum Fixtures {
   }()
 
   static func path(_ relative: String) -> URL {
-    if relative.hasPrefix("GuavaUI/") {
-      let sdk = ProcessInfo.processInfo.environment["GUAVA_SDK_ROOT"]
-        .map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent("GuavaUI")
-      return sdk.appendingPathComponent(String(relative.dropFirst("GuavaUI/".count)))
+    if relative.hasPrefix("CoveUI/") {
+      let sdk = ProcessInfo.processInfo.environment["COVE_SDK_ROOT"]
+        .map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent("CoveUI")
+      return sdk.appendingPathComponent(String(relative.dropFirst("CoveUI/".count)))
     }
     return root.appendingPathComponent(relative)
   }
@@ -31,7 +31,7 @@ enum Fixtures {
 
 func makeTestDirectory() throws -> URL {
   let url = FileManager.default.temporaryDirectory.appendingPathComponent(
-    "guava-rhi-test-\(UUID().uuidString)")
+    "cove-rhi-test-\(UUID().uuidString)")
   try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
   return url
 }
@@ -124,7 +124,7 @@ final class CompilationContractTests: XCTestCase {
     defer { try? FileManager.default.removeItem(at: directory) }
     let artifact = try compileShader(
       CompileRequest(
-        source: Fixtures.path("GuavaUI/Runtime/Tests/NativeRHITests/Fixtures/compute.slang"),
+        source: Fixtures.path("CoveUI/Runtime/Tests/NativeRHITests/Fixtures/compute.slang"),
         entry: "computeMain", stage: "compute", target: "spirv",
         output: directory.appendingPathComponent("compute.json"),
         compiler: slangc, threadgroupSize: nil, lineDirectives: true,
@@ -149,7 +149,7 @@ final class CompilationContractTests: XCTestCase {
 
   func testUIConstantsAreVertexOnlyAndImageBindingsAreStatic() throws {
     let slangc = try requireSlangc()
-    let source = Fixtures.path("GuavaUI/Sources/GuavaUIRuntime/Resources/Shaders/Slang/ui.slang")
+    let source = Fixtures.path("CoveUI/Sources/CoveUIRuntime/Resources/Shaders/Slang/ui.slang")
     let directory = try makeTestDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
     for target in ["metal", "spirv"] {
@@ -194,7 +194,7 @@ final class CompilationContractTests: XCTestCase {
     try Data("previous artifact".utf8).write(to: output)
     try Data("previous reflection".utf8).write(to: reflection)
     let request = CompileRequest(
-      source: Fixtures.path("GuavaUI/Runtime/Tests/NativeRHITests/Fixtures/\(fixture).slang"),
+      source: Fixtures.path("CoveUI/Runtime/Tests/NativeRHITests/Fixtures/\(fixture).slang"),
       entry: entry, stage: stage, target: "metal", output: output,
       compiler: slangc, threadgroupSize: dimensions, lineDirectives: true,
       threadgroupConstants: constants, defines: nil, spirvProfile: "spirv_1_5")
@@ -235,7 +235,7 @@ final class CompilationContractTests: XCTestCase {
     for target in ["metal", "spirv"] {
       let artifact = try compileShader(
         CompileRequest(
-          source: Fixtures.path("GuavaUI/Runtime/Tests/NativeRHITests/Fixtures/specialization.slang"),
+          source: Fixtures.path("CoveUI/Runtime/Tests/NativeRHITests/Fixtures/specialization.slang"),
           entry: "specializedCompute", stage: "compute", target: target,
           output: directory.appendingPathComponent("\(target).json"),
           compiler: slangc, threadgroupSize: [37, 1, 1], lineDirectives: true,

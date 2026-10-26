@@ -1,5 +1,5 @@
 @testable import EditorUI
-import GuavaUIRuntime
+import CoveUIRuntime
 import Testing
 
 @Suite("Editor display cadence")

@@ -114,7 +114,7 @@ public struct PerceptionModelManifest: Codable, Sendable, Equatable {
     public var license: PerceptionLicenseMetadata
     public var source: PerceptionModelSource
 
-    public init(schemaVersion: String = "guava.perception.model_manifest.v1",
+    public init(schemaVersion: String = "cove.perception.model_manifest.v1",
                 modelID: String,
                 displayName: String,
                 task: PerceptionTask,
@@ -372,7 +372,7 @@ public struct PerceptionResult: Codable, Sendable, Equatable {
     public var timing: PerceptionTimingInfo
     public var provenance: PerceptionProvenance
 
-    public init(schemaVersion: String = "guava.perception.result.v1",
+    public init(schemaVersion: String = "cove.perception.result.v1",
                 requestID: String,
                 modelID: String,
                 modelVersion: String,

@@ -1,5 +1,5 @@
 @testable import EditorCore
-import GuavaUIRuntime
+import CoveUIRuntime
 import SceneRuntime
 import SIMDCompat
 import Testing

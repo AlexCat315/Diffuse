@@ -1,7 +1,7 @@
 import EditorCore
 import Foundation
 import ScriptRuntime
-private import GuavaFileSystem
+private import CoveFileSystem
 
 public enum GameProjectScriptLoadError: Error, CustomStringConvertible, Equatable {
     case unsupportedVersion(Int)

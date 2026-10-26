@@ -38,7 +38,7 @@ final class RenderThread: @unchecked Sendable {
     private let packetBuffer: LatestValueBuffer<RenderPacket>
     private let onKernelPhase: @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void
     private let consumer: any RenderPacketConsumer
-    private let queue = DispatchQueue(label: "com.guava.engine.render", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "com.cove.engine.render", qos: .userInitiated)
     private let state = LockedState(State())
     private let onFrameRendered: @Sendable (RenderThreadReport) -> Void
 

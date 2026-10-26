@@ -7,7 +7,7 @@ enum DevToolsEndpoint {
   static func resolve(_ target: String, environment: [String: String] = ProcessInfo.processInfo.environment) throws -> URL {
     if let port = UInt16(target), port > 0 {
       var url = URLComponents(); url.scheme = "ws"; url.host = "127.0.0.1"; url.port = Int(port); url.path = "/"
-      if let token = environment["GUAVA_DEVTOOLS_TOKEN"], !token.isEmpty { url.queryItems = [URLQueryItem(name: "token", value: token)] }
+      if let token = environment["COVE_DEVTOOLS_TOKEN"], !token.isEmpty { url.queryItems = [URLQueryItem(name: "token", value: token)] }
       return url.url!
     }
     guard target.hasPrefix("@"), target.count > 1 else { throw ToolError.message("Endpoint must be a port or @path/to/session.json (runtime.json is also supported)") }

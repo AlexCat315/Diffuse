@@ -1,6 +1,6 @@
 import Foundation
 import PluginRuntime
-public import GuavaUICompose
+public import CoveUICompose
 
 public struct EditorThemeDescriptor: Sendable, Equatable, Identifiable {
     public let id: String

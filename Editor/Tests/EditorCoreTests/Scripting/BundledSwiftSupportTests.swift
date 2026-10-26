@@ -4,13 +4,13 @@ import PluginRuntime
 import PluginWasmtimeRuntime
 import CapabilityRuntime
 import LanguageServerRuntime
-internal import GuavaProcess
-import GuavaUICompose
+internal import CoveProcess
+import CoveUICompose
 @testable import EditorCore
 
 @Suite("Bundled Swift Support")
 struct BundledSwiftSupportTests {
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["GUAVA_TEST_REAL_SOURCEKIT"] == "1"), .timeLimit(.minutes(3)))
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["COVE_TEST_REAL_SOURCEKIT"] == "1"), .timeLimit(.minutes(3)))
     func realSourceKitSemanticQueries() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -101,10 +101,10 @@ struct BundledSwiftSupportTests {
         }
         let executable = root.appendingPathComponent("Editor.app/Contents/MacOS/EditorApp")
         let configuration = ProjectScriptBuildConfiguration.discover(for: executable,
-            environment: ["GUAVA_BUILD_PRODUCTS_PATH": products.path])
+            environment: ["COVE_BUILD_PRODUCTS_PATH": products.path])
         #expect(configuration.engineModulePaths == [products.path])
         let overridden = ProjectScriptBuildConfiguration.discover(for: executable,
-            environment: ["GUAVA_BUILD_PRODUCTS_PATH": products.path, "GUAVA_ENGINE_MODULE_PATHS": "/SDK/Modules"])
+            environment: ["COVE_BUILD_PRODUCTS_PATH": products.path, "COVE_ENGINE_MODULE_PATHS": "/SDK/Modules"])
         #expect(overridden.engineModulePaths == ["/SDK/Modules"])
     }
 
@@ -114,9 +114,9 @@ struct BundledSwiftSupportTests {
         let host = try #require(EditorPluginHostLocator.resolve())
         let client = PluginHostProcessClient(executableURL: host)
         defer { client.stop() }
-        let url = fixture.root.appendingPathComponent("SwiftSupport.guavaplugin")
+        let url = fixture.root.appendingPathComponent("SwiftSupport.coveplugin")
         try FileManager.default.copyItem(at: try #require(BundledPlugins.languageServer), to: url)
-        var manifest = try JSONDecoder().decode(GuavaPluginManifest.self, from: Data(contentsOf: url.appendingPathComponent("plugin.json")))
+        var manifest = try JSONDecoder().decode(CovePluginManifest.self, from: Data(contentsOf: url.appendingPathComponent("plugin.json")))
         manifest.host.processes[0].environmentKeys += Array(fixture.environment.keys)
         try JSONEncoder().encode(manifest).write(to: url.appendingPathComponent("plugin.json"))
         let inspection = try client.inspectPlugin(at: url)
@@ -156,7 +156,7 @@ struct BundledSwiftSupportTests {
         #expect(throws: (any Error).self) { try adapter.connect(command) }
     }
 
-    /// Bundled packages are built from `Editor/Plugins/<Name>` with `guava plugin build`;
+    /// Bundled packages are built from `Editor/Plugins/<Name>` with `cove plugin build`;
     /// their manifests and contracts must be the sources'.
     @Test func bundledPackagesMatchTheirSources() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -182,7 +182,7 @@ struct BundledSwiftSupportTests {
                 atPath: package.appendingPathComponent("capabilities.wit").path)
             for file in ["plugin.json"] + (shipsContract ? ["capabilities.wit"] : []) {
                 #expect(try Data(contentsOf: source.appendingPathComponent(file)) == Data(contentsOf: package.appendingPathComponent(file)),
-                        "\(package.lastPathComponent)/\(file) is out of date; run guava plugin build")
+                        "\(package.lastPathComponent)/\(file) is out of date; run cove plugin build")
             }
         }
     }
@@ -214,7 +214,7 @@ struct BundledSwiftSupportTests {
         let project = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: project) }
         try BundledPlugins.setEnabled(false, id: "studio.swift-support", in: project.path)
-        try Data("invalid".utf8).write(to: project.appendingPathComponent(".guava/disabled_bundled_plugins.json"))
+        try Data("invalid".utf8).write(to: project.appendingPathComponent(".cove/disabled_bundled_plugins.json"))
         #expect(throws: (any Error).self) { try BundledPlugins.disabled(in: project.path) }
     }
 }

@@ -8,7 +8,7 @@ enum RendererTestDevice {
         #if (os(Windows) || os(Linux)) && canImport(CVulkanHeaders)
         if config.preferredBackends.first == .vulkan,
            !VulkanBackend.isAvailable,
-           ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] != "1" {
+           ProcessInfo.processInfo.environment["COVE_RUN_GPU_SMOKE_TESTS"] != "1" {
             throw XCTSkip("No native Vulkan driver; GPU regression requires a hardware runner")
         }
         #endif

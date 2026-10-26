@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import AIRuntime
 import ContextMemory
 import AssetPipeline
@@ -14,8 +14,8 @@ import SemanticPipeline
 import RenderBackend
 import NativeRHI
 import SceneRuntime
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import Foundation
 import SIMDCompat
 
@@ -209,7 +209,7 @@ extension EditorApplication {
 
     func restoreAndObserveViewportSnapSettings() {
         let url = URL(fileURLWithPath: projectDirectory, isDirectory: true)
-            .appendingPathComponent(".guava/editor-snap-settings.json")
+            .appendingPathComponent(".cove/editor-snap-settings.json")
         if let data = try? Data(contentsOf: url),
            let saved = try? JSONDecoder().decode(EditorViewportSnapSettings.self, from: data) {
             saved.restore(in: store)

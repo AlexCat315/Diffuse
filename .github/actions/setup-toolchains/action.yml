@@ -1,4 +1,4 @@
-name: Guava build toolchains
+name: Cove build toolchains
 description: Install the verified release toolchains on macOS, Linux and Windows.
 runs:
   using: composite
@@ -37,11 +37,11 @@ runs:
       # compile and link once INCLUDE/LIB/PATH point at the MSVC toolchain, which
       # only happens inside a Developer Command Prompt. This action scripts
       # vcvarsall and persists the environment to GITHUB_ENV so the later
-      # `guava-dev media` step can drive `cl` for the Windows FFmpeg build.
+      # `cove-dev media` step can drive `cl` for the Windows FFmpeg build.
       if: runner.os == 'Windows'
       uses: ilammy/msvc-dev-cmd@v1
     - name: Install Zig
-      # libghostty-vt (GuavaUITerminal) is built with Zig; Ghostty pins the
+      # libghostty-vt (CoveUITerminal) is built with Zig; Ghostty pins the
       # exact compiler release it supports.
       uses: mlugg/setup-zig@v2
       with:
@@ -69,6 +69,6 @@ runs:
       if: runner.os == 'Windows'
       shell: bash
       run: |
-        ./guava studio vulkan bootstrap --destination "$RUNNER_TEMP/guava-vulkan-sdk"
-        echo "VULKAN_SDK=$RUNNER_TEMP/guava-vulkan-sdk" >> "$GITHUB_ENV"
-        echo "$RUNNER_TEMP/guava-vulkan-sdk/bin" >> "$GITHUB_PATH"
+        ./cove studio vulkan bootstrap --destination "$RUNNER_TEMP/cove-vulkan-sdk"
+        echo "VULKAN_SDK=$RUNNER_TEMP/cove-vulkan-sdk" >> "$GITHUB_ENV"
+        echo "$RUNNER_TEMP/cove-vulkan-sdk/bin" >> "$GITHUB_PATH"

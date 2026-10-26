@@ -1,10 +1,10 @@
 @testable import EditorUI
 import EditorCore
 import Foundation
-import GuavaUI
-import GuavaUICompose
-import GuavaUIRuntime
-import GuavaUIWorkspace
+import CoveUI
+import CoveUICompose
+import CoveUIRuntime
+import CoveUIWorkspace
 import Testing
 
 @Suite("Workspace layout regression", .serialized)
@@ -77,10 +77,10 @@ struct WorkspacePresetRegressionTests {
 
     @Test("a saved layout survives content switches, and Reset Layout restores the default")
     func presetSelection() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-preset-\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cove-preset-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let key = "GUAVA_EDITOR_STATE_DIRECTORY"
+        let key = "COVE_EDITOR_STATE_DIRECTORY"
         let previous = ProcessInfo.processInfo.environment[key]
         #expect(WorkbenchUITestSupport.setEnvironmentValue(directory.appendingPathComponent("state").path, for: key))
         defer { _ = WorkbenchUITestSupport.setEnvironmentValue(previous, for: key) }
@@ -104,7 +104,7 @@ struct WorkspacePresetRegressionTests {
 
     @Test("Window reveals closed and collapsed panels, Inspector exits scene settings, and Restore Panels expands docks")
     func panelCommands() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-panel-\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cove-panel-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
@@ -125,7 +125,7 @@ struct WorkspacePresetRegressionTests {
 
     @Test("Area toggles collapse every group on an edge, then restore them; the center never collapses")
     func panelAreaToggles() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-area-\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cove-area-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
@@ -165,7 +165,7 @@ struct WorkspacePresetRegressionTests {
 
     @Test("A panel missing from an older saved layout opens and shows from the rail, even with its edge collapsed")
     func railOpensPanelMissingFromSavedLayout() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-rail-new-\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cove-rail-new-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)
@@ -188,7 +188,7 @@ struct WorkspacePresetRegressionTests {
 
     @Test("Clicking the rail entry of the showing panel collapses its group; clicking again restores it")
     func railToggle() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-rail-\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cove-rail-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: false)

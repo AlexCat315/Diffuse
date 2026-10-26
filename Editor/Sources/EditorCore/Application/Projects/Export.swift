@@ -13,8 +13,8 @@ import SemanticPipeline
 import RenderBackend
 import NativeRHI
 import SceneRuntime
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import Foundation
 import SIMDCompat
 
@@ -58,7 +58,7 @@ extension EditorApplication {
                     if player != nil { self.adHocSignExportedApplication(appName: descriptor.appName, in: output) }
                     else {
                         self.logConsole("Exported portable project data without an application", severity: .warning,
-                            nextStep: "Build GuavaPlayer or set GUAVA_PLAYER_EXECUTABLE, then export again.")
+                            nextStep: "Build CovePlayer or set COVE_PLAYER_EXECUTABLE, then export again.")
                     }
                     self.finishOperation(operation, succeeded: true, message: L("Project exported"))
                     self.logConsole("Exported project bundle", detail: output.path)
@@ -76,7 +76,7 @@ extension EditorApplication {
         let name = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .standardizedFileURL.lastPathComponent
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "Guava Game" : name
+        return name.isEmpty ? "Cove Game" : name
     }
 
     /// Exports a portable, runnable project bundle to `<projectDirectory>/export`
@@ -116,7 +116,7 @@ extension EditorApplication {
             } else {
                 logConsole("Exported portable project data without an application",
                            severity: .warning,
-                           detail: "Build GuavaPlayer or set GUAVA_PLAYER_EXECUTABLE to include a self-contained player")
+                           detail: "Build CovePlayer or set COVE_PLAYER_EXECUTABLE to include a self-contained player")
             }
             logConsole("Exported project bundle",
                        detail: "\(descriptor.entityCount) entities, \(descriptor.assetCount) assets"
@@ -183,7 +183,7 @@ extension EditorApplication {
         } else {
             logConsole("Unable to run exported build",
                        severity: .error,
-                       detail: "GuavaPlayer is not installed next to the Editor. Set GUAVA_PLAYER_EXECUTABLE to its path.")
+                       detail: "CovePlayer is not installed next to the Editor. Set COVE_PLAYER_EXECUTABLE to its path.")
             return false
         }
 
@@ -204,14 +204,14 @@ extension EditorApplication {
     }
 
     private func resolvePlayerExecutableURL() -> URL? {
-        let environmentOverride = ProcessInfo.processInfo.environment["GUAVA_PLAYER_EXECUTABLE"]
+        let environmentOverride = ProcessInfo.processInfo.environment["COVE_PLAYER_EXECUTABLE"]
             .map { URL(fileURLWithPath: $0) }
         let executableDirectory = Bundle.main.executableURL?.deletingLastPathComponent()
             ?? URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
         #if os(Windows)
-        let playerExecutableName = "GuavaPlayer.exe"
+        let playerExecutableName = "CovePlayer.exe"
         #else
-        let playerExecutableName = "GuavaPlayer"
+        let playerExecutableName = "CovePlayer"
         #endif
         return [
             environmentOverride,

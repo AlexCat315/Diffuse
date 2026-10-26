@@ -1,6 +1,6 @@
 internal import EditorCore
 internal import StudioDocuments
-internal import GuavaUI
+internal import CoveUI
 
 /// Every text format uses the same workspace for open/edit/save/conflicts and
 /// the same editing surface: monospaced, line numbers, minimap and wrapping.

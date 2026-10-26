@@ -95,7 +95,7 @@ final class NativeOpaqueTests: XCTestCase {
                 XCTAssertGreaterThan(image[pixel],5); XCTAssertGreaterThan(image[pixel+1],5)
             }
             let expected = try reference.readback()
-            let dir = URL(fileURLWithPath: "/tmp/guava-native-mask-\(api.rawValue)")
+            let dir = URL(fileURLWithPath: "/tmp/cove-native-mask-\(api.rawValue)")
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             try GridImage.writePPM(image,size: packet.drawableSize,to: dir.appendingPathComponent("frame-\(frame).ppm"))
             try GridImage.writePPM(expected,size: packet.drawableSize,to: dir.appendingPathComponent("repeat-\(frame).ppm"))

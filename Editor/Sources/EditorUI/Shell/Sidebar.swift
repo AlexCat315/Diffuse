@@ -1,7 +1,7 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUICompose
-internal import GuavaUIWorkspace
+internal import CoveUI
+internal import CoveUICompose
+internal import CoveUIWorkspace
 
 /// What the left side shows. The rail picks a view and the one sidebar pane
 /// renders it, so the left dock never needs a tab strip.

@@ -18,15 +18,15 @@ final class ToolSupportTests: XCTestCase {
 
   func testFileDigestMatchesBuffer() throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "guava-sha-\(UUID().uuidString)")
+      "cove-sha-\(UUID().uuidString)")
     try Data("pinned artifact".utf8).write(to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     XCTAssertEqual(try SHA256.hex(file: url), SHA256.hex(Data("pinned artifact".utf8)))
   }
 
   func testRelativePathsUseForwardSlashes() {
-    let root = URL(fileURLWithPath: "/tmp/guava")
-    let file = URL(fileURLWithPath: "/tmp/guava/Engine/vendor/info.json")
+    let root = URL(fileURLWithPath: "/tmp/cove")
+    let file = URL(fileURLWithPath: "/tmp/cove/Engine/vendor/info.json")
     XCTAssertEqual(Fs.relative(file, to: root), "Engine/vendor/info.json")
   }
 }

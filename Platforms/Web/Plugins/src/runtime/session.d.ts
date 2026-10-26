@@ -1,4 +1,4 @@
-export type QueryPermission = 'guava:scene/query' | 'guava:selection/query' | 'guava:asset/metadata-query';
+export type QueryPermission = 'cove:scene/query' | 'cove:selection/query' | 'cove:asset/metadata-query';
 export type Access = 'read' | 'reversible_write' | 'destructive_write';
 export interface Inspection {
   manifest: {

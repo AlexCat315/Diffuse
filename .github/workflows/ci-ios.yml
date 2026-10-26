@@ -2,9 +2,9 @@ name: iOS application host
 on:
   push:
     branches: [main]
-    paths: ['Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
+    paths: ['Editor/cove.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'cove', 'cove.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
   pull_request:
-    paths: ['Editor/guava.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
+    paths: ['Editor/cove.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Validation/IOS/**', 'cove', 'cove.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-ios.yml']
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,30 +16,30 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with: {submodules: recursive}
-      - name: Fetch pinned Guava SDK
+      - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
       - uses: ./.github/actions/setup-toolchains
       - uses: actions/cache/restore@v5
         id: native
         with:
           path: |
-            GuavaUI/Artifacts/native/ios-arm64-simulator/Runtime/vendor
-            GuavaUI/Artifacts/native/ios-arm64-simulator/vendor
-          key: ios-native-v1-${{ runner.arch }}-xcode27-${{ hashFiles('Editor/guava.json') }}
+            CoveUI/Artifacts/native/ios-arm64-simulator/Runtime/vendor
+            CoveUI/Artifacts/native/ios-arm64-simulator/vendor
+          key: ios-native-v1-${{ runner.arch }}-xcode27-${{ hashFiles('Editor/cove.json') }}
       - name: Prepare iOS SDK dependencies
-        run: ./guava setup --ios
+        run: ./cove setup --ios
       - uses: actions/cache/save@v5
         if: steps.native.outputs.cache-hit != 'true'
         with:
           path: |
-            GuavaUI/Artifacts/native/ios-arm64-simulator/Runtime/vendor
-            GuavaUI/Artifacts/native/ios-arm64-simulator/vendor
+            CoveUI/Artifacts/native/ios-arm64-simulator/Runtime/vendor
+            CoveUI/Artifacts/native/ios-arm64-simulator/vendor
           key: ${{ steps.native.outputs.cache-primary-key }}
       - name: Build the shared application
         shell: bash
         run: |
-          application="$RUNNER_TEMP/guava-ios-application"
-          ./guava create app "$application" --platforms ios
-          ./guava build "$application" --ios --debug --output "$RUNNER_TEMP/guava-ios/Application.app"
+          application="$RUNNER_TEMP/cove-ios-application"
+          ./cove create app "$application" --platforms ios
+          ./cove build "$application" --ios --debug --output "$RUNNER_TEMP/cove-ios/Application.app"
       - name: Verify actual simulator rendering
-        run: ./guava studio ios-simulator validate "$RUNNER_TEMP/guava-ios/Application.app"
+        run: ./cove studio ios-simulator validate "$RUNNER_TEMP/cove-ios/Application.app"

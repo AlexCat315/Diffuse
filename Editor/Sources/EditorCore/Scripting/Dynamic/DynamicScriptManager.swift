@@ -1,6 +1,6 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 import ScriptRuntime
 
 /// Manages dynamically compiled Swift scripts in a project.
@@ -14,7 +14,7 @@ import ScriptRuntime
 /// - Track compilation status and diagnostics
 public final class DynamicScriptManager: @unchecked Sendable {
     /// Host/operator configuration only; project files cannot select an executable.
-    public static let compilerOverrideEnvironmentKey = "GUAVA_SWIFTC_PATH"
+    public static let compilerOverrideEnvironmentKey = "COVE_SWIFTC_PATH"
 
     // MARK: - Public types
 

@@ -1,7 +1,7 @@
 @testable import EditorUI
 import EngineKernel
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import Testing
 
 @Suite("CommitOnBlurTextField", .serialized)

@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 
 /// The project's build, test and run tasks. The plugin that contributes tasks
 /// for this kind of project decides each command and reads its output; this

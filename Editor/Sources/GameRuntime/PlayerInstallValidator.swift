@@ -1,4 +1,4 @@
-import GuavaPlatformCore
+import CovePlatformCore
 import Foundation
 import EngineKernel
 
@@ -9,9 +9,9 @@ public enum PlayerInstallValidationError: Error, Equatable, CustomStringConverti
     public var description: String {
         switch self {
         case .executableLocationUnavailable:
-            return "GuavaPlayer installation validation could not locate the executable."
+            return "CovePlayer installation validation could not locate the executable."
         case let .missingComponents(components):
-            return "GuavaPlayer installation is incomplete; missing: "
+            return "CovePlayer installation is incomplete; missing: "
                 + components.joined(separator: ", ")
         }
     }
@@ -20,11 +20,11 @@ public enum PlayerInstallValidationError: Error, Equatable, CustomStringConverti
 /// Validates the resource layout used by both release archives and exported games.
 public enum PlayerInstallValidator {
     private static let resourceBundleBases = [
-        "GuavaStudioEditor_EditorCore",
-        "GuavaStudioRuntime_RenderBackend",
-        "GuavaUI_GuavaUI",
-        "GuavaUI_GuavaUICompose",
-        "GuavaUI_GuavaUIWorkspace",
+        "DiffuseEditor_EditorCore",
+        "DiffuseRuntime_RenderBackend",
+        "CoveUI_CoveUI",
+        "CoveUI_CoveUICompose",
+        "CoveUI_CoveUIWorkspace",
     ]
 
     public static func validateLayout(
@@ -66,7 +66,7 @@ public enum PlayerInstallValidator {
         guard missing.isEmpty else {
             throw PlayerInstallValidationError.missingComponents(missing.sorted())
         }
-        return "GuavaPlayer installation validation passed ("
+        return "CovePlayer installation validation passed ("
             + "\(resourceBundleBases.count) resource bundles)"
     }
 

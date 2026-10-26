@@ -1,5 +1,5 @@
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 import PluginRuntime
 
 /// The workbench domain of one editor session: its catalog, the content

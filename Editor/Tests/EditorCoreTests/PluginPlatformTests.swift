@@ -1,6 +1,6 @@
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import PluginRuntime
 import Testing
 @testable import EditorCore
@@ -61,17 +61,17 @@ struct PluginPlatformTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let manifestURL = root.appendingPathComponent("plugin.json")
         let original = try String(contentsOf: manifestURL, encoding: .utf8)
-        try Data(original.replacingOccurrences(of: "guava.theme/v1", with: "guava.theme/v2").utf8)
+        try Data(original.replacingOccurrences(of: "cove.theme/v1", with: "cove.theme/v2").utf8)
             .write(to: manifestURL)
-        #expect(throws: PluginManifestValidationError.invalidContribution("guava.theme/v2")) {
+        #expect(throws: PluginManifestValidationError.invalidContribution("cove.theme/v2")) {
             try PluginPackageLoader().load(at: root)
         }
         var object = try #require(JSONSerialization.jsonObject(with: Data(original.utf8)) as? [String: Any])
         let descriptor: [String: String] = ["id": "test.theme", "title": "Test", "appearance": "dark",
                                            "path": "resources/theme.json"]
-        object["contributes"] = ["guava.theme/v1": [descriptor, descriptor]]
+        object["contributes"] = ["cove.theme/v1": [descriptor, descriptor]]
         try JSONSerialization.data(withJSONObject: object).write(to: manifestURL)
-        #expect(throws: PluginManifestValidationError.invalidContribution("guava.theme/v1")) {
+        #expect(throws: PluginManifestValidationError.invalidContribution("cove.theme/v1")) {
             try PluginPackageLoader().load(at: root)
         }
     }
@@ -207,7 +207,7 @@ struct PluginPlatformTests {
     }
 
     private func package() throws -> URL {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).guavaplugin")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).coveplugin")
         try FileManager.default.createDirectory(at: root.appendingPathComponent("resources"),
                                                 withIntermediateDirectories: true)
         try Data(##"{"version":1,"dark":{"colors":{"accent":"#ff0000"}}}"##.utf8)
@@ -216,7 +216,7 @@ struct PluginPlatformTests {
         {"id":"test.theme","version":1,"name":"Test theme","description":"Fixture",
          "access":"read","imports":[],"composable_host_capabilities":[],
          "resources":[{"id":"theme","path":"resources/theme.json","kind":"theme"}],
-         "contributes":{"guava.theme/v1":[{"id":"test.theme","title":"Test theme",
+         "contributes":{"cove.theme/v1":[{"id":"test.theme","title":"Test theme",
             "appearance":"dark","path":"resources/theme.json"}]}}
         """
         try Data(manifest.utf8).write(to: root.appendingPathComponent("plugin.json"))

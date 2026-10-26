@@ -21,8 +21,8 @@ public enum EmbeddedWasmtimeError: Error, Sendable, Equatable, CustomStringConve
 }
 
 /// Component Model embedding for native hosts and iOS (Pulley).
-/// Desktop applications use this inside the isolated GuavaPluginHost process. The bridge creates a fresh Store per call, links
-/// no WASI interfaces, and exposes only manifest-granted Guava query imports.
+/// Desktop applications use this inside the isolated DiffusePluginHost process. The bridge creates a fresh Store per call, links
+/// no WASI interfaces, and exposes only manifest-granted Cove query imports.
 public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unchecked Sendable {
     public let runtimeVersion: String
     public let usesInterpreter: Bool
@@ -36,18 +36,18 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                 http: PluginHTTPService? = nil) throws {
         self.processes = processes
         self.http = http
-        var error = guava_wasmtime_buffer_t(data: nil, size: 0)
-        guard let runtime = guava_wasmtime_runtime_new(useInterpreter ? GUAVA_WASMTIME_INTERPRETER : GUAVA_WASMTIME_AUTOMATIC, &error) else {
+        var error = cove_wasmtime_buffer_t(data: nil, size: 0)
+        guard let runtime = cove_wasmtime_runtime_new(useInterpreter ? COVE_WASMTIME_INTERPRETER : COVE_WASMTIME_AUTOMATIC, &error) else {
             let message = Self.consume(&error)
             throw EmbeddedWasmtimeError.initialisationFailed(message)
         }
         self.runtime = runtime
-        usesInterpreter = guava_wasmtime_runtime_is_interpreter(runtime) != 0
-        runtimeVersion = String(cString: guava_wasmtime_runtime_version())
+        usesInterpreter = cove_wasmtime_runtime_is_interpreter(runtime) != 0
+        runtimeVersion = String(cString: cove_wasmtime_runtime_version())
     }
 
     deinit {
-        guava_wasmtime_runtime_delete(runtime)
+        cove_wasmtime_runtime_delete(runtime)
     }
 
     public func validateComponent(_ package: ValidatedPluginPackage,
@@ -55,7 +55,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
         let component = try package.requireRuntime()
         try invocationLock.withLock {
             try withDeadline(milliseconds: limits.discoveryTimeoutMilliseconds) { deadline in
-                var error = guava_wasmtime_buffer_t(data: nil, size: 0)
+                var error = cove_wasmtime_buffer_t(data: nil, size: 0)
                 var enforcedLimits = bridgeLimitsValue(limits)
                 let capabilities = component.witContract.capabilityInputs.map(\.name)
                 let signatures = component.witContract.capabilityInputs.map {
@@ -68,7 +68,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                             return component.componentURL.path.withCString { path in
                                 component.witContract.capabilitiesInterfaceName.withCString {
                                     interfaceName in
-                                    guava_wasmtime_validate_component(
+                                    cove_wasmtime_validate_component(
                                         runtime,
                                         path,
                                         interfaceName,
@@ -98,7 +98,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
         let component = try package.requireRuntime()
         guard input.count <= limits.maximumOutputBytes else {
             throw EmbeddedWasmtimeError.bridge(
-                status: Int32(GUAVA_WASMTIME_INVALID_ARGUMENT.rawValue),
+                status: Int32(COVE_WASMTIME_INVALID_ARGUMENT.rawValue),
                 message: "Component input exceeds its limit"
             )
         }
@@ -134,7 +134,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
     }
 
     public func interrupt(pluginID: String) {
-        guava_wasmtime_runtime_interrupt(runtime)
+        cove_wasmtime_runtime_interrupt(runtime)
     }
 
     private func invoke(package: ValidatedPluginPackage,
@@ -153,8 +153,8 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
             entryPoint: capabilityName
         )
         return try withDeadline(milliseconds: timeoutMilliseconds) { deadline in
-            var output = guava_wasmtime_buffer_t(data: nil, size: 0)
-            var error = guava_wasmtime_buffer_t(data: nil, size: 0)
+            var output = cove_wasmtime_buffer_t(data: nil, size: 0)
+            var error = cove_wasmtime_buffer_t(data: nil, size: 0)
             var enforcedLimits = bridgeLimitsValue(limits)
             let capabilities = component.witContract.capabilityInputs.map(\.name)
             let signatures = component.witContract.capabilityInputs.map {
@@ -169,7 +169,7 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                                 capabilityName.withCString { name in
                                     component.witContract.capabilitiesInterfaceName.withCString {
                                         interfaceName in
-                                        guava_wasmtime_invoke_capability(
+                                        cove_wasmtime_invoke_capability(
                                             runtime,
                                             path,
                                             interfaceName,
@@ -195,17 +195,17 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                 }
             }
             try check(status: status, error: &error, deadline: deadline)
-            defer { guava_wasmtime_buffer_delete(&output) }
+            defer { cove_wasmtime_buffer_delete(&output) }
             guard let bytes = output.data else { return Data() }
             return Data(bytes: bytes, count: output.size)
         }
     }
 
-    private func check(status: guava_wasmtime_status_t,
-                       error: inout guava_wasmtime_buffer_t,
+    private func check(status: cove_wasmtime_status_t,
+                       error: inout cove_wasmtime_buffer_t,
                        deadline: InvocationDeadline) throws {
         let message = Self.consume(&error)
-        guard status == GUAVA_WASMTIME_OK else {
+        guard status == COVE_WASMTIME_OK else {
             if deadline.didFire {
                 throw EmbeddedWasmtimeError.wallClockTimeout
             }
@@ -239,8 +239,8 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
         return try operation(deadline)
     }
 
-    private func bridgeLimitsValue(_ limits: PluginResourceLimits) -> guava_wasmtime_limits_t {
-        guava_wasmtime_limits_t(
+    private func bridgeLimitsValue(_ limits: PluginResourceLimits) -> cove_wasmtime_limits_t {
+        cove_wasmtime_limits_t(
             maximum_memory_bytes: limits.maximumMemoryBytes,
             fuel_per_invocation: limits.fuelPerInvocation,
             maximum_table_elements: 100_000,
@@ -274,19 +274,19 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
         }
     }
 
-    private static func consume(_ buffer: inout guava_wasmtime_buffer_t) -> String {
-        defer { guava_wasmtime_buffer_delete(&buffer) }
+    private static func consume(_ buffer: inout cove_wasmtime_buffer_t) -> String {
+        defer { cove_wasmtime_buffer_delete(&buffer) }
         guard let bytes = buffer.data, buffer.size > 0 else { return "" }
         return String(decoding: UnsafeBufferPointer(start: bytes, count: buffer.size),
                       as: UTF8.self)
     }
 
     public static func compileComponentWAT(_ source: String) throws -> Data {
-        var output = guava_wasmtime_buffer_t(data: nil, size: 0)
-        var error = guava_wasmtime_buffer_t(data: nil, size: 0)
+        var output = cove_wasmtime_buffer_t(data: nil, size: 0)
+        var error = cove_wasmtime_buffer_t(data: nil, size: 0)
         let sourceData = Data(source.utf8)
         let status = sourceData.withUnsafeBytes { bytes in
-            guava_wasmtime_component_wat2wasm(
+            cove_wasmtime_component_wat2wasm(
                 bytes.bindMemory(to: UInt8.self).baseAddress,
                 bytes.count,
                 &output,
@@ -294,14 +294,14 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
             )
         }
         let message = consume(&error)
-        guard status == GUAVA_WASMTIME_OK else {
-            guava_wasmtime_buffer_delete(&output)
+        guard status == COVE_WASMTIME_OK else {
+            cove_wasmtime_buffer_delete(&output)
             throw EmbeddedWasmtimeError.bridge(
                 status: Int32(status.rawValue),
                 message: message
             )
         }
-        defer { guava_wasmtime_buffer_delete(&output) }
+        defer { cove_wasmtime_buffer_delete(&output) }
         guard let bytes = output.data else { return Data() }
         return Data(bytes: bytes, count: output.size)
     }
@@ -323,7 +323,7 @@ private final class InvocationDeadline: @unchecked Sendable {
         lock.withLock {
             guard active else { return }
             fired = true
-            guava_wasmtime_runtime_interrupt(runtime)
+            cove_wasmtime_runtime_interrupt(runtime)
         }
     }
 
@@ -374,7 +374,7 @@ private final class QueryEnvironment: @unchecked Sendable {
     }
 }
 
-private let embeddedQueryCallback: guava_wasmtime_query_callback_t = {
+private let embeddedQueryCallback: cove_wasmtime_query_callback_t = {
     environment,
     interfaceName,
     interfaceNameSize,
@@ -404,7 +404,7 @@ private let embeddedQueryCallback: guava_wasmtime_query_callback_t = {
         let payload = try dispatcher.response(importName: importName,
                                               request: requestData)
         return payload.withUnsafeBytes { bytes in
-            guava_wasmtime_buffer_copy(
+            cove_wasmtime_buffer_copy(
                 response,
                 bytes.bindMemory(to: UInt8.self).baseAddress,
                 bytes.count
@@ -413,7 +413,7 @@ private let embeddedQueryCallback: guava_wasmtime_query_callback_t = {
     } catch let queryError {
         let diagnostic = Data(String(describing: queryError).utf8)
         _ = diagnostic.withUnsafeBytes { bytes in
-            guava_wasmtime_buffer_copy(
+            cove_wasmtime_buffer_copy(
                 errorBuffer,
                 bytes.bindMemory(to: UInt8.self).baseAddress,
                 bytes.count

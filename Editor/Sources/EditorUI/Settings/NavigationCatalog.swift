@@ -1,5 +1,5 @@
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 private import Foundation
 
 enum SettingsCategory: String, CaseIterable, Sendable {
@@ -12,7 +12,7 @@ enum SettingsCategory: String, CaseIterable, Sendable {
         case .assistant: "Assistant"
         case .plugins: "Extensions"
         case .shortcuts: "Keyboard Shortcuts"
-        case .about: "About Guava"
+        case .about: "About Cove"
         }
         return L(key)
     }

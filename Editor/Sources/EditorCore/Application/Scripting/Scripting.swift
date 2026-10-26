@@ -13,8 +13,8 @@ import SemanticPipeline
 import RenderBackend
 import NativeRHI
 import SceneRuntime
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import Foundation
 import SIMDCompat
 
@@ -26,7 +26,7 @@ extension EditorApplication {
     /// SIMDCompat`, etc.
     ///
     /// Resolution order:
-    /// 1. `GUAVA_ENGINE_MODULE_PATHS` environment variable (comma-separated).
+    /// 1. `COVE_ENGINE_MODULE_PATHS` environment variable (comma-separated).
     /// 2. Derived from the executable's build directory:
     ///    `<build>/<platform>/<configuration>/Modules`.
     static func scriptBuildConfiguration() -> ProjectScriptBuildConfiguration {

@@ -15,7 +15,7 @@ struct ProjectScriptCatalogTests {
 
         #expect(catalog.sourceURL == nil)
         #expect(catalog.entries.count == ScriptPresetKind.allCases.count)
-        #expect(catalog.entries.contains { $0.identifier == "guava.rotator" })
+        #expect(catalog.entries.contains { $0.identifier == "cove.rotator" })
     }
 
     @Test("valid aliases load while invalid entries produce actionable diagnostics")
@@ -63,7 +63,7 @@ struct ProjectScriptCatalogTests {
         let entity = try #require(adapter.scene.roots().first)
         _ = adapter.scene.setComponent(
             ScriptComponent(bindings: [
-                ScriptBinding(identifier: "guava.rotator",
+                ScriptBinding(identifier: "cove.rotator",
                               parametersJSON: #"{"speed":[0,1,0]}"#),
                 ScriptBinding(identifier: "project.missing"),
             ]),
@@ -87,7 +87,7 @@ struct ProjectScriptCatalogTests {
         let entity = try #require(source.scene.roots().first)
         let bindingID = ScriptBindingID()
         _ = source.scene.setComponent(
-            ScriptComponent(ScriptBinding(identifier: "guava.mover",
+            ScriptComponent(ScriptBinding(identifier: "cove.mover",
                                           id: bindingID,
                                           parametersJSON: #"{"velocity":[2,0,0]}"#)),
             for: entity
@@ -102,7 +102,7 @@ struct ProjectScriptCatalogTests {
         let binding = try #require(
             restored.scene.component(ScriptComponent.self, for: restoredEntity)?.bindings.first
         )
-        #expect(binding.identifier == "guava.mover")
+        #expect(binding.identifier == "cove.mover")
         #expect(binding.id == bindingID)
         #expect(restored.scene.resource(InputActionMap.self)?.bindings["jump"]?
             .contains(.key(Scancode.space)) == true)
@@ -114,7 +114,7 @@ struct ProjectScriptCatalogTests {
 
     private func temporaryDirectory() throws -> URL {
         let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-script-catalog-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-script-catalog-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
     }

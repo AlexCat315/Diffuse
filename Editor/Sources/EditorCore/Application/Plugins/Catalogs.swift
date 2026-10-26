@@ -1,6 +1,6 @@
 import Foundation
 import PluginRuntime
-public import GuavaUICompose
+public import CoveUICompose
 
 extension EditorApplication {
     public var languageCatalog: LanguageCatalog { pluginSession.languages }
@@ -15,5 +15,5 @@ extension EditorApplication {
         pluginSession.contributions.themes.theme(id: store.presentation.themeID, dark: dark)
     }
 
-    var enabledPluginManifests: [String: GuavaPluginManifest] { pluginSession.manager.enabledManifests }
+    var enabledPluginManifests: [String: CovePluginManifest] { pluginSession.manager.enabledManifests }
 }

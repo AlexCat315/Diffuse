@@ -38,8 +38,8 @@ final class EditorPluginAuthorizationStoreTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let guava = directory.appendingPathComponent(".guava", isDirectory: true)
-        try FileManager.default.createDirectory(at: guava,
+        let cove = directory.appendingPathComponent(".cove", isDirectory: true)
+        try FileManager.default.createDirectory(at: cove,
                                                 withIntermediateDirectories: true)
         let inspection = makeInspection(maximumLength: 32)
         let authorization = try PluginAuthorizationRecord(inspection: inspection)
@@ -52,7 +52,7 @@ final class EditorPluginAuthorizationStoreTests: XCTestCase {
             "records": [object, object],
         ]
         try JSONSerialization.data(withJSONObject: document).write(
-            to: guava.appendingPathComponent("plugin_authorizations.json")
+            to: cove.appendingPathComponent("plugin_authorizations.json")
         )
 
         let store = EditorPluginAuthorizationStore(projectDirectory: directory.path)
@@ -61,7 +61,7 @@ final class EditorPluginAuthorizationStoreTests: XCTestCase {
         XCTAssertNotNil(store.loadWarning)
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.storageURL.path))
         let quarantinedFiles = try FileManager.default.contentsOfDirectory(
-            at: guava,
+            at: cove,
             includingPropertiesForKeys: nil
         )
         XCTAssertTrue(quarantinedFiles.contains {
@@ -74,10 +74,10 @@ final class EditorPluginAuthorizationStoreTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let guava = directory.appendingPathComponent(".guava", isDirectory: true)
-        try FileManager.default.createDirectory(at: guava,
+        let cove = directory.appendingPathComponent(".cove", isDirectory: true)
+        try FileManager.default.createDirectory(at: cove,
                                                 withIntermediateDirectories: true)
-        let storageURL = guava.appendingPathComponent("plugin_authorizations.json")
+        let storageURL = cove.appendingPathComponent("plugin_authorizations.json")
         try Data("{\"format_version\":2,\"records\":[]}".utf8).write(to: storageURL)
 
         let store = EditorPluginAuthorizationStore(projectDirectory: directory.path)
@@ -89,7 +89,7 @@ final class EditorPluginAuthorizationStoreTests: XCTestCase {
 
     private func makeInspection(maximumLength: Int) -> PluginInspection {
         let pluginID = "safe.persisted"
-        let manifest = GuavaPluginManifest(id: pluginID,
+        let manifest = CovePluginManifest(id: pluginID,
                                            version: 1,
                                            name: "Persisted",
                                            description: "Test",

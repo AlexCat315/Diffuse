@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// Resets files to the last revision; like Git, a discarded new file goes to the Trash.
 func discard(_ request: StepRequest) -> Step {

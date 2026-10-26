@@ -14,56 +14,56 @@
 #include <wasmtime.h>
 #include <wasmtime/component.h>
 
-#define GUAVA_MAX_COMPONENT_BYTES (128ULL * 1024ULL * 1024ULL)
-#define GUAVA_COMPONENT_CACHE_SIZE 16
+#define COVE_MAX_COMPONENT_BYTES (128ULL * 1024ULL * 1024ULL)
+#define COVE_COMPONENT_CACHE_SIZE 16
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-typedef SRWLOCK guava_mutex_t;
-static void guava_mutex_init(guava_mutex_t *mutex) { InitializeSRWLock(mutex); }
-static void guava_mutex_lock(guava_mutex_t *mutex) { AcquireSRWLockExclusive(mutex); }
-static void guava_mutex_unlock(guava_mutex_t *mutex) { ReleaseSRWLockExclusive(mutex); }
-static void guava_mutex_destroy(guava_mutex_t *mutex) { (void)mutex; }
+typedef SRWLOCK cove_mutex_t;
+static void cove_mutex_init(cove_mutex_t *mutex) { InitializeSRWLock(mutex); }
+static void cove_mutex_lock(cove_mutex_t *mutex) { AcquireSRWLockExclusive(mutex); }
+static void cove_mutex_unlock(cove_mutex_t *mutex) { ReleaseSRWLockExclusive(mutex); }
+static void cove_mutex_destroy(cove_mutex_t *mutex) { (void)mutex; }
 #else
 #include <pthread.h>
-typedef pthread_mutex_t guava_mutex_t;
-static void guava_mutex_init(guava_mutex_t *mutex) { pthread_mutex_init(mutex, NULL); }
-static void guava_mutex_lock(guava_mutex_t *mutex) { pthread_mutex_lock(mutex); }
-static void guava_mutex_unlock(guava_mutex_t *mutex) { pthread_mutex_unlock(mutex); }
-static void guava_mutex_destroy(guava_mutex_t *mutex) { pthread_mutex_destroy(mutex); }
+typedef pthread_mutex_t cove_mutex_t;
+static void cove_mutex_init(cove_mutex_t *mutex) { pthread_mutex_init(mutex, NULL); }
+static void cove_mutex_lock(cove_mutex_t *mutex) { pthread_mutex_lock(mutex); }
+static void cove_mutex_unlock(cove_mutex_t *mutex) { pthread_mutex_unlock(mutex); }
+static void cove_mutex_destroy(cove_mutex_t *mutex) { pthread_mutex_destroy(mutex); }
 #endif
 
 // A compiled Component keyed by its path and exact bytes. Compiling is the
 // dominant cost of a call, and every call reads the file again, so a changed
 // package never runs stale code.
-typedef struct guava_cached_component {
+typedef struct cove_cached_component {
   char *path;
   uint8_t *bytes;
   size_t size;
   wasmtime_component_t *component;
   uint64_t last_use;
-} guava_cached_component_t;
+} cove_cached_component_t;
 
-struct guava_wasmtime_runtime {
+struct cove_wasmtime_runtime {
   wasm_engine_t *engine;
   bool interpreter;
-  guava_mutex_t cache_lock;
-  guava_cached_component_t cache[GUAVA_COMPONENT_CACHE_SIZE];
+  cove_mutex_t cache_lock;
+  cove_cached_component_t cache[COVE_COMPONENT_CACHE_SIZE];
   uint64_t cache_clock;
 };
 
-typedef struct guava_host_binding {
+typedef struct cove_host_binding {
   uint8_t *interface_name;
   size_t interface_name_size;
-  guava_wasmtime_query_callback_t callback;
+  cove_wasmtime_query_callback_t callback;
   void *environment;
   size_t maximum_output_bytes;
   size_t maximum_query_request_bytes;
-} guava_host_binding_t;
+} cove_host_binding_t;
 
-static guava_wasmtime_status_t
-set_error(guava_wasmtime_buffer_t *error, guava_wasmtime_status_t status,
+static cove_wasmtime_status_t
+set_error(cove_wasmtime_buffer_t *error, cove_wasmtime_status_t status,
           const char *format, ...) {
   if (error == NULL) {
     return status;
@@ -81,37 +81,37 @@ set_error(guava_wasmtime_buffer_t *error, guava_wasmtime_status_t status,
   uint8_t *bytes = (uint8_t *)malloc((size_t)required);
   if (bytes == NULL && required > 0) {
     va_end(arguments);
-    return GUAVA_WASMTIME_OUT_OF_MEMORY;
+    return COVE_WASMTIME_OUT_OF_MEMORY;
   }
   if (required > 0) {
     char *terminated = (char *)malloc((size_t)required + 1);
     if (terminated == NULL) {
       free(bytes);
       va_end(arguments);
-      return GUAVA_WASMTIME_OUT_OF_MEMORY;
+      return COVE_WASMTIME_OUT_OF_MEMORY;
     }
     (void)vsnprintf(terminated, (size_t)required + 1, format, arguments);
     memcpy(bytes, terminated, (size_t)required);
     free(terminated);
   }
   va_end(arguments);
-  guava_wasmtime_buffer_delete(error);
+  cove_wasmtime_buffer_delete(error);
   error->data = bytes;
   error->size = (size_t)required;
   return status;
 }
 
-static guava_wasmtime_status_t
+static cove_wasmtime_status_t
 take_wasmtime_error(wasmtime_error_t *wasmtime_error,
-                    guava_wasmtime_status_t status,
-                    guava_wasmtime_buffer_t *error) {
+                    cove_wasmtime_status_t status,
+                    cove_wasmtime_buffer_t *error) {
   if (wasmtime_error == NULL) {
     return status;
   }
   wasm_name_t message;
   wasmtime_error_message(wasmtime_error, &message);
   if (error != NULL) {
-    (void)guava_wasmtime_buffer_copy(error, (const uint8_t *)message.data,
+    (void)cove_wasmtime_buffer_copy(error, (const uint8_t *)message.data,
                                      message.size);
   }
   wasm_name_delete(&message);
@@ -119,7 +119,7 @@ take_wasmtime_error(wasmtime_error_t *wasmtime_error,
   return status;
 }
 
-int32_t guava_wasmtime_buffer_copy(guava_wasmtime_buffer_t *buffer,
+int32_t cove_wasmtime_buffer_copy(cove_wasmtime_buffer_t *buffer,
                                    const uint8_t *bytes, size_t size) {
   if (buffer == NULL || (bytes == NULL && size > 0)) {
     return -1;
@@ -132,13 +132,13 @@ int32_t guava_wasmtime_buffer_copy(guava_wasmtime_buffer_t *buffer,
     }
     memcpy(copy, bytes, size);
   }
-  guava_wasmtime_buffer_delete(buffer);
+  cove_wasmtime_buffer_delete(buffer);
   buffer->data = copy;
   buffer->size = size;
   return 0;
 }
 
-void guava_wasmtime_buffer_delete(guava_wasmtime_buffer_t *buffer) {
+void cove_wasmtime_buffer_delete(cove_wasmtime_buffer_t *buffer) {
   if (buffer == NULL) {
     return;
   }
@@ -147,22 +147,22 @@ void guava_wasmtime_buffer_delete(guava_wasmtime_buffer_t *buffer) {
   buffer->size = 0;
 }
 
-const char *guava_wasmtime_runtime_version(void) { return WASMTIME_VERSION; }
+const char *cove_wasmtime_runtime_version(void) { return WASMTIME_VERSION; }
 
-guava_wasmtime_runtime_t *
-guava_wasmtime_runtime_new(guava_wasmtime_execution_t execution,
-                          guava_wasmtime_buffer_t *error) {
+cove_wasmtime_runtime_t *
+cove_wasmtime_runtime_new(cove_wasmtime_execution_t execution,
+                          cove_wasmtime_buffer_t *error) {
   if (error != NULL) {
     error->data = NULL;
     error->size = 0;
   }
   wasm_config_t *config = wasm_config_new();
   if (config == NULL) {
-    (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+    (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                     "could not allocate Wasmtime configuration");
     return NULL;
   }
-  bool interpreter = execution == GUAVA_WASMTIME_INTERPRETER;
+  bool interpreter = execution == COVE_WASMTIME_INTERPRETER;
 #if defined(__APPLE__) && TARGET_OS_IPHONE
   // iOS, including Simulator, never requests executable pages for guest code.
   interpreter = true;
@@ -171,7 +171,7 @@ guava_wasmtime_runtime_new(guava_wasmtime_execution_t execution,
     wasmtime_error_t *target_error = wasmtime_config_target_set(
         config, sizeof(void *) == 8 ? "pulley64" : "pulley32");
     if (target_error != NULL) {
-      (void)take_wasmtime_error(target_error, GUAVA_WASMTIME_COMPILE_ERROR, error);
+      (void)take_wasmtime_error(target_error, COVE_WASMTIME_COMPILE_ERROR, error);
       wasm_config_delete(config);
       return NULL;
     }
@@ -181,143 +181,143 @@ guava_wasmtime_runtime_new(guava_wasmtime_execution_t execution,
   wasmtime_config_wasm_component_model_set(config, true);
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
   if (engine == NULL) {
-    (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+    (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                     "could not create Wasmtime engine");
     return NULL;
   }
-  guava_wasmtime_runtime_t *runtime =
-      (guava_wasmtime_runtime_t *)calloc(1, sizeof(*runtime));
+  cove_wasmtime_runtime_t *runtime =
+      (cove_wasmtime_runtime_t *)calloc(1, sizeof(*runtime));
   if (runtime == NULL) {
     wasm_engine_delete(engine);
-    (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
-                    "could not allocate Guava Wasmtime runtime");
+    (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
+                    "could not allocate Cove Wasmtime runtime");
     return NULL;
   }
   runtime->engine = engine;
   runtime->interpreter = interpreter;
-  guava_mutex_init(&runtime->cache_lock);
+  cove_mutex_init(&runtime->cache_lock);
   return runtime;
 }
 
-int32_t guava_wasmtime_runtime_is_interpreter(guava_wasmtime_runtime_t *runtime) {
+int32_t cove_wasmtime_runtime_is_interpreter(cove_wasmtime_runtime_t *runtime) {
   return runtime != NULL && runtime->interpreter;
 }
 
-void guava_wasmtime_runtime_delete(guava_wasmtime_runtime_t *runtime) {
+void cove_wasmtime_runtime_delete(cove_wasmtime_runtime_t *runtime) {
   if (runtime == NULL) {
     return;
   }
-  for (size_t index = 0; index < GUAVA_COMPONENT_CACHE_SIZE; index++) {
-    guava_cached_component_t *entry = &runtime->cache[index];
+  for (size_t index = 0; index < COVE_COMPONENT_CACHE_SIZE; index++) {
+    cove_cached_component_t *entry = &runtime->cache[index];
     if (entry->component != NULL) {
       wasmtime_component_delete(entry->component);
     }
     free(entry->path);
     free(entry->bytes);
   }
-  guava_mutex_destroy(&runtime->cache_lock);
+  cove_mutex_destroy(&runtime->cache_lock);
   wasm_engine_delete(runtime->engine);
   free(runtime);
 }
 
-void guava_wasmtime_runtime_interrupt(guava_wasmtime_runtime_t *runtime) {
+void cove_wasmtime_runtime_interrupt(cove_wasmtime_runtime_t *runtime) {
   if (runtime != NULL && runtime->engine != NULL) {
     wasmtime_engine_increment_epoch(runtime->engine);
   }
 }
 
-static guava_wasmtime_status_t
+static cove_wasmtime_status_t
 read_component(const char *path, uint8_t **bytes_out, size_t *size_out,
-               guava_wasmtime_buffer_t *error) {
+               cove_wasmtime_buffer_t *error) {
   if (path == NULL || bytes_out == NULL || size_out == NULL) {
-    return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+    return set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                      "invalid component path");
   }
   FILE *file = fopen(path, "rb");
   if (file == NULL) {
-    return set_error(error, GUAVA_WASMTIME_IO_ERROR,
+    return set_error(error, COVE_WASMTIME_IO_ERROR,
                      "could not open component.wasm");
   }
   if (fseek(file, 0, SEEK_END) != 0) {
     fclose(file);
-    return set_error(error, GUAVA_WASMTIME_IO_ERROR,
+    return set_error(error, COVE_WASMTIME_IO_ERROR,
                      "could not measure component.wasm");
   }
   long measured = ftell(file);
-  if (measured < 0 || (uint64_t)measured > GUAVA_MAX_COMPONENT_BYTES) {
+  if (measured < 0 || (uint64_t)measured > COVE_MAX_COMPONENT_BYTES) {
     fclose(file);
-    return set_error(error, GUAVA_WASMTIME_IO_ERROR,
+    return set_error(error, COVE_WASMTIME_IO_ERROR,
                      "component.wasm exceeds 128 MiB");
   }
   if (fseek(file, 0, SEEK_SET) != 0) {
     fclose(file);
-    return set_error(error, GUAVA_WASMTIME_IO_ERROR,
+    return set_error(error, COVE_WASMTIME_IO_ERROR,
                      "could not rewind component.wasm");
   }
   size_t size = (size_t)measured;
   uint8_t *bytes = size == 0 ? NULL : (uint8_t *)malloc(size);
   if (bytes == NULL && size > 0) {
     fclose(file);
-    return set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+    return set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                      "could not allocate component buffer");
   }
   if (size > 0 && fread(bytes, 1, size, file) != size) {
     free(bytes);
     fclose(file);
-    return set_error(error, GUAVA_WASMTIME_IO_ERROR,
+    return set_error(error, COVE_WASMTIME_IO_ERROR,
                      "could not read complete component.wasm");
   }
   fclose(file);
   *bytes_out = bytes;
   *size_out = size;
-  return GUAVA_WASMTIME_OK;
+  return COVE_WASMTIME_OK;
 }
 
-static guava_wasmtime_status_t
-compile_component(guava_wasmtime_runtime_t *runtime, const char *path,
+static cove_wasmtime_status_t
+compile_component(cove_wasmtime_runtime_t *runtime, const char *path,
                   wasmtime_component_t **component_out,
-                  guava_wasmtime_buffer_t *error) {
+                  cove_wasmtime_buffer_t *error) {
   uint8_t *bytes = NULL;
   size_t size = 0;
-  guava_wasmtime_status_t status =
+  cove_wasmtime_status_t status =
       read_component(path, &bytes, &size, error);
-  if (status != GUAVA_WASMTIME_OK) {
+  if (status != COVE_WASMTIME_OK) {
     return status;
   }
-  guava_mutex_lock(&runtime->cache_lock);
-  for (size_t index = 0; index < GUAVA_COMPONENT_CACHE_SIZE; index++) {
-    guava_cached_component_t *entry = &runtime->cache[index];
+  cove_mutex_lock(&runtime->cache_lock);
+  for (size_t index = 0; index < COVE_COMPONENT_CACHE_SIZE; index++) {
+    cove_cached_component_t *entry = &runtime->cache[index];
     if (entry->component != NULL && entry->size == size &&
         strcmp(entry->path, path) == 0 &&
         (size == 0 || memcmp(entry->bytes, bytes, size) == 0)) {
       entry->last_use = ++runtime->cache_clock;
       *component_out = wasmtime_component_clone(entry->component);
-      guava_mutex_unlock(&runtime->cache_lock);
+      cove_mutex_unlock(&runtime->cache_lock);
       free(bytes);
-      return GUAVA_WASMTIME_OK;
+      return COVE_WASMTIME_OK;
     }
   }
-  guava_mutex_unlock(&runtime->cache_lock);
+  cove_mutex_unlock(&runtime->cache_lock);
 
   wasmtime_component_t *component = NULL;
   wasmtime_error_t *wasmtime_error = wasmtime_component_new(
       runtime->engine, bytes, size, &component);
   if (wasmtime_error != NULL) {
     free(bytes);
-    return take_wasmtime_error(wasmtime_error, GUAVA_WASMTIME_COMPILE_ERROR,
+    return take_wasmtime_error(wasmtime_error, COVE_WASMTIME_COMPILE_ERROR,
                                error);
   }
   char *path_copy = (char *)malloc(strlen(path) + 1);
   if (path_copy == NULL) {
     free(bytes);
     *component_out = component;
-    return GUAVA_WASMTIME_OK;
+    return COVE_WASMTIME_OK;
   }
   strcpy(path_copy, path);
-  guava_mutex_lock(&runtime->cache_lock);
-  guava_cached_component_t *slot = &runtime->cache[0];
-  for (size_t index = 0; index < GUAVA_COMPONENT_CACHE_SIZE; index++) {
-    guava_cached_component_t *entry = &runtime->cache[index];
+  cove_mutex_lock(&runtime->cache_lock);
+  cove_cached_component_t *slot = &runtime->cache[0];
+  for (size_t index = 0; index < COVE_COMPONENT_CACHE_SIZE; index++) {
+    cove_cached_component_t *entry = &runtime->cache[index];
     if (entry->component == NULL) {
       slot = entry;
       break;
@@ -337,8 +337,8 @@ compile_component(guava_wasmtime_runtime_t *runtime, const char *path,
   slot->component = component;
   slot->last_use = ++runtime->cache_clock;
   *component_out = wasmtime_component_clone(component);
-  guava_mutex_unlock(&runtime->cache_lock);
-  return GUAVA_WASMTIME_OK;
+  cove_mutex_unlock(&runtime->cache_lock);
+  return COVE_WASMTIME_OK;
 }
 
 static bool bytes_equal(const char *bytes, size_t size, const char *expected) {
@@ -349,14 +349,14 @@ static bool bytes_equal(const char *bytes, size_t size, const char *expected) {
 static bool validate_string_function(
     const wasmtime_component_func_type_t *function,
     const char *const *parameter_names, size_t parameter_count,
-    guava_wasmtime_buffer_t *error, const char *display_name) {
+    cove_wasmtime_buffer_t *error, const char *display_name) {
   if (wasmtime_component_func_type_async(function)) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "%s must be synchronous", display_name);
     return false;
   }
   if (wasmtime_component_func_type_param_count(function) != parameter_count) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "%s has the wrong parameter count", display_name);
     return false;
   }
@@ -366,7 +366,7 @@ static bool validate_string_function(
     wasmtime_component_valtype_t type;
     if (!wasmtime_component_func_type_param_nth(function, index, &name,
                                                 &name_size, &type)) {
-      (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+      (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                       "%s parameter reflection failed", display_name);
       return false;
     }
@@ -374,22 +374,22 @@ static bool validate_string_function(
                  bytes_equal(name, name_size, parameter_names[index]);
     wasmtime_component_valtype_delete(&type);
     if (!valid) {
-      (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
-                      "%s parameters must exactly match the Guava string ABI",
+      (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
+                      "%s parameters must exactly match the Cove string ABI",
                       display_name);
       return false;
     }
   }
   wasmtime_component_valtype_t result;
   if (!wasmtime_component_func_type_result(function, &result)) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "%s must return string", display_name);
     return false;
   }
   bool valid_result = result.kind == WASMTIME_COMPONENT_VALTYPE_STRING;
   wasmtime_component_valtype_delete(&result);
   if (!valid_result) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "%s must return string", display_name);
     return false;
   }
@@ -454,11 +454,11 @@ static bool instance_type_export_item_at(
 }
 
 static bool validate_query_import(const wasmtime_component_item_t *item,
-                                  guava_wasmtime_runtime_t *runtime,
+                                  cove_wasmtime_runtime_t *runtime,
                                   const char *import_name,
-                                  guava_wasmtime_buffer_t *error) {
+                                  cove_wasmtime_buffer_t *error) {
   if (item->kind != WASMTIME_COMPONENT_ITEM_COMPONENT_INSTANCE) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "import %s must be a component interface", import_name);
     return false;
   }
@@ -466,14 +466,14 @@ static bool validate_query_import(const wasmtime_component_item_t *item,
       item->of.component_instance;
   if (wasmtime_component_instance_type_export_count(instance, runtime->engine) !=
       1) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "import %s must expose only query", import_name);
     return false;
   }
   wasmtime_component_item_t query;
   if (!instance_type_export_item(
           instance, runtime->engine, "query", strlen("query"), &query)) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "import %s is missing query", import_name);
     return false;
   }
@@ -486,20 +486,20 @@ static bool validate_query_import(const wasmtime_component_item_t *item,
     valid = validate_string_function(query.of.component_func, parameter_names,
                                      1, error, display_name);
   } else {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "import %s query must be a function", import_name);
   }
   wasmtime_component_item_delete(&query);
   return valid;
 }
 
-typedef struct guava_signature_builder {
+typedef struct cove_signature_builder {
   char *data;
   size_t size;
   size_t capacity;
-} guava_signature_builder_t;
+} cove_signature_builder_t;
 
-static void signature_builder_delete(guava_signature_builder_t *builder) {
+static void signature_builder_delete(cove_signature_builder_t *builder) {
   if (builder == NULL) {
     return;
   }
@@ -509,7 +509,7 @@ static void signature_builder_delete(guava_signature_builder_t *builder) {
   builder->capacity = 0;
 }
 
-static bool signature_append(guava_signature_builder_t *builder,
+static bool signature_append(cove_signature_builder_t *builder,
                              const char *bytes, size_t size) {
   if (builder == NULL || (bytes == NULL && size > 0) ||
       size > 64ULL * 1024ULL || builder->size > 64ULL * 1024ULL - size) {
@@ -543,13 +543,13 @@ static bool signature_append(guava_signature_builder_t *builder,
   return true;
 }
 
-static bool signature_literal(guava_signature_builder_t *builder,
+static bool signature_literal(cove_signature_builder_t *builder,
                               const char *literal) {
   return signature_append(builder, literal, strlen(literal));
 }
 
 static bool append_type_signature(const wasmtime_component_valtype_t *type,
-                                  guava_signature_builder_t *builder,
+                                  cove_signature_builder_t *builder,
                                   size_t depth) {
   if (type == NULL || builder == NULL || depth > 12) {
     return false;
@@ -643,10 +643,10 @@ static bool append_type_signature(const wasmtime_component_valtype_t *type,
 
 static bool validate_capability_function(
     const wasmtime_component_func_type_t *function, const char *name,
-    const char *expected_signature, guava_wasmtime_buffer_t *error) {
+    const char *expected_signature, cove_wasmtime_buffer_t *error) {
   if (wasmtime_component_func_type_async(function) ||
       wasmtime_component_func_type_param_count(function) != 1) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "capability %s must be synchronous with one input", name);
     return false;
   }
@@ -657,80 +657,80 @@ static bool validate_capability_function(
           function, 0, &parameter_name, &parameter_name_size, &input_type) ||
       !bytes_equal(parameter_name, parameter_name_size, "input")) {
     wasmtime_component_valtype_delete(&input_type);
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "capability %s parameter must be named input", name);
     return false;
   }
-  guava_signature_builder_t signature = {0};
+  cove_signature_builder_t signature = {0};
   bool valid = append_type_signature(&input_type, &signature, 0) &&
                expected_signature != NULL && signature.data != NULL &&
                strcmp(signature.data, expected_signature) == 0;
   wasmtime_component_valtype_delete(&input_type);
   signature_builder_delete(&signature);
   if (!valid) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "capability %s input type does not match capabilities.wit",
                     name);
     return false;
   }
   wasmtime_component_valtype_t result = {0};
   if (!wasmtime_component_func_type_result(function, &result)) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "capability %s must return string", name);
     return false;
   }
   valid = result.kind == WASMTIME_COMPONENT_VALTYPE_STRING;
   wasmtime_component_valtype_delete(&result);
   if (!valid) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "capability %s must return string", name);
   }
   return valid;
 }
 
-static guava_wasmtime_status_t validate_contract(
-    guava_wasmtime_runtime_t *runtime, const wasmtime_component_t *component,
+static cove_wasmtime_status_t validate_contract(
+    cove_wasmtime_runtime_t *runtime, const wasmtime_component_t *component,
     const char *capabilities_interface_name,
     const char *const *expected_imports, size_t expected_import_count,
     const char *const *expected_capabilities,
     const char *const *expected_type_signatures,
     size_t expected_capability_count,
-    guava_wasmtime_buffer_t *error) {
+    cove_wasmtime_buffer_t *error) {
   wasmtime_component_type_t *type = wasmtime_component_type(component);
   if (type == NULL) {
-    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                      "could not reflect component type");
   }
   if (wasmtime_component_type_import_count(type, runtime->engine) !=
       expected_import_count) {
     wasmtime_component_type_delete(type);
-    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                      "component imports do not match capabilities.wit");
   }
   for (size_t index = 0; index < expected_import_count; index++) {
     const char *name = expected_imports[index];
     if (name == NULL) {
       wasmtime_component_type_delete(type);
-      return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+      return set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                        "expected import name is null");
     }
     wasmtime_component_item_t item;
     if (!component_type_import_item(type, runtime->engine, name,
                                             strlen(name), &item)) {
       wasmtime_component_type_delete(type);
-      return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+      return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                        "component is missing declared import %s", name);
     }
     bool valid = validate_query_import(&item, runtime, name, error);
     wasmtime_component_item_delete(&item);
     if (!valid) {
       wasmtime_component_type_delete(type);
-      return GUAVA_WASMTIME_CONTRACT_MISMATCH;
+      return COVE_WASMTIME_CONTRACT_MISMATCH;
     }
   }
   if (wasmtime_component_type_export_count(type, runtime->engine) != 1) {
     wasmtime_component_type_delete(type);
-    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                      "component must export exactly the capabilities interface");
   }
   wasmtime_component_item_t capabilities = {0};
@@ -744,7 +744,7 @@ static guava_wasmtime_status_t validate_contract(
       wasmtime_component_item_delete(&capabilities);
     }
     wasmtime_component_type_delete(type);
-    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                      "component is missing capabilities interface export");
   }
   const wasmtime_component_instance_type_t *instance =
@@ -755,7 +755,7 @@ static guava_wasmtime_status_t validate_contract(
       instance_export_count > 256) {
     wasmtime_component_item_delete(&capabilities);
     wasmtime_component_type_delete(type);
-    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                      "Component capability count does not match capabilities.wit");
   }
   size_t reflected_function_count = 0;
@@ -769,7 +769,7 @@ static guava_wasmtime_status_t validate_contract(
             &export_name_size, &item)) {
       wasmtime_component_item_delete(&capabilities);
       wasmtime_component_type_delete(type);
-      return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+      return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                        "could not reflect capabilities interface export");
     }
     if (item.kind == WASMTIME_COMPONENT_ITEM_COMPONENT_FUNC) {
@@ -788,14 +788,14 @@ static guava_wasmtime_status_t validate_contract(
         wasmtime_component_item_delete(&item);
         wasmtime_component_item_delete(&capabilities);
         wasmtime_component_type_delete(type);
-        return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+        return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                          "Component exposes a capability absent from capabilities.wit");
       }
     } else if (item.kind != WASMTIME_COMPONENT_ITEM_TYPE) {
       wasmtime_component_item_delete(&item);
       wasmtime_component_item_delete(&capabilities);
       wasmtime_component_type_delete(type);
-      return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+      return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                        "capabilities interface contains a forbidden export");
     }
     wasmtime_component_item_delete(&item);
@@ -803,7 +803,7 @@ static guava_wasmtime_status_t validate_contract(
   if (reflected_function_count != expected_capability_count) {
     wasmtime_component_item_delete(&capabilities);
     wasmtime_component_type_delete(type);
-    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                      "Component capability count does not match capabilities.wit");
   }
   for (size_t index = 0; index < expected_capability_count; index++) {
@@ -812,7 +812,7 @@ static guava_wasmtime_status_t validate_contract(
     if (name == NULL || signature == NULL) {
       wasmtime_component_item_delete(&capabilities);
       wasmtime_component_type_delete(type);
-      return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+      return set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                        "expected capability metadata is null");
     }
     wasmtime_component_item_t function = {0};
@@ -833,7 +833,7 @@ static guava_wasmtime_status_t validate_contract(
       }
       wasmtime_component_item_delete(&capabilities);
       wasmtime_component_type_delete(type);
-      return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+      return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                        "component is missing exported input type for %s", name);
     }
     wasmtime_component_item_delete(&exported_input_type);
@@ -847,27 +847,27 @@ static guava_wasmtime_status_t validate_contract(
         wasmtime_component_item_delete(&function);
       }
       if (error == NULL || error->size == 0) {
-        (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+        (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                         "component is missing typed capability %s", name);
       }
       wasmtime_component_item_delete(&capabilities);
       wasmtime_component_type_delete(type);
-      return GUAVA_WASMTIME_CONTRACT_MISMATCH;
+      return COVE_WASMTIME_CONTRACT_MISMATCH;
     }
     wasmtime_component_item_delete(&function);
   }
   wasmtime_component_item_delete(&capabilities);
   wasmtime_component_type_delete(type);
-  return GUAVA_WASMTIME_OK;
+  return COVE_WASMTIME_OK;
 }
 
 static wasmtime_store_t *
-make_store(guava_wasmtime_runtime_t *runtime,
-           const guava_wasmtime_limits_t *limits,
-           guava_wasmtime_buffer_t *error) {
+make_store(cove_wasmtime_runtime_t *runtime,
+           const cove_wasmtime_limits_t *limits,
+           cove_wasmtime_buffer_t *error) {
   wasmtime_store_t *store = wasmtime_store_new(runtime->engine, NULL, NULL);
   if (store == NULL) {
-    (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+    (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                     "could not allocate Wasmtime store");
     return NULL;
   }
@@ -880,18 +880,18 @@ make_store(guava_wasmtime_runtime_t *runtime,
       wasmtime_context_set_fuel(context, limits->fuel_per_invocation);
   if (wasmtime_error != NULL) {
     (void)take_wasmtime_error(wasmtime_error,
-                              GUAVA_WASMTIME_INVOCATION_ERROR, error);
+                              COVE_WASMTIME_INVOCATION_ERROR, error);
     wasmtime_store_delete(store);
     return NULL;
   }
   // One engine epoch advancement interrupts this invocation. Swift schedules
-  // the wall-clock deadline and calls guava_wasmtime_runtime_interrupt.
+  // the wall-clock deadline and calls cove_wasmtime_runtime_interrupt.
   wasmtime_context_set_epoch_deadline(context, 1);
   return store;
 }
 
 static void delete_host_binding(void *opaque) {
-  guava_host_binding_t *binding = (guava_host_binding_t *)opaque;
+  cove_host_binding_t *binding = (cove_host_binding_t *)opaque;
   if (binding == NULL) {
     return;
   }
@@ -923,56 +923,56 @@ static wasmtime_error_t *host_query_callback(
     size_t result_count) {
   (void)context;
   (void)type;
-  guava_host_binding_t *binding = (guava_host_binding_t *)opaque;
+  cove_host_binding_t *binding = (cove_host_binding_t *)opaque;
   if (binding == NULL || binding->callback == NULL) {
-    return wasmtime_error_new("Guava query context is unavailable");
+    return wasmtime_error_new("Cove query context is unavailable");
   }
   if (argument_count != 1 || result_count != 1 ||
       args[0].kind != WASMTIME_COMPONENT_STRING) {
-    return wasmtime_error_new("Guava query called with an invalid ABI");
+    return wasmtime_error_new("Cove query called with an invalid ABI");
   }
   if (args[0].of.string.size > binding->maximum_query_request_bytes) {
-    return wasmtime_error_new("Guava query request exceeds its byte limit");
+    return wasmtime_error_new("Cove query request exceeds its byte limit");
   }
-  guava_wasmtime_buffer_t response = {0};
-  guava_wasmtime_buffer_t callback_error = {0};
+  cove_wasmtime_buffer_t response = {0};
+  cove_wasmtime_buffer_t callback_error = {0};
   int32_t callback_status = binding->callback(
       binding->environment, binding->interface_name,
       binding->interface_name_size, (const uint8_t *)args[0].of.string.data,
       args[0].of.string.size, &response, &callback_error);
   if (callback_status != 0) {
     char *message = terminated_copy(callback_error.data, callback_error.size,
-                                    "Guava query was rejected");
-    guava_wasmtime_buffer_delete(&response);
-    guava_wasmtime_buffer_delete(&callback_error);
+                                    "Cove query was rejected");
+    cove_wasmtime_buffer_delete(&response);
+    cove_wasmtime_buffer_delete(&callback_error);
     if (message == NULL) {
-      return wasmtime_error_new("Guava query failed without diagnostics");
+      return wasmtime_error_new("Cove query failed without diagnostics");
     }
     wasmtime_error_t *error = wasmtime_error_new(message);
     free(message);
     return error;
   }
-  guava_wasmtime_buffer_delete(&callback_error);
+  cove_wasmtime_buffer_delete(&callback_error);
   if (response.size > binding->maximum_output_bytes) {
-    guava_wasmtime_buffer_delete(&response);
-    return wasmtime_error_new("Guava query response exceeds its byte limit");
+    cove_wasmtime_buffer_delete(&response);
+    return wasmtime_error_new("Cove query response exceeds its byte limit");
   }
   results[0].kind = WASMTIME_COMPONENT_STRING;
   wasm_name_new(&results[0].of.string, response.size,
                 (const char *)response.data);
-  guava_wasmtime_buffer_delete(&response);
+  cove_wasmtime_buffer_delete(&response);
   return NULL;
 }
 
 static wasmtime_component_linker_t *build_linker(
-    guava_wasmtime_runtime_t *runtime, const char *const *expected_imports,
-    size_t expected_import_count, guava_wasmtime_query_callback_t callback,
-    void *environment, const guava_wasmtime_limits_t *limits,
-    guava_wasmtime_buffer_t *error) {
+    cove_wasmtime_runtime_t *runtime, const char *const *expected_imports,
+    size_t expected_import_count, cove_wasmtime_query_callback_t callback,
+    void *environment, const cove_wasmtime_limits_t *limits,
+    cove_wasmtime_buffer_t *error) {
   wasmtime_component_linker_t *linker =
       wasmtime_component_linker_new(runtime->engine);
   if (linker == NULL) {
-    (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+    (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                     "could not allocate Component linker");
     return NULL;
   }
@@ -980,7 +980,7 @@ static wasmtime_component_linker_t *build_linker(
       wasmtime_component_linker_root(linker);
   if (root == NULL) {
     wasmtime_component_linker_delete(linker);
-    (void)set_error(error, GUAVA_WASMTIME_LINK_ERROR,
+    (void)set_error(error, COVE_WASMTIME_LINK_ERROR,
                     "could not acquire Component linker root");
     return NULL;
   }
@@ -993,18 +993,18 @@ static wasmtime_component_linker_t *build_linker(
     if (wasmtime_error != NULL) {
       wasmtime_component_linker_instance_delete(root);
       wasmtime_component_linker_delete(linker);
-      (void)take_wasmtime_error(wasmtime_error, GUAVA_WASMTIME_LINK_ERROR,
+      (void)take_wasmtime_error(wasmtime_error, COVE_WASMTIME_LINK_ERROR,
                                 error);
       return NULL;
     }
-    guava_host_binding_t *binding =
-        (guava_host_binding_t *)calloc(1, sizeof(*binding));
+    cove_host_binding_t *binding =
+        (cove_host_binding_t *)calloc(1, sizeof(*binding));
     if (binding == NULL) {
       wasmtime_component_linker_instance_delete(child);
       wasmtime_component_linker_instance_delete(root);
       wasmtime_component_linker_delete(linker);
-      (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
-                      "could not allocate Guava host binding");
+      (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
+                      "could not allocate Cove host binding");
       return NULL;
     }
     binding->interface_name_size = strlen(name);
@@ -1016,8 +1016,8 @@ static wasmtime_component_linker_t *build_linker(
       wasmtime_component_linker_instance_delete(child);
       wasmtime_component_linker_instance_delete(root);
       wasmtime_component_linker_delete(linker);
-      (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
-                      "could not copy Guava import name");
+      (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
+                      "could not copy Cove import name");
       return NULL;
     }
     memcpy(binding->interface_name, name, binding->interface_name_size);
@@ -1034,7 +1034,7 @@ static wasmtime_component_linker_t *build_linker(
       wasmtime_component_linker_instance_delete(child);
       wasmtime_component_linker_instance_delete(root);
       wasmtime_component_linker_delete(linker);
-      (void)take_wasmtime_error(wasmtime_error, GUAVA_WASMTIME_LINK_ERROR,
+      (void)take_wasmtime_error(wasmtime_error, COVE_WASMTIME_LINK_ERROR,
                                 error);
       return NULL;
     }
@@ -1044,37 +1044,37 @@ static wasmtime_component_linker_t *build_linker(
   return linker;
 }
 
-static guava_wasmtime_status_t instantiate_component(
-    guava_wasmtime_runtime_t *runtime, const wasmtime_component_t *component,
+static cove_wasmtime_status_t instantiate_component(
+    cove_wasmtime_runtime_t *runtime, const wasmtime_component_t *component,
     const char *const *expected_imports, size_t expected_import_count,
-    guava_wasmtime_query_callback_t callback, void *environment,
-    const guava_wasmtime_limits_t *limits, wasmtime_store_t **store_out,
+    cove_wasmtime_query_callback_t callback, void *environment,
+    const cove_wasmtime_limits_t *limits, wasmtime_store_t **store_out,
     wasmtime_component_instance_t *instance_out,
-    guava_wasmtime_buffer_t *error) {
+    cove_wasmtime_buffer_t *error) {
   wasmtime_store_t *store = make_store(runtime, limits, error);
   if (store == NULL) {
-    return GUAVA_WASMTIME_INVOCATION_ERROR;
+    return COVE_WASMTIME_INVOCATION_ERROR;
   }
   wasmtime_component_linker_t *linker = build_linker(
       runtime, expected_imports, expected_import_count, callback, environment,
       limits, error);
   if (linker == NULL) {
     wasmtime_store_delete(store);
-    return GUAVA_WASMTIME_LINK_ERROR;
+    return COVE_WASMTIME_LINK_ERROR;
   }
   wasmtime_error_t *wasmtime_error = wasmtime_component_linker_instantiate(
       linker, wasmtime_store_context(store), component, instance_out);
   wasmtime_component_linker_delete(linker);
   if (wasmtime_error != NULL) {
     wasmtime_store_delete(store);
-    return take_wasmtime_error(wasmtime_error, GUAVA_WASMTIME_LINK_ERROR,
+    return take_wasmtime_error(wasmtime_error, COVE_WASMTIME_LINK_ERROR,
                                error);
   }
   *store_out = store;
-  return GUAVA_WASMTIME_OK;
+  return COVE_WASMTIME_OK;
 }
 
-static bool valid_limits(const guava_wasmtime_limits_t *limits) {
+static bool valid_limits(const cove_wasmtime_limits_t *limits) {
   return limits != NULL && limits->maximum_memory_bytes > 0 &&
          limits->maximum_memory_bytes <= 256ULL * 1024ULL * 1024ULL &&
          limits->fuel_per_invocation > 0 &&
@@ -1089,13 +1089,13 @@ static bool valid_limits(const guava_wasmtime_limits_t *limits) {
          limits->maximum_table_elements <= 100000;
 }
 
-typedef struct guava_typed_cursor {
+typedef struct cove_typed_cursor {
   const uint8_t *data;
   size_t size;
   size_t offset;
-} guava_typed_cursor_t;
+} cove_typed_cursor_t;
 
-static bool cursor_read(guava_typed_cursor_t *cursor, void *output,
+static bool cursor_read(cove_typed_cursor_t *cursor, void *output,
                         size_t size) {
   if (cursor == NULL || output == NULL || size > cursor->size ||
       cursor->offset > cursor->size - size) {
@@ -1106,11 +1106,11 @@ static bool cursor_read(guava_typed_cursor_t *cursor, void *output,
   return true;
 }
 
-static bool cursor_u8(guava_typed_cursor_t *cursor, uint8_t *output) {
+static bool cursor_u8(cove_typed_cursor_t *cursor, uint8_t *output) {
   return cursor_read(cursor, output, 1);
 }
 
-static bool cursor_u16(guava_typed_cursor_t *cursor, uint16_t *output) {
+static bool cursor_u16(cove_typed_cursor_t *cursor, uint16_t *output) {
   uint8_t bytes[2];
   if (!cursor_read(cursor, bytes, sizeof(bytes))) {
     return false;
@@ -1119,7 +1119,7 @@ static bool cursor_u16(guava_typed_cursor_t *cursor, uint16_t *output) {
   return true;
 }
 
-static bool cursor_u32(guava_typed_cursor_t *cursor, uint32_t *output) {
+static bool cursor_u32(cove_typed_cursor_t *cursor, uint32_t *output) {
   uint8_t bytes[4];
   if (!cursor_read(cursor, bytes, sizeof(bytes))) {
     return false;
@@ -1129,7 +1129,7 @@ static bool cursor_u32(guava_typed_cursor_t *cursor, uint32_t *output) {
   return true;
 }
 
-static bool cursor_u64(guava_typed_cursor_t *cursor, uint64_t *output) {
+static bool cursor_u64(cove_typed_cursor_t *cursor, uint64_t *output) {
   uint8_t bytes[8];
   if (!cursor_read(cursor, bytes, sizeof(bytes))) {
     return false;
@@ -1146,13 +1146,13 @@ static bool valid_unicode_scalar(uint32_t value) {
   return value <= 0x10ffff && !(value >= 0xd800 && value <= 0xdfff);
 }
 
-static bool decode_typed_value(guava_typed_cursor_t *cursor,
+static bool decode_typed_value(cove_typed_cursor_t *cursor,
                                const wasmtime_component_valtype_t *type,
                                wasmtime_component_val_t *output,
                                size_t depth,
-                               guava_wasmtime_buffer_t *error) {
+                               cove_wasmtime_buffer_t *error) {
   if (cursor == NULL || type == NULL || output == NULL || depth > 12) {
-    (void)set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+    (void)set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                     "typed capability input exceeds its nesting limit");
     return false;
   }
@@ -1283,7 +1283,7 @@ static bool decode_typed_value(guava_typed_cursor_t *cursor,
     output->of.option = wasmtime_component_val_new(&value);
     if (output->of.option == NULL) {
       wasmtime_component_val_delete(&value);
-      (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+      (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                       "could not allocate typed option value");
       return false;
     }
@@ -1297,7 +1297,7 @@ static bool decode_typed_value(guava_typed_cursor_t *cursor,
     output->kind = WASMTIME_COMPONENT_LIST;
     wasmtime_component_vallist_new_uninit(&output->of.list, count);
     if (count > 0 && output->of.list.data == NULL) {
-      (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+      (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                       "could not allocate typed list");
       return false;
     }
@@ -1325,7 +1325,7 @@ static bool decode_typed_value(guava_typed_cursor_t *cursor,
     output->kind = WASMTIME_COMPONENT_RECORD;
     wasmtime_component_valrecord_new_uninit(&output->of.record, count);
     if (count > 0 && output->of.record.data == NULL) {
-      (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+      (void)set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                       "could not allocate typed record");
       return false;
     }
@@ -1352,23 +1352,23 @@ static bool decode_typed_value(guava_typed_cursor_t *cursor,
     return true;
   }
   default:
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    (void)set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                     "Component capability uses an unsupported typed value");
     return false;
   }
-  (void)set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+  (void)set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                   "typed capability input is truncated or malformed");
   return false;
 }
 
-guava_wasmtime_status_t guava_wasmtime_validate_component(
-    guava_wasmtime_runtime_t *runtime, const char *component_path,
+cove_wasmtime_status_t cove_wasmtime_validate_component(
+    cove_wasmtime_runtime_t *runtime, const char *component_path,
     const char *capabilities_interface_name,
     const char *const *expected_imports, size_t expected_import_count,
     const char *const *expected_capabilities,
     const char *const *expected_type_signatures,
     size_t expected_capability_count,
-    const guava_wasmtime_limits_t *limits, guava_wasmtime_buffer_t *error) {
+    const cove_wasmtime_limits_t *limits, cove_wasmtime_buffer_t *error) {
   if (error != NULL) {
     error->data = NULL;
     error->size = 0;
@@ -1380,13 +1380,13 @@ guava_wasmtime_status_t guava_wasmtime_validate_component(
        (expected_capabilities == NULL || expected_type_signatures == NULL)) ||
       expected_import_count > 16 || expected_capability_count > 64 ||
       !valid_limits(limits)) {
-    return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+    return set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                      "invalid Component validation arguments");
   }
   wasmtime_component_t *component = NULL;
-  guava_wasmtime_status_t status =
+  cove_wasmtime_status_t status =
       compile_component(runtime, component_path, &component, error);
-  if (status != GUAVA_WASMTIME_OK) {
+  if (status != COVE_WASMTIME_OK) {
     return status;
   }
   status = validate_contract(runtime, component, capabilities_interface_name,
@@ -1394,7 +1394,7 @@ guava_wasmtime_status_t guava_wasmtime_validate_component(
                              expected_import_count, expected_capabilities,
                              expected_type_signatures,
                              expected_capability_count, error);
-  if (status == GUAVA_WASMTIME_OK) {
+  if (status == COVE_WASMTIME_OK) {
     wasmtime_store_t *store = NULL;
     wasmtime_component_instance_t instance = {0};
     status = instantiate_component(
@@ -1408,8 +1408,8 @@ guava_wasmtime_status_t guava_wasmtime_validate_component(
   return status;
 }
 
-guava_wasmtime_status_t guava_wasmtime_invoke_capability(
-    guava_wasmtime_runtime_t *runtime, const char *component_path,
+cove_wasmtime_status_t cove_wasmtime_invoke_capability(
+    cove_wasmtime_runtime_t *runtime, const char *component_path,
     const char *capabilities_interface_name, const char *capability_name,
     const uint8_t *typed_input,
     size_t typed_input_size,
@@ -1417,9 +1417,9 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
     const char *const *expected_capabilities,
     const char *const *expected_type_signatures,
     size_t expected_capability_count,
-    guava_wasmtime_query_callback_t query_callback, void *query_environment,
-    const guava_wasmtime_limits_t *limits, guava_wasmtime_buffer_t *output,
-    guava_wasmtime_buffer_t *error) {
+    cove_wasmtime_query_callback_t query_callback, void *query_environment,
+    const cove_wasmtime_limits_t *limits, cove_wasmtime_buffer_t *output,
+    cove_wasmtime_buffer_t *error) {
   if (output != NULL) {
     output->data = NULL;
     output->size = 0;
@@ -1437,7 +1437,7 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
       (expected_capability_count > 0 &&
        (expected_capabilities == NULL || expected_type_signatures == NULL)) ||
       expected_import_count > 16 || expected_capability_count > 64) {
-    return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+    return set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                      "invalid Component invocation arguments");
   }
   bool declared = false;
@@ -1449,18 +1449,18 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
     }
   }
   if (!declared) {
-    return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+    return set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                      "capability is absent from capabilities.wit");
   }
   const uint8_t magic[] = {0x47, 0x54, 0x56, 0x31};
   if (memcmp(typed_input, magic, sizeof(magic)) != 0) {
-    return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+    return set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                      "typed capability input has an unsupported version");
   }
   wasmtime_component_t *component = NULL;
-  guava_wasmtime_status_t status =
+  cove_wasmtime_status_t status =
       compile_component(runtime, component_path, &component, error);
-  if (status != GUAVA_WASMTIME_OK) {
+  if (status != COVE_WASMTIME_OK) {
     return status;
   }
   status = validate_contract(runtime, component, capabilities_interface_name,
@@ -1468,7 +1468,7 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
                              expected_import_count, expected_capabilities,
                              expected_type_signatures,
                              expected_capability_count, error);
-  if (status != GUAVA_WASMTIME_OK) {
+  if (status != COVE_WASMTIME_OK) {
     wasmtime_component_delete(component);
     return status;
   }
@@ -1477,7 +1477,7 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
   status = instantiate_component(
       runtime, component, expected_imports, expected_import_count,
       query_callback, query_environment, limits, &store, &instance, error);
-  if (status != GUAVA_WASMTIME_OK) {
+  if (status != COVE_WASMTIME_OK) {
     wasmtime_component_delete(component);
     return status;
   }
@@ -1503,7 +1503,7 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
     }
     wasmtime_store_delete(store);
     wasmtime_component_delete(component);
-    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                      "validated typed capability could not be resolved");
   }
   wasmtime_component_export_index_delete(function_index);
@@ -1523,11 +1523,11 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
     }
     wasmtime_store_delete(store);
     wasmtime_component_delete(component);
-    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    return set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                      "could not reflect typed capability input");
   }
   wasmtime_component_func_type_delete(function_type);
-  guava_typed_cursor_t cursor = {
+  cove_typed_cursor_t cursor = {
       .data = typed_input,
       .size = typed_input_size,
       .offset = sizeof(magic),
@@ -1541,10 +1541,10 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
     wasmtime_store_delete(store);
     wasmtime_component_delete(component);
     if (error == NULL || error->size == 0) {
-      return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+      return set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                        "typed capability input has trailing or invalid bytes");
     }
-    return GUAVA_WASMTIME_INVALID_ARGUMENT;
+    return COVE_WASMTIME_INVALID_ARGUMENT;
   }
   wasmtime_component_val_t result = {0};
   wasmtime_error_t *wasmtime_error = wasmtime_component_func_call(
@@ -1552,17 +1552,17 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
   wasmtime_component_val_delete(&component_argument);
   if (wasmtime_error != NULL) {
     status = take_wasmtime_error(wasmtime_error,
-                                 GUAVA_WASMTIME_INVOCATION_ERROR, error);
+                                 COVE_WASMTIME_INVOCATION_ERROR, error);
   } else if (result.kind != WASMTIME_COMPONENT_STRING) {
-    status = set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+    status = set_error(error, COVE_WASMTIME_CONTRACT_MISMATCH,
                        "Component export returned a non-string value");
   } else if (result.of.string.size > limits->maximum_output_bytes) {
-    status = set_error(error, GUAVA_WASMTIME_OUTPUT_TOO_LARGE,
+    status = set_error(error, COVE_WASMTIME_OUTPUT_TOO_LARGE,
                        "Component output exceeds its limit");
-  } else if (guava_wasmtime_buffer_copy(
+  } else if (cove_wasmtime_buffer_copy(
                  output, (const uint8_t *)result.of.string.data,
                  result.of.string.size) != 0) {
-    status = set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+    status = set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                        "could not copy Component output");
   }
   if (wasmtime_error == NULL) {
@@ -1573,9 +1573,9 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
   return status;
 }
 
-guava_wasmtime_status_t guava_wasmtime_component_wat2wasm(
-    const uint8_t *wat, size_t wat_size, guava_wasmtime_buffer_t *output,
-    guava_wasmtime_buffer_t *error) {
+cove_wasmtime_status_t cove_wasmtime_component_wat2wasm(
+    const uint8_t *wat, size_t wat_size, cove_wasmtime_buffer_t *output,
+    cove_wasmtime_buffer_t *error) {
   if (output != NULL) {
     output->data = NULL;
     output->size = 0;
@@ -1585,20 +1585,20 @@ guava_wasmtime_status_t guava_wasmtime_component_wat2wasm(
     error->size = 0;
   }
   if (wat == NULL || wat_size == 0 || output == NULL) {
-    return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+    return set_error(error, COVE_WASMTIME_INVALID_ARGUMENT,
                      "component WAT is empty");
   }
   wasm_byte_vec_t binary;
   wasmtime_error_t *wasmtime_error =
       wasmtime_wat2wasm((const char *)wat, wat_size, &binary);
   if (wasmtime_error != NULL) {
-    return take_wasmtime_error(wasmtime_error, GUAVA_WASMTIME_COMPILE_ERROR,
+    return take_wasmtime_error(wasmtime_error, COVE_WASMTIME_COMPILE_ERROR,
                                error);
   }
-  guava_wasmtime_status_t status = GUAVA_WASMTIME_OK;
-  if (guava_wasmtime_buffer_copy(output, (const uint8_t *)binary.data,
+  cove_wasmtime_status_t status = COVE_WASMTIME_OK;
+  if (cove_wasmtime_buffer_copy(output, (const uint8_t *)binary.data,
                                  binary.size) != 0) {
-    status = set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+    status = set_error(error, COVE_WASMTIME_OUT_OF_MEMORY,
                        "could not copy compiled component WAT");
   }
   wasm_byte_vec_delete(&binary);

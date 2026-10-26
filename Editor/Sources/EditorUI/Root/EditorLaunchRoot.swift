@@ -1,7 +1,7 @@
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
-import GuavaUIWorkspace
+import CoveUI
+import CoveUIRuntime
+import CoveUIWorkspace
 
 struct EditorLaunchRoot: View {
     let context: EditorLaunchContext

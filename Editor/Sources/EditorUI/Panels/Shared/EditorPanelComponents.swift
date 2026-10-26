@@ -1,5 +1,5 @@
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Shared editor-panel chrome. Keeping the density, insets, and surface in one
 /// place makes docked panels feel like parts of one application instead of a

@@ -3,7 +3,7 @@
   (type $query-interface (instance
     (export "query" (func (param "request" string) (result string)))
   ))
-  (import (interface "guava:scene/query")
+  (import (interface "cove:scene/query")
     (instance $scene-query (type $query-interface)))
   (alias export $scene-query "query" (func $query))
 

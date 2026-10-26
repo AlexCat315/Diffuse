@@ -130,7 +130,7 @@ extension RuntimeWorldSchedule {
             physicsTransform.translation,
             SIMD3<Float>(repeating: t)
         )
-        let rotation = guavaSlerp(
+        let rotation = coveSlerp(
             animationTransform.rotation,
             physicsTransform.rotation,
             t

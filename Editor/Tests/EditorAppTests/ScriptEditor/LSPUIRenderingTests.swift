@@ -1,8 +1,8 @@
 import Foundation
 import Testing
 import EditorCore
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 @testable import EditorUI
 
 @Suite("Editor code UI integration", .serialized)
@@ -13,7 +13,7 @@ struct LSPUIRenderingTests {
         let context = PlatformInputContext(), portals = PortalStore()
         context.addScopedAmbient(PortalStoreAmbient(portals))
         try context.withCurrent {
-            var source: TextBuffer = "let message = \"Guava\"\nlet upper = message."
+            var source: TextBuffer = "let message = \"Cove\"\nlet upper = message."
             var annotations = TextEditorAnnotations()
             let original = source
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())

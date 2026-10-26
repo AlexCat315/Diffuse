@@ -15,7 +15,7 @@ struct ComponentBuildTests {
       provider: func(input: provider-input) -> string;
     }
     world plugin {
-      import guava:process/host;
+      import cove:process/host;
       export capabilities;
     }
     """
@@ -25,8 +25,8 @@ struct ComponentBuildTests {
         """) -> Data {
         Data("""
         {"id": "test.echo", "version": 1, "name": "Echo", "description": "fixture", "access": "read",
-         "imports": ["guava:process/host"], "composable_host_capabilities": [], "host": \(processes),
-         "contributes": {"guava.vcs/v1": [\(versionControl)]}}
+         "imports": ["cove:process/host"], "composable_host_capabilities": [], "host": \(processes),
+         "contributes": {"cove.vcs/v1": [\(versionControl)]}}
         """.utf8)
     }
 
@@ -39,12 +39,12 @@ struct ComponentBuildTests {
         for invalid in [#"{"id": "Git", "title": "Git", "marker": ".git", "ignoreFile": ".gitignore"}"#,
                         #"{"id": "git", "title": "Git", "marker": "../.git", "ignoreFile": ".gitignore"}"#,
                         #"{"id": "git", "title": " ", "marker": ".git", "ignoreFile": ".gitignore"}"#] {
-            #expect(throws: PluginManifestValidationError.invalidContribution("guava.vcs/v1")) {
+            #expect(throws: PluginManifestValidationError.invalidContribution("cove.vcs/v1")) {
                 try PluginManifestValidator.decodeAndValidate(Self.manifest(invalid))
             }
         }
         let otherEntryPoint = #"{"processes": [{"id": "git", "command": "git", "argumentPrefix": [], "allowsAdditionalArguments": true, "environmentKeys": [], "entryPoints": ["inspect"], "lifetimeMilliseconds": 60000}]}"#
-        #expect(throws: PluginManifestValidationError.invalidContribution("guava.vcs/v1")) {
+        #expect(throws: PluginManifestValidationError.invalidContribution("cove.vcs/v1")) {
             try PluginManifestValidator.decodeAndValidate(Self.manifest(valid, processes: otherEntryPoint))
         }
     }
@@ -54,7 +54,7 @@ struct ComponentBuildTests {
         func manifest(_ contributes: String) -> Data {
             Data("""
             {"id": "test.lang", "version": 1, "name": "Lang", "description": "fixture", "access": "read",
-             "imports": ["guava:process/host"], "composable_host_capabilities": [],
+             "imports": ["cove:process/host"], "composable_host_capabilities": [],
              "host": {"processes": [
                {"id": "server", "command": "lsp", "argumentPrefix": [], "allowsAdditionalArguments": true, "environmentKeys": [], "entryPoints": ["language-server"], "lifetimeMilliseconds": null},
                {"id": "package", "command": "tool", "argumentPrefix": [], "allowsAdditionalArguments": true, "environmentKeys": [], "entryPoints": ["tasks"], "lifetimeMilliseconds": null}]},
@@ -62,20 +62,20 @@ struct ComponentBuildTests {
             """.utf8)
         }
         let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
-            {"guava.tasks/v1": [{"id": "pkg", "title": "Package", "marker": "Package.swift"}],
-             "guava.language/v1": [{"id": "swift", "title": "Swift", "extensions": ["swift"],
+            {"cove.tasks/v1": [{"id": "pkg", "title": "Package", "marker": "Package.swift"}],
+             "cove.language/v1": [{"id": "swift", "title": "Swift", "extensions": ["swift"],
                             "server": {"process": "server", "initializationOptions": {"backgroundIndexing": true},
                                        "watchedFiles": ["Package.resolved"]}}]}
             """))
         #expect(((try? valid.contributes.decode(TaskContributionPoint.self)) ?? []).first == TaskContribution(id: "pkg", title: "Package", marker: "Package.swift"))
         #expect(((try? valid.contributes.decode(LanguageContributionPoint.self)) ?? []).first?.server?.initializationOptions == .object(["backgroundIndexing": .bool(true)]))
-        #expect(throws: PluginManifestValidationError.invalidContribution("guava.tasks/v1")) {
-            try PluginManifestValidator.decodeAndValidate(manifest(#"{"guava.tasks/v1": [{"id": "pkg", "title": "Package", "marker": "a/b"}]}"#))
+        #expect(throws: PluginManifestValidationError.invalidContribution("cove.tasks/v1")) {
+            try PluginManifestValidator.decodeAndValidate(manifest(#"{"cove.tasks/v1": [{"id": "pkg", "title": "Package", "marker": "a/b"}]}"#))
         }
-        for invalid in [#"{"guava.language/v1": [{"id": "swift", "title": "Swift", "extensions": []}]}"#,
-                        #"{"guava.language/v1": [{"id": "swift", "title": "Swift", "extensions": [".swift"]}]}"#,
-                        #"{"guava.language/v1": [{"id": "swift", "title": "Swift", "extensions": ["swift"], "server": {"process": "missing"}}]}"#] {
-            #expect(throws: PluginManifestValidationError.invalidContribution("guava.language/v1")) {
+        for invalid in [#"{"cove.language/v1": [{"id": "swift", "title": "Swift", "extensions": []}]}"#,
+                        #"{"cove.language/v1": [{"id": "swift", "title": "Swift", "extensions": [".swift"]}]}"#,
+                        #"{"cove.language/v1": [{"id": "swift", "title": "Swift", "extensions": ["swift"], "server": {"process": "missing"}}]}"#] {
+            #expect(throws: PluginManifestValidationError.invalidContribution("cove.language/v1")) {
                 try PluginManifestValidator.decodeAndValidate(manifest(invalid))
             }
         }
@@ -85,7 +85,7 @@ struct ComponentBuildTests {
     func shellAndBindings() throws {
         let contract = try WITContractParser.parse(Data(Self.wit.utf8), grantedImports: [.process])
         let shell = try PluginComponentBuild.shell(for: contract)
-        #expect(shell.wat.contains(#"(import "guava:process/host" "query" (func (param i32 i32 i32)))"#))
+        #expect(shell.wat.contains(#"(import "cove:process/host" "query" (func (param i32 i32 i32)))"#))
         #expect(shell.wat.contains(#"(func (export "provider") (param i32 i32 i32 i32) (result i32) unreachable)"#))
         #expect(shell.bindings.contains("@_expose(wasm, \"provider\")"))
         #expect(shell.bindings.contains(
@@ -105,7 +105,7 @@ struct ComponentBuildTests {
         // A guest that answers with its request.
         let core = try EmbeddedWasmtimeComponentRuntime.compileComponentWAT("""
         (module
-          (import "guava:process/host" "query" (func (param i32 i32 i32)))
+          (import "cove:process/host" "query" (func (param i32 i32 i32)))
           (memory (export "memory") 16)
           (global $next (mut i32) (i32.const 1024))
           (func (export "cabi_realloc") (param i32 i32 i32 i32) (result i32) (local $address i32)
@@ -118,7 +118,7 @@ struct ComponentBuildTests {
             i32.const 0))
         """)
         #expect(throws: PluginComponentBuild.Error.invalidCoreModule) { try PluginComponentBuild.link(shell: shell, core: shell) }
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).guavaplugin")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).coveplugin")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         try PluginComponentBuild.link(shell: shell, core: core).write(to: root.appendingPathComponent("component.wasm"))

@@ -1,5 +1,5 @@
 import Foundation
-import GuavaLogging
+import CoveLogging
 import NativeRHI
 
 /// An isolated RenderPacketConsumer for validating the migrated editor-grid

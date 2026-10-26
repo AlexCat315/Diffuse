@@ -1,5 +1,5 @@
 import EditorCore
-import GuavaUIRuntime
+import CoveUIRuntime
 
 /// Window-space point the hover popup should hang from — normally just below
 /// the glyph the pointer is resting on.

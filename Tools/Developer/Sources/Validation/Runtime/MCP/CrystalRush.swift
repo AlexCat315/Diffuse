@@ -2,11 +2,11 @@ internal import Foundation
 internal import ToolSupport
 
 /// Port of `scripts/validate-crystal-rush-mcp.py`: create and validate Crystal
-/// Rush through the real Guava MCP stdio server. Source writes, builds, scene
+/// Rush through the real Cove MCP stdio server. Source writes, builds, scene
 /// drafts, script attachment, save, play inspection and export all use MCP tools.
 enum CrystalRush {
   static let usage = """
-    guava-dev validate crystal-rush [--project PATH] [--source-file PATH]
+    cove-dev validate crystal-rush [--project PATH] [--source-file PATH]
 
       --project      Project directory; defaults to examples/CrystalRush.
       --source-file  Gameplay source to write; defaults to the example's script.
@@ -46,11 +46,11 @@ enum CrystalRush {
 
     let port = try FreePort.reserve()
     var environment = ProcessInfo.processInfo.environment
-    environment["GUAVA_MCP_PORT"] = String(port)
+    environment["COVE_MCP_PORT"] = String(port)
     let editor = try BuildProducts.executable(package: "Editor", name: "EditorApp")
-    let player = try BuildProducts.executable(package: "Editor", name: "GuavaPlayer")
-    let server = try BuildProducts.executable(package: "GuavaMcp", name: "GuavaMCP")
-    environment["GUAVA_PLAYER_EXECUTABLE"] = player.path
+    let player = try BuildProducts.executable(package: "Editor", name: "CovePlayer")
+    let server = try BuildProducts.executable(package: "CoveMcp", name: "CoveMCP")
+    environment["COVE_PLAYER_EXECUTABLE"] = player.path
 
     let log = project.appendingPathComponent("validation/editor.log")
     let logHandle = try openForWriting(log)
@@ -86,7 +86,7 @@ enum CrystalRush {
 
     let tools = try JSON.objects(try mcp.request("tools/list")["tools"], "tools")
     try Check.require(
-      tools.contains { $0["name"] as? String == "write_script" }, "GuavaMCP is missing write_script"
+      tools.contains { $0["name"] as? String == "write_script" }, "CoveMCP is missing write_script"
     )
     let info = try mcp.tool("get_project_info")
     Terminal.info(
@@ -148,8 +148,8 @@ enum CrystalRush {
     Terminal.info("Runnable game: \(executable)")
 
     var isolated = ProcessInfo.processInfo.environment
-    isolated["PATH"] = "/guava-no-toolchain"
-    isolated.removeValue(forKey: "GUAVA_PROJECT_DIR")
+    isolated["PATH"] = "/cove-no-toolchain"
+    isolated.removeValue(forKey: "COVE_PROJECT_DIR")
     let validation = try Subprocess.run(
       URL(fileURLWithPath: executable),
       arguments: ["--validate-project", "--simulation-frames", "120"],
@@ -159,7 +159,7 @@ enum CrystalRush {
   }
 
   private static func prepareScene(_ project: URL) throws {
-    let scene = project.appendingPathComponent(".guava/editor-scene-manifest.json")
+    let scene = project.appendingPathComponent(".cove/editor-scene-manifest.json")
     try Fs.directory(scene.deletingLastPathComponent())
     guard !BuildProducts.isFile(scene) else { return }
     try Fs.write(

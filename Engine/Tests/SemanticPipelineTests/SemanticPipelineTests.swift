@@ -255,7 +255,7 @@ final class SemanticPipelineTests: XCTestCase {
 
     func testFileBackedStoreRoundTripsConfirmedEntry() async throws {
         let storeURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava_semantic_\(UUID().uuidString)")
+            .appendingPathComponent("cove_semantic_\(UUID().uuidString)")
             .appendingPathComponent("memory.json")
         let store = try FileBackedSemanticMemoryStore(storageURL: storeURL)
         defer { try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent()) }
@@ -275,7 +275,7 @@ final class SemanticPipelineTests: XCTestCase {
 
     func testFileBackedStoreSurvivesReload() async throws {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava_semantic_reload_\(UUID().uuidString)")
+            .appendingPathComponent("cove_semantic_reload_\(UUID().uuidString)")
         let storeURL = dir.appendingPathComponent("memory.json")
         defer { try? FileManager.default.removeItem(at: dir) }
 
@@ -299,7 +299,7 @@ final class SemanticPipelineTests: XCTestCase {
 
     func testFileBackedStoreIgnoresRejectedConfirmation() async throws {
         let storeURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava_semantic_reject_\(UUID().uuidString)")
+            .appendingPathComponent("cove_semantic_reject_\(UUID().uuidString)")
             .appendingPathComponent("memory.json")
         let store = try FileBackedSemanticMemoryStore(storageURL: storeURL)
         defer { try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent()) }
@@ -318,7 +318,7 @@ final class SemanticPipelineTests: XCTestCase {
 
     func testFileBackedStoreReportsWriteFailureWithoutChangingMemory() async throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava_semantic_failure_\(UUID().uuidString)")
+            .appendingPathComponent("cove_semantic_failure_\(UUID().uuidString)")
         let storeURL = directory.appendingPathComponent("memory.json")
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try FileBackedSemanticMemoryStore(storageURL: storeURL)

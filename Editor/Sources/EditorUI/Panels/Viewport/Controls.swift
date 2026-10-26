@@ -1,5 +1,5 @@
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// The viewport header's one control vocabulary: ghost icon buttons, icon
 /// menu triggers and a segmented tool switcher. None of them draws its own box

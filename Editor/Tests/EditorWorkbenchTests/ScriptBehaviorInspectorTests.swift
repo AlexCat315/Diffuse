@@ -1,8 +1,8 @@
 @testable import EditorCore
 import EngineKernel
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import SceneRuntime
 import ScriptRuntime
 import Testing
@@ -59,8 +59,8 @@ struct ScriptBehaviorInspectorTests {
         let adapter = EditorSceneAdapter(seedPreviewScene: false)
         _ = adapter.applyProjectScriptCatalog(.builtIn)
         let entity = adapter.scene.createEntity()
-        _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "guava.mover")
-        _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "guava.rotator")
+        _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "cove.mover")
+        _ = adapter.addScriptBinding(to: entity.rawValue, identifier: "cove.rotator")
         let section = try #require(adapter.inspectorSections(for: entity.rawValue).first { $0.id == "scripts" })
         // Search by the behavior name: it is unique per binding in every UI language.
         let query = try #require(section.groups.first).title

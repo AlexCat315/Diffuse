@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 func stage(_ request: StepRequest) -> Step {
     if request.output != nil { return finish(request) }

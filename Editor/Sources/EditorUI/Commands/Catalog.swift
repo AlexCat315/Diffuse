@@ -1,6 +1,6 @@
 internal import EditorCore
 internal import EngineKernel
-internal import GuavaUI
+internal import CoveUI
 
 /// Everything a command's availability depends on. The native menu rebuilds
 /// only when this value changes.
@@ -194,7 +194,7 @@ private struct Builder {
 
     var applicationItems: [EditorCommandItem] {
         [
-            entry("app.about", "About Guava", command: .about),
+            entry("app.about", "About Cove", command: .about),
             entry("preferences", "Settings...", "preferences settings 设置 偏好", .init(.comma), command: .openSettings),
         ]
     }
@@ -337,7 +337,7 @@ private struct Builder {
             ])
         }
         return menu("agent", "Agent", [
-            entry("agent.intent", "Ask Guava...", "", .init(.letter("k")), command: .focusAssistant, inPalette: false),
+            entry("agent.intent", "Ask Cove...", "", .init(.letter("k")), command: .focusAssistant, inPalette: false),
             entry("agent.show", "Agent", "agent assistant conversation review approval 智能体 对话 审阅",
                   command: .showView(.agent)),
             entry("view.toggle", "Switch Workbench and Agent", "workbench agent view switch 工作台 智能体 视图 切换",

@@ -4,9 +4,9 @@ import PluginRuntime
 import SceneRuntime
 import ScriptRuntime
 import Foundation
-import GuavaUICompose
-import GuavaUIRuntime
-import GuavaUIWorkspace
+import CoveUICompose
+import CoveUIRuntime
+import CoveUIWorkspace
 import Testing
 
 @Suite("Unified authoring workbench", .serialized)

@@ -1,6 +1,6 @@
 internal import EditorCore
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 /// The repository's system, current branch (a menu to switch or create one)
 /// and sync actions with their ahead/behind counts.

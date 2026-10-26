@@ -3,9 +3,9 @@ private import ToolSupport
 
 /// Real Wasm and socket acceptance for source links and body profiling.
 func analysisChecks(page: Page, inspector: Frame) throws {
-  let initialCount = try page.evaluate("guavaDebug.snapshot.count").int ?? 0
+  let initialCount = try page.evaluate("coveDebug.snapshot.count").int ?? 0
   let compact = try inspector.evaluate(
-    "inspector.tree.compactTag('GuavaUI.Row<GuavaUI._SourceLocatedView<Demo.Button>>')"
+    "inspector.tree.compactTag('CoveUI.Row<CoveUI._SourceLocatedView<Demo.Button>>')"
   ).string
   try ensure(compact == "Row", "compactTag returned \(compact ?? "null")")
 
@@ -53,11 +53,11 @@ func analysisChecks(page: Page, inspector: Frame) throws {
     "e => e.open = true")
   let buildRoot = filePath.components(separatedBy: "/Examples/Counter/").first ?? ""
   try inspector.locator("#sourceBuildRoot").fill(buildRoot)
-  try inspector.locator("#sourceLocalRoot").fill("C:\\我的项目\\Guava UI")
+  try inspector.locator("#sourceLocalRoot").fill("C:\\我的项目\\Cove UI")
   let uri = try inspector.locator("#openSource").attribute("href") ?? ""
   try ensure(
     uri.hasPrefix(
-      "cursor://file/C:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/Guava%20UI/Examples/Counter/"),
+      "cursor://file/C:/%E6%88%91%E7%9A%84%E9%A1%B9%E7%9B%AE/Cove%20UI/Examples/Counter/"),
     "Windows remote path mapping failed: \(uri)")
 
   try ensure(
@@ -152,10 +152,10 @@ func analysisChecks(page: Page, inspector: Frame) throws {
     "Reset did not clear the causes")
 
   _ = try page.evaluate(
-    "count => guavaDebug.request({type:'state.restore',id:992,payload:{count:String(count),dark:String(guavaDebug.snapshot.dark)}})",
+    "count => coveDebug.request({type:'state.restore',id:992,payload:{count:String(count),dark:String(coveDebug.snapshot.dark)}})",
     argument: .number(Double(initialCount)))
   try page.waitForFunction(
-    "count => guavaDebug.snapshot.count === count", argument: .number(Double(initialCount)))
+    "count => coveDebug.snapshot.count === count", argument: .number(Double(initialCount)))
   Terminal.info(
     "Analysis: exact Swift expression line, VS Code/Cursor URI, remote/Windows path mapping, real State count/cause, timing and reset passed"
   )

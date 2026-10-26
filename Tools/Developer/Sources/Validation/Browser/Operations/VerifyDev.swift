@@ -7,7 +7,7 @@ private import ToolSupport
 
 /// `verify-dev` — exercises real Swift rebuilds, state retention, and
 /// failed-build recovery against the development server. Replaces
-/// `GuavaUI/Browser/verify_dev.py`.
+/// `CoveUI/Browser/verify_dev.py`.
 enum VerifyDevOperation {
   private static func firstCapture(in text: String, pattern: String) -> String? {
     guard let expression = try? NSRegularExpression(pattern: pattern),
@@ -32,7 +32,7 @@ enum VerifyDevOperation {
 
   static func verify() throws {
     let root = Browser.sdkRoot.appendingPathComponent("Browser")
-    let source = root.appendingPathComponent("Sources/GuavaUIBrowserPrototype/main.swift")
+    let source = root.appendingPathComponent("Sources/CoveUIBrowserPrototype/main.swift")
     let original = try Fs.read(source)
     defer { try? Fs.write(original, to: source) }
 
@@ -62,25 +62,25 @@ enum VerifyDevOperation {
     defer { browser.close() }
     let page = try browser.newPage()
     try page.goto(address + "/?renderer=canvas2d", waitUntil: .domContentLoaded)
-    try page.waitForFunction("window.guavaDebug?.snapshot != null", timeout: 30)
+    try page.waitForFunction("window.coveDebug?.snapshot != null", timeout: 30)
     try page.locator("#increment").click()
-    try page.waitForFunction("guavaDebug.snapshot.count === 1")
+    try page.waitForFunction("coveDebug.snapshot.count === 1")
     let firstURL = page.url
     // Let EventSource connect before changing a watched source.
-    try page.waitForFunction("window.guavaDevConnected === true")
+    try page.waitForFunction("window.coveDevConnected === true")
     try Fs.write(original + Data("\n// development reload verification\n".utf8), to: source)
     try page.waitForURL({ $0 != firstURL }, timeout: 60)
-    try page.waitForFunction("window.guavaDebug?.snapshot?.count === 1", timeout: 30)
+    try page.waitForFunction("window.coveDebug?.snapshot?.count === 1", timeout: 30)
     let secondURL = page.url
-    try page.waitForFunction("window.guavaDevConnected === true")
+    try page.waitForFunction("window.coveDevConnected === true")
     try Fs.write(original + Data("\nthis_is_not_valid_swift\n".utf8), to: source)
     try page.locator("pre").filter(text: .contains("error:")).waitFor(timeout: 60)
     try ensure(page.url == secondURL, "A failed build navigated away from the last good revision")
     try page.locator("#increment").click()
-    try page.waitForFunction("guavaDebug.snapshot.count === 2")
+    try page.waitForFunction("coveDebug.snapshot.count === 2")
     try Fs.write(original, to: source)
     try page.waitForURL({ $0 != secondURL }, timeout: 60)
-    try page.waitForFunction("window.guavaDebug?.snapshot?.count === 2", timeout: 30)
+    try page.waitForFunction("window.coveDebug?.snapshot?.count === 2", timeout: 30)
     Terminal.info(
       "Development reload: real Swift rebuild, checkpoint retention, error overlay and recovery passed"
     )

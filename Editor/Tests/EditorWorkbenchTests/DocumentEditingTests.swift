@@ -1,7 +1,7 @@
 import Foundation
 import EditorCore
-import GuavaUICompose
-import GuavaUIRuntime
+import CoveUICompose
+import CoveUIRuntime
 import Testing
 @testable import EditorUI
 

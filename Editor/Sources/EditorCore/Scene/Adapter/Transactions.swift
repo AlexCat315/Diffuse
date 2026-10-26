@@ -1,6 +1,6 @@
 import Foundation
 import AssetPipeline
-import GuavaUIRuntime
+import CoveUIRuntime
 import IntentRuntime
 import RenderBackend
 import SceneRuntime

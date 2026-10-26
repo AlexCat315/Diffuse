@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// Lore (https://github.com/EpicGames/lore) through its CLI. Reads use the
 /// `--json` event stream (one `{"tagName", "data"}` object per line); history

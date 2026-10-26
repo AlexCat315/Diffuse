@@ -2,7 +2,7 @@
 
 ## 目标
 
-把 GuavaStudio 从「WASM 能力运行时 + 若干硬编码贡献分支」升级为统一的插件平台：
+把 Diffuse 从「WASM 能力运行时 + 若干硬编码贡献分支」升级为统一的插件平台：
 
 - 所有用户可见功能都通过插件交付，内置功能与第三方使用同一套贡献契约。
 - 一个插件可以组合多种贡献，不引入「主题插件类型」「AI 插件类型」这样的封闭分类。
@@ -34,7 +34,7 @@
 5. **一个插件，多种贡献**
    - 不设计 `PluginKind`；插件是贡献的容器。
 6. **领域拥有类型**
-   - `guava.language/v1` 的 descriptor 与校验归语言领域；`guava.ai.provider/v1` 归 AI 领域。平台只负责注册、解析、生命周期。
+   - `cove.language/v1` 的 descriptor 与校验归语言领域；`cove.ai.provider/v1` 归 AI 领域。平台只负责注册、解析、生命周期。
 
 ## 包模型
 
@@ -78,13 +78,13 @@ resources/...
   "id": "studio.ai.anthropic",
   "version": 1,
   "name": "Anthropic",
-  "description": "Anthropic models for GuavaStudio",
+  "description": "Anthropic models for Diffuse",
   "access": "read",
   "imports": [],
   "requires": [],
   "activation": ["onAIProvider:anthropic"],
   "contributes": {
-    "guava.ai.provider/v1": [ ... ]
+    "cove.ai.provider/v1": [ ... ]
   },
   "runtime": {
     "component": "component.wasm",
@@ -99,20 +99,20 @@ resources/...
 
 ### 命名与版本
 
-格式：`guava.<domain>.<point>/v<major>`。
+格式：`cove.<domain>.<point>/v<major>`。
 
 示例：
 
-- `guava.theme/v1`
-- `guava.language/v1`
-- `guava.command/v1`
-- `guava.ui.panel/v1`
-- `guava.ui.menu/v1`
-- `guava.ai.provider/v1`
-- `guava.ai.agent/v1`
-- `guava.ai.harness/v1`
-- `guava.ai.tool/v1`
-- `guava.ai.context/v1`
+- `cove.theme/v1`
+- `cove.language/v1`
+- `cove.command/v1`
+- `cove.ui.panel/v1`
+- `cove.ui.menu/v1`
+- `cove.ai.provider/v1`
+- `cove.ai.agent/v1`
+- `cove.ai.harness/v1`
+- `cove.ai.tool/v1`
+- `cove.ai.context/v1`
 
 major 不同视为不同贡献点；平台拒绝未知 major，不猜测解码。
 
@@ -213,7 +213,7 @@ onURI:<scheme>
 ```json
 {
   "id": "studio.theme.default",
-  "title": "Guava Default",
+  "title": "Cove Default",
   "appearance": "dual",
   "path": "resources/theme.json"
 }
@@ -254,7 +254,7 @@ onURI:<scheme>
 
 AI 不是单一插件类型，而是一组贡献点。
 
-### `guava.ai.provider/v1`
+### `cove.ai.provider/v1`
 
 声明：
 
@@ -267,7 +267,7 @@ AI 不是单一插件类型，而是一组贡献点。
 
 阶段 1 的 provider 不直接访问网络。宿主按 `apiFormat` 执行 HTTP、注入凭据、流式读取、超时和审计。自定义协议以后通过受控的 provider capability 或独立 provider host 开放。
 
-### `guava.ai.agent/v1`
+### `cove.ai.agent/v1`
 
 ```json
 {
@@ -284,12 +284,12 @@ AI 不是单一插件类型，而是一组贡献点。
 - `instructions` 追加在宿主指令之后，不能替换宿主规则。
 - `model`：用户未选模型时用 `preferred`（须为所选 provider 的模型），`maxOutputTokens` 只能压低模型上限。
 - `tools`：只能收窄工作区允许的工具（宿主工具名、capability ID）；缺省为全部，`respond` 始终保留。
-- `context`：宿主来源 `scene` / `selection` / `edits` / `memory` / `transactions` / `workflow` / `assets`，加上 `guava.ai.context/v1` 的 ID；缺省为全部宿主来源、不含插件上下文。
+- `context`：宿主来源 `scene` / `selection` / `edits` / `memory` / `transactions` / `workflow` / `assets`，加上 `cove.ai.context/v1` 的 ID；缺省为全部宿主来源、不含插件上下文。
 - `canAutoApprove: false` 时即使用户开启自动应用也保持审阅。
-- `harness` 指定接管流程的 `guava.ai.harness/v1`；缺省用宿主内置流程。
+- `harness` 指定接管流程的 `cove.ai.harness/v1`；缺省用宿主内置流程。
 - 设置里的 `agent_id` 选择 agent，空值或已停用时取第一个。随包 AI 插件提供默认 agent。
 
-### `guava.ai.harness/v1`
+### `cove.ai.harness/v1`
 
 助手每一轮的流程（问模型 → 执行工具 → 把结果喂回 → 决定继续或结束）默认由宿主内置。harness 让插件接管**流程决策**，宿主仍掌握所有执行能力：
 
@@ -298,8 +298,8 @@ AI 不是单一插件类型，而是一组贡献点。
 - 不用 harness 时行为与内置流程完全一致。
 
 ```json
-"guava.ai.harness/v1": [ { "id": "careful", "title": "Careful", "entryPoint": "harness" } ],
-"guava.ai.agent/v1": [ { "id": "careful", "title": "Careful", "harness": "careful" } ]
+"cove.ai.harness/v1": [ { "id": "careful", "title": "Careful", "entryPoint": "harness" } ],
+"cove.ai.agent/v1": [ { "id": "careful", "title": "Careful", "harness": "careful" } ]
 ```
 
 - agent 用 `harness` 指定流程；harness 的 `id` 在已启用插件间唯一，只接受 `access: "read"` 的包。
@@ -331,18 +331,18 @@ AI 不是单一插件类型，而是一组贡献点。
 - 每步都可带 `state`，省略表示不变。
 - 每轮最多 32 步；工具调用仍受 agent 的工具白名单、工作区范围和工具策略约束。
 
-`GuavaPluginKit` 的 `HarnessTurn` / `HarnessStep` 负责解析与构造。随包插件目前都不需要自定义流程，内置流程保持默认；harness 由 AIRuntime 的会话测试覆盖。
+`CovePluginKit` 的 `HarnessTurn` / `HarnessStep` 负责解析与构造。随包插件目前都不需要自定义流程，内置流程保持默认；harness 由 AIRuntime 的会话测试覆盖。
 
-### `guava.ai.tool/v1`
+### `cove.ai.tool/v1`
 
 ```json
 { "entryPoint": "status", "title": "Git Status", "description": "Read working tree status" }
 ```
 
-- 只有被 `guava.ai.tool/v1` 声明的 capability 才会提供给模型；其余导出只由编辑器调用。宿主入口与 `components` 不能声明为工具。
+- 只有被 `cove.ai.tool/v1` 声明的 capability 才会提供给模型；其余导出只由编辑器调用。宿主入口与 `components` 不能声明为工具。
 - 模型看到的标题和描述取自声明；输入 schema 仍来自 WIT，调用走 capability 的权限、草案与审批。
 
-### `guava.ai.context/v1`
+### `cove.ai.context/v1`
 
 ```json
 { "id": "git-summary", "title": "Working Tree", "entryPoint": "context", "maxBytes": 4096 }
@@ -356,7 +356,7 @@ AI 不是单一插件类型，而是一组贡献点。
 
 ### AI 面板
 
-AI 聊天面板通过通用 `guava.ui.panel/v1` 贡献，内容是宿主视图 `agent`：
+AI 聊天面板通过通用 `cove.ui.panel/v1` 贡献，内容是宿主视图 `agent`：
 
 ```json
 { "id": "intent-input", "title": "Harness", "slot": "trailing", "icon": "ai-intent", "view": "agent" }
@@ -366,7 +366,7 @@ AI 聊天面板通过通用 `guava.ui.panel/v1` 贡献，内容是宿主视图 `
 
 ## UI 贡献
 
-插件不持有 GuavaUI 视图，也不画像素。插件界面由**组件树 + 状态往返**构成：
+插件不持有 CoveUI 视图，也不画像素。插件界面由**组件树 + 状态往返**构成：
 
 - 插件用一组通用组件（布局、文本、按钮、输入框、开关、选择、表格、折叠……）描述界面，宿主按编辑器样式绘制。
 - 用户操作变成事件发回插件；插件拿到上一次的状态和事件，返回新状态、新组件树和要宿主执行的效果（Elm 式的 `update` + `view`）。
@@ -374,12 +374,12 @@ AI 聊天面板通过通用 `guava.ui.panel/v1` 贡献，内容是宿主视图 `
 
 不选的方案：
 
-- 隔离 webview：`GuavaUIWebView` 只有 Apple 宿主；原生视图盖在合成内容之上，不受圆角、透明度和遮挡约束；网页还会绕过宿主的进程、网络和审批边界。
+- 隔离 webview：`CoveUIWebView` 只有 Apple 宿主；原生视图盖在合成内容之上，不受圆角、透明度和遮挡约束；网页还会绕过宿主的进程、网络和审批边界。
 - 常驻实例 + 像素/矢量绘制：需要长期内存、帧调度和独立的输入与无障碍处理，破坏每次调用一个实例的隔离模型。需要自绘时再加 `canvas` 组件（矢量命令），仍走同一协议。
 
 ### 视图协议
 
-`guava.ui.panel/v1`（带 `entryPoint`）与 `guava.ui.documentView/v1` 共用一个入口签名：
+`cove.ui.panel/v1`（带 `entryPoint`）与 `cove.ui.documentView/v1` 共用一个入口签名：
 
 ```
 func(input: record { view: string, state: string, event: string, context: string }) -> string
@@ -444,7 +444,7 @@ func(input: record { view: string, state: string, event: string, context: string
 - `{"type": "panel", "id"}`：显示本包的面板。
 - `{"type": "open", "path"}`：在编辑器中打开项目内的文件，路径不在项目内时拒绝。
 
-### `guava.command/v1`
+### `cove.command/v1`
 
 ```json
 { "id": "refresh", "title": "Refresh Status", "keywords": "reload", "entryPoint": "command", "palette": true }
@@ -454,7 +454,7 @@ func(input: record { view: string, state: string, event: string, context: string
 - 入口签名：`func(input: record { command: string, arguments: string }) -> string`，`arguments` 是 JSON 对象文本。
 - 返回 `{ "effects": [...] }`，效果同上。命令执行后宿主重新渲染本包的所有视图。隐式激活事件 `onCommand:<id>`。
 
-### `guava.ui.panel/v1`
+### `cove.ui.panel/v1`
 
 ```json
 { "id": "status", "title": "Status", "slot": "leading", "icon": "console", "entryPoint": "view" }
@@ -464,17 +464,17 @@ func(input: record { view: string, state: string, event: string, context: string
 - `id` 在已启用插件间唯一，不能占用宿主内置面板 ID；布局按它持久化。插件启停时面板实时加入或离开布局。
 - 带 `entryPoint` 的面板走视图协议，隐式激活事件 `onView:<id>`。
 
-### `guava.ui.menu/v1` 与 `guava.ui.toolbar/v1`
+### `cove.ui.menu/v1` 与 `cove.ui.toolbar/v1`
 
 ```json
-"guava.ui.menu/v1": [ { "command": "refresh", "menu": "run" } ],
-"guava.ui.toolbar/v1": [ { "command": "refresh", "icon": "toolbar-arrow-path" } ]
+"cove.ui.menu/v1": [ { "command": "refresh", "menu": "run" } ],
+"cove.ui.toolbar/v1": [ { "command": "refresh", "icon": "toolbar-arrow-path" } ]
 ```
 
 - 只能放置本包的命令。菜单项接在宿主菜单项之后（`file` / `edit` / `select` / `world` / `view` / `agent` / `run` / `window` / `help`）；已放进菜单的命令不再单独出现在命令面板。
 - 工具栏按钮在标题栏，图标取宿主工具栏图标，提示文字是命令标题。
 
-### `guava.ui.documentView/v1`
+### `cove.ui.documentView/v1`
 
 ```json
 { "id": "table", "title": "Table", "extensions": ["csv"], "entryPoint": "view" }
@@ -485,7 +485,7 @@ func(input: record { view: string, state: string, event: string, context: string
 
 ### 插件端
 
-`GuavaPluginKit` 的 `UI` 提供组件构造函数与事件解析，插件写普通函数：
+`CovePluginKit` 的 `UI` 提供组件构造函数与事件解析，插件写普通函数：
 
 ```swift
 func view(view: String, state: String, event: String, context: String) -> String {
@@ -525,8 +525,8 @@ func view(view: String, state: String, event: String, context: String) -> String
 3. `EditorAISettings.provider` → provider ID，`model` → model ID。
 4. 默认 Anthropic / OpenAI / DeepSeek 变为随包 AI provider 插件。
 5. `studio.languages` 保持运行时（format），但 grammar/outline 仍为声明。
-6. Git / Swift Support 迁移到 `guava.vcs/v1` / `guava.tasks/v1`；`contributes` 键更新为新格式。
-7. AI 面板迁移到 `guava.ui.panel/v1`。
+6. Git / Swift Support 迁移到 `cove.vcs/v1` / `cove.tasks/v1`；`contributes` 键更新为新格式。
+7. AI 面板迁移到 `cove.ui.panel/v1`。
 
 ## 验证
 

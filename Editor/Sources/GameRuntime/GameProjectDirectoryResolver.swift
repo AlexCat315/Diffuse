@@ -1,8 +1,8 @@
 import Foundation
 
-/// Resolves the project consumed by GuavaPlayer in a deterministic priority order.
+/// Resolves the project consumed by CovePlayer in a deterministic priority order.
 /// Besides explicit CLI/environment configuration, it recognizes both the macOS
-/// app resource layout and the portable `Export/Player/GuavaPlayer` layout.
+/// app resource layout and the portable `Export/Player/CovePlayer` layout.
 public enum GameProjectDirectoryResolver {
     public static func resolve(
         arguments: [String] = CommandLine.arguments,
@@ -17,12 +17,12 @@ public enum GameProjectDirectoryResolver {
            !arguments[index + 1].isEmpty {
             return arguments[index + 1]
         }
-        if let environmentPath = environment["GUAVA_PROJECT_DIR"],
+        if let environmentPath = environment["COVE_PROJECT_DIR"],
            !environmentPath.isEmpty {
             return environmentPath
         }
         if let bundleResourceURL {
-            let bundledProject = bundleResourceURL.appendingPathComponent("GuavaProject",
+            let bundledProject = bundleResourceURL.appendingPathComponent("CoveProject",
                                                                           isDirectory: true)
             if isProjectDirectory(bundledProject) { return bundledProject.path }
         }

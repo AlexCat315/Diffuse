@@ -15,7 +15,7 @@ public struct ThemeContribution: Codable, Sendable, Equatable {
 }
 
 public enum ThemeContributionPoint: ContributionPointSpec {
-    public static let id = "guava.theme/v1"
+    public static let id = "cove.theme/v1"
 
     public static func validate(_ descriptor: ThemeContribution, host: PluginHostPermissions) throws {
         guard descriptor.id.range(of: #"^[a-z][a-z0-9.-]{2,63}$"#, options: .regularExpression) != nil,

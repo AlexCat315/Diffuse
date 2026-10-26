@@ -14,7 +14,7 @@ struct CameraControllerTests {
         }
         var runtime = SceneRuntime()
         runtime.setScriptDriver(scripts)
-        runtime.setResource(InputActionMap.guavaDefault)
+        runtime.setResource(InputActionMap.coveDefault)
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(), for: entity)
         _ = runtime.setComponent(CameraComponent(target: SIMD3<Float>(0, 0, -1)), for: entity)
@@ -39,7 +39,7 @@ struct CameraControllerTests {
         }
         var runtime = SceneRuntime()
         runtime.setScriptDriver(scripts)
-        runtime.setResource(InputActionMap.guavaDefault)
+        runtime.setResource(InputActionMap.coveDefault)
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(), for: entity)
         _ = runtime.setComponent(CameraComponent(), for: entity)

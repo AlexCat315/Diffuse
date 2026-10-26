@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// What the assistant reads about the working tree: the branch, how it stands
 /// against the server, the changed files and the files locked in this

@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// Compiler and linker messages: `path:line:column: error: message`.
 enum Problems {

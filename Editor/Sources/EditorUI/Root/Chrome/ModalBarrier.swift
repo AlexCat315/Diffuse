@@ -1,5 +1,5 @@
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 
 /// Invisible full-window modal barrier: swallows pointer / wheel / hover so
 /// everything behind stays inert (no visual dimming, per design preference),

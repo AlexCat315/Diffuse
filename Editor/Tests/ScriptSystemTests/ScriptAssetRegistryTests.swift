@@ -8,7 +8,7 @@ struct ScriptAssetRegistryTests {
     @Test("renaming a source file preserves its asset identity and legacy aliases")
     func renamePreservesIdentity() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-script-assets-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-script-assets-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let trustURL = project.appendingPathComponent("user-trust.json")
         let manager = DynamicScriptManager(projectDirectory: project.path,
@@ -33,9 +33,9 @@ struct ScriptAssetRegistryTests {
     @Test("workspace trust is fail-closed and stored outside project state")
     func trustIsExplicitAndPersistent() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-script-trust-project-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("cove-script-trust-project-\(UUID().uuidString)", isDirectory: true)
         let userStore = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-script-trust-user-\(UUID().uuidString).json")
+            .appendingPathComponent("cove-script-trust-user-\(UUID().uuidString).json")
         defer {
             try? FileManager.default.removeItem(at: project)
             try? FileManager.default.removeItem(at: userStore)

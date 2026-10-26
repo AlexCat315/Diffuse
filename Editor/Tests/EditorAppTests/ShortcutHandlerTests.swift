@@ -1,7 +1,7 @@
 @testable import EditorUI
 import EditorCore
 import EngineKernel
-import GuavaUICompose
+import CoveUICompose
 import Testing
 
 @Suite("EditorShortcutHandler")

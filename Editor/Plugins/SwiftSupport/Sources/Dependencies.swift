@@ -1,4 +1,4 @@
-import GuavaPluginKit
+import CovePluginKit
 
 /// The packages a `Package.resolved` pins, as a table beside its JSON: what
 /// SwiftPM resolved, at which version or branch, and where it comes from.

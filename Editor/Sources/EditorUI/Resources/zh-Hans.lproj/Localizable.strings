@@ -110,7 +110,7 @@
 "Help" = "帮助";
 "New Scene" = "新建场景";
 "Open Scene..." = "打开场景...";
-"Guava Scene" = "Guava 场景";
+"Cove Scene" = "Cove 场景";
 "Save Scene" = "保存场景";
 "Import Assets..." = "导入资源...";
 "Undo" = "撤销";
@@ -122,7 +122,7 @@
 "Build Project" = "构建项目";
 "Build and Run" = "构建并运行";
 "Documentation" = "文档";
-"About Guava" = "关于 Guava";
+"About Cove" = "关于 Cove";
 "Version" = "版本";
 "Development Build" = "开发版本";
 "An AI-assisted workstation for code, games, animation and video." = "AI 辅助的代码、游戏、动画与视频工作站。";
@@ -144,7 +144,7 @@
 "Bake" = "烘焙";
 "Pause" = "暂停";
 "Stop" = "停止";
-"Guava Make" = "Guava 制作";
+"Cove Make" = "Cove 制作";
 "Settings" = "设置";
 "Platforms" = "平台";
 "Preset" = "预设";
@@ -182,7 +182,7 @@
 "Stored credential could not be removed. See Console for details." = "无法移除存储的凭据，请在控制台查看详情。";
 "AI Plugins" = "AI 插件";
 "PluginHost is unavailable. Rebuild or reinstall the Editor." = "PluginHost 不可用，请重新构建或安装编辑器。";
-"Choose .guavaplugin Folder" = "选择 .guavaplugin 文件夹";
+"Choose .coveplugin Folder" = "选择 .coveplugin 文件夹";
 "Inspecting plugin without loading it…" = "正在检查插件（尚未加载）…";
 "Enabled Plugins" = "已启用插件";
 "Access" = "访问等级";
@@ -381,7 +381,7 @@
 "Front to Back" = "从前到后";
 "GPU Preferred" = "优先使用 GPU";
 "GPU Required" = "必须使用 GPU";
-"GuavaStudio" = "GuavaStudio";
+"Diffuse" = "Diffuse";
 "Half Extents" = "半尺寸";
 "Half Height" = "半高度";
 "Height Field" = "高度场";
@@ -729,7 +729,7 @@
 "Convert the files to a supported model or texture format, then import again." = "将文件转换为支持的模型或纹理格式，然后重新导入。";
 "Open Problems, repair the reported files, then Reload Assets." = "打开问题列表，修复报告的文件，然后重新加载资源。";
 "Check project assets and script trust in Settings, then export again." = "检查项目资源以及设置中的脚本信任状态，然后重新导出。";
-"Build GuavaPlayer or set GUAVA_PLAYER_EXECUTABLE, then export again." = "构建 GuavaPlayer 或设置 GUAVA_PLAYER_EXECUTABLE，然后重新导出。";
+"Build CovePlayer or set COVE_PLAYER_EXECUTABLE, then export again." = "构建 CovePlayer 或设置 COVE_PLAYER_EXECUTABLE，然后重新导出。";
 "Check Build Output and project assets, fix the errors, then export again." = "检查构建输出与项目资源，修复错误，然后重新导出。";
 "Enter a project-relative path and save scripts referencing this asset before moving it." = "请输入项目相对路径，并先保存引用此资源的脚本，然后移动资源。";
 "Check the destination, file permissions and dependencies, then retry." = "检查目标路径、文件权限与依赖，然后重试。";
@@ -809,14 +809,14 @@
 "Session Journal" = "会话日志";
 "This Session" = "本次会话";
 "Project commands" = "项目命令";
-"Tell Guava what you want to do…" = "告诉 Guava 你想做什么…";
-"Tell Guava what you want to do… (> commands, @ files, # entities)" = "告诉 Guava 你想做什么…（> 命令，@ 文件，# 实体）";
+"Tell Cove what you want to do…" = "告诉 Cove 你想做什么…";
+"Tell Cove what you want to do… (> commands, @ files, # entities)" = "告诉 Cove 你想做什么…（> 命令，@ 文件，# 实体）";
 "A fresh start" = "新的开始";
 "Tasks and activity appear here as you work." = "任务和操作记录会显示在这里。";
 "New Task" = "新任务";
 "Clear conversation" = "清空对话";
 "What shall we make?" = "一起创造点什么？";
-"One workspace. A shared scene. Tell Guava what you want to create, change, or understand." = "同一个工作台，共同的场景。告诉 Guava，你想创造、修改，或了解什么。";
+"One workspace. A shared scene. Tell Cove what you want to create, change, or understand." = "同一个工作台，共同的场景。告诉 Cove，你想创造、修改，或了解什么。";
 "Connect an AI provider to start working together." = "连接 AI 服务，开始一起工作。";
 "Set up Assistant" = "配置助手";
 "TRY A STARTING POINT" = "从这里开始";
@@ -825,7 +825,7 @@
 "Find issues in this project" = "检查项目中的问题";
 "Review before applying" = "审阅后应用";
 "Context" = "上下文";
-"Ask Guava" = "交给 Guava";
+"Ask Cove" = "交给 Cove";
 "Open Assistant" = "打开助手";
 "Work with the assistant in this context" = "在当前上下文中与助手协作";
 
@@ -845,14 +845,14 @@
 "Run" = "运行";
 "Space" = "Space";
 "Open Resource..." = "打开资源…";
-"Ask Guava..." = "交给 Guava…";
+"Ask Cove..." = "交给 Cove…";
 "Play / Pause" = "试玩 / 暂停";
 "Settings..." = "设置…";
 "Application Menu" = "应用菜单";
 "Hide %@" = "隐藏 %@";
 "Hide Others" = "隐藏其他";
 "Quit %@" = "退出 %@";
-"Guava is working" = "Guava 正在执行";
+"Cove is working" = "Cove 正在执行";
 "Assistant ready" = "助手就绪";
 "Assistant offline" = "助手未连接";
 "Select" = "选择";

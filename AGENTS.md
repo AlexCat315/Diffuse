@@ -9,6 +9,6 @@ I will not allow Python to pollute my project!
 
 Avoid unnecessary supporting text, descriptive copy, and redundant UI microcopy.
 
-Please use the `guava cli` command to run the program; do not use the `swift` command.
+Please use the `cove cli` command to run the program; do not use the `swift` command.
 
 A changelog must be written for every new version release.

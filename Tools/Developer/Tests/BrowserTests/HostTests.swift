@@ -32,8 +32,8 @@ final class HostTests: XCTestCase {
   }
 
   func testRealChromiumProtocolAndScreenshot() throws {
-    guard ProcessInfo.processInfo.environment["GUAVA_TEST_CHROMIUM"] == "1" else {
-      throw XCTSkip("Set GUAVA_TEST_CHROMIUM=1 to exercise an installed Chromium")
+    guard ProcessInfo.processInfo.environment["COVE_TEST_CHROMIUM"] == "1" else {
+      throw XCTSkip("Set COVE_TEST_CHROMIUM=1 to exercise an installed Chromium")
     }
     let server = try HTTPServer(port: 0) { _, response in
       response.send(

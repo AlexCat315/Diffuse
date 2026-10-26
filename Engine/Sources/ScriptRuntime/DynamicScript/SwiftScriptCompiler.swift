@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 #if canImport(Darwin)
 import Darwin
@@ -124,7 +124,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
 
     /// C ABI symbols exported by the host that scripts may call.
     ///
-    /// These correspond to the `@_cdecl("guava_*")` functions declared in
+    /// These correspond to the `@_cdecl("cove_*")` functions declared in
     /// `ScriptCBridge*.swift`. The list is used to generate the Windows
     /// `.def` file. Keep it in sync with the bridge sources, or populate it
     /// automatically via ``scanExportedSymbols(in:)``.
@@ -154,7 +154,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
             guard fileURL.pathExtension == "swift" else { continue }
             let content = try String(contentsOf: fileURL, encoding: .utf8)
             // Scan line by line so documentation comments like
-            // `/// @_cdecl("guavaCreateScript")` are not picked up.
+            // `/// @_cdecl("coveCreateScript")` are not picked up.
             for line in content.components(separatedBy: .newlines) {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if trimmed.hasPrefix("//") { continue }
@@ -178,7 +178,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         clangIncludePaths: [String] = [],
         libraryPaths: [String] = [],
         outputDirectory: URL,
-        hostModuleName: String = "GuavaStudioEditor",
+        hostModuleName: String = "DiffuseEditor",
         exportedSymbols: [String] = [],
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
@@ -213,7 +213,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
                         cancellation: ScriptCompilationCancellationToken? = nil) throws -> CompilationResult {
         if cancellation?.isCancelled == true { throw ScriptCompileError.cancelled }
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-        let shimURL = outputDirectory.appendingPathComponent(".guava-entrypoint-\(UUID().uuidString).swift")
+        let shimURL = outputDirectory.appendingPathComponent(".cove-entrypoint-\(UUID().uuidString).swift")
         try AtomicFile.write(Data(Self.generatedEntryPointSource.utf8), to: shimURL)
         defer { try? FileManager.default.removeItem(at: shimURL) }
 
@@ -348,14 +348,14 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     private static let generatedEntryPointSource = """
     import ScriptRuntime
 
-    @_cdecl("guavaScriptDefinition")
-    public func guavaScriptDefinition(_ output: UnsafeMutableRawPointer) {
+    @_cdecl("coveScriptDefinition")
+    public func coveScriptDefinition(_ output: UnsafeMutableRawPointer) {
         let definition = (GameScript.self as? any ScriptAuthoring.Type)?.definition ?? ScriptDefinition()
         output.assumingMemoryBound(to: ScriptDefinition.self).pointee = definition
     }
 
-    @_cdecl("guavaCreateScript")
-    public func guavaCreateScript(_ output: UnsafeMutableRawPointer) {
+    @_cdecl("coveCreateScript")
+    public func coveCreateScript(_ output: UnsafeMutableRawPointer) {
         output.assumingMemoryBound(to: Script.self).pointee = Script(behavior: GameScript.self)
     }
     """
@@ -454,7 +454,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     // MARK: - Windows import library
 
     /// The file name (without extension) of the generated import library.
-    private var importLibraryName: String { "guava_scripts" }
+    private var importLibraryName: String { "cove_scripts" }
 
     /// Generates the `.def` file and runs `llvm-dlltool` to produce the
     /// import library. Returns the path to the resulting `.lib`.
@@ -500,10 +500,10 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     /// Builds the contents of the `.def` file.
     ///
     /// ```
-    /// LIBRARY GuavaStudioEditor
+    /// LIBRARY DiffuseEditor
     /// EXPORTS
-    ///     guava_input_axis
-    ///     guava_input_held
+    ///     cove_input_axis
+    ///     cove_input_held
     ///     ...
     /// ```
     private func buildDefFileContent() -> String {

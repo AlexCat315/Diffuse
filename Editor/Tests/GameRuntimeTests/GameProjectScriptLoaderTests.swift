@@ -11,7 +11,7 @@ private final class PlayerScriptTestBundle: NSObject {}
 @Suite("Exported Swift gameplay", .serialized)
 struct GameProjectScriptLoaderTests {
     private func temporaryProject() throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("guava-script-export-\(UUID())")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cove-script-export-\(UUID())")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
@@ -75,10 +75,10 @@ struct GameProjectScriptLoaderTests {
         let fileManager = FileManager.default
         let editorRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let override = ProcessInfo.processInfo.environment["GUAVA_TEST_PLAYER_EXECUTABLE"].map { URL(fileURLWithPath: $0) }
+        let override = ProcessInfo.processInfo.environment["COVE_TEST_PLAYER_EXECUTABLE"].map { URL(fileURLWithPath: $0) }
         let bundle = Bundle(for: PlayerScriptTestBundle.self).bundleURL
         let player = try #require(override ?? [bundle, bundle.deletingLastPathComponent()]
-            .map { $0.appendingPathComponent("GuavaPlayer") }
+            .map { $0.appendingPathComponent("CovePlayer") }
             .first { fileManager.isExecutableFile(atPath: $0.path) })
         let configuration = ProjectScriptBuildConfiguration.discover(for: player)
         #expect(!configuration.engineModulePaths.isEmpty)
@@ -161,8 +161,8 @@ struct GameProjectScriptLoaderTests {
         process.executableURL = ProjectExporter.runnableExecutableURL(appName: "ScriptTest", in: output)
         process.arguments = ["--validate-project", "--simulation-frames", "2"]
         var environment = ProcessInfo.processInfo.environment
-        environment["PATH"] = "/guava-no-toolchain"
-        environment.removeValue(forKey: "GUAVA_PROJECT_DIR")
+        environment["PATH"] = "/cove-no-toolchain"
+        environment.removeValue(forKey: "COVE_PROJECT_DIR")
         process.environment = environment
         let stdout = Pipe()
         let stderr = Pipe()

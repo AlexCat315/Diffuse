@@ -59,7 +59,7 @@ private func fixture(_ name: String) -> URL { Bundle.module.resourceURL!.appendi
 #if os(macOS) || os(Linux) || os(Windows)
 @Test func trimsAndConcatenatesVideoWithSilentAudio() async throws {
     let root = fixture("video.mp4").deletingLastPathComponent()
-    let output = FileManager.default.temporaryDirectory.appendingPathComponent("guava-media-test-\(UUID().uuidString).mp4")
+    let output = FileManager.default.temporaryDirectory.appendingPathComponent("cove-media-test-\(UUID().uuidString).mp4")
     defer { try? FileManager.default.removeItem(at: output) }
     var composition = MediaComposition()
     composition.video.width = 16; composition.video.height = 16; composition.video.framesPerSecond = 10

@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import Foundation
 import PluginRuntime
 
@@ -23,7 +23,7 @@ public struct BundledPlugin: Sendable, Equatable, Identifiable {
     /// Command-line tools its process permissions run.
     public let commands: [String]
     let package: URL
-    let manifest: GuavaPluginManifest
+    let manifest: CovePluginManifest
     public var categories: [PluginCategory] {
         PluginCategory.categories(points: manifest.contributes.pointIDs, hasCapabilities: host != .declarative)
     }
@@ -36,7 +36,7 @@ enum BundledPlugins {
         let root = bundle.url(forResource: "Plugins", withExtension: nil)
             ?? bundle.bundleURL.appendingPathComponent("Plugins", isDirectory: true)
         let packages = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
-        return packages.filter { $0.pathExtension == "guavaplugin" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return packages.filter { $0.pathExtension == "coveplugin" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
             .compactMap { package in
                 guard let validated = try? PluginPackageLoader().load(at: package) else { return nil }
                 let manifest = validated.manifest
@@ -73,7 +73,7 @@ enum BundledPlugins {
     }
 
     private static func preferences(in project: String) -> URL {
-        URL(fileURLWithPath: project).appendingPathComponent(".guava/disabled_bundled_plugins.json")
+        URL(fileURLWithPath: project).appendingPathComponent(".cove/disabled_bundled_plugins.json")
     }
 }
 

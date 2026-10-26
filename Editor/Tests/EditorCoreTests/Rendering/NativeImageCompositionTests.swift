@@ -6,9 +6,9 @@ import EngineKernel
 import NativeRHI
 import NativeRendererValidation
 import RenderBackend
-import GuavaUICompose
-import GuavaUI
-@testable import GuavaUIRuntime
+import CoveUICompose
+import CoveUI
+@testable import CoveUIRuntime
 
 private struct ImageGalleryHUD: View {
     let path: String
@@ -50,12 +50,12 @@ final class NativeImageCompositionTests: XCTestCase {
             reports.append(["scale": scale, "width": size.width, "height": size.height,
                 "mean": delta.meanAbsoluteChannelError, "maximum": delta.maximumChannelError])
             if frame == 1 {
-                try GridImage.writePPM(pixels, size: size, to: URL(fileURLWithPath: "/tmp/guava-native-image-hud.ppm"))
-                try GridImage.writePPM(expected, size: size, to: URL(fileURLWithPath: "/tmp/guava-repeat-image-hud.ppm"))
+                try GridImage.writePPM(pixels, size: size, to: URL(fileURLWithPath: "/tmp/cove-native-image-hud.ppm"))
+                try GridImage.writePPM(expected, size: size, to: URL(fileURLWithPath: "/tmp/cove-repeat-image-hud.ppm"))
             }
         }
         try JSONSerialization.data(withJSONObject: reports, options: [.prettyPrinted, .sortedKeys])
-            .write(to: URL(fileURLWithPath: "/tmp/guava-native-image-hud-parity.json"))
+            .write(to: URL(fileURLWithPath: "/tmp/cove-native-image-hud-parity.json"))
     }
 
     @MainActor
@@ -103,7 +103,7 @@ final class NativeImageCompositionTests: XCTestCase {
     }
 
     private func fixture() throws -> URL {
-        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("guava-owned-image-\(UUID()).svg")
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("cove-owned-image-\(UUID()).svg")
         try """
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="16">
         <rect width="12" height="8" fill="#ff0011"/><rect x="12" width="12" height="8" fill="#00dd22"/>

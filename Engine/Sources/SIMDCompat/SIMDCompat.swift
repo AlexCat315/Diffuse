@@ -488,7 +488,7 @@ public func * (lhs: simd_quatf, rhs: simd_quatf) -> simd_quatf {
 #endif
 
 /// Spherical interpolation matching the Apple simd shortest-arc behavior.
-public func guavaSlerp(_ start: simd_quatf,
+public func coveSlerp(_ start: simd_quatf,
                        _ end: simd_quatf,
                        _ t: Float) -> simd_quatf {
     func normalized(_ vector: SIMD4<Float>) -> SIMD4<Float> {

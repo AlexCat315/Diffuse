@@ -9,7 +9,7 @@ struct EditorSceneRecoveryTests {
     @Test("an explicitly selected scene file loads and survives the unsaved prompt")
     func opensExplicitSceneFile() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-open-scene-\(UUID().uuidString)",
+            .appendingPathComponent("diffuse-open-scene-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -36,7 +36,7 @@ struct EditorSceneRecoveryTests {
     @Test("corrupt scene recovery is quarantined with a diagnostic")
     func corruptSceneRecoveryIsQuarantined() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-corrupt-recovery-\(UUID().uuidString)",
+            .appendingPathComponent("diffuse-corrupt-recovery-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         let recoveryURL = GameSaveDocument.url(slot: GameSaveDocument.autoSaveSlot,
@@ -69,12 +69,12 @@ struct EditorSceneRecoveryTests {
     @Test("corrupt AI context memory is quarantined instead of silently disabling memory")
     func corruptContextMemoryIsQuarantined() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-context-memory-\(UUID().uuidString)",
+            .appendingPathComponent("diffuse-context-memory-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
-        let guavaDirectory = project.appendingPathComponent(".guava", isDirectory: true)
-        try FileManager.default.createDirectory(at: guavaDirectory, withIntermediateDirectories: true)
-        let memoryURL = guavaDirectory.appendingPathComponent("context_memory.json")
+        let coveDirectory = project.appendingPathComponent(".cove", isDirectory: true)
+        try FileManager.default.createDirectory(at: coveDirectory, withIntermediateDirectories: true)
+        let memoryURL = coveDirectory.appendingPathComponent("context_memory.json")
         try Data("not-json".utf8).write(to: memoryURL)
 
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
@@ -85,7 +85,7 @@ struct EditorSceneRecoveryTests {
         })
 
         app.shutdown()
-        let files = try FileManager.default.contentsOfDirectory(at: guavaDirectory,
+        let files = try FileManager.default.contentsOfDirectory(at: coveDirectory,
                                                                 includingPropertiesForKeys: nil)
         #expect(files.contains {
             $0.lastPathComponent.hasPrefix("context_memory.corrupt-")
@@ -101,7 +101,7 @@ struct EditorSceneRecoveryTests {
     @Test("core playback state machine rejects stopping-to-paused and no-op transitions")
     func corePlaybackStateMachineRejectsInvalidTransitions() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-playback-policy-\(UUID().uuidString)",
+            .appendingPathComponent("diffuse-playback-policy-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -117,18 +117,18 @@ struct EditorSceneRecoveryTests {
     @Test("an interrupted Play snapshot is recovered on the next launch")
     func interruptedPlaySnapshotRecovery() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-interrupted-play-\(UUID().uuidString)",
+            .appendingPathComponent("diffuse-interrupted-play-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
-        let guavaDirectory = project.appendingPathComponent(".guava", isDirectory: true)
-        try FileManager.default.createDirectory(at: guavaDirectory,
+        let coveDirectory = project.appendingPathComponent(".cove", isDirectory: true)
+        try FileManager.default.createDirectory(at: coveDirectory,
                                                 withIntermediateDirectories: true)
 
         let authored = EditorSceneAdapter()
         let sourceID = try #require(authored.defaultSelectionID)
         let recoveredPosition = SIMD3<Float>(12, 8, -4)
         authored.setEntityLocalTranslation(sourceID, to: recoveredPosition)
-        let snapshotURL = guavaDirectory.appendingPathComponent("physics-play-snapshot.json")
+        let snapshotURL = coveDirectory.appendingPathComponent("physics-play-snapshot.json")
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(authored.manifest(selectedEntityID: sourceID))
@@ -151,13 +151,13 @@ struct EditorSceneRecoveryTests {
     @Test("clean shutdown removes the Play crash marker")
     func cleanShutdownRemovesPlaySnapshot() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-clean-play-exit-\(UUID().uuidString)",
+            .appendingPathComponent("diffuse-clean-play-exit-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         let snapshotURL = project
-            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent(".cove", isDirectory: true)
             .appendingPathComponent("physics-play-snapshot.json")
 
         app.applyPlaybackState(.playing)
@@ -170,7 +170,7 @@ struct EditorSceneRecoveryTests {
     @Test("dirty scene is autosaved on shutdown, restored, and cleared by an explicit save")
     func shutdownRecoveryRoundTrip() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-recovery-\(UUID().uuidString)",
+            .appendingPathComponent("diffuse-recovery-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -206,7 +206,7 @@ struct EditorSceneRecoveryTests {
     @Test("saving during playback persists the authored scene, not runtime mutations")
     func saveDuringPlaybackUsesPrePlaySnapshot() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-play-save-\(UUID().uuidString)",
+            .appendingPathComponent("diffuse-play-save-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -244,7 +244,7 @@ struct EditorSceneRecoveryTests {
     @Test("exporting during playback packages the authored scene, not runtime mutations")
     func exportDuringPlaybackUsesPrePlaySnapshot() throws {
         let project = FileManager.default.temporaryDirectory
-            .appendingPathComponent("guava-studio-play-export-\(UUID().uuidString)",
+            .appendingPathComponent("diffuse-play-export-\(UUID().uuidString)",
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

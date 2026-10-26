@@ -113,7 +113,7 @@ public struct LanguageCatalog: Sendable {
     }
 
     private static func server(of language: LanguageContribution,
-                               in manifest: GuavaPluginManifest)
+                               in manifest: CovePluginManifest)
     -> (contribution: LanguageServerContribution, process: PluginProcessPermission)? {
         language.server.flatMap { server in
             manifest.host.processes.first { $0.id == server.process }.map { (server, $0) }

@@ -20,7 +20,7 @@ struct ToolchainActivationTests {
         let manager: DynamicScriptManager
 
         init() throws {
-            directory = FileManager.default.temporaryDirectory.appendingPathComponent("guava-toolchain-activation-\(UUID().uuidString)")
+            directory = FileManager.default.temporaryDirectory.appendingPathComponent("cove-toolchain-activation-\(UUID().uuidString)")
             previous = directory.appendingPathComponent("Previous")
             candidate = directory.appendingPathComponent("Candidate")
             preferences = directory.appendingPathComponent("Preferences")
@@ -32,8 +32,8 @@ struct ToolchainActivationTests {
                 let reply = try JSONSerialization.data(withJSONObject: ["compilerVersion": "Swift version 6.4.1",
                     "paths": ["runtimeResourcePath": resources.path]])
                 let compiler = binaries.appendingPathComponent("swiftc")
-                let script = "#!/bin/sh\nif [ \"$1\" = \"-print-target-info\" ]; then\ncat <<'GUAVA_REPLY'\n"
-                    + String(decoding: reply, as: UTF8.self) + "\nGUAVA_REPLY\nfi\nexit 0\n"
+                let script = "#!/bin/sh\nif [ \"$1\" = \"-print-target-info\" ]; then\ncat <<'COVE_REPLY'\n"
+                    + String(decoding: reply, as: UTF8.self) + "\nCOVE_REPLY\nfi\nexit 0\n"
                 try Data(script.utf8).write(to: compiler)
                 let server = binaries.appendingPathComponent("sourcekit-lsp")
                 try Data("#!/bin/sh\nexit 0\n".utf8).write(to: server)
@@ -109,7 +109,7 @@ struct ToolchainActivationTests {
         }
         let previousState = model.snapshot.languageServiceState
         do {
-            try await model.configureSwiftToolchain(path: "/missing/guava-toolchain", preferencesDirectory: fixture.preferences,
+            try await model.configureSwiftToolchain(path: "/missing/cove-toolchain", preferencesDirectory: fixture.preferences,
                 activate: { Issue.record("Invalid toolchains must not reach activation") }, recover: {})
             Issue.record("Invalid toolchains must fail")
         } catch {}
@@ -117,7 +117,7 @@ struct ToolchainActivationTests {
         #expect(!model.snapshot.toolchainActivity.isBusy)
         model.stopLanguageService()
         do {
-            try await model.configureSwiftToolchain(path: "/missing/guava-toolchain", preferencesDirectory: fixture.preferences,
+            try await model.configureSwiftToolchain(path: "/missing/cove-toolchain", preferencesDirectory: fixture.preferences,
                 activate: {}, recover: {})
         } catch {}
         #expect(model.snapshot.languageServiceState == .inactive)

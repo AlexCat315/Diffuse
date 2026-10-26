@@ -1,5 +1,5 @@
-internal import GuavaUI
-internal import GuavaUIRuntime
+internal import CoveUI
+internal import CoveUIRuntime
 
 enum ScriptSymbolIcon: Equatable {
     case type, interface, function, property, enumeration, variable, namespace, value, symbol

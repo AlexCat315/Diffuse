@@ -1,15 +1,15 @@
 # 浏览器插件执行
 
-浏览器不加载 Wasmtime 的本机静态库。这个目标将 Guava 的同一个 `.guavaplugin` Component 包在应用构建时转换为 core Wasm 和可信胶水代码，并在专用 Module Worker 中执行。固定使用 Bytecode Alliance Jco 1.37.0，依赖树由 `package-lock.json` 锁定。
+浏览器不加载 Wasmtime 的本机静态库。这个目标将 Cove 的同一个 `.coveplugin` Component 包在应用构建时转换为 core Wasm 和可信胶水代码，并在专用 Module Worker 中执行。固定使用 Bytecode Alliance Jco 1.37.0，依赖树由 `package-lock.json` 锁定。
 
 准备与打包，在仓库根目录运行：
 
 ```sh
-swift build --package-path Engine --product GuavaPluginHost
+swift build --package-path Engine --product DiffusePluginHost
 npm ci --prefix Platforms/Web/Plugins --ignore-scripts
 node Platforms/Web/Plugins/src/packaging/entry.js \
-  path/to/example.guavaplugin path/to/new-web-output \
-  "$(swift build --package-path Engine --show-bin-path)/GuavaPluginHost"
+  path/to/example.coveplugin path/to/new-web-output \
+  "$(swift build --package-path Engine --show-bin-path)/DiffusePluginHost"
 ```
 
 输出目录必须是新目录，避免覆盖已经发布的包。工具先复制运行时插件包（manifest、WIT、component 及可选的已声明资源），再调用原生宿主校验 manifest、WIT、Component 实际类型和 imports；随后让 Jco 生成可重复实例化的模块。没有第二套 WIT 解析器。core Wasm 内存和表的最大值在打包时写入二进制；不允许 shared memory 或 memory64。
@@ -35,7 +35,7 @@ const result = await plugin.prepare('safe.reader.inspect', { enabled: true });
 const result = await plugin.prepare('safe.reader.inspect', { enabled: true }, {
   snapshot: {
     sceneRevision: 42,
-    values: { 'guava:scene/query': { entities: [], revision: 42 } },
+    values: { 'cove:scene/query': { entities: [], revision: 42 } },
   },
   signal: abortController.signal,
   timeoutMilliseconds: 1000,
@@ -50,9 +50,9 @@ const result = await plugin.prepare('safe.reader.inspect', { enabled: true }, {
 
 ```sh
 npm test --prefix Platforms/Web/Plugins
-swift run --package-path Tools/Developer guava-dev browser web-plugins \
-  --host "$(swift build --package-path Engine --show-bin-path)/GuavaPluginHost" \
-  --probe Engine/build/plugin-probe/GuavaPluginProbe
+swift run --package-path Tools/Developer cove-dev browser web-plugins \
+  --host "$(swift build --package-path Engine --show-bin-path)/DiffusePluginHost" \
+  --probe Engine/build/plugin-probe/CovePluginProbe
 ```
 
-`GUAVA_CHROMIUM` 可指定已有 Chromium 可执行文件。浏览器测试覆盖真实 Component 执行、强类型输入、查询授权、授权失效、文件篡改、无限循环超时、取消及恢复。此目标提供插件执行能力，不代表 `guava build --web` 已实现完整的 Web 应用交付。
+`COVE_CHROMIUM` 可指定已有 Chromium 可执行文件。浏览器测试覆盖真实 Component 执行、强类型输入、查询授权、授权失效、文件篡改、无限循环超时、取消及恢复。此目标提供插件执行能力，不代表 `cove build --web` 已实现完整的 Web 应用交付。

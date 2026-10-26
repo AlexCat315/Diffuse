@@ -1,8 +1,8 @@
 import LanguageServerRuntime
-public import GuavaProcess
-import GuavaLogging
+public import CoveProcess
+import CoveLogging
 import Foundation
-import GuavaUICompose
+import CoveUICompose
 
 /// Orchestrates one SourceKit-LSP session for the project's script files.
 ///
@@ -189,7 +189,7 @@ public actor ScriptLanguageSupport {
         command.arguments = SourceKitLSPCommandLine.arguments(for: workspace.rootURL,
             capabilities: SourceKitLSPExecutableLocator.probeCapabilities(executableURL: executableURL))
         command.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
-        command.environment["GUAVA_LOG_RUN_ID"] = LogSystem.launch.runID
+        command.environment["COVE_LOG_RUN_ID"] = LogSystem.launch.runID
         var configuration = LanguageServerConfiguration(command: command, workspace: workspace.rootURL)
         // The project folder is a second root: its own Swift files and package are
         // analyzed in place, and its package keeps a background index under
@@ -261,7 +261,7 @@ public actor ScriptLanguageSupport {
     private func setState(_ state: ScriptLanguageServiceState) {
         guard lifecycle.state != state else { return }
         lifecycle.state = state
-        let logger = LogSystem.logger("com.guava.editor.lsp")
+        let logger = LogSystem.logger("com.cove.editor.lsp")
         switch state {
         case .inactive: logger.info("Swift language server stopped")
         case .starting: logger.info("Swift language server starting")
@@ -429,7 +429,7 @@ public actor ScriptLanguageSupport {
         guard connectionID == lifecycle.connectionID else { throw LSPClientError.notRunning }
         return ScriptAssistanceReplies.workspaceSymbols(payload, limit: 200).compactMap { symbol in
             let scriptID = scriptIdentifier(forDocumentURI: symbol.uri)
-            if scriptID == nil, symbol.uri.contains("/.guava/") { return nil }
+            if scriptID == nil, symbol.uri.contains("/.cove/") { return nil }
             return ScriptWorkspaceSymbol(name: symbol.name, kind: symbol.kind, containerName: symbol.container,
                                          location: ScriptDefinitionLocation(documentURI: symbol.uri, scriptID: scriptID, span: symbol.span))
         }
@@ -608,7 +608,7 @@ public actor ScriptLanguageSupport {
     private func handleServiceNotification(_ notification: LSPNotification) {
         guard let object = try? JSONSerialization.jsonObject(with: notification.params) as? [String: Any] else { return }
         switch notification.method {
-        case "window/logMessage", "window/showMessage", "guava/stderr":
+        case "window/logMessage", "window/showMessage", "cove/stderr":
             guard let message = object["message"] as? String, !message.isEmpty else { return }
             let level: ScriptLanguageLogEntry.Level
             switch object["type"] as? Int {

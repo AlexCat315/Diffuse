@@ -5,7 +5,7 @@
   "description": "Lore working trees and file locks for the Source Control panel, file tree, status bar and agent tools.",
   "access": "read",
   "imports": [
-    "guava:process/host"
+    "cove:process/host"
   ],
   "composable_host_capabilities": [],
   "host": {
@@ -41,7 +41,7 @@
     ]
   },
   "contributes": {
-    "guava.vcs/v1": [
+    "cove.vcs/v1": [
       {
         "id": "lore",
         "title": "Lore",
@@ -50,7 +50,7 @@
         "priority": 1
       }
     ],
-    "guava.ai.context/v1": [
+    "cove.ai.context/v1": [
       {
         "id": "lore",
         "title": "Lore Workspace",

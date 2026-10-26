@@ -8,7 +8,7 @@ public struct ScriptAuthoringDefaults: Sendable {
 
 public extension ComponentRegistry {
     /// Adds script persistence to this registry without changing another scene.
-    mutating func registerScriptCodec(defaultIdentifier: String = "guava.rotator") {
+    mutating func registerScriptCodec(defaultIdentifier: String = "cove.rotator") {
         guard self["script"] == nil else { return }
         register(ComponentSchema(ScriptComponent.self, typeID: "script", displayName: "Script", category: .scripting,
             encode: { world, entity, context in

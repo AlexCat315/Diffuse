@@ -1,6 +1,6 @@
 internal import Foundation
 internal import ToolSupport
-internal import GuavaProcess
+internal import CoveProcess
 
 /// Device commands share the same finite-process IO and deadline behavior as
 /// repository checks. Only file/inherited output needs a direct streaming path.

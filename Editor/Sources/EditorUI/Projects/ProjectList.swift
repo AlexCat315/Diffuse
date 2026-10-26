@@ -3,8 +3,8 @@ import Foundation
 /// The projects the window keeps open across launches, in sidebar order, and
 /// the one in front.
 struct EditorProjectList: Equatable {
-    private static let openKey = "GuavaOpenProjects"
-    private static let activeKey = "GuavaActiveProject"
+    private static let openKey = "CoveOpenProjects"
+    private static let activeKey = "CoveActiveProject"
 
     var paths: [String] = []
     var active: String?

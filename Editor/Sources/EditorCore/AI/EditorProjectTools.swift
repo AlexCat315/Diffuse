@@ -1,4 +1,4 @@
-private import GuavaFileSystem
+private import CoveFileSystem
 import AIRuntime
 import CapabilityRuntime
 import Foundation
@@ -267,7 +267,7 @@ extension EditorApplication {
     RenderMeshComponent(meshIndex: 0, colorTint: SIMD3<Float>) renders a cube.
     CameraComponent(target: SIMD3<Float>) renders from its entity's transform translation.
     LightComponent(type: .directional, intensity: Float) adds a light to its entity.
-    context.setResource(InputActionMap.guavaDefault); context.input.axis("move_x"/"move_y").
+    context.setResource(InputActionMap.coveDefault); context.input.axis("move_x"/"move_y").
     InputActionMap.bind("restart", to: .key(Scancode.r)); input.isJustPressed("restart").
     context.setResource(custom Sendable resource); resource(Resource.self).
     context.drawUI { canvas in canvas.label("Score: 0", x: 24, y: 24, fontSize: 24) }.

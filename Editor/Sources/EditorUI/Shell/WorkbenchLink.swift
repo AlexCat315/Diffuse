@@ -1,5 +1,5 @@
 internal import EditorCore
-internal import GuavaUIWorkspace
+internal import CoveUIWorkspace
 
 /// Lets a panel change the window's arrangement (focus mode, revealing a
 /// sibling panel) without the registry having to own the controller.

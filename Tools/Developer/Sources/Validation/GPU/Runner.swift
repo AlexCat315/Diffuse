@@ -2,7 +2,7 @@ internal import Foundation
 internal import ToolSupport
 
 /// Port of `scripts/test-gpu-regression.sh`, the CI orchestration for the GPU
-/// regression job. It runs the fixed inventory in Engine and GuavaUI, tee-ing
+/// regression job. It runs the fixed inventory in Engine and CoveUI, tee-ing
 /// each command's combined output, then verifies the fresh report directory.
 enum Runner {
   /// Fixed suite selections, copied verbatim from the shell script so newly
@@ -31,15 +31,15 @@ enum Runner {
 
     let root = Repository.root
     let output =
-      override("GUAVA_GPU_TEST_OUTPUT_DIR")
+      override("COVE_GPU_TEST_OUTPUT_DIR")
       ?? root.appendingPathComponent("Engine/build/gpu-regression")
     try Fs.directory(output)
     let report = try makeReportDirectory(in: output)
 
     var environment = ProcessInfo.processInfo.environment
-    environment["GUAVA_RUN_GPU_SMOKE_TESTS"] = "1"
-    environment["GUAVA_GPU_TEST_OUTPUT_DIR"] = output.path
-    let swift = overrideString("GUAVA_SWIFT_EXECUTABLE") ?? "swift"
+    environment["COVE_RUN_GPU_SMOKE_TESTS"] = "1"
+    environment["COVE_GPU_TEST_OUTPUT_DIR"] = output.path
+    let swift = overrideString("COVE_SWIFT_EXECUTABLE") ?? "swift"
 
     try Tee.run(
       [
@@ -50,7 +50,7 @@ enum Runner {
       environment: environment, log: report.appendingPathComponent("gpu.log"))
     try Tee.run(
       [
-        swift, "test", "--package-path", root.appendingPathComponent("GuavaUI").path,
+        swift, "test", "--package-path", root.appendingPathComponent("CoveUI").path,
         "--filter", uiFilter,
         "--xunit-output", report.appendingPathComponent("ui-results.xml").path,
       ],

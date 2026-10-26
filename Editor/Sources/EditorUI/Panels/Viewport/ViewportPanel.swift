@@ -4,8 +4,8 @@ import EngineKernel
 import CoreGraphics
 #endif
 import Foundation
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 import RenderBackend
 import SceneRuntime
 import SIMDCompat

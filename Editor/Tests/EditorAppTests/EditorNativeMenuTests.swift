@@ -1,7 +1,7 @@
 @testable import EditorUI
 import EditorCore
-import GuavaUI
-import GuavaUIRuntime
+import CoveUI
+import CoveUIRuntime
 import Testing
 
 @Suite("Editor native menu")
@@ -46,10 +46,10 @@ struct EditorNativeMenuTests {
     func applicationMenu() {
         let bar = EditorNativeMenuBuilder.make(catalog: catalog()) { _ in }
         let application = actions(bar.applicationItems)
-        #expect(application.map(\.title) == [L("About Guava"), L("Settings...")])
+        #expect(application.map(\.title) == [L("About Cove"), L("Settings...")])
         #expect(application.last?.keyEquivalent == ",")
         #expect(!actions(bar.menus.flatMap(\.items)).contains { $0.keyEquivalent == "," })
-        #expect(bar.applicationTitles.quit.contains("GuavaStudio"))
+        #expect(bar.applicationTitles.quit.contains("Diffuse"))
     }
 
     @MainActor

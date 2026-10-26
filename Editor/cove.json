@@ -1,0 +1,24 @@
+{
+  "application": {
+    "id": "com.cove.diffuse",
+    "name": "Diffuse"
+  },
+  "toolchain": {
+    "sdkVersion": "0.2.0"
+  },
+  "targets": {
+    "platforms": [
+      "mac",
+      "win",
+      "linux"
+    ],
+    "desktopExecutable": "EditorApp",
+    "desktopHelpers": [
+      "DiffusePluginHost"
+    ]
+  },
+  "version": {
+    "name": "0.1.0",
+    "build": 1
+  }
+}

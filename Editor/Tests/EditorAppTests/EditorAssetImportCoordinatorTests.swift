@@ -7,7 +7,7 @@ struct EditorAssetImportCoordinatorTests {
     @Test("shared import copy includes local glTF dependencies")
     func copiesDependencies() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "guava-studio-import-\(UUID().uuidString)",
+            "diffuse-import-\(UUID().uuidString)",
             isDirectory: true
         )
         defer { try? FileManager.default.removeItem(at: root) }
