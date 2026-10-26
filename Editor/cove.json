@@ -4,7 +4,7 @@
     "name": "Diffuse"
   },
   "toolchain": {
-    "sdkVersion": "0.2.1"
+    "sdkVersion": "0.2.2"
   },
   "targets": {
     "platforms": [
