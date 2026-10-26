@@ -352,7 +352,8 @@ public final class EditorApplication: @unchecked Sendable {
         let wantsContinuousFrames = EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: state.viewport.realtimeEnabled,
             playbackState: state.timing.playbackState,
-            continuousViewportInteractionActive: continuousViewportInteractionActive
+            continuousViewportInteractionActive: continuousViewportInteractionActive,
+            isPresentationActive: state.shouldRender
         )
         let renderViewport = renderGate.shouldRender(
             signature: EditorViewportRenderGate.Signature(
@@ -365,6 +366,7 @@ public final class EditorApplication: @unchecked Sendable {
             forceContinuous: wantsContinuousFrames,
             hasViewportInput: !inputEvents.isEmpty,
             temporalEffectsActive: lastQueuedRenderSettings.postProcessing.taa,
+            isPresentationActive: state.shouldRender,
             now: monotonicNow()
         )
         let shouldSubmitEngineTick = shouldAdvanceSceneSimulation || renderViewport

@@ -162,7 +162,7 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
         events: events,
         onTick: { dt in
             context.tick(deltaTime: dt)
-            if let bundle = context.bundle {
+            if let bundle = context.bundle, bundle.app.store.shouldRender {
                 // Fixed game resolutions simulate the same HUD pixel layout
                 // across desktop content scales; Fit Window uses logical points.
                 let store = bundle.app.store

@@ -53,7 +53,13 @@ public struct EditorViewportRenderGate {
                                       forceContinuous: Bool,
                                       hasViewportInput: Bool,
                                       temporalEffectsActive: Bool,
+                                      isPresentationActive: Bool = true,
                                       now: Double) -> Bool {
+        guard isPresentationActive else {
+            lastSignature = nil
+            pendingFrames = 0
+            return false
+        }
         if signature != lastSignature || forceContinuous || hasViewportInput {
             pendingFrames = temporalEffectsActive
                 ? Self.temporalConvergenceFrames

@@ -5,6 +5,24 @@ import NativeRendererValidation
 @testable import RenderBackend
 
 final class NativeViewportSurfaceTests: XCTestCase {
+    func testSettledShrinkReplacesTargetsWithoutInvalidatingHeldImage() throws {
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [.metal], enableValidation: true))
+        let renderer = try NativeRenderer(device: device)
+        var packet = MeshProbeScene.packet(size: RenderDrawableSize(width: 1024, height: 1024))
+        try renderer.renderChecked(packet: packet)
+        let original = renderer.currentViewportSurfaceState()
+        packet.drawableSize = RenderDrawableSize(width: 64, height: 64)
+        try renderer.renderChecked(packet: packet)
+        XCTAssertTrue(renderer.currentViewportSurfaceState().image === original.image)
+        let held = try XCTUnwrap(original.image?.resource)
+        let pixels = try GridImage.readback(device: device, texture: held.texture, size: packet.drawableSize)
+        Thread.sleep(forTimeInterval: ViewportTargetSizing.settleInterval + 0.1)
+        try renderer.renderChecked(packet: packet)
+        let compact = renderer.currentViewportSurfaceState()
+        XCTAssertEqual(compact.region.capacity, RenderDrawableSize(width: 256, height: 256))
+        XCTAssertFalse(compact.image === original.image)
+        XCTAssertEqual(try GridImage.readback(device: device, texture: held.texture, size: packet.drawableSize), pixels)
+    }
     func testScenePublicationTracksUsedRegionAndSuccessfulSubmission() throws {
         let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [.metal], enableValidation: true))
         let renderer = try NativeRenderer(device: device)

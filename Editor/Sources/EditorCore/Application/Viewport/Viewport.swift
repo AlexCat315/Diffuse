@@ -299,6 +299,9 @@ extension EditorApplication {
             store.dispatch(.setWindowOccluded(false))
         case .windowOccluded:
             store.dispatch(.setWindowOccluded(true))
+            scene.endInteractiveEditHistoryGroup()
+            EditorGizmoController.shared.clearDrag()
+            EditorViewportInputController.shared.reset()
         case .windowExposed:
             store.dispatch(.setWindowOccluded(false))
         default:

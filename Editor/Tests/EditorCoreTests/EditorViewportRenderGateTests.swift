@@ -7,6 +7,25 @@ import Testing
 
 @Suite("EditorViewportRenderGate")
 struct EditorViewportRenderGateTests {
+    @Test("Hidden viewports skip even forced frames and resume with full convergence")
+    func hiddenViewportResumesImmediately() {
+        var gate = EditorViewportRenderGate()
+        let sig = signature()
+        _ = settled(&gate, sig, at: 0)
+        let hidden = gate.shouldRender(signature: sig, forceContinuous: true, hasViewportInput: true,
+                                       temporalEffectsActive: true, isPresentationActive: false, now: 100)
+        #expect(!hidden)
+        let exposed = gate.shouldRender(signature: sig, forceContinuous: false, hasViewportInput: false,
+                                        temporalEffectsActive: true, now: 100.01)
+        #expect(exposed)
+        for frame in 1..<EditorViewportRenderGate.temporalConvergenceFrames {
+            #expect(decide(&gate, sig, taa: true, now: 100.01 + Double(frame) * 0.01))
+        }
+        #expect(!decide(&gate, sig, taa: true, now: 100.2))
+        #expect(!EditorViewportFrameDrive.wantsContinuousFrames(
+            viewportRealtimeEnabled: true, playbackState: .playing,
+            continuousViewportInteractionActive: true, isPresentationActive: false))
+    }
     private func signature(revision: UInt64 = 1,
                            eyeX: Float = 0,
                            width: UInt32 = 1000,

@@ -28,6 +28,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public var lastFrameUsedOpaqueCache: Bool { frameState.cacheHit }
     private let windowTarget: NativeWindowTarget?
     private var targets: NativeRenderTargets?
+    private var targetSizing = ViewportTargetSizing()
     private var viewportPublication = ViewportSurfacePublication()
     public private(set) var lastFrameStats = RenderFrameStats()
     public private(set) var lastError: String?
@@ -280,7 +281,8 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         let previous = targets?.size ?? RenderDrawableSize(width: 0,height: 0)
         let postSize = hdr ? post.targets?.size : nil
         let current = RenderDrawableSize(width: max(previous.width,postSize?.width ?? 0),height: max(previous.height,postSize?.height ?? 0))
-        let capacity = windowTarget != nil && !hdr ? size : ViewportTargetAllocation.grownCapacity(current: current,used: size)
+        let capacity = windowTarget != nil && !hdr ? size : targetSizing.capacity(current: current, used: size,
+            now: Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000)
         if targets?.size == capacity && (targets?.hdr != nil) == hdr { return }
         let replacement = try NativeRenderTargets.make(device: device, size: capacity, offscreen: windowTarget == nil, hdr: hdr)
         targets = replacement

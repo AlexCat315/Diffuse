@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 跟进 GuavaUI 0.1.13 SDK；窗口不可呈现时停止视口连续帧请求、跳过视口与 HUD 绘制，恢复时重新收敛 TAA；失效／更换的视口输出不再留在图像附件缓存中。
+- 原生场景目标在大幅缩小并稳定一秒后回收过大容量，扩容仍立即进行；旧纹理快照的所有权保持有效，面板拖动期间避免反复分配。
+
 - 去掉欢迎页与项目启动器（新建、打开、最近项目、示例项目），窗口可同时打开多个项目：每个项目各自保留编辑器、场景与 Agent，不在前台时 Agent 继续工作，只有前台项目运行场景与渲染。启动时 `--project-dir` 优先，否则恢复上次打开的项目列表与前台项目，都没有时不打开任何项目，窗口就是项目列表为空的 Agent 视图，由左侧“项目”旁的 + 或“文件 › 打开文件夹…”（⌘⇧O，⌘O 仍是打开场景）添加项目，添加前输入框不可用。窗口默认显示 Agent 视图，工作台在标题栏切换。任意文件夹都可作为项目打开，没有 `.guava` 的文件夹只新增 `.guava/project.json`，其余文件不变。Agent 视图左侧列出所有项目与前台项目的任务，后台项目显示工作中或待审阅数量，点击即切到前台；工作台标题栏的项目按钮改为项目菜单（切换、打开文件夹、关闭项目）。“关闭项目”只移除当前项目并切到下一个；退出时逐个询问各项目未保存的更改。打开的项目列表存为 `GuavaOpenProjects` / `GuavaActiveProject`，不再读取 `GuavaRecentProjects`。各项目的通知、工作台链接、Agent 视图状态与最近命令在关闭时释放。新增 `EditorProjectLifecycle.adopt(_:)`；`EditorLaunchContext` 改为持有多个项目（`openProject`、`activate`、`closeProject`、`restoreProjects`），`WelcomeView` 与 `RecentProjectsStore` 删除。`ProjectWorkspaceTests` 覆盖无项目时的空 Agent 视图、并行项目的切换关闭与重启恢复、普通文件夹打开，以及已编译可运行的项目在另一个项目在前台时保持状态。
 
 - Windows 系统能力统一到 GuavaUI 的 `GuavaFileSystem`、`GuavaProcess`：插件宿主、LSP、工具发现、原子写入、权限和路径检查共用实现，移除 Engine 的重复进程运行库与 Editor 的本地替换器。测试辅助程序预先构建，不再在测试中临时调用编译器。CI 分开构建与执行、分开 XCTest 与 Swift Testing，缓存编译和原生依赖，并在 Windows 超时前保存事件与进程转储。跨仓库验证通过 `.github/sdk-revision` 固定完整 SDK 提交；版本仍由 `Editor/guava.json` 校验。

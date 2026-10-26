@@ -66,6 +66,10 @@ package struct ViewportHost<Overlay: View>: _PrimitiveView {
 
     package func _updateNode(_ node: Node) {
         let snap = self
+        if let cached = node.attachments["__viewport_image"] as? ImageCache,
+           cached.output !== surface.image || !surface.isValid {
+            node.attachments["__viewport_image"] = nil
+        }
         node.attachments[TextInputAttachmentKey.focusChangeHandler] = { (focused: Bool) -> Void in
             snap.onFocusChanged?(focused)
         }

@@ -4,6 +4,23 @@ import NativeRHI
 
 @Suite("ViewportTargetAllocation")
 struct ViewportTargetAllocationTests {
+    @Test("Oversized targets shrink after settling; growth and resizing stay immediate")
+    func settledAllocationsShrink() {
+        var sizing = ViewportTargetSizing()
+        let large = RenderDrawableSize(width: 2048, height: 2048)
+        let small = RenderDrawableSize(width: 500, height: 400)
+        #expect(sizing.capacity(current: large, used: small, now: 0) == large)
+        #expect(sizing.capacity(current: large, used: small, now: 0.5) == large)
+        #expect(sizing.capacity(current: large, used: small, now: 1) == RenderDrawableSize(width: 512, height: 512))
+        var dragging = ViewportTargetSizing()
+        #expect(dragging.capacity(current: large, used: small, now: 0) == large)
+        let next = RenderDrawableSize(width: 700, height: 400)
+        #expect(dragging.capacity(current: large, used: next, now: 0.9) == large)
+        #expect(dragging.capacity(current: large, used: next, now: 1.5) == large)
+        #expect(dragging.capacity(current: large, used: next, now: 2) == RenderDrawableSize(width: 768, height: 512))
+        let grown = dragging.capacity(current: large, used: RenderDrawableSize(width: 2500, height: 100), now: 2.1)
+        #expect(grown == RenderDrawableSize(width: 2560, height: 2048))
+    }
     @Test("quantizes up to the allocation granularity")
     func quantizesUp() {
         #expect(ViewportTargetAllocation.quantized(1) == 256)
