@@ -2,9 +2,9 @@ name: Android application build
 on:
   push:
     branches: [main]
-    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
+    paths: ['Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
   pull_request:
-    paths: ['.github/sdk-revision', 'Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
+    paths: ['Editor/guava.json', 'Platforms/Android/**', 'guava', 'guava.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-android.yml']
   workflow_dispatch:
 permissions:
   contents: read

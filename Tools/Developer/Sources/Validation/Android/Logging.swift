@@ -8,7 +8,7 @@ enum LoggingOperation {
     let parsed = try ParsedArguments.parse(arguments, options: [], positionals: 1)
     let project = URL(fileURLWithPath: parsed.positionals[0]).standardizedFileURL
 
-    let devtools = project.appendingPathComponent(".guava/build/devtools")
+    let devtools = project.appendingPathComponent(".build/devtools")
     let entries =
       (try? FileManager.default.contentsOfDirectory(
         at: devtools, includingPropertiesForKeys: [.isDirectoryKey])) ?? []

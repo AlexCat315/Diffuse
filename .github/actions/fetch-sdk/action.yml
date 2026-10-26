@@ -1,44 +1,24 @@
 name: Fetch Guava SDK
-description: Clone the pinned standalone GuavaUI SDK checkout this repository builds against.
+description: Install the shared versioned Guava SDK.
 runs:
   using: composite
   steps:
-    - name: Fetch and validate pinned SDK checkout
+    - name: Install pinned SDK
       shell: bash
       run: |
         set -euo pipefail
-        version=$(sed -n 's/.*"sdkVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' Editor/guava.json)
-        if [ -z "$version" ]; then
-          echo "Editor/guava.json must declare toolchain.sdkVersion" >&2
-          exit 1
-        fi
-        revision=
-        if [ -f .github/sdk-revision ]; then
-          revision=$(tr -d '\r\n' < .github/sdk-revision)
-          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
-            echo ".github/sdk-revision must contain a full SDK commit SHA" >&2
-            exit 1
-          fi
-        fi
-        if [ -f GuavaUI/Tools/Guava/Sources/GuavaCLI/SDK.json ]; then
-          echo "Guava SDK checkout already present"
-        elif [ -n "$revision" ]; then
-          git init GuavaUI
-          git -C GuavaUI remote add origin https://github.com/AlexCat315/GuavaUI.git
-          git -C GuavaUI fetch --depth 1 origin "$revision"
-          git -C GuavaUI checkout --detach FETCH_HEAD
-          git -C GuavaUI submodule update --init --recursive --depth 1
+        version=$(node -p 'JSON.parse(require("fs").readFileSync("Editor/guava.json")).toolchain.sdkVersion')
+        if [ "$RUNNER_OS" = Windows ]; then
+          curl -fsSL https://github.com/AlexCat315/GuavaUI/releases/latest/download/install.ps1 -o "$RUNNER_TEMP/install-guava.ps1"
+          pwsh -NoProfile -File "$RUNNER_TEMP/install-guava.ps1" -Version "$version"
+          sdk="$LOCALAPPDATA/Guava/versions/$version"
+          echo "$LOCALAPPDATA/Guava/bin" >> "$GITHUB_PATH"
         else
-          git clone --depth 1 --branch "v$version" \
-            --recurse-submodules --shallow-submodules \
-            https://github.com/AlexCat315/GuavaUI.git GuavaUI
+          curl -fsSL https://github.com/AlexCat315/GuavaUI/releases/latest/download/install.sh -o "$RUNNER_TEMP/install-guava.sh"
+          sh "$RUNNER_TEMP/install-guava.sh" --version "$version"
+          sdk="${GUAVA_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/guava}/versions/$version"
+          if [ "$RUNNER_OS" = macOS ]; then sdk="${GUAVA_HOME:-$HOME/.guava}/versions/$version"; fi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         fi
-        actual=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' GuavaUI/Tools/Guava/Sources/GuavaCLI/SDK.json)
-        if [ "$actual" != "$version" ]; then
-          echo "SDK checkout version $actual does not match Editor SDK $version" >&2
-          exit 1
-        fi
-        if [ -n "$revision" ] && [ "$(git -C GuavaUI rev-parse HEAD)" != "$revision" ]; then
-          echo "SDK checkout does not match .github/sdk-revision" >&2
-          exit 1
-        fi
+        echo "GUAVA_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+        GUAVA_SHARED_SDK="$sdk" node -e 'require("fs").symlinkSync(process.env.GUAVA_SHARED_SDK, "GuavaUI", process.platform === "win32" ? "junction" : "dir")'

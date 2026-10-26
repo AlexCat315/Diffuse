@@ -2,9 +2,9 @@ name: Media and documents
 on:
   push:
     branches: [main]
-    paths: ['.github/sdk-revision', 'Engine/Media/**', 'Editor/Documents/**', 'Engine/Sources/AudioRuntime/**', '.github/workflows/ci-media.yml']
+    paths: ['Engine/Media/**', 'Editor/Documents/**', 'Engine/Sources/AudioRuntime/**', '.github/workflows/ci-media.yml']
   pull_request:
-    paths: ['.github/sdk-revision', 'Engine/Media/**', 'Editor/Documents/**', 'Engine/Sources/AudioRuntime/**', '.github/workflows/ci-media.yml']
+    paths: ['Engine/Media/**', 'Editor/Documents/**', 'Engine/Sources/AudioRuntime/**', '.github/workflows/ci-media.yml']
   workflow_dispatch:
 jobs:
   native:

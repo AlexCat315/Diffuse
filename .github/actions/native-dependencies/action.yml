@@ -15,8 +15,6 @@ runs:
         path: |
           Engine/vendor
           Engine/Media/vendor
-          GuavaUI/vendor
-          GuavaUI/Runtime/vendor
         key: studio-native-v2-${{ runner.os }}-${{ runner.arch }}-6.4.1-${{ steps.sources.outputs.revision }}-${{ hashFiles('GuavaUI/Artifacts/native.json', 'Engine/third-party/CMakeLists.txt', 'Engine/third-party/cmake/**', 'Tools/Developer/Sources/Build/NativeBootstrap/**', 'Tools/Developer/Sources/Build/MediaStaging/**', 'Tools/Developer/Sources/Build/PluginStaging/**', '.github/actions/setup-toolchains/action.yml') }}
     - name: Prepare native artifacts
       if: runner.os != 'Windows'
@@ -32,6 +30,4 @@ runs:
         path: |
           Engine/vendor
           Engine/Media/vendor
-          GuavaUI/vendor
-          GuavaUI/Runtime/vendor
         key: ${{ steps.native.outputs.cache-primary-key }}

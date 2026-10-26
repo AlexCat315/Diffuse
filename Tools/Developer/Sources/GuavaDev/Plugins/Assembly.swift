@@ -20,7 +20,7 @@ struct PluginBuild {
         }
         let hasContract = FileManager.default.fileExists(atPath: contract.path)
         if !hasContract && object["runtime"] == nil {
-            let package = output ?? directory.appendingPathComponent(".guava/build/\(moduleName).guavaplugin")
+            let package = output ?? directory.appendingPathComponent(".build/\(moduleName).guavaplugin")
             try assemble(manifest: manifest, runtime: [], package: package, object: object)
             return
         }
@@ -31,7 +31,7 @@ struct PluginBuild {
         }
         let toolchain = try EmbeddedWasmToolchain.locate()
         let host = try pluginHost()
-        let scratch = directory.appendingPathComponent(".guava/build/plugin")
+        let scratch = directory.appendingPathComponent(".build/plugin")
         try Fs.reset(scratch)
 
         try Shell.inherit([host.path, "--component-shell", contract.path, scratch.path])

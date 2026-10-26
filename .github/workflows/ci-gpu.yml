@@ -5,7 +5,6 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/sdk-revision'
       - 'Engine/**'
       - 'Editor/**'
       - 'Tools/Developer/**'

@@ -30,7 +30,8 @@ enum Bootstrap {
     }
 
     #if os(Windows)
-    let sdkCommand = sdkRoot.appendingPathComponent("guava.cmd")
+    let binary = sdkRoot.appendingPathComponent("guava.exe")
+    let sdkCommand = FileManager.default.fileExists(atPath: binary.path) ? binary : sdkRoot.appendingPathComponent("guava.cmd")
     #else
     let sdkCommand = sdkRoot.appendingPathComponent("guava")
     #endif

@@ -17,7 +17,7 @@ runs:
           Tools/Developer/.build
           GuavaUI/Tools/Guava/.build
           GuavaUI/System/.build
-          Editor/.guava/build/swift
+          Editor/.build
           Engine/.build
         key: studio-swift-v1-${{ github.workflow }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Editor/guava.json', '**/Package.swift', '**/Package.resolved', '.github/actions/setup-toolchains/action.yml') }}-${{ github.sha }}
         restore-keys: |

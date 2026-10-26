@@ -20,7 +20,7 @@ enum DevelopmentSession {
   }
 
   private static func verify(project: URL, platform: String) throws {
-    let folder = project.appendingPathComponent(".guava/build/devtools")
+    let folder = project.appendingPathComponent(".build/devtools")
     let entries: [URL]
     do {
       entries = try FileManager.default.contentsOfDirectory(

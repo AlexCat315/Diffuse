@@ -60,14 +60,14 @@ package enum IOSStaging {
         .map { URL(fileURLWithPath: $0).standardizedFileURL }
         ?? root.appendingPathComponent("GuavaUI")
       let engineRoot = root.appendingPathComponent("Engine")
-      let runtimeRoot = sdkRoot.appendingPathComponent("Runtime")
       let variant = "ios-\(arch)" + (sdk == "iphonesimulator" ? "-simulator" : "")
       let vendor = Repository.path("Engine/Media/vendor")
       if !MediaStaging.isReady(platform: variant, vendor: vendor) {
         try MediaStaging.run(["--platform", variant])
       }
       let sysroot = try Shell.output(["xcrun", "--sdk", sdk, "--show-sdk-path"])
-      for package in [engineRoot, runtimeRoot, sdkRoot] {
+      try Shell.inherit([sdkRoot.appendingPathComponent("guava").path, "setup", "--ios", "--sdk", sdk, "--arch", arch])
+      for package in [engineRoot] {
         let build = package.appendingPathComponent("build/\(variant)")
         var command = [
           "cmake", "-S", package.appendingPathComponent("third-party").path,
@@ -87,11 +87,7 @@ package enum IOSStaging {
           // native dependency; a missing bundle breaks package resolution.
           targets = ["stage_ocio_openexr"]
           if plugins { targets.append("stage_wasmtime") }
-        } else if package == runtimeRoot {
-          targets = ["stage_sdl3", "stage_image_decode"]
-        } else {
-          targets = ["stage_freetype", "stage_harfbuzz"]
-        }
+        } else { targets = [] }
         try Shell.inherit(command)
         try Shell.inherit(
           [

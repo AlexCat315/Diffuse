@@ -55,7 +55,7 @@ public func makeApplicationContent() -> some View { MyRootView() }
 guava build /absolute/path/to/MyApp --android --release --output /absolute/path/to/MyApp.apk
 ```
 
-默认 APK 和相邻 JSON 报告位于 `.guava/build/android/debug` 或 `release`。身份由项目配置提供；工具参数 `--android-sdk` / `--ndk` 选择工具链，`run --device` 选择设备。自定义应用在自己的 `.guava/build/android/swift` 使用独立 Swift 构建缓存。`guava clean` 清理项目生成缓存，保留 SDK 共用原生依赖与作者数据。
+默认 APK 和相邻 JSON 报告位于 `.build/android/debug` 或 `release`。身份由项目配置提供；工具参数 `--android-sdk` / `--ndk` 选择工具链，`run --device` 选择设备。自定义应用在自己的 `.build/android/swift` 使用独立 Swift 构建缓存。`guava clean` 清理项目生成缓存，保留 SDK 共用原生依赖与作者数据。
 
 SwiftPM resource bundles 自动打包并解包；模板的 `AppResources.bundle` 通过 `PackageResourceBundle` 定位，Debug / Release 通用。项目固定 SDK 版本，本地开发可通过 `GUAVA_SDK_ROOT` 指向 GuavaUI checkout。根视图状态在存活进程的暂停 / 旋转间保留，进程死亡后的业务状态持久化由应用负责。系统权限、图标、通知和商店发布需要应用进一步集成。
 

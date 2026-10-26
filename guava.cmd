@@ -26,26 +26,21 @@ set "GUAVA_ROOT=%~dp0"
 "%GUAVA_STUDIO_PRODUCTS%\guava-dev.exe" %GUAVA_STUDIO_ARGS%
 exit /b %errorlevel%
 :forward
-"%GUAVA_SDK_ROOT%\guava.cmd" %*
+if exist "%GUAVA_SDK_ROOT%\guava.exe" (
+    "%GUAVA_SDK_ROOT%\guava.exe" %*
+) else (
+    call "%GUAVA_SDK_ROOT%\guava.cmd" %*
+)
 exit /b %errorlevel%
 :select_sdk
-if defined GUAVA_SDK_ROOT goto verify_selection
-set "GUAVA_SDK_ROOT=%~dp0GuavaUI"
-if exist "%GUAVA_SDK_ROOT%\Tools\Guava\Sources\GuavaCLI\SDK.json" goto run
-goto fetch
-:verify_selection
-if exist "%GUAVA_SDK_ROOT%\Tools\Guava\Sources\GuavaCLI\SDK.json" goto run
-echo Guava SDK not found at "%GUAVA_SDK_ROOT%". Set GUAVA_SDK_ROOT to a checkout of https://github.com/AlexCat315/GuavaUI.>&2
-exit /b 1
-:fetch
-for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "(Get-Content -Raw '%~dp0Editor\guava.json' | ConvertFrom-Json).toolchain.sdkVersion"`) do set "GUAVA_SDK_VERSION=%%v"
-if not defined GUAVA_SDK_VERSION (
-    echo Editor\guava.json must declare toolchain.sdkVersion>&2
-    exit /b 1
-)
-echo Fetching Guava SDK v%GUAVA_SDK_VERSION% into GuavaUI/>&2
-git clone --depth 1 --branch "v%GUAVA_SDK_VERSION%" --recurse-submodules --shallow-submodules https://github.com/AlexCat315/GuavaUI.git "%~dp0GuavaUI"
+if defined GUAVA_SDK_ROOT exit /b 0
+if not defined GUAVA_HOME set "GUAVA_HOME=%LOCALAPPDATA%\Guava"
+for /f "usebackq delims=" %%V in (`powershell.exe -NoProfile -Command "(Get-Content -LiteralPath '%~dp0Editor\guava.json' -Raw | ConvertFrom-Json).toolchain.sdkVersion"`) do set "GUAVA_REQUIRED=%%V"
+set "GUAVA_SDK_ROOT=%GUAVA_HOME%\versions\%GUAVA_REQUIRED%"
+if exist "%GUAVA_HOME%\sdk.json" for /f "usebackq delims=" %%R in (`powershell.exe -NoProfile -Command "$p=(Get-Content -LiteralPath '%GUAVA_HOME%\sdk.json' -Raw | ConvertFrom-Json).path; if((Get-Content -LiteralPath ($p + '/Tools/Guava/Sources/GuavaCLI/SDK.json') -Raw | ConvertFrom-Json).version -eq '%GUAVA_REQUIRED%'){$p}"`) do set "GUAVA_SDK_ROOT=%%R"
+if exist "%GUAVA_SDK_ROOT%\Package.swift" goto sdk_selected
+call guava sdk install "%GUAVA_REQUIRED%"
 if errorlevel 1 exit /b %errorlevel%
-set "GUAVA_SDK_ROOT=%~dp0GuavaUI"
-:run
+
+:sdk_selected
 exit /b 0

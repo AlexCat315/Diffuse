@@ -4,7 +4,7 @@
 
 > 基于 Swift 构建、以 AI Agent 驱动的综合创作工作站：文本与代码编辑、游戏开发、动画制作和视频剪辑。
 
-[GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) 是独立项目，按 `Editor/guava.json` 声明的版本由 `./guava` 拉取到被忽略的 `GuavaUI/` 检出目录；它拥有 UI、NativeRHI、平台服务和 CLI。Studio 拥有场景、三维渲染、物理、脚本及其 UI 适配器。
+[GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) 是独立项目，按 `Editor/guava.json` 声明的版本全局安装，所有项目共享同一份源码与原生库；它拥有 UI、NativeRHI、平台服务和 CLI。Studio 拥有场景、三维渲染、物理、脚本及其 UI 适配器。
 
 ---
 
@@ -33,7 +33,7 @@ git submodule update --init --recursive
 ./guava build Editor --mac
 ```
 
-`./guava` 会先拉取 `Editor/guava.json` 声明的 SDK 版本到被忽略的 `GuavaUI/` 目录，也支持用 `GUAVA_SDK_ROOT` 选择本地检出。`guava studio native-bootstrap` 随后安装 SDK 发布的原生依赖，构建 Studio 的 FFmpeg、OpenEXR/Imath，并准备固定版本的 Wasmtime；Windows 下自动初始化 MSVC 工具链。
+先安装 Guava SDK；`./guava` 选择 `Editor/guava.json` 声明的共享版本，也支持用 `GUAVA_SDK_ROOT` 选择本地开发源码。`guava studio native-bootstrap` 随后安装 SDK 发布的原生依赖，构建 Studio 的 FFmpeg、OpenEXR/Imath，并准备固定版本的 Wasmtime；Windows 下自动初始化 MSVC 工具链。
 
 后续日常开发只需要：
 
@@ -80,7 +80,7 @@ SDK 的共享核心、跨平台调试服务、浏览器原型与示例位于 [Gu
 ```
 GuavaStudio/
 ├── Engine/Sources/       渲染 / 场景 / 物理 / 资产 / AI 运行时 / 观察总线 / 影视管线
-├── GuavaUI/              独立 SDK 检出（被忽略；源码见 GuavaUI 仓库）
+├── GuavaUI/              CI 中指向共享 SDK 的链接（被忽略）
 ├── Editor/Sources/       创作工作站（文档、媒体时间线、场景、Agent）
 ├── GuavaMcp/Sources/    MCP 服务器（暴露 Guava 能力给 LLM agent）
 └── .github/workflows/    CI 矩阵与 release

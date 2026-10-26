@@ -25,11 +25,11 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 Studio contains the Engine and Editor packages plus an MCP server; the SDK is an independent repository:
 
 - **`Engine/`** — rendering, scene, simulation, asset pipeline, AI runtime kernels, observation bus, film pipeline (EXR / color / denoise / render farm).
-- **`GuavaUI/`** — the [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) is a separate project, fetched at the version pinned by `Editor/guava.json` when you run `./guava`; it owns UI, NativeRHI, platform services and the CLI.
+- **`GuavaUI/`** — the [GuavaUI SDK](https://github.com/AlexCat315/GuavaUI) is installed globally at the version pinned by `Editor/guava.json`; projects share its framework sources, native libraries and CLI. CI uses this path as a link to the shared SDK.
 - **`Editor/`** — the desktop editor application. Hosts the engine, mounts GuavaUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
 - **`GuavaMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Guava capabilities to LLM agents over stdio / WebSocket.
 
-CI checks out the exact SDK commit in `.github/sdk-revision` and validates it against `Editor/guava.json`. For local development before that SDK version is released, set `GUAVA_SDK_ROOT` to the matching SDK checkout.
+CI installs the SDK release pinned by `Editor/guava.json`. For local development before that SDK version is released, set `GUAVA_SDK_ROOT` to the matching SDK checkout.
 
 ---
 
@@ -105,7 +105,7 @@ git submodule update --init --recursive
 ./guava build Editor
 ```
 
-`./guava` fetches the GuavaUI SDK version declared by `Editor/guava.json` into the ignored `GuavaUI/` checkout, or uses `GUAVA_SDK_ROOT` when a local SDK checkout is selected. `guava studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg and OpenEXR/Imath dependencies, and stages the pinned Wasmtime runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
+`./guava` uses the shared Guava SDK declared by `Editor/guava.json`, or `GUAVA_SDK_ROOT` for a local development checkout. `guava studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg and OpenEXR/Imath dependencies, and stages the pinned Wasmtime runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
 
 After the first bootstrap, day-to-day development only needs:
 

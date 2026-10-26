@@ -1,6 +1,6 @@
 plugins { id("com.android.library") }
 
-layout.buildDirectory.set(rootProject.projectDir.resolve("../../.guava/build/android/gradle/runtime"))
+layout.buildDirectory.set(rootProject.projectDir.resolve("../../.build/android/gradle/runtime"))
 android {
     namespace = "com.guava.runtime"
     compileSdk = 36

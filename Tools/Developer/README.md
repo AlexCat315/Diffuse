@@ -73,7 +73,7 @@ checks through the app's own input dispatcher. Query the resulting state and
 capture the rendered UI to verify the action; delivery alone is not a pass.
 
 `query-ui`, `input-ui`, `capture-ui` and `record-timings` also accept
-`@/path/to/.guava/build/devtools/SESSION/session.json` (or `runtime.json`) instead
+`@/path/to/.build/devtools/SESSION/session.json` (or `runtime.json`) instead
 of a port. This reads the authenticated endpoint published by `guava run`,
 including an Android forwarded port when present, without copying its token
 into commands. `devtools session PROJECT mac|android` shares the same resolver.
