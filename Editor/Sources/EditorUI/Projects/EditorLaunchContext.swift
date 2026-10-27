@@ -72,7 +72,16 @@ final class EditorLaunchContext: @unchecked Sendable {
             (try? EditorProjectLifecycle.inspect(URL(fileURLWithPath: path, isDirectory: true), validateScene: false))
                 .map { EditorProjectEntry(directory: $0.directory.path, name: $0.name) }
         }
-        if let front { return try openProject(directory: front) }
+        if let front {
+            do { return try openProject(directory: front) }
+            catch {
+                // A bad launch folder must not leave the window without an
+                // editor: report it and fall through to the normal restore.
+                LogSystem.logger("com.cove.editor").warning("Launch project did not open",
+                    metadata: ["project": "\(front)", "error": "\(error)"])
+                openFailure = error.localizedDescription
+            }
+        }
         let preferred = saved.active.flatMap { active in projects.firstIndex { $0.directory == active } } ?? 0
         for entry in projects[min(preferred, projects.count)...] + projects[..<min(preferred, projects.count)] {
             do { try activate(entry.directory); break }
@@ -82,6 +91,9 @@ final class EditorLaunchContext: @unchecked Sendable {
                 projects.removeAll { $0.directory == entry.directory }
             }
         }
+        // Nothing to restore: open the untitled workspace so the window shows a
+        // workbench instead of an empty shell.
+        ensureWorkspaceIsOpen()
         persist()
         publisher.send()
     }
@@ -124,6 +136,43 @@ final class EditorLaunchContext: @unchecked Sendable {
         }
     }
 
+    /// Opens the fallback workspace: a real project folder in Application
+    /// Support, so the workbench and the agent are usable without choosing a
+    /// project first. Returns false when even that could not be opened.
+    @MainActor @discardableResult
+    func openScratchWorkspace() -> Bool {
+        let location: EditorProjectLocation
+        do { location = try EditorScratchWorkspace.prepare() }
+        catch {
+            openFailure = error.localizedDescription
+            publisher.send()
+            display?.requestDisplay()
+            return false
+        }
+        let path = location.directory.path
+        if !projects.contains(where: { $0.directory == path }) {
+            projects.append(EditorProjectEntry(directory: path, name: L("Untitled")))
+        }
+        do { try activate(path) }
+        catch {
+            projects.removeAll { $0.directory == path }
+            persist()
+            publisher.send()
+            openFailure = error.localizedDescription
+            display?.requestDisplay()
+            return false
+        }
+        return true
+    }
+
+    /// A window always has a workspace. The workbench, every panel and the
+    /// agent all need a root, so when there is no project to show the editor
+    /// makes an untitled one instead of leaving the window without an editor.
+    @MainActor func ensureWorkspaceIsOpen() {
+        guard activeDirectory == nil else { return }
+        openScratchWorkspace()
+    }
+
     /// Puts a project in front, loading its editor the first time.
     @MainActor func activate(_ directory: String) throws {
         guard directory != activeDirectory || loaded[directory] == nil else { return }
@@ -148,6 +197,9 @@ final class EditorLaunchContext: @unchecked Sendable {
     /// Removes a project from the window; the next one comes to the front.
     @MainActor func closeProject(_ directory: String) {
         guard let index = projects.firstIndex(where: { $0.directory == directory }) else { return }
+        // The untitled workspace is the window's fallback: closing it on its own
+        // would only reopen it, so it stays.
+        if EditorScratchWorkspace.isScratch(directory), projects.count == 1 { return }
         if let bundle = loaded.removeValue(forKey: directory) {
             if directory == activeDirectory { saveShellState(from: bundle.app) }
             teardown(bundle)
@@ -164,8 +216,13 @@ final class EditorLaunchContext: @unchecked Sendable {
                 if (try? activate(entry.directory)) != nil { break }
             }
             if activeDirectory == nil {
-                display?.installNativeMenuBar(projectlessMenu())
-                nativeMenuState = nil
+                // Nothing left to show: keep the window usable with the
+                // untitled workspace instead of emptying it out.
+                openScratchWorkspace()
+                if activeDirectory == nil {
+                    display?.installNativeMenuBar(projectlessMenu())
+                    nativeMenuState = nil
+                }
             }
         }
         persist()
@@ -174,7 +231,12 @@ final class EditorLaunchContext: @unchecked Sendable {
     }
 
     private func persist() {
-        EditorProjectList(paths: projects.map(\.directory), active: activeDirectory).save()
+        // The scratch workspace is created on demand in Application Support, so
+        // it stays out of the saved list: the next launch restores the user's
+        // own projects instead of reopening it.
+        let paths = projects.map(\.directory).filter { !EditorScratchWorkspace.isScratch($0) }
+        let active = activeDirectory.flatMap { EditorScratchWorkspace.isScratch($0) ? nil : $0 }
+        EditorProjectList(paths: paths, active: active).save()
     }
 
     // MARK: Window

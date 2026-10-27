@@ -102,34 +102,40 @@ struct AssistantThread: View {
                         .font(.caption).foregroundColor(.onSurfaceMuted)
                     Button(L("Set up Assistant")) { app.openSettingsWindow() }
                         .buttonStyle(EditorChromeButtonStyle(agent: true))
-                        .background(EditorThemeTokens.assistantColor.opacity(0.10)).cornerRadius(6)
+                        .debugName("editor-agent-setup")
                 }.padding(vertical: 4)
             }
             Box {}.frame(height: 8)
-            if app.store.content == .scene {
-                suggestion(L("Explain the current selection"))
-                suggestion(L("Help me plan the next step"))
-            } else {
-                suggestion(L("Summarize this file"))
-                suggestion(L("Polish this document"))
-                suggestion(L("Find problems in this file"))
-            }
-            suggestion(L("Find issues in this project"))
-            if app.workstation.versionControl.snapshot.repository != nil {
-                suggestion(L("Review my uncommitted changes"))
-            }
+            for text in suggestionTitles { AnyView(suggestion(text)) }
         }.padding(vertical: 16).frame(width: .percent(100), minWidth: 0)
     }
 
+    /// What the session can actually do right now: no "summarize this file"
+    /// without a file, and nothing at all while the assistant is offline.
+    private var suggestionTitles: [String] {
+        var items: [String] = []
+        if app.store.content == .scene {
+            items = [L("Explain the current selection"), L("Help me plan the next step")]
+        } else if EditorWorkFocus(app: app, documents: documents.wrappedValue).leaf != nil {
+            items = [L("Summarize this file"), L("Polish this document"), L("Find problems in this file")]
+        }
+        items.append(L("Find issues in this project"))
+        if app.workstation.versionControl.snapshot.repository != nil {
+            items.append(L("Review my uncommitted changes"))
+        }
+        return items
+    }
+
     private func suggestion(_ text: String) -> some View {
-        Button { updateDraft(TextBuffer(text)) } label: {
+        Button(isEnabled: app.isAIAvailable) { updateDraft(TextBuffer(text)) } label: {
             Row(alignment: .center, spacing: 8) {
-                Icon(UIIcons.Status.sparkles, size: 12, color: EditorThemeTokens.assistantColor)
-                Text(text, lineLimit: 2).font(.body).foregroundColor(.onSurfaceVariant).flex()
+                Text(text, lineLimit: 2).font(.body)
+                    .foregroundColor(app.isAIAvailable ? .onSurfaceVariant : .onSurfaceMuted)
+                    .flex(1, shrink: 1).frame(minWidth: 0)
                 Icon(UIIcons.Navigation.arrowUpRight, size: 12, color: .onSurfaceMuted)
             }.padding(horizontal: 10, vertical: 10).frame(width: .percent(100), minWidth: 0)
                 .background(.surfaceRaised).cornerRadius(10)
-        }.buttonStyle(.plain).frame(width: .percent(100))
+        }.buttonStyle(.plain).frame(width: .percent(100), minWidth: 0)
     }
 
     /// Padding and background share a node, so the inset around the bordered

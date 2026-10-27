@@ -120,7 +120,10 @@ private struct AgentTaskList: View {
                         MainActor.assumeIsolated { projects.requestOpenFolder() }
                     }.buttonStyle(EditorChromeButtonStyle(height: 22)).debugName("editor-agent-open-folder")
                 }.padding(EdgeInsets(top: 14, leading: 10, bottom: 4, trailing: 4))
-                for entry in list.wrappedValue {
+                // An untitled workspace is not a project: its tasks show without
+                // a project heading, and it never appears in the list.
+                if app.isUntitledWorkspace { AnyView(tasks(store)) }
+                for entry in list.wrappedValue where !EditorScratchWorkspace.isScratch(entry.directory) {
                     if entry.directory == app.projectDirectory {
                         AnyView(Text(entry.name, lineLimit: 1).truncated().font(.bodyStrong).foregroundColor(.onSurface)
                             .padding(EdgeInsets(top: 15, leading: 10, bottom: 4, trailing: 10)))
@@ -138,7 +141,9 @@ private struct AgentTaskList: View {
                     }
                 }
             } else {
-                heading(URL(fileURLWithPath: app.projectDirectory).lastPathComponent)
+                if !app.isUntitledWorkspace {
+                    heading(URL(fileURLWithPath: app.projectDirectory).lastPathComponent)
+                }
                 tasks(store)
             }
             Spacer(minLength: 0)
@@ -152,7 +157,9 @@ private struct AgentTaskList: View {
     }
 
     @ViewBuilder private func tasks(_ store: EditorStore) -> some View {
-        if !store.chatMessages.isEmpty || store.agentTasks.isEmpty {
+        // An empty session has no task to list; the New Task button above is
+        // the only entry point, so there is nothing to duplicate here.
+        if !store.chatMessages.isEmpty || !store.agentTasks.isEmpty {
             AgentTaskRow(title: store.chatMessages.first { $0.role == .user }?.text ?? L("New Task"),
                          detail: store.agentTasks.first.map { L($0.phase.title) }, selected: true)
         }

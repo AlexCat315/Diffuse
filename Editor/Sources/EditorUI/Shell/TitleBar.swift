@@ -79,20 +79,24 @@ struct EditorTitleBar: View {
     // MARK: Project
 
     @ViewBuilder private var project: some View {
-        if let projects {
-            MenuButton(entries: projectEntries(projects.wrappedValue), width: 240,
-                       accessibilityLabel: L("Projects")) { projectLabel }
-                .buttonStyle(EditorChromeButtonStyle()).debugName("editor-project")
-        } else {
-            Button(tooltip: L("Project commands")) {
-                onCommand(.showCommandPalette(.commands))
-            } label: { projectLabel }.buttonStyle(EditorChromeButtonStyle()).debugName("editor-project")
+        // An untitled workspace has no project to name, so the chip is absent
+        // rather than reading "Untitled".
+        if !app.isUntitledWorkspace {
+            if let projects {
+                MenuButton(entries: projectEntries(projects.wrappedValue), width: 240,
+                           accessibilityLabel: L("Projects")) { projectLabel }
+                    .buttonStyle(EditorChromeButtonStyle()).debugName("editor-project")
+            } else {
+                Button(tooltip: L("Project commands")) {
+                    onCommand(.showCommandPalette(.commands))
+                } label: { projectLabel }.buttonStyle(EditorChromeButtonStyle()).debugName("editor-project")
+            }
         }
     }
 
     /// The window's projects, with the one in front checked, then opening and closing.
     private func projectEntries(_ list: [EditorProjectEntry]) -> [MenuEntry] {
-        list.map { entry in
+        list.filter { !EditorScratchWorkspace.isScratch($0.directory) }.map { entry in
             .item(MenuItem(id: "project:" + entry.directory, title: entry.name,
                            isSelected: entry.directory == app.projectDirectory,
                            action: { onCommand(.activateProject(entry.directory)) }))

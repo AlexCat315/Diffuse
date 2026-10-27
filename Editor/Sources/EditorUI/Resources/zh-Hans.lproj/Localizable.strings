@@ -652,6 +652,13 @@
 // Project launcher
 "Projects" = "项目";
 "Open Folder..." = "打开文件夹...";
+"Untitled" = "无标题";
+"Untitled Workspace" = "无标题工作区";
+"The workspace could not be opened" = "无法打开工作区";
+"Open the untitled workspace" = "打开无标题工作区";
+"Start in the untitled workspace" = "在无标题工作区中开始";
+"Open a project, or start right away" = "打开一个项目，或直接开始";
+"The Workbench and the Agent both run on top of a project folder. Start in an untitled workspace, or open one of your own." = "工作台与智能体都运行在项目目录之上。可以直接在无标题工作区开始，也可以打开自己的项目。";
 "Close Project" = "关闭项目";
 "Move to Trash" = "移入废纸篓";
 "The project has unsaved scene or script changes. Save before closing?" = "项目包含未保存的场景或脚本修改。关闭前是否保存？";
