@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 internal import CoveProcess
 
 extension SwiftToolchain {

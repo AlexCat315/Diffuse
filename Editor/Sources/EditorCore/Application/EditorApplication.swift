@@ -56,7 +56,7 @@ public final class EditorApplication: @unchecked Sendable {
     var pendingViewportEvents: [InputEvent] = []
     var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
-    private var renderGate = EditorViewportRenderGate()
+    var renderGate = EditorViewportRenderGate()
     var renderSettingsGeneration: UInt64 = 0
     var lastQueuedRenderSettings = RenderSettings()
     private var openSettingsWindowHandler: (() -> Void)?

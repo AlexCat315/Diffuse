@@ -1,5 +1,5 @@
 private import CoveFileSystem
-public import Foundation
+import Foundation
 
 /// How Swift files are edited, for every project on this machine.
 public struct SwiftEditingPreferences: Codable, Sendable, Equatable {

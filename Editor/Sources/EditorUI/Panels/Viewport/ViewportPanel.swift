@@ -19,7 +19,6 @@ struct ViewportPanel: View {
             let _ = store.viewportSurfaceRevision
             let _ = store.sceneRevision
             let _ = store.viewportCameraRevision
-            let camera = scene.currentRenderCamera()
             let surface = app.currentViewportSurfaceState()
             let selectedEntityID = store.selectedEntityID
             let selectedEntityIDs = store.selectedEntityIDs
