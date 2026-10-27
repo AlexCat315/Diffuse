@@ -43,10 +43,10 @@ swift run --package-path Editor EditorApp --project-dir "$PWD/examples/CrystalRu
 无需模型 API Key 也可以执行完整的 MCP 验证：
 
 ```bash
-swift build --package-path Editor
-swift build --package-path DiffuseMCP
-swift run --package-path Tools/Developer cove-dev validate mcp-protocol
-swift run --package-path Tools/Developer cove-dev validate crystal-rush
+./cove build Editor
+./cove internal build-package DiffuseMCP --product DiffuseMCP
+./cove studio validate mcp-protocol
+./cove studio validate crystal-rush
 ```
 
 验证脚本会为这个样例启动独立的无窗口编辑器，显式信任样例脚本、确认可撤销的场景草稿，在随机本机端口上通过 MCP 编译和导出，最后让打包后的 Player 模拟 120 帧。完整请求和结果保存在 `validation/mcp-transcript.json`。
