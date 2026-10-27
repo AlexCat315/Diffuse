@@ -8,7 +8,7 @@ Diffuse 建立在 [Cove](../) 提供的 UI、NativeRHI、平台服务与 CLI 之
 Diffuse/
 ├── Engine/Sources/     渲染 / 场景 / 物理 / 资产 / AI 运行时 / 观察总线 / 影视管线
 ├── Editor/Sources/     创作工作站（文档、媒体时间线、场景、Agent）
-├── CoveMcp/Sources/    MCP 服务器（把 Cove 能力暴露给 LLM agent）
+├── DiffuseMCP/Sources/    MCP 服务器（把 Diffuse 编辑器能力暴露给 LLM agent）
 └── .github/workflows/  CI 矩阵与 release
 ```
 

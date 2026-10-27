@@ -77,7 +77,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
             macOS.appendingPathComponent("EditorApp"),
             macOS.appendingPathComponent("CovePlayer"),
             helpers.appendingPathComponent("DiffusePluginHost"),
-            helpers.appendingPathComponent("CoveMCP"),
+            helpers.appendingPathComponent("DiffuseMCP"),
         ] {
             try Data().write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: 0o755],
@@ -111,7 +111,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         for url in [
             macOS.appendingPathComponent("EditorApp"),
             macOS.appendingPathComponent("CovePlayer"),
-            helpers.appendingPathComponent("CoveMCP"),
+            helpers.appendingPathComponent("DiffuseMCP"),
         ] {
             try Data().write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: 0o755],
@@ -162,7 +162,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
             macOS.appendingPathComponent("EditorApp"),
             macOS.appendingPathComponent("CovePlayer"),
             helpers.appendingPathComponent("DiffusePluginHost"),
-            helpers.appendingPathComponent("CoveMCP"),
+            helpers.appendingPathComponent("DiffuseMCP"),
         ] {
             try Data().write(to: url)
             try FileManager.default.setAttributes([.posixPermissions: 0o755],
@@ -230,7 +230,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
             "EditorApp\(suffix)",
             "CovePlayer\(suffix)",
             "Tools/DiffusePluginHost\(suffix)",
-            "Tools/CoveMCP\(suffix)",
+            "Tools/DiffuseMCP\(suffix)",
         ] {
             let url = root.appendingPathComponent(path)
             try Data().write(to: url)

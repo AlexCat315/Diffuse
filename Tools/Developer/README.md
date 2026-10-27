@@ -52,7 +52,7 @@ Gate legend:
 - **Dev** — a local development or debugging utility; it is not a test.
 - **Build** — a setup/staging step shared by CI and local builds.
 
-`validate mcp-protocol` runs in `ci-cove-mcp.yml`. `editor-loop`,
+`validate mcp-protocol` runs in `ci-diffuse-mcp.yml`. `editor-loop`,
 `crystal-rush` and `agent-diagnostics` are manual checks. `devtools session`
 is a manual check; `query-ui`, `input-ui`, `capture-ui` and `record-timings`
 are development clients, not validation gates. `android` operations require a

@@ -126,7 +126,7 @@ jobs:
           swift build -c release --package-path Editor --product EditorApp
           swift build -c release --package-path Editor --product CovePlayer
           swift build -c release --package-path Engine --product DiffusePluginHost
-          swift build -c release --package-path CoveMcp
+          swift build -c release --package-path DiffuseMCP
 
       - name: Test packages before release
         shell: bash
@@ -144,7 +144,7 @@ jobs:
           editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
           player_bin="$(swift build -c release --package-path Editor --product CovePlayer --show-bin-path)"
           plugin_host_bin="$(swift build -c release --package-path Engine --product DiffusePluginHost --show-bin-path)"
-          mcp_bin="$(swift build -c release --package-path CoveMcp --show-bin-path)"
+          mcp_bin="$(swift build -c release --package-path DiffuseMCP --show-bin-path)"
 
           dist_root="$PWD/dist"
           package_dir="$dist_root/Diffuse-macos-$arch"
@@ -157,7 +157,7 @@ jobs:
           cp "$editor_bin/EditorApp" "$app_dir/Contents/MacOS/"
           cp "$player_bin/CovePlayer" "$app_dir/Contents/MacOS/"
           cp "$plugin_host_bin/DiffusePluginHost" "$app_dir/Contents/Helpers/"
-          cp "$mcp_bin/CoveMCP" "$app_dir/Contents/Helpers/"
+          cp "$mcp_bin/DiffuseMCP" "$app_dir/Contents/Helpers/"
           cp "Engine/Media/vendor/FFmpeg.artifactbundle/macos-$arch/bin/ffmpeg" "$app_dir/Contents/Helpers/"
           cp "Engine/Media/vendor/FFmpeg.artifactbundle/macos-$arch/bin/ffprobe" "$app_dir/Contents/Helpers/"
           mkdir -p "$app_dir/Contents/Resources/FFmpeg"
@@ -202,7 +202,7 @@ jobs:
           "$app_dir/Contents/MacOS/EditorApp" --validate-install
           "$app_dir/Contents/MacOS/CovePlayer" --validate-install
           "$app_dir/Contents/Helpers/DiffusePluginHost" </dev/null
-          "$app_dir/Contents/Helpers/CoveMCP" </dev/null
+          "$app_dir/Contents/Helpers/DiffuseMCP" </dev/null
           codesign --force --deep --sign - --timestamp=none "$app_dir"
           codesign --verify --deep --strict "$app_dir"
 
@@ -248,7 +248,7 @@ jobs:
           swift build -c release --package-path Editor --product EditorApp
           swift build -c release --package-path Editor --product CovePlayer
           swift build -c release --package-path Engine --product DiffusePluginHost
-          swift build -c release --package-path CoveMcp
+          swift build -c release --package-path DiffuseMCP
 
       - name: Test packages before release
         shell: pwsh
@@ -268,7 +268,7 @@ jobs:
           $editorBin = (swift build -c release --package-path Editor --product EditorApp --show-bin-path).Trim()
           $playerBin = (swift build -c release --package-path Editor --product CovePlayer --show-bin-path).Trim()
           $pluginHostBin = (swift build -c release --package-path Engine --product DiffusePluginHost --show-bin-path).Trim()
-          $mcpBin = (swift build -c release --package-path CoveMcp --show-bin-path).Trim()
+          $mcpBin = (swift build -c release --package-path DiffuseMCP --show-bin-path).Trim()
 
           $distRoot = Join-Path $PWD "dist"
           $packageDir = Join-Path $distRoot "Diffuse-windows-x86_64"
@@ -280,7 +280,7 @@ jobs:
           Copy-Item (Join-Path $editorBin "EditorApp.exe") $packageDir
           Copy-Item (Join-Path $playerBin "CovePlayer.exe") $packageDir
           Copy-Item (Join-Path $pluginHostBin "DiffusePluginHost.exe") (Join-Path $packageDir "Tools")
-          Copy-Item (Join-Path $mcpBin "CoveMCP.exe") (Join-Path $packageDir "Tools")
+          Copy-Item (Join-Path $mcpBin "DiffuseMCP.exe") (Join-Path $packageDir "Tools")
           Copy-Item "Engine/Media/vendor/FFmpeg.artifactbundle/windows-x86_64/bin/*.exe" (Join-Path $packageDir "Tools")
           $mediaLicenses = Join-Path $packageDir "Licenses/FFmpeg"
           New-Item -ItemType Directory -Path $mediaLicenses -Force | Out-Null
@@ -327,7 +327,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Packaged EditorApp validation failed" }
             & (Join-Path $packageDir "CovePlayer.exe") --validate-install
             if ($LASTEXITCODE -ne 0) { throw "Packaged CovePlayer validation failed" }
-            foreach ($helper in @("DiffusePluginHost.exe", "CoveMCP.exe")) {
+            foreach ($helper in @("DiffusePluginHost.exe", "DiffuseMCP.exe")) {
               $helperPath = Join-Path (Join-Path $packageDir "Tools") $helper
               $process = Start-Process -FilePath $helperPath -RedirectStandardInput $emptyInput.FullName -NoNewWindow -Wait -PassThru
               if ($process.ExitCode -ne 0) {
@@ -414,7 +414,7 @@ jobs:
           swift build -c release --package-path Editor --product EditorApp
           swift build -c release --package-path Editor --product CovePlayer
           swift build -c release --package-path Engine --product DiffusePluginHost
-          swift build -c release --package-path CoveMcp
+          swift build -c release --package-path DiffuseMCP
 
       - name: Test packages before release
         shell: bash
@@ -431,7 +431,7 @@ jobs:
           editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
           player_bin="$(swift build -c release --package-path Editor --product CovePlayer --show-bin-path)"
           plugin_host_bin="$(swift build -c release --package-path Engine --product DiffusePluginHost --show-bin-path)"
-          mcp_bin="$(swift build -c release --package-path CoveMcp --show-bin-path)"
+          mcp_bin="$(swift build -c release --package-path DiffuseMCP --show-bin-path)"
 
           dist_root="$PWD/dist"
           package_dir="$dist_root/Diffuse-linux-x86_64"
@@ -441,7 +441,7 @@ jobs:
           cp "$editor_bin/EditorApp" "$package_dir/"
           cp "$player_bin/CovePlayer" "$package_dir/"
           cp "$plugin_host_bin/DiffusePluginHost" "$package_dir/Tools/"
-          cp "$mcp_bin/CoveMCP" "$package_dir/Tools/"
+          cp "$mcp_bin/DiffuseMCP" "$package_dir/Tools/"
           cp Engine/Media/vendor/FFmpeg.artifactbundle/linux-x86_64/bin/ffmpeg "$package_dir/Tools/"
           cp Engine/Media/vendor/FFmpeg.artifactbundle/linux-x86_64/bin/ffprobe "$package_dir/Tools/"
           mkdir -p "$package_dir/Licenses/FFmpeg"
@@ -453,7 +453,7 @@ jobs:
             -exec cp -R {} "$package_dir/" \;
 
           ldd "$package_dir/EditorApp" "$package_dir/CovePlayer" \
-            "$package_dir/Tools/DiffusePluginHost" "$package_dir/Tools/CoveMCP" \
+            "$package_dir/Tools/DiffusePluginHost" "$package_dir/Tools/DiffuseMCP" \
             | awk '/=> \// { print $3 } /^\// { print $1 }' \
             | sort -u \
             | { grep -E '/swift-|/usr/lib/swift|/swift/linux|libswift|libFoundation|libdispatch|libBlocksRuntime|lib_Foundation|libicu' || true; } \
@@ -471,7 +471,7 @@ jobs:
           # shellcheck disable=SC2016
           patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/DiffusePluginHost"
           # shellcheck disable=SC2016
-          patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/CoveMCP"
+          patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/DiffuseMCP"
 
           cat > "$package_dir/run-editor.sh" <<'EOF'
           #!/usr/bin/env bash
@@ -485,17 +485,17 @@ jobs:
           # Resolve Swift libraries from this package during validation.
           export LD_LIBRARY_PATH="$package_dir/Lib"
           if ldd "$package_dir/EditorApp" "$package_dir/CovePlayer" \
-            "$package_dir/Tools/DiffusePluginHost" "$package_dir/Tools/CoveMCP" \
+            "$package_dir/Tools/DiffusePluginHost" "$package_dir/Tools/DiffuseMCP" \
             | grep -q 'not found'; then
             echo "Packaged binaries contain unresolved shared libraries" >&2
             ldd "$package_dir/EditorApp" "$package_dir/CovePlayer" \
-              "$package_dir/Tools/DiffusePluginHost" "$package_dir/Tools/CoveMCP" >&2
+              "$package_dir/Tools/DiffusePluginHost" "$package_dir/Tools/DiffuseMCP" >&2
             exit 1
           fi
           "$package_dir/EditorApp" --validate-install
           "$package_dir/CovePlayer" --validate-install
           "$package_dir/Tools/DiffusePluginHost" </dev/null
-          "$package_dir/Tools/CoveMCP" </dev/null
+          "$package_dir/Tools/DiffuseMCP" </dev/null
 
           tar_path="$dist_root/diffuse-linux-x86_64.tar.gz"
           tar -C "$dist_root" -czf "$tar_path" "$(basename "$package_dir")"

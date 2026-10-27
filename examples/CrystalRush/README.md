@@ -1,6 +1,6 @@
 # Crystal Rush / 晶体冲刺
 
-用 Diffuse 的真实 Swift 脚本、输入、实体、灯光和 HUD 实现的小型游戏。源码写入、脚本编译、场景草稿、脚本绑定、场景保存、播放查询和独立导出均已通过真实 `CoveMCP` stdio 服务执行。
+用 Diffuse 的真实 Swift 脚本、输入、实体、灯光和 HUD 实现的小型游戏。源码写入、脚本编译、场景草稿、脚本绑定、场景保存、播放查询和独立导出均已通过真实 `DiffuseMCP` stdio 服务执行。
 
 ## 试玩
 
@@ -44,7 +44,7 @@ swift run --package-path Editor EditorApp --project-dir "$PWD/examples/CrystalRu
 
 ```bash
 swift build --package-path Editor
-swift build --package-path CoveMcp
+swift build --package-path DiffuseMCP
 swift run --package-path Tools/Developer cove-dev validate mcp-protocol
 swift run --package-path Tools/Developer cove-dev validate crystal-rush
 ```

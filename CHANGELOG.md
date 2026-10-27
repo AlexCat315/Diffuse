@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 将编辑器 MCP 服务统一改名为 `DiffuseMCP`，同步模块、环境变量、安装检查、发布产物与 CI；移除旧 GuavaMcp 构建目录。
+- 修复依赖视图对 branch/revision 锁定的验证，以及脚本编译器在重复 C 模块声明中选择生成映射的稳定性。
+
 - Windows 包边界检查优先调用已安装 SDK 的 `cove.exe`，源码仓库才回退到 `cove.cmd`，修复安装后找不到命令的问题。
 
 - 同步 Cove SDK 0.2.6：提供 `@TrackStateReads` 字段读取推导和 Metal GPU 时间戳；UI 默认保留 4x，普通窗口在支持的 Apple GPU 上使用临时附件降低分配，磨砂与揭幕保留持久样本；DevTools 区分逻辑容量和 MSAA 分配，解析 1x 仍可按窗口启用。

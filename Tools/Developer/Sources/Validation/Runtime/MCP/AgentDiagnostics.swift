@@ -7,8 +7,8 @@ enum AgentDiagnostics {
   static let usage = """
     cove-dev validate agent-diagnostics
 
-    Launches the headless editor in a temporary project and drives CoveMCP
-    over stdio against it. Needs a built EditorApp and CoveMCP.
+    Launches the headless editor in a temporary project and drives DiffuseMCP
+    over stdio against it. Needs a built EditorApp and DiffuseMCP.
     """
 
   static func run(_ arguments: [String]) throws {
@@ -22,7 +22,7 @@ enum AgentDiagnostics {
 
     let port = try FreePort.reserve()
     var environment = ProcessInfo.processInfo.environment
-    environment["COVE_MCP_PORT"] = String(port)
+    environment["DIFFUSE_MCP_PORT"] = String(port)
 
     let directory = try Temp.directory(prefix: "cove-agent-diagnostics-")
     defer { try? Fs.remove(directory) }
@@ -46,7 +46,7 @@ enum AgentDiagnostics {
 
     try waitForTransport(child: child, port: port, log: log)
     mcp = try ChildProcess(
-      try BuildProducts.executable(package: "CoveMcp", name: "CoveMCP"),
+      try BuildProducts.executable(package: "DiffuseMCP", name: "DiffuseMCP"),
       environment: environment, stdin: .pipe, stdout: .pipe, stderr: .file(logHandle))
     try inspect(mcp!)
     Terminal.info(
@@ -94,7 +94,7 @@ enum AgentDiagnostics {
     let definitions = try JSON.objects(try request("tools/list")["tools"], "tools")
     try Check.require(
       definitions.contains { $0["name"] as? String == "query_ui_nodes" },
-      "CoveMCP is missing query_ui_nodes")
+      "DiffuseMCP is missing query_ui_nodes")
 
     let report = try tool("get_diagnostics")
     try Check.equal(try JSON.boolean(report["isError"], "isError"), false, JSON.text(report))

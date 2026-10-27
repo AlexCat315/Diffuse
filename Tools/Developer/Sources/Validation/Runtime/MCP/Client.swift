@@ -1,7 +1,7 @@
 internal import Foundation
 internal import ToolSupport
 
-/// JSON-RPC client for the stdio CoveMCP server, matching the `MCPClient`
+/// JSON-RPC client for the stdio DiffuseMCP server, matching the `MCPClient`
 /// the Crystal Rush and editor-loop validations shared. Requests are
 /// correlated by id; unrelated messages are dropped, as in the Python.
 final class MCPClient {

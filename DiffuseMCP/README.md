@@ -1,30 +1,30 @@
-# Cove MCP
+# Diffuse MCP
 
 本地 stdio MCP 服务，连接正在运行的 Diffuse。项目脚本工具与内置 AI 助手共用实现，详见 [工具文档](../docs/api/ai-tools.md)。
 
 先构建并启动编辑器，再将 MCP 可执行文件配置到支持 stdio 的客户端：
 
 ```bash
-swift build --package-path Editor
-swift build --package-path CoveMcp
-swift run --package-path Editor EditorApp --project-dir "$PWD/examples/CrystalRush"
-swift build --package-path CoveMcp --show-bin-path
+./cove internal build-package Editor --product EditorApp
+./cove internal build-package DiffuseMCP --product DiffuseMCP --result-file /tmp/diffuse-mcp-build.json
+./cove run Editor -- --project-dir "$PWD/examples/CrystalRush"
+cat /tmp/diffuse-mcp-build.json
 ```
 
-最后一个命令返回目录；使用其中的 `CoveMCP` 作为下面 `command` 的绝对路径：
+最后一个命令的 `products` 字段给出产物目录；使用其中的 `DiffuseMCP` 作为下面 `command` 的绝对路径：
 
 ```json
 {
   "mcpServers": {
-    "cove": {
-      "command": "/absolute/build/directory/CoveMCP",
-      "env": { "COVE_MCP_PORT": "9898" }
+    "diffuse": {
+      "command": "/absolute/build/directory/DiffuseMCP",
+      "env": { "DIFFUSE_MCP_PORT": "9898" }
     }
   }
 }
 ```
 
-Editor 默认监听 `127.0.0.1:9898`，支持多个连接和异步脚本编译。需要更换端口时，为 Editor 和 MCP 同时设置 `COVE_MCP_PORT`。TCP 桥接已迁到 CoveUI 的 `AgentLocalServer`，使用 SwiftNIO；MCP 协议分发复用 `MCPServer`。实现支持 macOS/Linux/Windows，本次构建与连通验证平台是 macOS。
+Editor 默认监听 `127.0.0.1:9898`，支持多个连接和异步脚本编译。需要更换端口时，为 Editor 和 MCP 同时设置 `DIFFUSE_MCP_PORT`。TCP 桥接已迁到 CoveUI 的 `AgentLocalServer`，使用 SwiftNIO；MCP 协议分发复用 `MCPServer`。实现支持 macOS/Linux/Windows，本次构建与连通验证平台是 macOS。
 
 AI 与 MCP 共用诊断工具：`get_diagnostics`、`query_ui_nodes`、`query_ui_recomposition`、`query_ui_state`、`capture_ui_trace`、`get_ui_trace`、`compare_ui_traces`。`list_skills` / `read_skill` 提供任务指引，MCP 也通过 `prompts/list` / `prompts/get` 暴露同一份 skill。图形 Editor 自动接入 UI 查询；headless Editor 可读领域诊断和 skills，UI 查询明确返回 unavailable。详见 [通用 AI 底层](../docs/architecture/agent-framework.md)。
 
@@ -35,8 +35,8 @@ AI 与 MCP 共用诊断工具：`get_diagnostics`、`query_ui_nodes`、`query_ui
 验证入口：
 
 ```bash
-swift run --package-path Tools/Developer cove-dev validate mcp-protocol
-swift run --package-path Tools/Developer cove-dev validate crystal-rush
+./cove studio validate mcp-protocol
+./cove studio validate crystal-rush
 ```
 
 `EditorApp --mcp-headless --project-dir <project>` 为本地自动化提供无 GPU 的宿主。只有显式传入 `--trust-project-scripts` 才信任项目；`--approve-scene-edits` 自动确认可撤销的场景预览，不确认破坏性修改。这些参数由启动编辑器的人选择，不是 MCP 工具。

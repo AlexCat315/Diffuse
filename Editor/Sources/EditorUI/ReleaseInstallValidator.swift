@@ -61,8 +61,8 @@ enum EditorInstallValidator {
                  executableDirectory.appendingPathComponent("CovePlayer"), true),
                 ("Contents/Helpers/DiffusePluginHost",
                  contentsDirectory.appendingPathComponent("Helpers/DiffusePluginHost"), true),
-                ("Contents/Helpers/CoveMCP",
-                 contentsDirectory.appendingPathComponent("Helpers/CoveMCP"), true),
+                ("Contents/Helpers/DiffuseMCP",
+                 contentsDirectory.appendingPathComponent("Helpers/DiffuseMCP"), true),
             ]
             : [
                 ("EditorApp\(suffix)",
@@ -71,8 +71,8 @@ enum EditorInstallValidator {
                  executableDirectory.appendingPathComponent("CovePlayer\(suffix)"), true),
                 ("Tools/DiffusePluginHost\(suffix)",
                  executableDirectory.appendingPathComponent("Tools/DiffusePluginHost\(suffix)"), true),
-                ("Tools/CoveMCP\(suffix)",
-                 executableDirectory.appendingPathComponent("Tools/CoveMCP\(suffix)"), true),
+                ("Tools/DiffuseMCP\(suffix)",
+                 executableDirectory.appendingPathComponent("Tools/DiffuseMCP\(suffix)"), true),
             ]
         var missing = requiredFiles.compactMap { component in
             let isValid = component.mustBeExecutable

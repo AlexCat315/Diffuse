@@ -2,7 +2,7 @@ internal import Foundation
 internal import ToolSupport
 
 /// Port of `scripts/validate-crystal-rush-mcp.py`: create and validate Crystal
-/// Rush through the real Cove MCP stdio server. Source writes, builds, scene
+/// Rush through the real Diffuse MCP stdio server. Source writes, builds, scene
 /// drafts, script attachment, save, play inspection and export all use MCP tools.
 enum CrystalRush {
   static let usage = """
@@ -46,10 +46,10 @@ enum CrystalRush {
 
     let port = try FreePort.reserve()
     var environment = ProcessInfo.processInfo.environment
-    environment["COVE_MCP_PORT"] = String(port)
+    environment["DIFFUSE_MCP_PORT"] = String(port)
     let editor = try BuildProducts.executable(package: "Editor", name: "EditorApp")
     let player = try BuildProducts.executable(package: "Editor", name: "CovePlayer")
-    let server = try BuildProducts.executable(package: "CoveMcp", name: "CoveMCP")
+    let server = try BuildProducts.executable(package: "DiffuseMCP", name: "DiffuseMCP")
     environment["COVE_PLAYER_EXECUTABLE"] = player.path
 
     let log = project.appendingPathComponent("validation/editor.log")
@@ -86,7 +86,7 @@ enum CrystalRush {
 
     let tools = try JSON.objects(try mcp.request("tools/list")["tools"], "tools")
     try Check.require(
-      tools.contains { $0["name"] as? String == "write_script" }, "CoveMCP is missing write_script"
+      tools.contains { $0["name"] as? String == "write_script" }, "DiffuseMCP is missing write_script"
     )
     let info = try mcp.tool("get_project_info")
     Terminal.info(

@@ -93,7 +93,7 @@ enum EditorNativeLoop {
       package: "Editor", name: "EditorApp", configuration: configuration)
     let player = try BuildProducts.executable(
       package: "Editor", name: "CovePlayer", configuration: configuration)
-    let server = try BuildProducts.executable(package: "CoveMcp", name: "CoveMCP")
+    let server = try BuildProducts.executable(package: "DiffuseMCP", name: "DiffuseMCP")
     let root = Repository.root
 
     let project = directory.appendingPathComponent("Crystal Rush")
@@ -128,7 +128,7 @@ enum EditorNativeLoop {
     let port = try FreePort.reserve()
     let devtoolsPort = try FreePort.reserve()
     var environment = ProcessInfo.processInfo.environment
-    environment["COVE_MCP_PORT"] = String(port)
+    environment["DIFFUSE_MCP_PORT"] = String(port)
     environment["COVE_EDITOR_STATE_DIRECTORY"] = state.path
     environment["COVE_PLAYER_EXECUTABLE"] = player.path
     environment["COVEUI_FORCE_CONTINUOUS_FRAMES"] = continuous ? "1" : "0"

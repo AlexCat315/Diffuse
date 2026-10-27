@@ -45,7 +45,7 @@ git submodule update --init --recursive
 ```bash
 ./cove internal build-package Engine            # 引擎核心
 ./cove build Editor                             # 编辑器（运行：./cove run Editor）
-./cove internal build-package CoveMcp --product CoveMCP  # MCP 服务
+./cove internal build-package DiffuseMCP --product DiffuseMCP  # MCP 服务
 ```
 
 ## 运行编辑器

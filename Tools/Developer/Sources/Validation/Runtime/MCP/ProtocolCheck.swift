@@ -1,15 +1,15 @@
 internal import Foundation
 internal import ToolSupport
 
-/// Port of `scripts/check-cove-mcp-protocol.py`: drives the real stdio server
+/// Port of `scripts/check-diffuse-mcp-protocol.py`: drives the real stdio server
 /// with framing, malformed input, negotiation, ping, tools and disconnect
 /// cases, with no running editor or model key.
 enum MCPProtocolCheck {
   static let usage = """
     cove-dev validate mcp-protocol
 
-    Runs the built CoveMCP stdio server against its protocol edge cases.
-    Honors COVE_MCP_EXECUTABLE to select the server executable.
+    Runs the built DiffuseMCP stdio server against its protocol edge cases.
+    Honors DIFFUSE_MCP_EXECUTABLE to select the server executable.
     """
 
   static func run(_ arguments: [String]) throws {
@@ -24,12 +24,12 @@ enum MCPProtocolCheck {
     let server = try BuildProducts.mcpServer()
     let input = Data(requests.joined(separator: "\n").appending("\n").utf8)
     var environment = ProcessInfo.processInfo.environment
-    environment["COVE_MCP_PORT"] = "1"
+    environment["DIFFUSE_MCP_PORT"] = "1"
     let outcome = try Subprocess.run(server, environment: environment, input: input, timeout: 10)
     guard outcome.status == 0 else {
       throw ToolError.message(
         outcome.stderrText.isEmpty
-          ? "CoveMCP exited with status \(outcome.status)"
+          ? "DiffuseMCP exited with status \(outcome.status)"
           : outcome.stderrText)
     }
 
@@ -68,7 +68,7 @@ enum MCPProtocolCheck {
     try Check.contains(promptText, "query_ui_nodes", JSON.text(messages))
 
     guard let write = tools.first(where: { $0["name"] as? String == "write_script" }) else {
-      throw ToolError.message("CoveMCP is missing write_script")
+      throw ToolError.message("DiffuseMCP is missing write_script")
     }
     let schema = try JSON.object(write["inputSchema"], "inputSchema")
     try Check.equal(
@@ -85,7 +85,7 @@ enum MCPProtocolCheck {
       JSON.text(messages))
 
     Terminal.info(
-      "Cove MCP protocol passed: framing, malformed input, negotiation, ping, tools and real disconnect errors"
+      "Diffuse MCP protocol passed: framing, malformed input, negotiation, ping, tools and real disconnect errors"
     )
   }
 

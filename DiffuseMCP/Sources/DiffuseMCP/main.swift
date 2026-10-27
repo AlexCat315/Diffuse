@@ -11,7 +11,7 @@ import Glibc
 import WinSDK
 #endif
 
-// MARK: - IPC (TCP → Cove.app on localhost:\(editorPort))
+// MARK: - IPC (TCP → Diffuse.app on localhost:\(editorPort))
 
 func editorCall(_ request: [String: Any]) -> [String: Any] {
     guard var payload = try? JSONSerialization.data(withJSONObject: request) else {
@@ -45,7 +45,7 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
         }
     }
     guard connected == 0 else {
-        return ["ok": false, "error": "Cove is not running (could not connect to localhost:\(editorPort))"]
+        return ["ok": false, "error": "Diffuse is not running (could not connect to localhost:\(editorPort))"]
     }
 
     let sent = payload.withUnsafeBytes {
@@ -86,7 +86,7 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
         }
     }
     guard connected == 0 else {
-        return ["ok": false, "error": "Cove is not running (could not connect to localhost:\(editorPort))"]
+        return ["ok": false, "error": "Diffuse is not running (could not connect to localhost:\(editorPort))"]
     }
 
     var sent = 0
@@ -127,7 +127,7 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
 // MARK: - Tool definitions
 
 let registry = CapabilityRegistry.aiDefault
-let editorPort = ProcessInfo.processInfo.environment["COVE_MCP_PORT"].flatMap(UInt16.init) ?? 9898
+let editorPort = ProcessInfo.processInfo.environment["DIFFUSE_MCP_PORT"].flatMap(UInt16.init) ?? 9898
 let capabilitySessionID = UUID().uuidString
 var activeCapabilityTools: [String: [String: Any]] = [:]
 var currentCapabilitySnapshotID: String?
@@ -135,7 +135,7 @@ var currentCapabilitySnapshotID: String?
 func frameworkTool(capabilityID: String, name: String) -> [String: Any] {
     guard let contract = registry.descriptor(for: capabilityID)?.contract else {
         return ["name": name,
-                "description": "Unavailable Cove framework capability",
+                "description": "Unavailable Diffuse editor capability",
                 "inputSchema": ["type": "object", "properties": [:]]]
     }
     return [
@@ -278,7 +278,7 @@ func invokeTool(_ name: String, input: Data) throws -> AgentToolResult {
                            isError: response["ok"] as? Bool != true)
 }
 
-let mcp = MCPServer(name: "cove", version: "0.0.9", skills: try UIDiagnosticTools.skills(),
+let mcp = MCPServer(name: "diffuse", version: "0.0.9", skills: try UIDiagnosticTools.skills(),
     tools: { try await toolDescriptors() }, execute: { try await invokeTool($0, input: $1) })
 
 // MARK: - Main loop

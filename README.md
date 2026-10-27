@@ -27,7 +27,7 @@ Studio contains the Engine and Editor packages plus an MCP server; the SDK is an
 - **`Engine/`** — rendering, scene, simulation, asset pipeline, AI runtime kernels, observation bus, film pipeline (EXR / color / denoise / render farm).
 - **`CoveUI/`** — the [CoveUI SDK](https://github.com/AlexCat315/Cove) is installed globally at the version pinned by `Editor/cove.json`; projects share its framework sources, native libraries and CLI. CI uses this path as a link to the shared SDK.
 - **`Editor/`** — the desktop editor application. Hosts the engine, mounts CoveUI panels (Hierarchy / Inspector / Console / Asset Browser / Viewport / Sequencer / Farm Dashboard …), and is the primary surface for AI interactions.
-- **`CoveMcp/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Cove capabilities to LLM agents over stdio / WebSocket.
+- **`DiffuseMCP/`** — an [MCP](https://modelcontextprotocol.io/) server that exposes Diffuse editor capabilities to LLM agents over stdio / WebSocket.
 
 CI installs the SDK release pinned by `Editor/cove.json`. For local development before that SDK version is released, set `COVE_SDK_ROOT` to the matching SDK checkout.
 
@@ -120,7 +120,7 @@ After the first bootstrap, day-to-day development only needs:
 ```bash
 ./cove internal build-package Engine   # engine + renderers
 ./cove build Editor   # editor (run: ./cove run Editor)
-./cove internal build-package CoveMcp --product CoveMCP # MCP server
+./cove internal build-package DiffuseMCP --product DiffuseMCP # MCP server
 ```
 
 The SDK's portable core, DevTools server, browser prototype and examples live in the [CoveUI repository](https://github.com/AlexCat315/Cove).
@@ -177,7 +177,7 @@ Diffuse/
 │   ├── EditorCore/            (editor project/application domain)
 │   └── GameRuntime/           (project simulation and player services)
 ├── examples/                  (CrystalRush game content)
-├── CoveMcp/Sources/CoveMCP/  (MCP server exposing Cove capabilities)
+├── DiffuseMCP/Sources/DiffuseMCP/  (MCP server exposing Diffuse editor capabilities)
 └── .github/workflows/        (CI matrices for engine / editor / MCP + release)
 ```
 
@@ -191,7 +191,7 @@ GitHub Actions workflows live under `.github/workflows/`:
 
 - `ci-engine.yml` — Engine package matrix.
 - `ci-editor.yml` — Editor package.
-- `ci-cove-mcp.yml` — MCP server package.
+- `ci-diffuse-mcp.yml` — MCP server package.
 - `release.yml` — release builds.
 
 The SDK's own CI lives in the [CoveUI repository](https://github.com/AlexCat315/Cove).

@@ -25,6 +25,7 @@ enum RebuildCommand {
       name: "--targets", arity: -1, choices: ["metal", "spirv", "spirv-mobile", "dxil"]),
     ArgumentDefinition(name: "--check", arity: 0),
     ArgumentDefinition(name: "--ui-only", arity: 0),
+    ArgumentDefinition(name: "--sdk-root", arity: 1),
   ]
 
   static let particleKernels: [(String, String)] = [
@@ -80,7 +81,7 @@ enum RebuildCommand {
     let targets = parsed.list("--targets") ?? ["metal", "spirv"]
     let check = parsed.isPresent("--check")
     let uiOnly = parsed.isPresent("--ui-only")
-    let programs = buildPrograms(uiOnly: uiOnly)
+    let programs = buildPrograms(uiOnly: uiOnly, sdkRoot: parsed.value("--sdk-root"))
     let specialized = Set(particleKernels.map { $0.0 })
       .subtracting(["particle_metadata_reset", "particle_state_finalize"])
     let particleNames = Set(particleKernels.map { $0.0 })
@@ -134,9 +135,9 @@ enum RebuildCommand {
     try finish(destinations: destinations, check: check)
   }
 
-  private static func buildPrograms(uiOnly: Bool) -> [Program] {
+  private static func buildPrograms(uiOnly: Bool, sdkRoot requestedSDK: String?) -> [Program] {
     let renderShaders = Repository.path("Engine/Sources/RenderBackend/Resources/Shaders")
-    let sdkRoot = ProcessInfo.processInfo.environment["COVE_SDK_ROOT"]
+    let sdkRoot = (requestedSDK ?? ProcessInfo.processInfo.environment["COVE_SDK_ROOT"])
       .map { URL(fileURLWithPath: $0) } ?? Repository.path("CoveUI")
     let uiShaders = sdkRoot.appendingPathComponent("Sources/CoveUIRuntime/Resources/Shaders")
     var programs: [(String, String, [(String, String)])] = []

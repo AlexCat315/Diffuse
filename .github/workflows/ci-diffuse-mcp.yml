@@ -1,13 +1,13 @@
-name: cove-mcp CI
+name: diffuse-mcp CI
 
 on:
   push:
     branches: [main]
     paths:
-      - 'CoveMcp/**'
+      - 'DiffuseMCP/**'
       - 'Tools/Developer/Sources/Validation/Runtime/**'
       - 'Engine/**'
-      - '.github/workflows/ci-cove-mcp.yml'
+      - '.github/workflows/ci-diffuse-mcp.yml'
       - '.github/actions/setup-toolchains/**'
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
@@ -19,10 +19,10 @@ on:
       - 'cmake/**'
   pull_request:
     paths:
-      - 'CoveMcp/**'
+      - 'DiffuseMCP/**'
       - 'Tools/Developer/Sources/Validation/Runtime/**'
       - 'Engine/**'
-      - '.github/workflows/ci-cove-mcp.yml'
+      - '.github/workflows/ci-diffuse-mcp.yml'
       - '.github/actions/setup-toolchains/**'
       - '.github/actions/native-dependencies/**'
       - '.github/actions/fetch-sdk/**'
@@ -33,7 +33,7 @@ on:
       - 'Tools/Developer/Sources/Build/**'
       - 'cmake/**'
 
-# SwiftPM validates every Engine binary target even when CoveMCP only
+# SwiftPM validates every Engine binary target even when DiffuseMCP only
 # imports Swift products. Bootstrap native artifacts before package resolution.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -84,12 +84,12 @@ jobs:
         run: swift --version
 
       - name: Build (release)
-        working-directory: CoveMcp
+        working-directory: DiffuseMCP
         run: swift build -c release
 
       - name: Verify stdio protocol contract
         if: runner.os != 'Windows'
         shell: bash
         env:
-          COVE_MCP_EXECUTABLE: ${{ github.workspace }}/CoveMcp/.build/release/CoveMCP
+          DIFFUSE_MCP_EXECUTABLE: ${{ github.workspace }}/DiffuseMCP/.build/release/DiffuseMCP
         run: ./cove studio validate mcp-protocol

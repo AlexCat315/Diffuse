@@ -44,10 +44,10 @@ ObservationBus  观察引擎执行结果
 
 ## MCP 服务器
 
-`CoveMcp` 实现了 MCP（Model Context Protocol）服务器，把 Cove 与 Diffuse 的能力标准化地暴露给外部 LLM agent：
+`DiffuseMCP` 实现了 MCP（Model Context Protocol）服务器，把 Diffuse 编辑器与引擎的能力标准化地暴露给外部 LLM agent：
 
 ```bash
-./cove internal build-package CoveMcp --product CoveMCP
+./cove internal build-package DiffuseMCP --product DiffuseMCP
 ```
 
 ## 插件与 Agent

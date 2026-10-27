@@ -386,7 +386,13 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         let declaration = try? NSRegularExpression(pattern: #"(?:^|\n)\s*(?:framework\s+)?module\s+(\w+)\s*\{"#)
         let umbrella = try? NSRegularExpression(pattern: #"\bumbrella\s+(?:header\s+)?"([^"]+)""#)
         var byModule: [String: String] = [:]
-        for path in maps.sorted() {
+        // Prefer the canonical generated map over per-target intermediates;
+        // package names must not change which duplicate declaration wins.
+        for path in maps.sorted(by: {
+            let left = $0.contains("/GeneratedModuleMaps/")
+            let right = $1.contains("/GeneratedModuleMaps/")
+            return left == right ? $0 < $1 : left
+        }) {
             guard let contents = try? String(contentsOfFile: path, encoding: .utf8),
                   !contents.contains("-Swift.h"),
                   let match = declaration?.firstMatch(in: contents, range: NSRange(contents.startIndex..., in: contents)),

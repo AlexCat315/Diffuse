@@ -20,7 +20,7 @@ const pluginTypes = [
   {
     name: 'MCP 服务',
     en: 'MCP Server',
-    desc: 'CoveMcp 把能力暴露给外部 LLM agent，标准协议、即插即用。',
+    desc: 'DiffuseMCP 把能力暴露给外部 LLM agent，标准协议、即插即用。',
     icon: 'M5 12h14M12 5l7 7-7 7',
     tint: '#fb923c',
   },

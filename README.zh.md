@@ -48,7 +48,7 @@ git submodule update --init --recursive
 ```bash
 ./cove internal build-package Engine    # 引擎核心
 ./cove build Editor    # 编辑器（运行: ./cove run Editor）
-./cove internal build-package CoveMcp --product CoveMCP # MCP 服务
+./cove internal build-package DiffuseMCP --product DiffuseMCP # MCP 服务
 ```
 
 SDK 的共享核心、跨平台调试服务、浏览器原型与示例位于 [CoveUI 仓库](https://github.com/AlexCat315/Cove)。
@@ -82,7 +82,7 @@ Diffuse/
 ├── Engine/Sources/       渲染 / 场景 / 物理 / 资产 / AI 运行时 / 观察总线 / 影视管线
 ├── CoveUI/              CI 中指向共享 SDK 的链接（被忽略）
 ├── Editor/Sources/       创作工作站（文档、媒体时间线、场景、Agent）
-├── CoveMcp/Sources/    MCP 服务器（暴露 Cove 能力给 LLM agent）
+├── DiffuseMCP/Sources/    MCP 服务器（暴露 Diffuse 编辑器能力给 LLM agent）
 └── .github/workflows/    CI 矩阵与 release
 ```
 

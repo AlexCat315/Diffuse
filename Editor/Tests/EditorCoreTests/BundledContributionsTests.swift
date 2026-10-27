@@ -58,7 +58,9 @@ struct BundledContributionsTests {
         #expect(table.columns == ["Package", "Version", "Revision", "Location"])
         #expect(table.rows.map { $0.cells[0] } == pins.compactMap { $0["identity"] as? String })
         let first = try #require(pins.first?["state"] as? [String: Any])
-        #expect(table.rows.first?.cells[1] == first["version"] as? String)
+        let display = first["version"] as? String
+            ?? (first["branch"] as? String).map { "branch " + $0 } ?? "—"
+        #expect(table.rows.first?.cells[1] == display)
     }
 
     // MARK: Fixtures

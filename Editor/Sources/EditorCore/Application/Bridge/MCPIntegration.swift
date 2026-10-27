@@ -23,7 +23,7 @@ extension EditorApplication {
     // MARK: - MCP Bridge
 
     func startMCPBridge() {
-        let port = ProcessInfo.processInfo.environment["COVE_MCP_PORT"].flatMap(UInt16.init) ?? 9898
+        let port = ProcessInfo.processInfo.environment["DIFFUSE_MCP_PORT"].flatMap(UInt16.init) ?? 9898
         let bridge = AgentLocalServer(port: port) { [weak self] data in
             guard let self else { return Data(#"{"ok":false,"error":"editor unavailable"}"#.utf8) }
             return await self.handleMCPMessage(data)
