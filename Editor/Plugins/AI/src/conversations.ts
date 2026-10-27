@@ -73,6 +73,7 @@ export class Conversations {
     // Lock ownership spans every project host using this application-level conversation directory.
     const lock = await open(lockPath, "wx", 0o600).catch(() => { throw new Error("此会话已在另一个项目中运行"); });
     await lock.writeFile(JSON.stringify({ pid: process.pid })); await lock.close();
+    await rm(join(this.directory, `${id}.cancel`), { force: true });
     const controller = new AbortController();
     const answer: Message = { id: crypto.randomUUID(), role: "assistant", text: "", state: "running" };
     conversation.messages.push({ id: crypto.randomUUID(), role: "user", text: prompt }, answer);
@@ -87,6 +88,7 @@ export class Conversations {
       }, 100);
       let lastSave = Date.now();
       try {
+        controller.signal.throwIfAborted();
         await generate(conversation.messages.filter(message => message !== answer), controller.signal, text => {
           if (controller.signal.aborted) return;
           answer.text += text;

@@ -18,7 +18,7 @@ struct AuthoringWorkspaceTests {
         let package = try PluginPackageLoader().load(at: plugin.package)
         app.pluginSession.providers = AIProviderCatalog(packages: [package])
         app.pluginSession.agents = AgentCatalog(packages: [package])
-        app.pluginSession.workbench.replace(WorkbenchCatalog(packages: [package]))
+        app.pluginSession.editor.workbench.replace(WorkbenchCatalog(packages: [package]))
     }
 
     private final class ResizingTitle: View {
@@ -73,8 +73,7 @@ struct AuthoringWorkspaceTests {
         let commands = EditorCommandSearch.commands(app: app)
         #expect(commands.contains { $0.id == "project.build" })
         #expect(!commands.contains { $0.id == "scene.save" })
-        #expect(commands.contains { $0.id == "agent.show" })
-        #expect(commands.first { $0.id == "agent.show" }?.keywords.contains("审阅") == true)
+        #expect(commands.contains { $0.id == "surface.studio.ai.assistant" && $0.title == "AI" })
         let catalog = EditorCommandCatalog.make(EditorCommandContext(app: app))
         #expect(catalog.menus.contains { $0.id == "run" })
         #expect(!catalog.menus.contains { $0.id == "world" })
@@ -94,7 +93,7 @@ struct AuthoringWorkspaceTests {
         let selected = app.store.selectedEntityIDs
         let identity = app.store.state.document.identity
         let revision = app.scene.revision
-        #expect(EditorAssistantSurface.of(app).view == .agent)
+        #expect(EditorAssistantSurface.of(app).view == EditorStudioView("studio.ai.assistant"))
         EditorAssistantSurface.of(app).show(.make)
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: EditorRootView(app: app, controller: controller, registry: registry))
@@ -124,20 +123,33 @@ struct AuthoringWorkspaceTests {
         // Make is yours: no agent panel anywhere, only the switch in the title bar.
         #expect(frames.contains { $0.debugName == "editor-view-switch" })
         #expect(!frames.contains { $0.debugName == "editor-agent-view" })
-        try WorkbenchUITestSupport.activate("editor-view-agent", in: graph.tree.root, registry: interactions)
+        try WorkbenchUITestSupport.activate("editor-view-studio.ai.assistant", in: graph.tree.root, registry: interactions)
         settle()
         let agentFrames = graph.layoutSnapshot()
-        // Nothing sits beside the thread until the agent works on something or one is picked.
-        #expect(!agentFrames.contains { $0.debugName == "editor-agent-canvas" })
-        for name in ["editor-agent-tasks", "editor-agent-thread", "editor-agent-canvas-strip"] {
-            #expect(agentFrames.contains { $0.debugName == name }, "\(name) is missing")
-        }
+        #expect(agentFrames.contains { $0.debugName == "plugin-surface-assistant" })
         #expect(!agentFrames.contains { $0.debugName == "editor-workspace" })
-        try WorkbenchUITestSupport.activate("editor-agent-show-files", in: graph.tree.root, registry: interactions)
+        #expect(!agentFrames.contains { $0.debugName == "editor-status-bar" || $0.debugName == "editor-playback-toolbar" })
+        let leading = try #require(agentFrames.first { $0.debugName == "plugin-region-leading" })
+        #expect(leading.absoluteFrame.width == 280)
+        #expect(leading.absoluteFrame.minY == 40 && leading.absoluteFrame.maxY == 800)
+        #expect(!agentFrames.contains { $0.debugName == "plugin-region-trailing" })
+        try WorkbenchUITestSupport.activate("editor-toggle-leading", in: graph.tree.root, registry: interactions)
         settle()
-        #expect(graph.layoutSnapshot().contains { $0.debugName == "editor-agent-canvas" })
-        // The canvas is the content the workbench edits, so opening it there lands on the same code.
-        try WorkbenchUITestSupport.activate("editor-agent-canvas-make", in: graph.tree.root, registry: interactions)
+        #expect(!graph.layoutSnapshot().contains { $0.debugName == "plugin-region-leading" })
+        try WorkbenchUITestSupport.activate("editor-toggle-leading", in: graph.tree.root, registry: interactions)
+        try WorkbenchUITestSupport.activate("editor-toggle-trailing", in: graph.tree.root, registry: interactions)
+        settle()
+        let expanded = graph.layoutSnapshot()
+        let trailing = try #require(expanded.first { $0.debugName == "plugin-region-trailing" })
+        let main = try #require(expanded.first { $0.debugName == "plugin-main" })
+        #expect(trailing.absoluteFrame.width == 320 && trailing.absoluteFrame.maxY == 800)
+        #expect(main.absoluteFrame.maxX <= trailing.absoluteFrame.minX)
+        #expect(main.absoluteFrame.width >= 640)
+        try WorkbenchUITestSupport.activate("editor-toggle-trailing", in: graph.tree.root, registry: interactions)
+        settle()
+        try WorkbenchUITestSupport.activate("editor-view-make", in: graph.tree.root, registry: interactions)
+        EditorCommandDispatcher.handle(.showContent(.files), app: app, controller: controller,
+                                       registry: registry, fromCommandPalette: true)
         settle()
         #expect(app.store.content == .files)
         defer { EditorAssistantSurface.of(app).showCanvas(.follow) }
@@ -174,7 +186,7 @@ struct AuthoringWorkspaceTests {
         }
         // Include the custom window buttons on platforms that draw them in the title bar.
         // The complete trailing cluster must reach the window edge.
-        let trailing = frames.filter { ["editor-playback-toolbar", "window-control-close"].contains($0.debugName) }
+        let trailing = frames.filter { ["editor-toggle-trailing", "window-control-close"].contains($0.debugName) }
             .map(\.absoluteFrame.maxX).max() ?? 0
         #expect(trailing >= CGFloat(width) - 12, "trailing controls end at \(trailing) in \(width)")
         let titleMenu = frames.first { $0.debugName == "editor-title-menu" }

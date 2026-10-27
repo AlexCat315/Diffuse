@@ -2,6 +2,16 @@
   "version": 1,
   "entries": [
     {
+      "name": "conversation",
+      "input": {
+        "record": {
+          "request": "string"
+        }
+      },
+      "title": "conversation",
+      "description": ""
+    },
+    {
       "name": "complete",
       "input": {
         "record": {

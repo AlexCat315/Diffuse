@@ -139,6 +139,7 @@ struct PluginPlatformTests {
         }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false)
+        app.pluginSession.editor.installations = PluginInstallations(root: project.appendingPathComponent("installed-plugins"))
         defer { app.shutdown() }
         app.store.dispatch(.setThemeID("test.theme"))
         let authorization = try PluginAuthorizationRecord(inspection: app.inspectPlugin(at: root))

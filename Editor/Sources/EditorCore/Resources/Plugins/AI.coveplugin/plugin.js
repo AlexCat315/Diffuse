@@ -154,6 +154,7 @@ class Conversations {
     });
     await lock.writeFile(JSON.stringify({ pid: process.pid }));
     await lock.close();
+    await rm(join(this.directory, `${id}.cancel`), { force: true });
     const controller = new AbortController;
     const answer = { id: crypto.randomUUID(), role: "assistant", text: "", state: "running" };
     conversation.messages.push({ id: crypto.randomUUID(), role: "user", text: prompt }, answer);
@@ -177,6 +178,7 @@ class Conversations {
       }, 100);
       let lastSave = Date.now();
       try {
+        controller.signal.throwIfAborted();
         await generate(conversation.messages.filter((message) => message !== answer), controller.signal, (text) => {
           if (controller.signal.aborted)
             return;
@@ -581,6 +583,7 @@ async function disposeCompletions() {
 
 // Editor/Plugins/AI/src/index.ts
 var stores = new Map;
+var views = new Map;
 var text = (value, style = "body", tone = "normal") => ({ type: "text", text: value || " ", style, tone });
 var column = (children, options = {}) => ({ type: "column", spacing: 8, children, ...options });
 var row = (children, options = {}) => ({ type: "row", spacing: 8, children, ...options });
@@ -606,15 +609,34 @@ async function saveConfig(directory, config) {
 }
 function threadRow(thread, selected) {
   const suffix = thread.status === "running" ? " \xB7 \u8FD0\u884C\u4E2D" : thread.status === "failed" ? " \xB7 \u5931\u8D25" : "";
-  return button(thread.title + suffix, "select", { id: thread.id }, thread.id === selected ? "secondary" : "ghost");
+  return { ...button(thread.title + suffix, "select", { id: thread.id }, thread.id === selected ? "secondary" : "ghost"), align: "start" };
 }
 var src_default = definePlugin({
   async deactivate() {
     await disposeCompletions();
     await Promise.all([...stores.values()].map((store) => store.dispose()));
     stores.clear();
+    views.clear();
   },
   capabilities: {
+    conversation: capability({ record: { request: "string" } }, async (input, host) => {
+      const request = JSON.parse(input.request);
+      if (request.operation !== "current")
+        throw new Error("Unknown conversation operation");
+      const selected = views.get(host.storageDirectory)?.selected;
+      const store = stores.get(host.storageDirectory);
+      const conversation = selected && store ? await store.get(selected) : undefined;
+      if (!conversation)
+        return null;
+      return {
+        id: conversation.id,
+        title: conversation.title,
+        project: conversation.project ?? null,
+        status: conversation.status,
+        skills: conversation.skills ?? [],
+        messages: conversation.messages.slice(-20).map((message) => ({ role: message.role, text: message.text.slice(-16000) }))
+      };
+    }),
     complete: capability({ record: { request: "string" } }, async (input, host) => completion(input.request, host, await configAt(host.storageDirectory))),
     view: capability({ record: { view: "string", state: "string", event: "string", context: "string" } }, async (input, host) => {
       const context = JSON.parse(input.context);
@@ -625,7 +647,8 @@ var src_default = definePlugin({
         store = new Conversations(join3(context.storage, "conversations"));
         stores.set(context.storage, store);
       }
-      const state = input.state ? JSON.parse(input.state) : {};
+      const state = views.get(context.storage) ?? (input.state ? JSON.parse(input.state) : {});
+      views.set(context.storage, state);
       const event = input.event ? JSON.parse(input.event) : undefined;
       let config = await configAt(context.storage);
       if (event)
@@ -666,14 +689,14 @@ var src_default = definePlugin({
           case "configure": {
             const values = event.values ?? {};
             config = { format: values.format ?? config.format, baseURL: values.endpoint ?? config.baseURL, model: values.model ?? config.model, apiKey: values.key || config.apiKey };
-            if (!config.model || !config.apiKey)
+            if (!config.model || !config.format.startsWith("service:") && !config.apiKey)
               throw new Error("\u8BF7\u586B\u5199\u6A21\u578B\u548C API Key");
             await saveConfig(context.storage, config);
             state.settings = false;
             break;
           }
           case "send": {
-            if (!config.apiKey) {
+            if (!config.format.startsWith("service:") && !config.apiKey) {
               state.settings = true;
               throw new Error("\u8BF7\u5148\u914D\u7F6E\u6A21\u578B");
             }
@@ -712,43 +735,61 @@ var src_default = definePlugin({
       const sidebar = column([
         text("Diffuse", "title"),
         button("\u65B0\u4F1A\u8BDD", "new", {}, "secondary"),
-        button("\u6A21\u578B\u8BBE\u7F6E", "settings"),
+        button("\u6A21\u578B\u8BBE\u7F6E", "settings", {}, state.settings ? "secondary" : "ghost"),
         ...standalone.length ? [text("\u72EC\u7ACB\u4F1A\u8BDD", "caption", "muted"), ...standalone.map((thread) => threadRow(thread, state.selected))] : [],
         text("\u9879\u76EE", "caption", "muted"),
         ...[...projects].flatMap(([directory, name]) => [
           row([text(name, "strong"), button("\uFF0B", "new", { project: directory })]),
           ...threads.filter((thread) => thread.project === directory).map((thread) => threadRow(thread, state.selected))
         ])
-      ], { padding: 16, flex: 1 });
+      ], { padding: 20, flex: 1 });
+      const project = selected ? selected.project : context.workspace;
       let center;
       if (state.settings) {
         center = column([
           text("\u6A21\u578B\u8BBE\u7F6E", "title"),
           { type: "select", id: "format", value: config.format.startsWith("service:") && !providers.some((value) => `service:${value.data.service}` === config.format) ? "openai-compatible" : config.format, options: [{ value: "openai-compatible", label: "OpenAI compatible" }, { value: "anthropic", label: "Anthropic" }, ...providers.filter((value) => value.data.service).map((value) => ({ value: `service:${value.data.service}`, label: value.data.title ?? value.id }))] },
+          text("\u670D\u52A1\u5730\u5740", "caption", "muted"),
           field("endpoint", "API \u5730\u5740\uFF08\u5305\u542B\u6240\u9700\u7684 /v1/ \u8DEF\u5F84\uFF09", config.baseURL),
+          text("\u6A21\u578B", "caption", "muted"),
           field("model", "\u6A21\u578B ID", config.model),
+          text("API Key", "caption", "muted"),
           field("key", "API Key", "", true),
           button("\u4FDD\u5B58", "configure", {}, "primary")
-        ], { maxWidth: 720, padding: 24 });
+        ], { fillWidth: true, maxWidth: 720, padding: 24 });
       } else {
         const messages = selected?.messages ?? [];
-        const history = messages.slice(-40).flatMap((message) => [
-          text(message.role === "user" ? "\u4F60" : "AI", "caption", "muted"),
-          ...Array.from({ length: Math.max(1, Math.ceil(Math.min(message.text.length, 40000) / 900)) }, (_, index) => text(message.text.slice(index * 1800, (index + 1) * 1800)))
-        ]);
+        const history = messages.slice(-40).flatMap((message) => {
+          const visible = message.text.slice(-40000);
+          return [
+            text(message.role === "user" ? "\u4F60" : "AI", "caption", "muted"),
+            ...Array.from({ length: Math.max(1, Math.ceil(visible.length / 900)) }, (_, index) => text(visible.slice(index * 900, (index + 1) * 900)))
+          ];
+        });
         center = column([
-          ...messages.length ? [{ type: "scroll", child: column(history, { padding: 16, maxWidth: 820 }) }] : [{ type: "spacer" }, text("\u5F00\u59CB\u65B0\u7684\u5DE5\u4F5C", "title")],
+          ...messages.length ? [{ type: "scroll", child: column(history, { padding: 16, fillWidth: true, maxWidth: 820 }), fillWidth: true }] : [{ type: "spacer" }, text("\u5F00\u59CB\u65B0\u7684\u5DE5\u4F5C", "title")],
           column([
             ...state.error ? [text(state.error, "caption", "danger")] : [],
-            ...selected ? [text(selected.project ? projects.get(selected.project) ?? selected.project : "\u72EC\u7ACB\u4F1A\u8BDD", "caption", "muted")] : [],
+            text(project ? projects.get(project) ?? project.split(/[\\/]/).pop() : "\u72EC\u7ACB\u4F1A\u8BDD", "caption", "muted"),
             ...selected && skills.length ? [{ type: "select", id: "skill", value: skills.some((skill) => `${skill.pluginID}.${skill.id}` === selected.skills?.[0]) ? selected.skills[0] : "none", action: "skill", options: [{ value: "none", label: "Skill" }, ...skills.map((skill) => ({ value: `${skill.pluginID}.${skill.id}`, label: skill.data.title ?? skill.id }))] }] : [],
             { type: "textField", id: `prompt-${state.selected ?? "new"}`, placeholder: "\u63CF\u8FF0\u4F60\u60F3\u5B8C\u6210\u7684\u5DE5\u4F5C\u2026", multiline: true, minHeight: 88, submit: "send", change: "draft", value: selected?.draft ?? "" },
             row([text(config.model, "caption", "muted"), { type: "spacer" }, selected?.status === "running" ? button("\u505C\u6B62", "cancel", {}, "secondary") : button("\u53D1\u9001", "send", {}, "primary")])
-          ], { padding: 16, background: "raised", cornerRadius: 20, maxWidth: 820 }),
+          ], { padding: 16, background: "raised", cornerRadius: 20, fillWidth: true, maxWidth: 820 }),
           ...!messages.length ? [{ type: "spacer" }] : []
-        ], { padding: 32, flex: 1, align: "center" });
+        ], { padding: 32, spacing: messages.length ? 12 : 24, flex: 1, align: "center" });
       }
-      return { state, ui: row([{ type: "scroll", child: sidebar, width: 260, background: "surface", cornerRadius: 16 }, center], { flex: 1 }), refreshAfterMilliseconds: 500 };
+      const details = column([
+        text("\u4E0A\u4E0B\u6587", "strong"),
+        text("\u9879\u76EE", "caption", "muted"),
+        text(project ? projects.get(project) ?? project : "\u72EC\u7ACB\u4F1A\u8BDD"),
+        ...project ? [text(project, "caption", "muted")] : [],
+        text("\u6A21\u578B", "caption", "muted"),
+        text(config.model),
+        ...selected ? [text("\u4F1A\u8BDD\u72B6\u6001", "caption", "muted"), text({ idle: "\u672A\u5F00\u59CB", running: "\u8FD0\u884C\u4E2D", completed: "\u5DF2\u5B8C\u6210", cancelled: "\u5DF2\u505C\u6B62", failed: "\u5931\u8D25", interrupted: "\u5DF2\u4E2D\u65AD" }[selected.status])] : [],
+        ...selected?.skills?.length ? [text("Skills", "caption", "muted"), ...selected.skills.map((id) => text(skills.find((skill) => `${skill.pluginID}.${skill.id}` === id)?.data.title ?? id))] : []
+      ], { padding: 20 });
+      const ui = input.view === "ai-conversations" ? { type: "scroll", child: sidebar } : input.view === "ai-context" ? { type: "scroll", child: details } : center;
+      return { state, ui, refreshAfterMilliseconds: 500 };
     })
   }
 });

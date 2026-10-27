@@ -13,7 +13,9 @@ struct PluginNodeRenderer: @unchecked Sendable {
         var view = content(node)
         if let flex = node.flex { view = AnyView(view.flex(Float(flex)).frame(minWidth: 0)) }
         if let width = node.width { view = AnyView(view.frame(width: .points(Float(width))).flex(0, shrink: 0, basis: Float(width))) }
-        if let maximum = node.maxWidth { view = AnyView(view.frame(maxWidth: Float(maximum))) }
+        if node.fillWidth == true {
+            view = AnyView(view.frame(width: .percent(100), maxWidth: node.maxWidth.map(Float.init)))
+        } else if let maximum = node.maxWidth { view = AnyView(view.frame(maxWidth: Float(maximum))) }
         if let minimum = node.minHeight { view = AnyView(view.frame(minHeight: Float(minimum))) }
         if let background = node.background {
             let color: SemanticColorRef = switch background { case .canvas: .background; case .surface: .surface; case .raised: .surfaceRaised }
@@ -52,7 +54,7 @@ struct PluginNodeRenderer: @unchecked Sendable {
                 AnyView(ProgressView(value: Double(percent) / 100).frame(minWidth: 0))
             } else {
                 AnyView(Spinner(size: 12))
-            }
+            }.framePercent(width: button.align == .center ? nil : 100)
         case let .button(button): buttonView(button)
         case let .textField(field): textFieldView(field)
         case let .toggle(toggle): toggleView(toggle)
@@ -85,8 +87,10 @@ struct PluginNodeRenderer: @unchecked Sendable {
         }
         let label = Button(isEnabled: !button.disabled, tooltip: "", action: action) {
             Row(alignment: .center, spacing: 6) {
+                if button.align == .end { Spacer(minLength: 0) }
                 if let icon = button.icon { Icon(Self.icon(icon), size: 12) }
                 Text(title, lineLimit: 1)
+                if button.align == .start { Spacer(minLength: 0) }
             }
         }
         let styled: AnyView = switch button.style {

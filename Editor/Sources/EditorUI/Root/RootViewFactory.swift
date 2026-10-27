@@ -217,7 +217,7 @@ enum EditorRootViewFactory {
     /// keeps its state; the view itself follows the package's current content.
     static func syncContributedPanels(app: EditorApplication, registry: WorkspacePanelRegistry) {
         // The agent view is the window's session column, never a docked panel.
-        let panels = app.workbenchCatalog.panels.filter { $0.content == .model }
+        let panels = app.workbenchCatalog.panels.filter { $0.content == .model && $0.surface == nil && $0.inSurface == nil }
         for id in registry.ids where !EditorWorkspaceProfile.builtInPanelIDs.contains(id.rawValue)
             && !panels.contains(where: { $0.id == id.rawValue }) {
             registry.unregister(id: id)

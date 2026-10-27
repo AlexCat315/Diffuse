@@ -28,6 +28,12 @@ final class EditorAssistantSurface: _ObservableObject {
     }
 
     struct State: Equatable {
+        struct Regions: Equatable {
+            var leading = true
+            var trailing = false
+            var selectedPanels: [String: String] = [:]
+        }
+        var regions: [EditorStudioView: Regions] = [:]
         /// A window opens on the agent view, as Codex does; the workbench is one switch away.
         fileprivate(set) var requestedView: EditorStudioView = .agent
         var canvas: Canvas = .follow
@@ -80,11 +86,32 @@ final class EditorAssistantSurface: _ObservableObject {
         // Asking for a view no enabled package declares would leave a request
         // that only takes effect if the package comes back; refuse it so the
         // window cannot reopen on a view that does not exist.
-        guard availableViews().contains(view) else { return }
-        update { $0.requestedView = view }
+        let target = view == .agent ? availableViews().first(where: { $0 != .make }) ?? view : view
+        guard availableViews().contains(target) else { return }
+        update { $0.requestedView = target }
     }
 
     func showCanvas(_ canvas: Canvas) { update { $0.canvas = canvas } }
+
+    var regions: State.Regions { state.regions[view] ?? .init() }
+
+    func toggleRegion(leading: Bool) {
+        let mode = view
+        update {
+            var regions = $0.regions[mode] ?? .init()
+            if leading { regions.leading.toggle() } else { regions.trailing.toggle() }
+            $0.regions[mode] = regions
+        }
+    }
+
+    func selectRegionPanel(_ id: String, slot: String) {
+        let mode = view
+        update {
+            var regions = $0.regions[mode] ?? .init()
+            regions.selectedPanels[slot] = id
+            $0.regions[mode] = regions
+        }
+    }
 
     /// Called before the bundled packages start registering. Until
     /// `finishLaunch()` the window paints the launch surface rather than an

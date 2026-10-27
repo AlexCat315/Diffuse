@@ -431,8 +431,7 @@ let package = Package(
                 "CapabilityRuntime",
                 "PluginRuntime",
                 .product(name: "CoveProcess", package: "CoveUI"),
-            ],
-            resources: [.copy("Fixtures")]
+            ]
         ),
         .testTarget(
             name: "IntentRuntimeTests",

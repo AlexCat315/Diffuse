@@ -68,7 +68,9 @@ struct EditorRootView: View {
                             }
                         }.flex().frame(minWidth: 0, minHeight: 0)
 
-                        EditorStatusBar(app: app, controller: controller, onCommand: cb.handleMenuCommand)
+                        if surface.view == .make {
+                            EditorStatusBar(app: app, controller: controller, onCommand: cb.handleMenuCommand)
+                        }
                     }
                     .background(.background)
                     .flex()

@@ -57,6 +57,7 @@ public struct ContributedPanel: Sendable, Equatable, Identifiable {
     public let icon: String?
     public let content: Content
     public let surface: String?
+    public let inSurface: String?
     let entryPoint: String?
 
     init?(pluginID: String, contribution: PanelContribution) {
@@ -76,6 +77,7 @@ public struct ContributedPanel: Sendable, Equatable, Identifiable {
         slot = contribution.slot ?? "trailing"
         icon = contribution.icon
         surface = contribution.surface
+        inSurface = contribution.inSurface
     }
 }
 

@@ -40,7 +40,7 @@ struct PluginPanelTests {
             #expect(registry.descriptor(for: "fixture-status")?.defaultSlot == .leading)
             #expect(registry.descriptor(for: "fixture-status")?.panel.title == "Status")
 
-            app.pluginSession.workbench.replace(.empty)
+            app.pluginSession.editor.workbench.replace(.empty)
             EditorRootViewFactory.syncContributedPanels(app: app, registry: registry)
             #expect(registry.descriptor(for: "fixture-status") == nil)
             #expect(registry.descriptor(for: "console") != nil)
@@ -73,7 +73,7 @@ struct PluginPanelTests {
                 {"type": "table", "columns": ["Name", "Size"], "rows": [{"cells": ["a", "1"], "action": "pick"}, {"cells": ["b", "2"]}]}]},
               {"type": "progress", "percent": 40}, {"type": "icon", "name": "play"}, {"type": "spacer"}]}
             """.utf8))
-        let session = app.pluginSession.workbench.session(for: .panel(panel), invoke: { _, event in
+        let session = app.pluginSession.editor.workbench.session(for: .panel(panel), invoke: { _, event in
             if let event { events.append(event) }
             return PluginViewResult(state: .object([:]), ui: tree)
         }, effects: { _ in })
@@ -108,7 +108,7 @@ struct PluginPanelTests {
         defer { app.shutdown() }
         try install(in: app)
         let view = try #require(app.workbenchCatalog.documentViews(forPath: "data.csv").first)
-        let session = app.pluginSession.workbench.session(for: .document(view, path: "data.csv"), invoke: { _, _ in
+        let session = app.pluginSession.editor.workbench.session(for: .document(view, path: "data.csv"), invoke: { _, _ in
             PluginViewResult(ui: try JSONDecoder().decode(UINode.self, from: Data("""
                 {"type": "table", "columns": ["a"], "rows": [{"cells": ["1"]}, {"cells": ["2"]}, {"cells": ["3"]}]}
                 """.utf8)))
@@ -166,6 +166,6 @@ struct PluginPanelTests {
         try package.manifest.contributes.set(DocumentViewContributionPoint.self, descriptors: [
             DocumentViewContribution(id: "table", title: "Table", extensions: ["csv"], entryPoint: "document"),
         ])
-        app.pluginSession.workbench.replace(WorkbenchCatalog(packages: [package]))
+        app.pluginSession.editor.workbench.replace(WorkbenchCatalog(packages: [package]))
     }
 }

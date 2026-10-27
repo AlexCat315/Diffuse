@@ -5,7 +5,7 @@ import PluginRuntime
 extension EditorApplication {
     /// Re-mounts an enabled plugin whose package still satisfies its stored
     /// authorization: unload + load on the same host generation, then refresh
-    /// its component declarations. Any code, WIT, permission, schema, or
+    /// its component declarations. Any code, contract, permission, schema, or
     /// requirement change fails closed and requires re-authorization through
     /// the management flow.
     @MainActor

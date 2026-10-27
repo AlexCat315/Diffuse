@@ -100,7 +100,7 @@ var src_default = definePlugin({ capabilities: {
       const pins = JSON.parse(JSON.parse(context).text).pins;
       return { ui: { type: "scroll", child: { type: "column", spacing: 6, padding: 10, children: [
         { type: "text", text: `${pins.length} pinned packages`, style: "caption", tone: "muted" },
-        { type: "table", columns: ["Package", "Version", "Revision", "Location"], rows: pins.map((pin) => ({ cells: [pin.identity ?? "?", pin.state?.version ?? pin.state?.branch ?? "\u2014", (pin.state?.revision ?? "").slice(0, 10), pin.location ?? ""] })) }
+        { type: "table", columns: ["Package", "Version", "Revision", "Location"], rows: pins.map((pin) => ({ cells: [pin.identity ?? "?", pin.state?.version ?? (pin.state?.branch ? `branch ${pin.state.branch}` : "\u2014"), (pin.state?.revision ?? "").slice(0, 10), pin.location ?? ""] })) }
       ] } } };
     } catch {
       return { ui: { type: "text", text: "Invalid Package.resolved", tone: "danger" } };

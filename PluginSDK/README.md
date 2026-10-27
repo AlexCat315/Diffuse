@@ -53,6 +53,10 @@ Bun plugins are trusted desktop extensions with the operating system authority o
 
 Use `cove.ui.panel/v1` with an `entryPoint`. Add `surface` to provide a top-level mode. All packages use the same component renderer. `state` and `event` are JSON strings; the first event is empty. `context` supplies current content, workspace, window project catalog and the plugin's application storage directory. Return `{ state?, ui, effects?, refreshAfterMilliseconds? }`. Omitted state retains the previous value. Refresh intervals are bounded to 100–10,000 ms. Control values live in `event.values`; secret fields are never placed in diagnostic snapshots.
 
+A mode owns its central view. Other panels mount into it with `inSurface: 'owner.plugin.mode'` and `slot: 'leading' | 'trailing' | 'bottom'`. A panel cannot declare both `surface` and `inSurface`. Side regions have separate collapse controls; multiple contributions appear as tabs. These panels do not appear in the workbench. Declare a plugin dependency on the mode owner when your panel requires it.
+
+For example, an AI artifact plugin can contribute `{ id: 'example-artifacts', title: 'Artifacts', entryPoint: 'view', inSurface: 'studio.ai.assistant', slot: 'trailing' }`. The AI plugin's `diffuse.ai.conversation/v1` service accepts `{ operation: 'current' }` and returns the current conversation or null: ID, title, project, status, skills and up to 20 recent messages, each bounded to the last 16,000 characters. Credentials are excluded. Use the public service rather than reading another plugin's storage.
+
 ## Services and extension points
 
 A service is declared under `cove.service/v1` with `{ id, title, entryPoint }`. Its entry accepts `{ request: 'string' }` and returns JSON. IDs include a version, for example `example.translation/v1`.
@@ -80,3 +84,13 @@ The AI package owns `studio.ai.providers/v1`, `studio.ai.tools/v1` and `studio.a
 ./cove build Editor --mac
 ./cove test Engine --filter BunRuntimeTests
 ```
+
+## Installed development tools
+
+`context.storageDirectory` is application storage owned by the current plugin. `context.sdkDirectory` contains a bundled `cli.js`, SDK source and this guide. Run the installed CLI with the current Bun executable and `--no-macros`; it can build a separate source directory without the Diffuse checkout. The SDK also ships as an ordinary package tarball; it has not been published to npm yet.
+
+Node layout attributes include `width`, `fillWidth`, `maxWidth`, `minHeight`, `background` (`canvas`, `surface`, `raised`) and `cornerRadius`. `fillWidth:true` fills the available width, bounded by `maxWidth` when supplied. A `textField` can set `multiline:true`. Panels must provide `entryPoint`; the former host-owned `view` selector is rejected.
+
+AI's built-in development tools read this contract, write bounded TypeScript/resource files into their own development directory, build a package and request the generic installation review. Third-party tool and provider plugins use the same service contract. A build or review never automatically enables a package.
+
+An approved installation copies the reviewed package into application storage and records its exact authorization and enabled state. It is available across loaded projects and restored on restart; altered code, contracts, permissions or resources require another review. Disabling retains the package and data; uninstalling removes the installation. Project authorization files alone never enable code.

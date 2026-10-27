@@ -19,9 +19,9 @@ import Foundation
 import SIMDCompat
 
 extension EditorApplication {
-    // MARK: - Isolated AI plugins
+    // MARK: - Plugin packages
 
-    /// Inspects WIT, manifest metadata, and Component exports without enabling
+    /// Inspects static contracts, manifest metadata, and code without enabling
     /// or exposing the plugin. The returned value is what the UI must show
     /// before constructing an explicit authorization record.
     @MainActor
@@ -39,7 +39,7 @@ extension EditorApplication {
     }
 
     /// Call only after the user has approved the inspection shown by the UI.
-    /// Any code, WIT, permission, or schema change makes this record invalid.
+    /// Any code, contract, permission, or schema change makes this record invalid.
     public func makePluginAuthorization(
         afterUserApprovalOf inspection: PluginInspection,
         at date: Date = Date()
@@ -70,7 +70,7 @@ extension EditorApplication {
         do {
             try pluginSession.authorizationStore.record(authorization)
             if BundledPlugins.plugin(id: inspection.manifest.id) != nil {
-                try BundledPlugins.setEnabled(true, id: inspection.manifest.id, in: projectDirectory, applicationWide: pluginSession.peers != nil)
+                try BundledPlugins.setEnabled(true, id: inspection.manifest.id, in: projectDirectory, applicationWide: pluginSession.editor.peers != nil)
             }
         } catch {
             try? await pluginSession.manager.disable(id: inspection.manifest.id)
@@ -85,7 +85,7 @@ extension EditorApplication {
     func configurePluginRuntime() {
         pluginSession.hosts.hostCallHandler = { [weak self] owner, call in
             let waiter = PluginHostCallWaiter()
-            guard let queue = self?.pluginSession.workbench.uiQueue else { throw PluginCommandError.unavailable }
+            guard let queue = self?.pluginSession.editor.workbench.uiQueue else { throw PluginCommandError.unavailable }
             queue.schedule { [weak self] in
                     do {
                         guard let self else { throw PluginCommandError.unavailable }
@@ -112,7 +112,7 @@ extension EditorApplication {
                 components?.remove(pluginID: binding.pluginID)
             })
         }, deactivate: { [weak self] binding in
-            await MainActor.run { self?.pluginSession.serviceJobs.cancel(owner: binding.pluginID) }
+            await MainActor.run { self?.pluginSession.editor.jobs.cancel(owner: binding.pluginID) }
             guard let hosts = await MainActor.run(body: { self?.pluginSession.hosts }) else { return }
             try await Task.detached {
                 // Unloading drops this plugin's process only; its neighbours
@@ -157,7 +157,7 @@ extension EditorApplication {
 
     @MainActor
     public func disablePlugin(id pluginID: String) async throws {
-        let peers = pluginSession.peers?() ?? []
+        let peers = pluginSession.editor.peers?() ?? []
         for peer in peers where peer !== self && peer.enabledPluginManifests[pluginID] != nil {
             try await peer.disablePluginLocally(id: pluginID)
         }
@@ -165,24 +165,30 @@ extension EditorApplication {
     }
 
     @MainActor
-    private func disablePluginLocally(id pluginID: String) async throws {
+    func disablePluginLocally(id pluginID: String) async throws {
         let before = Set(pluginSession.manager.enabledManifests.keys)
         do { try await pluginSession.manager.disable(id: pluginID) }
         catch { try? await synchronizePlugins(); throw error }
         let removed = before.subtracting(pluginSession.manager.enabledManifests.keys)
+        try pluginSession.editor.installations?.setEnabled(false, ids: removed)
         for id in removed where BundledPlugins.plugin(id: id) != nil {
-            try BundledPlugins.setEnabled(false, id: id, in: projectDirectory, applicationWide: pluginSession.peers != nil)
+            try BundledPlugins.setEnabled(false, id: id, in: projectDirectory, applicationWide: pluginSession.editor.peers != nil)
         }
         try await synchronizePlugins()
     }
 
     @MainActor
     public func uninstallPlugin(id: String) async throws {
-        do { try await pluginSession.manager.uninstall(id: id) }
-        catch { try? await synchronizePlugins(); throw error }
-        try pluginSession.authorizationStore.remove(pluginID: id)
-        if BundledPlugins.plugin(id: id) != nil { try BundledPlugins.setEnabled(false, id: id, in: projectDirectory, applicationWide: pluginSession.peers != nil) }
-        try await synchronizePlugins()
+        if enabledPluginManifests[id] != nil { try await disablePlugin(id: id) }
+        let applications = [self] + (pluginSession.editor.peers?() ?? []).filter { $0 !== self }
+        for app in applications where app.pluginSession.manager.packageURLs[id] != nil {
+            do { try await app.pluginSession.manager.uninstall(id: id) }
+            catch { try? await app.synchronizePlugins(); throw error }
+            try app.pluginSession.authorizationStore.remove(pluginID: id)
+            try await app.synchronizePlugins()
+        }
+        try pluginSession.editor.installations?.remove(id: id)
+        if BundledPlugins.plugin(id: id) != nil { try BundledPlugins.setEnabled(false, id: id, in: projectDirectory, applicationWide: pluginSession.editor.peers != nil) }
     }
 
     @MainActor
@@ -331,15 +337,18 @@ extension EditorApplication {
             if enabledPluginManifests[authorization.pluginID] != nil {
                 try await disablePlugin(id: authorization.pluginID)
             }
-            let enabledInspection = try await enablePlugin(
-                at: pending.packageURL,
-                authorization: authorization
-            )
+            let installations = pluginSession.editor.installations ?? PluginInstallations()
+            pluginSession.editor.installations = installations
+            var record = try installations.stage(pending.packageURL, inspection: pending.inspection)
+            try installations.save(record)
+            try await enableInstalledPackage(at: installations.package(for: record), authorization: authorization)
+            record.enabled = true
+            try installations.save(record)
             pluginSession.pendingApproval = nil
             publishPluginManagement(
                 phase: .idle,
                 candidate: nil,
-                message: "Enabled plugin '\(enabledInspection.manifest.name)'."
+                message: "Enabled plugin '\(pending.inspection.manifest.name)'."
             )
         } catch {
             publishPluginManagement(phase: .failed,
@@ -413,11 +422,13 @@ extension EditorApplication {
         guard let url = pluginSession.manager.packageURLs[id] else { return }
         do {
             let inspection = try inspectPlugin(at: url)
-            guard let authorization = storedPluginAuthorization(for: inspection) else {
+            let installed = try pluginSession.editor.installations?.records().first { $0.authorization.pluginID == id }
+            guard let authorization = installed?.authorization ?? storedPluginAuthorization(for: inspection),
+                  authorization.isStillValid(for: inspection) else {
                 await inspectPluginForManagement(at: url)
                 return
             }
-            try await enablePlugin(at: url, authorization: authorization)
+            try await enableInstalledPackage(at: url, authorization: authorization)
         } catch {
             publishPluginManagement(phase: .failed, candidate: nil, message: Self.pluginManagementErrorMessage(error))
         }

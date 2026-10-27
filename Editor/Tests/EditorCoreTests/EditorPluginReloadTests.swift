@@ -4,8 +4,8 @@ import Foundation
 import PluginRuntime
 import XCTest
 
-/// End-to-end reload coverage: a real `DiffusePluginHost` process, a component
-/// compiled from the canonical fixture WAT, and the Editor's mount / reload /
+/// End-to-end reload coverage: a real `DiffusePluginHost` process, a Bun package
+/// with static contracts, and the Editor's mount / reload /
 /// stale-rejection paths.
 @MainActor
 final class EditorPluginReloadTests: XCTestCase {
@@ -98,6 +98,8 @@ final class EditorPluginReloadTests: XCTestCase {
                            .awaitingAuthorization)
 
             step = "approve replacement build"
+            application.pluginSession.editor.installations = PluginInstallations(root: package.deletingLastPathComponent().appendingPathComponent("installed-plugins-" + UUID().uuidString))
+            defer { if let root = application.pluginSession.editor.installations?.root { try? FileManager.default.removeItem(at: root) } }
             try await withTimeout(step: step) {
                 await application.authorizeAndEnableInspectedPlugin()
             }

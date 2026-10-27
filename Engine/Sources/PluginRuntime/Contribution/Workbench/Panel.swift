@@ -23,6 +23,8 @@ public struct PanelContribution: Codable, Sendable, Equatable {
     public var entryPoint: String?
     /// Registers a top-level mode rendered by this panel's own entry point.
     public var surface: String?
+    /// Mounts a region in another contributed mode, e.g. `studio.ai.assistant`.
+    public var inSurface: String?
 
     public init(id: String, title: String, slot: String? = nil, icon: String? = nil, content: Content) {
         self.id = id
@@ -54,6 +56,12 @@ public enum PanelContributionPoint: ContributionPointSpec {
         }
         guard panel.surface.map({ ContributionValidation.identifier($0) && panel.entryPoint != nil }) ?? true else {
             throw PluginManifestValidationError.invalidContribution(id)
+        }
+        if let target = panel.inSurface {
+            guard panel.surface == nil, ["leading", "trailing", "bottom"].contains(panel.slot ?? "trailing"),
+                  target.range(of: #"^[a-z][a-z0-9.-]{2,127}$"#, options: .regularExpression) != nil else {
+                throw PluginManifestValidationError.invalidContribution(id)
+            }
         }
     }
 

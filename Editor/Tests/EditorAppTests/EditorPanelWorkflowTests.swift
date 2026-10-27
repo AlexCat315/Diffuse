@@ -1,4 +1,5 @@
 import PluginRuntime
+import Foundation
 @testable import EditorCore
 import SceneRuntime
 import EngineKernel
@@ -210,29 +211,40 @@ struct EditorPanelWorkflowTests {
 
     @Test("AI settings drafts use provider defaults and never carry a secret across providers")
     func aiSettingsDraftProviderSwitching() throws {
-        let openai = try #require(AIProviderCatalog.bundled.provider(id: "openai"))
-        let anthropic = try #require(AIProviderCatalog.bundled.provider(id: "anthropic"))
-        let deepseek = try #require(AIProviderCatalog.bundled.provider(id: "deepseek"))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".coveplugin")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var manifest = CovePluginManifest(id: "test.settings", version: 1, name: "Settings", description: "Fixture", access: .read)
+        try manifest.contributes.set(AIProviderContributionPoint.self, descriptors:
+            ["openai", "anthropic", "deepseek"].map { id in
+                AIProviderContribution(id: id, title: id, apiFormat: "openai-compatible",
+                    models: [AIModelContribution(id: id + "-model", title: id)])
+            })
+        try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent("plugin.json"))
+        let providers = AIProviderCatalog(packages: [try PluginPackageLoader().load(at: root)])
+        let openai = try #require(providers.provider(id: "openai"))
+        let anthropic = try #require(providers.provider(id: "anthropic"))
+        let deepseek = try #require(providers.provider(id: "deepseek"))
         var draft = EditorAISettingsDraft(settings: .default)
         #expect(draft.providerID.isEmpty)
         #expect(draft.model.isEmpty)
 
         draft.credentials["api-key"] = "secret-for-openai"
-        draft.select(openai, in: .bundled)
+        draft.select(openai, in: providers)
         #expect(draft.model.stringValue == openai.defaultModel)
         #expect(draft.credentials.isEmpty)
 
         draft.credentials["api-key"] = "openai-secret"
-        draft.select(openai, in: .bundled)
+        draft.select(openai, in: providers)
         #expect(draft.enteredCredentials == ["api-key": "openai-secret"])
 
         draft.model = "custom-compatible-model"
-        draft.select(deepseek, in: .bundled)
+        draft.select(deepseek, in: providers)
         #expect(draft.model.stringValue == "custom-compatible-model")
         #expect(draft.credentials.isEmpty)
 
         draft.model = TextBuffer(deepseek.defaultModel)
-        draft.select(anthropic, in: .bundled)
+        draft.select(anthropic, in: providers)
         #expect(draft.model.stringValue == anthropic.defaultModel)
     }
 

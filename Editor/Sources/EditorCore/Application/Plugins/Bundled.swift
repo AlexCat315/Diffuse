@@ -8,7 +8,7 @@ public struct BundledPlugin: Sendable, Equatable, Identifiable {
     public enum Host: Sendable, Equatable {
         /// Loaded into the shared plugin host, beside plugins the user adds.
         case application
-        /// Declarative package with no component or WIT: registered in-process.
+        /// Declarative package with no executable entry: registered in-process.
         case declarative
         /// Contributes a version control system.
         case versionControl(VersionControlSystem)
@@ -95,12 +95,13 @@ extension EditorApplication {
         guard pluginSession.bundledStartup == nil else { return }
         pluginSession.bundledStartup = Task { @MainActor [weak self] in
             guard let self, !self.isShuttingDown else { return }
-            let disabled = (try? BundledPlugins.disabled(in: self.projectDirectory, applicationWide: self.pluginSession.peers != nil)) ?? []
+            let disabled = (try? BundledPlugins.disabled(in: self.projectDirectory, applicationWide: self.pluginSession.editor.peers != nil)) ?? []
             for plugin in BundledPlugins.catalog where !disabled.contains(plugin.id) {
                 guard !Task.isCancelled, !self.isShuttingDown else { return }
                 await self.enableBundledPlugin(plugin)
             }
             try? await self.activatePlugins(event: "onStartup")
+            await self.restoreInstalledPlugins()
             self.refreshContributionSnapshots()
             self.rebuildAgentSurfaces()
             await self.workstation.versionControl.refresh()
@@ -119,7 +120,7 @@ extension EditorApplication {
     public func setBundledPlugin(_ plugin: BundledPlugin, enabled: Bool) async {
         if enabled {
             await enableBundledPlugin(plugin)
-            for peer in pluginSession.peers?() ?? [] where peer !== self { await peer.enableBundledPlugin(plugin) }
+            for peer in pluginSession.editor.peers?() ?? [] where peer !== self { await peer.enableBundledPlugin(plugin) }
         }
         else { await disablePluginFromManagement(id: plugin.id) }
         rebuildAgentSurfaces()
@@ -153,7 +154,7 @@ extension EditorApplication {
             pluginSession.agents = AgentCatalog(packages: agents.values.map(\.value))
             pluginSession.agentRevision = agents.revision
         }
-        pluginSession.workbench.update(contributions.workbench.map(\.snapshot))
+        pluginSession.editor.workbench.update(contributions.workbench.map(\.snapshot))
         displayInvalidationHandler?()
     }
 

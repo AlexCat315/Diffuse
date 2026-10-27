@@ -12,6 +12,7 @@ struct EditorTitleBar: View {
     let onCommand: (EditorCommand) -> Void
     private var documents: Observed<EditorDocumentWorkspace, EditorDocumentSnapshot>
     private var workbench: Observed<WorkbenchSession, WorkbenchCatalog>
+    private var surface: Observed<EditorAssistantSurface, EditorAssistantSurface.State>
     private var projects: Observed<EditorLaunchContext, [EditorProjectEntry]>?
 
     init(app: EditorApplication, width: Float, menuPresentation: EditorMenuPresentation = .current,
@@ -23,27 +24,33 @@ struct EditorTitleBar: View {
         self.onCommand = onCommand
         documents = Observed(\.snapshot, on: app.workstation.documents)
         workbench = Observed(\.catalog, on: app.workbench)
+        surface = Observed(\.state, on: .of(app))
     }
 
     var body: some View {
         let store = app.store
         let focus = self.focus
+        let _ = surface.wrappedValue
+        let isWorkbench = app.assistantSurface.view == .make
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             ImmersiveWindowTitleBar(height: 40) {
                 Row(alignment: .center, spacing: 10) {
                     if menuPresentation == .titleBar {
                         EditorTitleMenu(catalog: catalog, onCommand: onCommand).id("title-menu")
                     }
-                    project.id("title-project")
-                    EditorContentPicker(app: app, content: store.content, onCommand: onCommand).id("title-content")
-                    if width >= 1180, let branch = EditorProjectBranch.name(in: app.projectDirectory) {
+                    sidebarToggle(leading: true)
+                    if isWorkbench {
+                        project.id("title-project")
+                        EditorContentPicker(app: app, content: store.content, onCommand: onCommand).id("title-content")
+                    }
+                    if isWorkbench, width >= 1180, let branch = EditorProjectBranch.name(in: app.projectDirectory) {
                         Row(alignment: .center, spacing: 4) {
                             Icon(UIIcons.Editor.gitBranch, size: 11, color: .onSurfaceMuted)
                             Text(branch, lineLimit: 1).truncated().font(.caption).foregroundColor(.onSurfaceMuted)
                                 .frame(maxWidth: 110).clipped()
                         }.accessibility { $0.label = L("Branch") + " " + branch }.id("title-branch").debugName("editor-branch")
                     }
-                    if width >= 1180 {
+                    if isWorkbench, width >= 1180 {
                         breadcrumb(focus).flex(0, shrink: 1).frame(minWidth: 0, maxWidth: 320).clipped().id("title-selection")
                     }
                     WindowDragRegion().flex().frame(minWidth: 8).id("title-drag")
@@ -51,12 +58,13 @@ struct EditorTitleBar: View {
                     // a package declares one.
                     if app.studioViewSegments.count > 1 { EditorViewSwitch(host: app).id("title-view") }
                     WindowDragRegion().flex().frame(minWidth: 8).id("title-drag-fill")
-                    if width >= 900, !workbench.wrappedValue.toolbarItems.isEmpty {
+                    if isWorkbench, width >= 900, !workbench.wrappedValue.toolbarItems.isEmpty {
                         PluginToolbar(items: workbench.wrappedValue.toolbarItems, onCommand: onCommand).id("title-plugins")
                     }
-                    EditorPlaybackToolbar(state: store.playbackState, compact: width < 520, showsTarget: width >= 1400,
+                    if isWorkbench { EditorPlaybackToolbar(state: store.playbackState, compact: width < 520, showsTarget: width >= 1400,
                                           onCommand: onCommand)
-                        .id("title-playback")
+                        .id("title-playback") }
+                    sidebarToggle(leading: false)
                 }
                 // The shell adds its own drag region after this row, and both grow
                 // equally. A full-width basis that shrinks to fit claims all free
@@ -79,6 +87,15 @@ struct EditorTitleBar: View {
     }
 
     // MARK: Project
+
+    private func sidebarToggle(leading: Bool) -> some View {
+        Button(icon: .resource(leading ? UIIcons.Layout.panelLeft : UIIcons.Layout.panelRight), size: 15,
+               tooltip: L(leading ? "Toggle Left Sidebar" : "Toggle Right Sidebar")) {
+            if app.assistantSurface.view == .make { onCommand(.togglePanelArea(leading ? .leading : .trailing)) }
+            else { app.assistantSurface.toggleRegion(leading: leading) }
+        }.buttonStyle(EditorChromeButtonStyle(height: 28))
+            .debugName(leading ? "editor-toggle-leading" : "editor-toggle-trailing")
+    }
 
     @ViewBuilder private var project: some View {
         // An untitled workspace has no project to name, so the chip is absent

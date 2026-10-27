@@ -34,6 +34,13 @@ struct WorkbenchContributionTests {
                 try PluginManifestValidator.decodeAndValidate(manifest(#"{"cove.ui.panel/v1": [\#(invalid)]}"#))
             }
         }
+        var region = PanelContribution(id: "context", title: "Context", slot: "trailing", content: .entryPoint("panel"))
+        region.inSurface = "example.owner.chat"
+        try PanelContributionPoint.validate(region, host: .init())
+        region.surface = "also-a-mode"
+        #expect(throws: PluginManifestValidationError.invalidContribution(PanelContributionPoint.id)) {
+            try PanelContributionPoint.validate(region, host: .init())
+        }
     }
 
     @Test("command and panel entry points must take the inputs the host sends")
@@ -112,7 +119,7 @@ struct WorkbenchContributionTests {
     func viewResultIsDecoded() throws {
         let result = try PluginViewResult(json: Data("""
             {"state": {"items": ["Ship"]},
-             "ui": {"type": "column", "spacing": 8, "children": [
+             "ui": {"type": "column", "spacing": 8, "fillWidth": true, "maxWidth": 820, "children": [
                {"type": "textField", "id": "draft", "placeholder": "New item", "value": "", "submit": "add"},
                {"type": "row", "align": "center", "children": [
                  {"type": "toggle", "id": "done-0", "value": true, "action": "toggle"},
@@ -129,6 +136,7 @@ struct WorkbenchContributionTests {
         #expect(result.effects == [.message("Added"), .panel("checklist"), .open(path: "notes/todo.md")])
         guard case let .column(stack) = result.ui.kind else { Issue.record("not a column"); return }
         #expect(stack.spacing == 8 && stack.children.count == 7)
+        #expect(result.ui.fillWidth == true && result.ui.maxWidth == 820)
         guard case let .textField(field) = stack.children[0].kind else { Issue.record("not a field"); return }
         #expect(field.submit == "add" && field.value == "")
 
@@ -161,6 +169,18 @@ struct WorkbenchContributionTests {
         ]
         for data in invalid {
             #expect(throws: PluginWorkbenchResultError.invalidView) { try PluginViewResult(json: data, panels: ["checklist"]) }
+        }
+    }
+
+    @Test("multiline drafts accept long prompts and retain a bounded input size")
+    func longDrafts() throws {
+        func draft(_ count: Int) throws -> Data {
+            try JSONSerialization.data(withJSONObject: ["ui": ["type": "textField", "id": "draft",
+                "multiline": true, "value": String(repeating: "x", count: count)]])
+        }
+        _ = try PluginViewResult(json: draft(32_000), panels: [])
+        #expect(throws: PluginWorkbenchResultError.invalidView) {
+            try PluginViewResult(json: draft(UINode.maximumInputBytes + 1), panels: [])
         }
     }
 

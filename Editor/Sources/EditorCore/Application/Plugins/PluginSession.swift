@@ -15,6 +15,7 @@ final class PluginSession: @unchecked Sendable {
     let hosts: PluginHostPool
     let manager: PluginManager
     let contributions = PluginContributions()
+    let editor = PluginEditorIntegration()
     let runtime: PluginRuntimeAccess
     let authorizationStore: EditorPluginAuthorizationStore
     var pendingApproval: PendingPluginApproval?
@@ -28,15 +29,10 @@ final class PluginSession: @unchecked Sendable {
     var providers = AIProviderCatalog()
     var agents = AgentCatalog.empty
     var agentRevision: UInt64?
-    let workbench = WorkbenchSession()
-    var workspaceCatalog: [String: String] = [:]
     var aiProvider: AIProviderDescriptor?
     var packageMonitor: PluginPackageMonitor?
     var bundledStartup: Task<Void, Never>?
     @MainActor var projection: Task<Void, Error>?
-    let serviceJobs = PluginServiceJobs()
-    var workspaceResolver: (@MainActor @Sendable (String) throws -> EditorApplication)?
-    var peers: (@MainActor @Sendable () -> [EditorApplication])?
 
     init(projectDirectory: String,
          hostExecutable: @escaping @Sendable () throws -> URL,
@@ -52,8 +48,8 @@ final class PluginSession: @unchecked Sendable {
     }
 
     func stop() {
-        if Thread.isMainThread { MainActor.assumeIsolated { serviceJobs.cancelAll() } }
-        else { workbench.uiQueue.schedule { [serviceJobs] in serviceJobs.cancelAll() } }
+        if Thread.isMainThread { MainActor.assumeIsolated { editor.jobs.cancelAll(); editor.workbench.stop() } }
+        else { editor.workbench.uiQueue.schedule { [editor] in editor.jobs.cancelAll(); editor.workbench.stop() } }
         bundledStartup?.cancel()
         bundledStartup = nil
         packageMonitor?.stop()

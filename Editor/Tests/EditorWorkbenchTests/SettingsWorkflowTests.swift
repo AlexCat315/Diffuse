@@ -84,7 +84,7 @@ struct SettingsWorkflowTests {
             let app = try EditorApplication(projectDirectory: directory.path)
             app.pluginSession.providers = AIProviderCatalog(packages: [package])
             app.pluginSession.agents = AgentCatalog(packages: [package])
-            app.pluginSession.workbench.replace(WorkbenchCatalog(packages: [package]))
+            app.pluginSession.editor.workbench.replace(WorkbenchCatalog(packages: [package]))
             defer { app.shutdown() }
             try work(app, interactions)
         }
@@ -122,7 +122,7 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = category
-            if category == .assistant { session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled) }
+            if category == .assistant { session.assistant.draft.select(app.aiProviderCatalog.provider(id: "openai"), in: app.aiProviderCatalog) }
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: SettingsPanel(app: app, session: session).theme(EditorVisualTheme.make(dark: true)))
             for _ in 0..<4 { graph.recomposer.commitAll(); graph.computeLayout(width: width, height: 740) }
@@ -144,13 +144,13 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             let editor = AssistantSettingsEditor(app: app, state: Binding(get: { session.assistant }, set: { session.assistant = $0 }), onChange: {})
-            editor.select(AIProviderCatalog.bundled.provider(id: "openai"))
+            editor.select(app.aiProviderCatalog.provider(id: "openai"))
             editor.update { $0.draft.credentials["api-key"] = "uncommitted-test-secret"; $0.draft.model = "" }
             #expect(app.store.aiSettings.providerID.isEmpty)
             editor.apply()
             #expect(session.assistant.feedback?.isError == true)
             #expect(app.store.aiSettings.providerID.isEmpty)
-            editor.select(AIProviderCatalog.bundled.provider(id: "deepseek"))
+            editor.select(app.aiProviderCatalog.provider(id: "deepseek"))
             #expect(session.assistant.draft.credentials.isEmpty)
             #expect(editor.isDirty)
             editor.reset()
@@ -164,7 +164,7 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .assistant
-            session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
+            session.assistant.draft.select(app.aiProviderCatalog.provider(id: "openai"), in: app.aiProviderCatalog)
             session.assistant.draft.model = "retained-model"
             let harness = ResizingPreferences(app: app, session: session)
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
@@ -189,7 +189,7 @@ struct SettingsWorkflowTests {
         try withApp { app, _ in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .assistant
-            session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
+            session.assistant.draft.select(app.aiProviderCatalog.provider(id: "openai"), in: app.aiProviderCatalog)
             var surface = UIEnvironment()
             surface.viewport.width = width
             surface.input = width == 390 ? [.touch] : width == 720 ? [.pointer, .touch, .keyboard] : [.pointer, .keyboard]
@@ -214,7 +214,7 @@ struct SettingsWorkflowTests {
         try withApp { app, interactions in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .assistant
-            session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
+            session.assistant.draft.select(app.aiProviderCatalog.provider(id: "openai"), in: app.aiProviderCatalog)
             session.assistant.draft.model = "my-model"
             session.assistant.draft.credentials["api-key"] = "uncommitted-test-secret"
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
@@ -239,7 +239,7 @@ struct SettingsWorkflowTests {
         try withApp { app, interactions in
             let session = EditorSettingsSession(settings: app.store.aiSettings)
             session.navigation.category = .assistant
-            session.assistant.draft.select(AIProviderCatalog.bundled.provider(id: "openai"), in: .bundled)
+            session.assistant.draft.select(app.aiProviderCatalog.provider(id: "openai"), in: app.aiProviderCatalog)
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: SettingsPanel(app: app, session: session))
             func settle() { for _ in 0..<5 { graph.recomposer.commitAll(); graph.computeLayout(width: 1040, height: 740) } }
@@ -283,18 +283,19 @@ struct AgentSurfaceTests {
             let plugin = try #require(BundledPlugins.plugin(id: "studio.ai"))
             let package = try PluginPackageLoader().load(at: plugin.package)
             app.pluginSession.agents = AgentCatalog(packages: [package])
-            app.pluginSession.workbench.replace(WorkbenchCatalog(packages: [package]))
-            #expect(app.isAgentEnabled)
+            app.pluginSession.editor.workbench.replace(WorkbenchCatalog(packages: [package]))
+            #expect(app.workbenchCatalog.panels.contains { $0.surface == "assistant" })
 
             let enabled = EditorRootViewFactory.makeRegistry(app: app)
             // The agent has its own view, not a docked panel.
-            #expect(enabled.descriptor(for: "intent-input") == nil)
-            #expect(app.agentPanelID == "intent-input")
+            #expect(enabled.descriptor(for: "assistant") == nil)
 
             app.pluginSession.agents = .empty
+            app.pluginSession.editor.workbench.replace(.empty)
             let disabled = EditorRootViewFactory.makeRegistry(app: app)
             #expect(disabled.descriptor(for: "intent-input") == nil)
             #expect(app.agentPanelID == nil)
+            #expect(app.workbenchCatalog.panels.isEmpty)
             #expect(!app.isAgentEnabled)
             #expect(!app.isAIAvailable)
         }

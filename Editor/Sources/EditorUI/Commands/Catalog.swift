@@ -307,7 +307,12 @@ private struct Builder {
             entry("content." + content.rawValue, content.title, "show content 内容 场景 文件 时间线",
                   .init(.digit(index + 1)), command: .showContent(content), selected: context.content == content)
         }
-        return menu("view", "View", contents + [
+        let surfaces: [EditorCommandItem] = context.workbench.panels.compactMap { panel in
+            guard let surface = panel.surface else { return nil }
+            let id = panel.pluginID + "." + surface
+            return entry("surface." + id, panel.title, "view 视图", command: .showView(EditorStudioView(id)))
+        }
+        return menu("view", "View", contents + surfaces + [
             .separator,
             .submenu(menu("layout", "Layout", [
                 entry("layout.save", "Save Layout", "layout workspace 保存布局", command: .saveLayout),
@@ -402,7 +407,7 @@ private struct Builder {
     /// Panels packages describe. A panel showing a host view, such as the agent
     /// conversation, has its own entry elsewhere.
     private var contributedPanels: [EditorCommandItem] {
-        let panels: [EditorCommandItem] = context.workbench.panels.filter { $0.content == .model }.map { panel in
+        let panels: [EditorCommandItem] = context.workbench.panels.filter { $0.content == .model && $0.surface == nil && $0.inSurface == nil }.map { panel in
             .entry(EditorCommandEntry(id: "panel." + panel.id, title: panel.title, keywords: "panel 面板",
                                       command: .showPanel(panel.id)))
         }

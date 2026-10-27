@@ -19,17 +19,17 @@ public enum PluginCapabilityValidationError: Error, Sendable, Equatable, CustomS
     public var description: String {
         switch self {
         case let .unknownCapability(id):
-            return "plugin capability '\(id)' is absent from its validated WIT contract"
+            return "plugin capability '\(id)' is absent from its validated static contract"
         }
     }
 }
 
 /// Builds the complete model-facing contract from package identity/authority
-/// and WIT-derived input types. Runtime Component output is never consulted.
+/// and statically derived input types. Runtime Component output is never consulted.
 public enum PluginContractDeriver {
     public static func contracts(for package: ValidatedPluginPackage) -> [CapabilityContract] {
         (package.runtime?.contract.capabilityInputs ?? []).map { input in
-            // A tool declaration is what the model reads; WIT docs describe the rest.
+            // A tool declaration is what the model reads; Static contract metadata describe the rest.
             let tool = package.manifest.aiTool(entryPoint: input.name)
             return CapabilityContract(
                 id: package.manifest.id + "." + input.name,
@@ -48,7 +48,7 @@ public enum PluginContractDeriver {
 }
 
 /// Immutable result shown to the user before enabling a plugin. It binds the
-/// exact code, WIT boundary, manifest authority, and AI-visible contracts.
+/// exact code, contract boundary, manifest authority, and AI-visible contracts.
 public struct PluginInspection: Codable, Sendable, Equatable {
     public var manifest: CovePluginManifest
     public var codeHash: String?
@@ -84,7 +84,7 @@ public enum PluginAuthorizationError: Error, Sendable, Equatable, CustomStringCo
     public var description: String {
         switch self {
         case .missing: return "plugin must be explicitly authorised before loading"
-        case .noLongerValid: return "plugin code, WIT, permissions, or capability schemas changed; reauthorisation is required"
+        case .noLongerValid: return "plugin code, static, permissions, or capability schemas changed; reauthorisation is required"
         case let .duplicateCapability(id): return "plugin authorisation contains duplicate capability '\(id)'"
         }
     }
@@ -155,7 +155,7 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
     }
 
     /// Stable executable-authority fingerprint. `authorisedAt` is deliberately
-    /// excluded: the authority is the exact code/WIT/permissions/schema tuple,
+    /// excluded: the authority is the exact code/contracts/permissions/schema tuple,
     /// not when a UI happened to persist the user's decision.
     public var authorityDigest: String {
         let object: [String: Any] = [
@@ -255,7 +255,7 @@ public struct PluginExecutionBinding: Sendable, Equatable {
     }
 }
 
-/// Converts authorised WIT-derived contracts into metadata-only Registry
+/// Converts authorised statically derived contracts into metadata-only Registry
 /// descriptors. Plugin code never supplies an executable closure or mutation.
 public enum PluginCapabilityRegistryBuilder {
     public static func build(

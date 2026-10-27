@@ -35,7 +35,7 @@ public final class EditorApplication: @unchecked Sendable {
     /// True when this is the untitled workspace the editor makes because the
     /// user has not opened a project. It backs the workbench and the agent so
     /// both work, but it is not a project: it is never named or listed.
-    public let isUntitledWorkspace: Bool
+    public var isUntitledWorkspace: Bool { EditorScratchWorkspace.isScratch(projectDirectory) }
     public let store: EditorStore
     public let inputState: InputState
     public let scene: EditorSceneAdapter
@@ -168,7 +168,6 @@ public final class EditorApplication: @unchecked Sendable {
         )
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), renderDevice: renderDevice, inGameUI: inGameUI)
         self.projectDirectory = projectDirectory
-        self.isUntitledWorkspace = EditorScratchWorkspace.isScratch(projectDirectory)
         self.store = store
         self.inputState = InputState()
         self.scene = scene

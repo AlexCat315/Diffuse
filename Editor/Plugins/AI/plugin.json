@@ -20,6 +20,20 @@
         "icon": "ai-intent",
         "surface": "assistant",
         "entryPoint": "view"
+      },
+      {
+        "id": "ai-conversations",
+        "title": "会话",
+        "slot": "leading",
+        "inSurface": "studio.ai.assistant",
+        "entryPoint": "view"
+      },
+      {
+        "id": "ai-context",
+        "title": "上下文",
+        "slot": "trailing",
+        "inSurface": "studio.ai.assistant",
+        "entryPoint": "view"
       }
     ],
     "cove.extensionPoint/v1": [
@@ -37,6 +51,11 @@
       }
     ],
     "cove.service/v1": [
+      {
+        "id": "diffuse.ai.conversation/v1",
+        "title": "Current conversation",
+        "entryPoint": "conversation"
+      },
       {
         "id": "diffuse.ai.completion/v1",
         "title": "Text completion",

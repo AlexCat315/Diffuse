@@ -4,10 +4,11 @@ public import AIRuntime
 
 extension EditorApplication {
     public func setPluginPeers(_ peers: @escaping @MainActor @Sendable () -> [EditorApplication]) {
-        pluginSession.peers = peers
+        pluginSession.editor.peers = peers
+        if pluginSession.editor.installations == nil { pluginSession.editor.installations = PluginInstallations() }
     }
     public func setPluginWorkspaceResolver(_ resolver: @escaping @MainActor @Sendable (String) throws -> EditorApplication) {
-        pluginSession.workspaceResolver = resolver
+        pluginSession.editor.workspaceResolver = resolver
     }
 
     @MainActor
@@ -18,7 +19,7 @@ extension EditorApplication {
               let operation = request["operation"] as? String else { throw EditorProjectToolError("Plugin \(owner) cannot call \(call.permission), or the service request is invalid") }
         func json(_ object: Any) throws -> Data { try JSONSerialization.data(withJSONObject: object, options: [.fragmentsAllowed, .sortedKeys]) }
         if permission == .editor, operation == "review", let path = request["package"] as? String {
-            let id = try pluginSession.serviceJobs.start(owner: owner) { [weak self] in
+            let id = try pluginSession.editor.jobs.start(owner: owner) { [weak self] in
                 guard let self else { throw PluginCommandError.unavailable }
                 await self.inspectPluginForManagement(at: URL(fileURLWithPath: path))
                 return Data(#"{"review":"presented"}"#.utf8)
@@ -27,15 +28,15 @@ extension EditorApplication {
         }
         if ["poll", "cancel"].contains(operation) {
             guard let text = request["job"] as? String, let id = UUID(uuidString: text) else { throw PluginCommandError.unavailable }
-            if operation == "cancel" { pluginSession.serviceJobs.cancel(id: id, owner: owner); return try json(NSNull()) }
-            return try pluginSession.serviceJobs.poll(id: id, owner: owner)
+            if operation == "cancel" { pluginSession.editor.jobs.cancel(id: id, owner: owner); return try json(NSNull()) }
+            return try pluginSession.editor.jobs.poll(id: id, owner: owner)
         }
         switch permission {
         case .editor:
             let workspace = request["workspace"] as? String ?? projectDirectory
             let target: EditorApplication
             if workspace == projectDirectory { target = self }
-            else if let resolver = pluginSession.workspaceResolver { target = try resolver(workspace) }
+            else if let resolver = pluginSession.editor.workspaceResolver { target = try resolver(workspace) }
             else { throw PluginCommandError.unavailable }
             if operation == "tools" {
                 guard !target.isUntitledWorkspace else { return try json([]) }
@@ -52,13 +53,13 @@ extension EditorApplication {
                    "get_context_memory", "open_capability_session", "search_capabilities", "invoke_capability",
                    "submit_capability_plan", "close_capability_session"].contains(action) else { throw PluginCommandError.unavailable }
             let data = try json(message)
-            let id = try pluginSession.serviceJobs.start(owner: owner) { [weak self, weak target] in
+            let id = try pluginSession.editor.jobs.start(owner: owner) { [weak self, weak target] in
                 guard let self, let target else { throw PluginCommandError.unavailable }
                 try Task.checkCancellation()
                 let before = target.store.pendingConfirmationRequest?.batchID
                 let result = await target.handleMCPMessage(data)
                 if before == nil, let batch = target.store.pendingConfirmationRequest?.batchID {
-                    self.pluginSession.serviceJobs.own(owner: owner) { [weak target] in
+                    self.pluginSession.editor.jobs.own(owner: owner) { [weak target] in
                         if target?.store.pendingConfirmationRequest?.batchID == batch { target?.skipPendingConfirmation() }
                     }
                 }
@@ -99,7 +100,7 @@ extension EditorApplication {
             }
             guard provider.value.manifest.id != owner else { throw EditorProjectToolError("Call your own service directly; cross-plugin calls cannot recurse into the caller.") }
             let arguments = String(decoding: try json(request["input"] ?? NSNull()), as: UTF8.self)
-            let id = try pluginSession.serviceJobs.start(owner: owner) { [weak self] in
+            let id = try pluginSession.editor.jobs.start(owner: owner) { [weak self] in
                 guard let self else { throw PluginCommandError.unavailable }
                 return try await self.readEntryPoint(pluginID: provider.value.manifest.id, entryPoint: descriptor.entryPoint,
                                                      event: "onService:" + name, input: ["request": arguments])

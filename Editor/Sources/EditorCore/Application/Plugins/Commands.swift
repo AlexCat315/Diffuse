@@ -16,13 +16,13 @@ public enum PluginCommandError: Error, Sendable, Equatable, LocalizedError {
 extension EditorApplication {
     /// Captured inside the window's presentation boundary, then safely used by plugin pipes and timers.
     public func setPluginWorkScheduler(_ enqueue: ((@escaping () -> Void) -> Void)?) {
-        pluginSession.workbench.uiQueue.install(enqueue)
+        pluginSession.editor.workbench.uiQueue.install(enqueue)
     }
     /// Commands, panels and views of the enabled packages.
-    public var workbenchCatalog: WorkbenchCatalog { pluginSession.workbench.catalog }
+    public var workbenchCatalog: WorkbenchCatalog { pluginSession.editor.workbench.catalog }
 
     /// The observable source of ``workbenchCatalog``.
-    public var workbench: WorkbenchSession { pluginSession.workbench }
+    public var workbench: WorkbenchSession { pluginSession.editor.workbench }
 
     /// The panel that holds the agent conversation, while a package declares
     /// that view *and* contributes an agent to hold it. Either half may come
@@ -33,12 +33,12 @@ extension EditorApplication {
 
     /// Called on the main actor whenever a package adds or removes a command or panel.
     public func setWorkbenchChangeHandler(_ handler: @escaping @MainActor () -> Void) {
-        pluginSession.workbench.onChange = handler
+        pluginSession.editor.workbench.onChange = handler
     }
 
     /// Shows a plugin's messages and failures; the shell installs it once.
     public func setPluginNotificationHandler(_ handler: @escaping @MainActor (_ text: String, _ isError: Bool) -> Void) {
-        pluginSession.workbench.notify = handler
+        pluginSession.editor.workbench.notify = handler
     }
 
     /// Runs a package's command, carries out its effects, then renders the
@@ -48,7 +48,7 @@ extension EditorApplication {
         let catalog = workbenchCatalog
         guard let command = catalog.command(pluginID: pluginID, name: name) else { throw PluginCommandError.unavailable }
         let encoded = try arguments.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) } ?? "{}"
-        defer { pluginSession.workbench.renderViews(of: pluginID) }
+        defer { pluginSession.editor.workbench.renderViews(of: pluginID) }
         let payload = try await readEntryPoint(pluginID: pluginID, entryPoint: command.entryPoint,
                                                event: "onCommand:" + name,
                                                input: ["command": name, "arguments": encoded])
@@ -66,15 +66,15 @@ extension EditorApplication {
             return ["content": .string(self.store.state.content.rawValue),
                     "workspace": .string(self.isUntitledWorkspace ? "" : self.projectDirectory),
                     "storage": .string(storage),
-                    "projects": .array(self.pluginSession.workspaceCatalog.keys.sorted().map { path in
-                        .object(["directory": .string(path), "name": .string(self.pluginSession.workspaceCatalog[path]!)])
+                    "projects": .array(self.pluginSession.editor.workspaceCatalog.keys.sorted().map { path in
+                        .object(["directory": .string(path), "name": .string(self.pluginSession.editor.workspaceCatalog[path]!)])
                     })]
         }
     }
 
     /// Read-only workspace context shared by every plugin view in this window.
     public func setPluginWorkspaceCatalog(_ projects: [String: String]) {
-        pluginSession.workspaceCatalog = projects
+        pluginSession.editor.workspaceCatalog = projects
     }
 
     /// The session of a document shown in a package's view. Each call passes
@@ -95,7 +95,7 @@ extension EditorApplication {
     @MainActor
     private func viewSession(_ source: PluginContentSource, entryPoint: String?, viewID: String,
                              context: @escaping @MainActor () throws -> [String: PluginJSON]) -> PluginViewSession {
-        pluginSession.workbench.session(for: source, invoke: { [weak self] state, event in
+        pluginSession.editor.workbench.session(for: source, invoke: { [weak self] state, event in
             guard let self, let entryPoint, source.isCurrent(in: self.workbenchCatalog) else {
                 throw PluginCommandError.unavailable
             }
@@ -116,8 +116,8 @@ extension EditorApplication {
     func applyPluginEffects(_ effects: [UIEffect]) {
         for effect in effects {
             switch effect {
-            case let .message(text): pluginSession.workbench.notify?(text, false)
-            case let .error(text): pluginSession.workbench.notify?(text, true)
+            case let .message(text): pluginSession.editor.workbench.notify?(text, false)
+            case let .error(text): pluginSession.editor.workbench.notify?(text, true)
             case let .panel(id): showPanel(id)
             case let .open(path): openDocument(path)
             }

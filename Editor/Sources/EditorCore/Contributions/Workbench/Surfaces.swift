@@ -56,6 +56,11 @@ public final class WorkbenchSession: _ObservableObject, @unchecked Sendable {
     func renderViews(of pluginID: String) {
         for session in sessions.values where session.source.pluginID == pluginID { session.render() }
     }
+
+    func stop() {
+        sessions.values.forEach { $0.cancel() }
+        sessions.removeAll()
+    }
 }
 
 extension WorkbenchSession {

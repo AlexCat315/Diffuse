@@ -35,7 +35,7 @@ struct EditorActivityRail: View {
                 view(UIIcons.Editor.box, title: L("Tasks"), id: "tasks")
             }
             view(UIIcons.File.package, title: L("Assets"), id: "assets")
-            for panel in app.workbenchCatalog.panels where panel.slot == WorkspaceSlotID.leading.rawValue {
+            for panel in app.workbenchCatalog.panels where panel.slot == WorkspaceSlotID.leading.rawValue && panel.inSurface == nil && panel.surface == nil {
                 AnyView(view(panel.icon.map { .svg(named: $0, in: EditorAppResourceBundle.bundle, subdirectory: "PanelIcons") }
                                  ?? UIIcons.Layout.panelLeft,
                              title: panel.title, id: WorkspacePanelID(rawValue: panel.id)))

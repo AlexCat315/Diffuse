@@ -29,6 +29,7 @@ public struct UINode: Sendable, Equatable {
         public var action: String
         public var arguments: PluginJSON?
         public var disabled = false
+        public var align = Align.center
     }
 
     public struct TextField: Sendable, Equatable {
@@ -90,6 +91,7 @@ public struct UINode: Sendable, Equatable {
     public var key: String?
     public var flex: Int?
     public var width: Int?
+    public var fillWidth: Bool?
     public var maxWidth: Int?
     public var minHeight: Int?
     public var background: Background?
@@ -105,13 +107,14 @@ public struct UINode: Sendable, Equatable {
     public static let maximumNodes = 4_000
     public static let maximumDepth = 24
     public static let maximumText = 4 * 1_024
+    public static let maximumInputBytes = 64 * 1_024
 }
 
 extension UINode: Decodable {
     private enum Keys: String, CodingKey {
         case type, key, flex, children, child, spacing, padding, align, title, text, style, tone, name, percent
         case icon, action, arguments, disabled, id, placeholder, value, secure, submit, change, label, options
-        case expanded, columns, rows, cells, width, maxWidth, minHeight, background, cornerRadius, multiline
+        case expanded, columns, rows, cells, width, fillWidth, maxWidth, minHeight, background, cornerRadius, multiline
     }
 
     public init(from decoder: Decoder) throws {
@@ -119,6 +122,7 @@ extension UINode: Decodable {
         key = try c.decodeIfPresent(String.self, forKey: .key)
         flex = try c.decodeIfPresent(Int.self, forKey: .flex)
         width = try c.decodeIfPresent(Int.self, forKey: .width)
+        fillWidth = try c.decodeIfPresent(Bool.self, forKey: .fillWidth)
         maxWidth = try c.decodeIfPresent(Int.self, forKey: .maxWidth)
         minHeight = try c.decodeIfPresent(Int.self, forKey: .minHeight)
         background = try c.decodeIfPresent(Background.self, forKey: .background)
@@ -149,7 +153,8 @@ extension UINode: Decodable {
                                   style: try c.decodeIfPresent(ButtonStyle.self, forKey: .style) ?? .secondary,
                                   action: try string(.action),
                                   arguments: try c.decodeIfPresent(PluginJSON.self, forKey: .arguments),
-                                  disabled: try c.decodeIfPresent(Bool.self, forKey: .disabled) ?? false))
+                                  disabled: try c.decodeIfPresent(Bool.self, forKey: .disabled) ?? false,
+                                  align: try c.decodeIfPresent(Align.self, forKey: .align) ?? .center))
         case "textField":
             kind = .textField(TextField(id: try string(.id), placeholder: try optional(.placeholder),
                                         value: try optional(.value),
@@ -226,7 +231,7 @@ extension UINode {
                 && Self.isArguments(button.arguments)
         case let .textField(field):
             return claim(field.id) && (field.placeholder.map { Self.isText($0) } ?? true)
-                && (field.value.map { Self.isText($0, allowsEmpty: true) } ?? true)
+                && (field.value.map { $0.utf8.count <= Self.maximumInputBytes } ?? true)
                 && (field.submit.map(Self.isName) ?? true) && (field.change.map(Self.isName) ?? true)
         case let .toggle(toggle):
             return claim(toggle.id) && (toggle.label.map { Self.isText($0) } ?? true) && (toggle.action.map(Self.isName) ?? true)
