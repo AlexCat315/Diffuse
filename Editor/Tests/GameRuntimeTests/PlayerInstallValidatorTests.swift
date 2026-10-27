@@ -47,8 +47,8 @@ final class PlayerInstallValidatorTests: XCTestCase {
                 return XCTFail("unexpected error: \(error)")
             }
             XCTAssertEqual(missing, [
-                "DiffuseRuntime_RenderBackend.{bundle,resources}",
                 "CoveUI_CoveUI.{bundle,resources}",
+                "DiffuseRuntime_RenderBackend.{bundle,resources}",
             ])
         }
     }
