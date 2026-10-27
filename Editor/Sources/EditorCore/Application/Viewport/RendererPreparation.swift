@@ -60,8 +60,11 @@ extension EditorApplication {
                 try Task.checkCancellation()
                 guard preparation.isCurrent(generation) else { return }
                 engine.start(renderSurface: nil, enableViewportSurface: true, renderConsumer: renderer)
-                queueTrackedRenderSettings(settings)
+                // Settings may have changed while preparation was running.
+                // EngineHost already holds the latest queued settings.
+                renderGate = EditorViewportRenderGate()
                 store.dispatch(.setConnected(true))
+                requestDisplayRefresh()
                 logConsole("Editor connected to runtime")
             } catch is CancellationError {
                 if preparation.isCurrent(generation) {

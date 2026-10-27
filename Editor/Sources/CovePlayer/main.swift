@@ -76,18 +76,18 @@ private struct GamePlayerRootView: View {
     var body: some View {
         switch state.preparation {
         case .ready:
-        ViewportHost(
-            surface: state.viewportSurface,
-            automaticallyFocus: true,
-            onInputEvent: { app.enqueueInput($0) },
-            onDrawableSizeChange: { app.setViewportDrawableSize($0) },
-            onScreenFrameChange: { frame in
-                state.logicalSize = (frame.width, frame.height)
+            ViewportHost(
+                surface: state.viewportSurface,
+                automaticallyFocus: true,
+                onInputEvent: { app.enqueueInput($0) },
+                onDrawableSizeChange: { app.setViewportDrawableSize($0) },
+                onScreenFrameChange: { frame in
+                    state.logicalSize = (frame.width, frame.height)
+                }
+            ) {
+                EmptyView()
             }
-        ) {
-            EmptyView()
-        }
-        .flex()
+            .flex()
         case let .preparing(progress):
             Column(alignment: .center, spacing: 12) {
                 Spinner(size: 18)

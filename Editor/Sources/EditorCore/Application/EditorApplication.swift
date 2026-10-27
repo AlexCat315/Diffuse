@@ -329,8 +329,8 @@ public final class EditorApplication: @unchecked Sendable {
         let viewportInput = EditorViewportInputController.shared
         let continuousViewportInteractionActive = viewportInput.isContinuousSceneInteractionActive
         let shouldAdvanceSceneSimulation =
-            (state.viewport.realtimeEnabled && state.timing.playbackState == .stopped)
-                || state.timing.playbackState == .playing
+            engine.isStarted && ((state.viewport.realtimeEnabled && state.timing.playbackState == .stopped)
+                || state.timing.playbackState == .playing)
         if viewportInput.hasFreelookMovementInput {
             driveContinuousViewportCamera(deltaTime: simulationDelta)
         }
@@ -364,7 +364,7 @@ public final class EditorApplication: @unchecked Sendable {
             forceContinuous: wantsContinuousFrames,
             hasViewportInput: !inputEvents.isEmpty,
             temporalEffectsActive: lastQueuedRenderSettings.postProcessing.taa,
-            isPresentationActive: state.shouldRender,
+            isPresentationActive: state.shouldRender && engine.isStarted,
             now: monotonicNow()
         )
         let shouldSubmitEngineTick = shouldAdvanceSceneSimulation || renderViewport
