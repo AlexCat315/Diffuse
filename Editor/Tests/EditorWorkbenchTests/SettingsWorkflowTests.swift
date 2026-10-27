@@ -17,6 +17,58 @@ struct SettingsWorkflowTests {
         init(app: EditorApplication, session: EditorSettingsSession) { self.app = app; self.session = session }
         var body: some View { SettingsPanel(app: app, session: session).frame(width: width, height: 740) }
     }
+    /// What the settings page reads: two providers and an agent.
+    ///
+    /// `studio.ai` used to contribute these, and stopped when model
+    /// configuration moved inside the plugin. The host page is driven by
+    /// contributions, not by one particular package, so the test supplies its
+    /// own instead of depending on what a shipped package happens to declare.
+    private func fixture(in directory: URL) throws -> ValidatedPluginPackage {
+        let package = directory.appendingPathComponent("settings-fixture.coveplugin")
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        let manifest = """
+        {
+          "id": "test.settings",
+          "version": 1,
+          "name": "Settings Fixture",
+          "description": "Model providers and an agent for the settings page.",
+          "access": "read",
+          "imports": [],
+          "composable_host_capabilities": [],
+          "contributes": {
+            "cove.ai.provider/v1": [
+              {
+                "id": "openai",
+                "title": "OpenAI",
+                "apiFormat": "openai-responses",
+                "baseURL": "https://api.openai.com",
+                "defaultModel": "gpt-4o",
+                "models": [{ "id": "gpt-4o", "title": "GPT-4o", "contextWindow": 128000,
+                             "maxOutputTokens": 8192, "supportsTools": true }],
+                "auth": { "type": "apiKey", "fields": [
+                  { "id": "api-key", "title": "API Key", "secret": true,
+                    "environmentVariable": "OPENAI_API_KEY" }] }
+              },
+              {
+                "id": "deepseek",
+                "title": "DeepSeek",
+                "apiFormat": "openai-compatible",
+                "baseURL": "https://api.deepseek.com",
+                "defaultModel": "deepseek-chat",
+                "models": [{ "id": "deepseek-chat", "title": "DeepSeek Chat" }],
+                "auth": { "type": "apiKey", "fields": [
+                  { "id": "api-key", "title": "API Key", "secret": true,
+                    "environmentVariable": "DEEPSEEK_API_KEY" }] }
+              }
+            ],
+            "cove.ai.agent/v1": [{ "id": "assistant", "title": "Assistant" }]
+          }
+        }
+        """
+        try Data(manifest.utf8).write(to: package.appendingPathComponent("plugin.json"))
+        return try PluginPackageLoader().load(at: package)
+    }
+
     private func withApp(_ work: (EditorApplication, InteractionRegistry) throws -> Void) throws {
         try WorkbenchUITestSupport.withEnvironment { interactions, _ in
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("settings-test-\(UUID())")
@@ -28,12 +80,11 @@ struct SettingsWorkflowTests {
                 _ = WorkbenchUITestSupport.setEnvironmentValue(previous, for: key)
                 try? FileManager.default.removeItem(at: directory)
             }
-            let providerPlugin = try #require(BundledPlugins.plugin(id: "studio.ai"))
-            let providers = try PluginPackageLoader().load(at: providerPlugin.package)
+            let package = try fixture(in: directory)
             let app = try EditorApplication(projectDirectory: directory.path)
-            app.pluginSession.providers = AIProviderCatalog(packages: [providers])
-            app.pluginSession.agents = AgentCatalog(packages: [providers])
-            app.pluginSession.workbench.replace(WorkbenchCatalog(packages: [providers]))
+            app.pluginSession.providers = AIProviderCatalog(packages: [package])
+            app.pluginSession.agents = AgentCatalog(packages: [package])
+            app.pluginSession.workbench.replace(WorkbenchCatalog(packages: [package]))
             defer { app.shutdown() }
             try work(app, interactions)
         }

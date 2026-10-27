@@ -32,12 +32,13 @@ struct EditorRootView: View {
             let _ = app.setPluginWorkScheduler(UIWorkSchedulerHolder.enqueue)
             // Redraw when the agent's own view state changes; `surface.view`
             // then decides whether that state is reachable at all.
-            let _ = session.wrappedValue
+            let surfaceState = session.wrappedValue
             let cb = EditorCallbacks(app: app, controller: controller, registry: registry,
                                      commandPaletteVisible: store.commandPaletteVisible)
             EditorPresentationBoundary(presentation: store.presentation,
                                        theme: app.resolvedTheme(dark: store.themeMode == .dark)) {
-                LayerRoot {
+                if surfaceState.isReady {
+                    LayerRoot {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
 
@@ -93,7 +94,25 @@ struct EditorRootView: View {
                         LaunchPluginReview(app: app, management: store.pluginManagement)
                     }
                 }
+                } else {
+                    LaunchSurface()
+                }
             }
+        }
+    }
+}
+
+/// What the window paints until the editor is ready: the themed background and
+/// nothing else. A view or a palette that arrives a few frames late reads as a
+/// flash, so the window waits for the packages that ship with the editor to
+/// register before drawing the editor it is going to keep.
+private struct LaunchSurface: View {
+    var body: some View {
+        LayerRoot {
+            Box(direction: .column, alignItems: .stretch, spacing: 0) { }
+                .background(.background)
+                .flex()
+                .frame(minWidth: 0, minHeight: 0)
         }
     }
 }

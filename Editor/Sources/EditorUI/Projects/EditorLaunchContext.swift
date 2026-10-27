@@ -482,6 +482,16 @@ final class EditorLaunchContext: @unchecked Sendable {
                 EditorSettingsWindowRoot(app: app)
             }
         }
+        // A window holds its first frame until the packages that ship with the
+        // editor have registered. A view or a palette that arrives a few frames
+        // late reads as a flash, not as loading, and the window would open on
+        // the workbench and then jump to the package's own view.
+        let surface = EditorAssistantSurface.of(app)
+        surface.beginLaunch()
+        Task { @MainActor in
+            await app.awaitBundledPlugins()
+            surface.finishLaunch()
+        }
     }
 
     private struct NativeMenuState: Equatable {

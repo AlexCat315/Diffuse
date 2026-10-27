@@ -108,6 +108,12 @@ extension EditorApplication {
         }
     }
 
+    /// Suspends until the bundled packages have registered — or until startup
+    /// declined to run them. The window uses this to hold its first frame.
+    public func awaitBundledPlugins() async {
+        await pluginSession.bundledStartup?.value
+    }
+
     /// Turns a bundled plugin on or off for this project, wherever it runs.
     @MainActor
     public func setBundledPlugin(_ plugin: BundledPlugin, enabled: Bool) async {
@@ -158,8 +164,14 @@ extension EditorApplication {
     private func enableBundledPlugin(_ plugin: BundledPlugin) async {
         guard pluginSession.manager.enabledManifests[plugin.id] == nil else { return }
         do {
-            let inspection = try inspectPlugin(at: plugin.package)
-            guard inspection.manifest.id == plugin.id else { throw PluginAuthorizationError.noLongerValid }
+            // The manifest and the contract are already validated on disk, so a
+            // bundled package needs no throwaway host process to be inspected.
+            // That spawn, once per runtime package, was the slowest part of
+            // startup and every frame before it painted an empty catalog.
+            let package = try PluginPackageLoader().load(at: plugin.package)
+            guard package.manifest.id == plugin.id else { throw PluginAuthorizationError.noLongerValid }
+            let inspection = PluginInspection(package: package,
+                                              contracts: PluginContractDeriver.contracts(for: package))
             try await enablePlugin(at: plugin.package, authorization: PluginAuthorizationRecord(inspection: inspection))
             publishPluginManagement(phase: .idle, candidate: nil, message: nil)
         } catch {

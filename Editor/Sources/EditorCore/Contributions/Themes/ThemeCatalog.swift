@@ -69,7 +69,11 @@ public final class EditorThemeCatalog: @unchecked Sendable {
     func theme(id: String = EditorThemeCatalog.defaultThemeID, dark: Bool) -> Theme {
         let entry = lock.withLock { entries.first { $0.descriptor.id == id } }
         let variant = dark ? entry?.resource.dark : entry?.resource.light
-        return (try? variant?.make(dark: dark)) ?? (dark ? Theme.defaultDark : Theme.defaultLight)
+        // Before the theme package registers — and when it is switched off —
+        // the bundled palette is already on disk and needs no plugin. Falling
+        // back to the SDK's own theme here painted one palette for the first
+        // frames and then swapped it, which read as a flash.
+        return (try? variant?.make(dark: dark)) ?? Self.bundledTheme(dark: dark)
     }
 
     public static func bundledTheme(id: String = defaultThemeID, dark: Bool) -> Theme {

@@ -14,3 +14,12 @@ for (const [directory, name] of sources) {
   await rename(staging, destination);
   console.log(`Built ${name}`);
 }
+// A package whose folder was renamed or removed would otherwise stay in the
+// output forever and register a second time under its old identity — two
+// entries in Settings, and two packages claiming the same contribution ids.
+const expected = new Set(sources.map(([, name]) => `${name}.coveplugin`));
+for (const name of await readdir(output)) {
+  if (!name.endsWith(".coveplugin") || expected.has(name)) continue;
+  await rm(join(output, name), { recursive: true, force: true });
+  console.log(`Removed stale ${name}`);
+}

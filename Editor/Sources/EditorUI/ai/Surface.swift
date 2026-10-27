@@ -33,6 +33,11 @@ final class EditorAssistantSurface: _ObservableObject {
         var canvas: Canvas = .follow
         /// Bumped to put the caret in the composer.
         var focusRequest: UInt64 = 0
+        /// False while the window's packages are still registering. The editor
+        /// is held back until then, so the first frame is the view the window
+        /// is actually going to stay on instead of the workbench it falls back
+        /// to while no package has contributed anything yet.
+        fileprivate(set) var isReady = true
     }
 
     private(set) var state = State()
@@ -80,6 +85,15 @@ final class EditorAssistantSurface: _ObservableObject {
     }
 
     func showCanvas(_ canvas: Canvas) { update { $0.canvas = canvas } }
+
+    /// Called before the bundled packages start registering. Until
+    /// `finishLaunch()` the window paints the launch surface rather than an
+    /// editor whose views and theme are not known yet.
+    func beginLaunch() { update { $0.isReady = false } }
+
+    /// Called once every bundled package has registered its contributions —
+    /// or once startup has given up on them.
+    func finishLaunch() { update { $0.isReady = true } }
 
     /// Cycles through whatever views exist, so a third view needs no change here.
     func toggleView() {
