@@ -29,11 +29,11 @@ public protocol ContributionPointSpec: Sendable {
     associatedtype Descriptor: Codable & Sendable
     static var id: String { get }
     static func validate(_ descriptor: Descriptor, host: PluginHostPermissions) throws
-    static func validateRuntime(_ descriptor: Descriptor, contract: WITContract?) throws
+    static func validateRuntime(_ descriptor: Descriptor, contract: PluginContract?) throws
 }
 
 extension ContributionPointSpec {
-    public static func validateRuntime(_ descriptor: Descriptor, contract: WITContract?) throws {}
+    public static func validateRuntime(_ descriptor: Descriptor, contract: PluginContract?) throws {}
 }
 
 public struct ContributionDescriptor: Codable, Sendable, Equatable {
@@ -82,7 +82,7 @@ public struct ContributionDescriptor: Codable, Sendable, Equatable {
         }
     }
 
-    func validateRuntime(_ contract: WITContract?, in registry: ContributionPointRegistry = .standard) throws {
+    func validateRuntime(_ contract: PluginContract?, in registry: ContributionPointRegistry = .standard) throws {
         for id in pointIDs {
             guard let point = registry.points[id] else {
                 throw PluginManifestValidationError.invalidContribution(id)
@@ -95,7 +95,7 @@ public struct ContributionDescriptor: Codable, Sendable, Equatable {
 public struct ContributionPointRegistry: Sendable {
     struct Point: Sendable {
         let validate: @Sendable (ContributionDescriptor, PluginHostPermissions) throws -> Void
-        let validateRuntime: @Sendable (ContributionDescriptor, WITContract?) throws -> Void
+        let validateRuntime: @Sendable (ContributionDescriptor, PluginContract?) throws -> Void
     }
     fileprivate var points: [String: Point] = [:]
 
@@ -132,6 +132,9 @@ public struct ContributionPointRegistry: Sendable {
         try! registry.register(AIToolContributionPoint.self)
         try! registry.register(AIContextContributionPoint.self)
         try! registry.register(AIHarnessContributionPoint.self)
+        try! registry.register(PluginServiceContributionPoint.self)
+        try! registry.register(PluginExtensionPointContributionPoint.self)
+        try! registry.register(PluginExtensionContributionPoint.self)
         return registry
     }()
 }

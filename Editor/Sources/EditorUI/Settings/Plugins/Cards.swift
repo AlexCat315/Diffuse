@@ -169,8 +169,8 @@ struct PluginReviewCard: View {
                     fact(L("Imports"), summary.imports.isEmpty ? L("None") : summary.imports.joined(separator: ", "))
                     fact(L("Host Capabilities"), summary.composableHostCapabilities.isEmpty
                          ? L("None") : summary.composableHostCapabilities.joined(separator: ", "))
-                    if let hash = summary.componentHash { fact(L("Component SHA-256"), hash) }
-                    if let hash = summary.witHash { fact(L("WIT SHA-256"), hash) }
+                    if let hash = summary.codeHash { fact(L("Component SHA-256"), hash) }
+                    if let hash = summary.contractHash { fact(L("WIT SHA-256"), hash) }
                     for point in summary.contributionPoints { AnyView(fact(L("Contribution"), point)) }
                     for path in summary.resourceHashes.keys.sorted() {
                         AnyView(fact(path, summary.resourceHashes[path] ?? ""))

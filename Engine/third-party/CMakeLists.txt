@@ -14,14 +14,6 @@ message(STATUS "Cove third-party target triple: ${COVE_TRIPLE} (SPM: ${COVE_SPM_
 set(COVE_VENDOR_DIR ${CMAKE_SOURCE_DIR}/../vendor CACHE PATH "Native artifact output directory")
 
 # ============================================================================
-# Wasmtime Component runtime (pinned static C API artifacts and iOS Pulley source build)
-# ============================================================================
-option(COVE_STAGE_WASMTIME "Stage the plugin runtime" ON)
-if(COVE_STAGE_WASMTIME)
-    include(${CMAKE_SOURCE_DIR}/cmake/FetchWasmtime.cmake)
-endif()
-
-# ============================================================================
 # Static-only, minimal-dependency build profile
 # ============================================================================
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)

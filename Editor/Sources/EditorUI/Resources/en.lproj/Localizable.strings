@@ -954,6 +954,7 @@
 "Swift toolchain updated" = "Swift toolchain updated";
 "Installation cancelled" = "Installation cancelled";
 "Projection" = "Projection";
+"Language Service" = "Language Service";
 "Enabled" = "Enabled";
 "Add Script" = "Add Script";
 "Open Script" = "Open Script";
@@ -1106,7 +1107,7 @@
 "Memory" = "Memory";
 "Plugin" = "Plugin";
 "No Swift toolchain was found. Choose or install one under Toolchains." = "No Swift toolchain was found. Choose or install one under Toolchains.";
-"The Swift Support plugin is off. Turn it on in Settings › Extensions." = "The Swift Support plugin is off. Turn it on in Settings › Extensions.";
+"No language service is enabled. Turn one on in Settings › Extensions." = "No language service is enabled. Turn one on in Settings › Extensions.";
 "The language service is stopped." = "The language service is stopped.";
 "No open Swift files" = "No open Swift files";
 "%d open Swift file(s), %d game script(s)" = "%d open Swift file(s), %d game script(s)";

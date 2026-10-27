@@ -13,6 +13,9 @@ extension PluginManager {
     static func activationEvents(for entry: Entry) -> Set<String> {
         let manifest = entry.package.manifest
         var result = Set(manifest.activation)
+        for service in (try? manifest.contributes.decode(PluginServiceContributionPoint.self)) ?? [] {
+            result.insert("onService:" + service.id)
+        }
         for language in (try? manifest.contributes.decode(LanguageContributionPoint.self)) ?? [] {
             if language.server != nil || language.format != nil { result.insert("onLanguage:" + language.id) }
         }

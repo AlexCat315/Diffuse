@@ -1,0 +1,1 @@
+{"name":"@diffuse/plugin-swift","private":true,"type":"module","dependencies":{"@diffuse/plugin-sdk":"workspace:*"}}

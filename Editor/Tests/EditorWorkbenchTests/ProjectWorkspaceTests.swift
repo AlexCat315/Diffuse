@@ -38,7 +38,7 @@ private struct IsolatedProjectState {
 @Suite("Project workspace", .serialized)
 @MainActor
 struct ProjectWorkspaceTests {
-    @Test("with no saved project nothing opens and the window is the agent view with an empty project list")
+    @Test("with no saved project the window opens an untitled workspace and no project entry")
     func projectless() throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let state = try IsolatedProjectState("projectless")
         defer { state.restore() }
@@ -46,15 +46,22 @@ struct ProjectWorkspaceTests {
         let context = EditorLaunchContext(renderDevice: device, inGameUI: try InGameUIHost(device: device),
                                           events: PlatformEventBridge(), shellState: nil)
         try context.restoreProjects()
+        // The window always has a workspace, but it is not a project: it never
+        // joins the list and is never restored as one.
         #expect(!context.isProjectLoaded && context.projects.isEmpty)
+        #expect(context.activeDirectory.map(EditorScratchWorkspace.isScratch) == true)
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: EditorLaunchRoot(context: context))
         graph.computeLayout(width: 1280, height: 720)
-        for name in ["editor-view-switch", "editor-agent-thread", "editor-agent-composer", "projectless-open-folder"] {
+        // A real workbench, not an empty shell: the deleted placeholder's
+        // "Open Folder" control must not exist anywhere.
+        for name in ["editor-title-bar", "editor-workspace", "editor-status-bar"] {
             let node = try WorkbenchUITestSupport.named(name, in: graph.tree.root)
             #expect(node.absoluteFrame.width > 0 && node.absoluteFrame.maxY <= 720, "\(name)")
         }
-        #expect(try WorkbenchUITestSupport.named("editor-agent-tasks", in: graph.tree.root).absoluteFrame.width == 232)
+        #expect(WorkbenchUITestSupport.firstNode(graph.tree.root) {
+            $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == "projectless-open-folder"
+        } == nil)
     } }
 
     @Test("folders open side by side, switch, close one at a time and come back on the next launch")

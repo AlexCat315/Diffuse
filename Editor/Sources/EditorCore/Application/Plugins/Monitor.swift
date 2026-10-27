@@ -82,7 +82,7 @@ final class PluginPackageMonitor: @unchecked Sendable {
             let manifest = try? Data(contentsOf: url.appendingPathComponent("plugin.json"))
             let resources = manifest.flatMap { try? JSONDecoder().decode(CovePluginManifest.self, from: $0) }?
                 .resources.map(\.path).filter(PluginResource.isValidPath) ?? []
-            for name in ["plugin.json", "capabilities.wit", "component.wasm"] + resources {
+            for name in ["plugin.json", "capabilities.json", "plugin.js"] + resources {
                 let fileURL = url.appendingPathComponent(name)
                 guard let values = try? fileURL.resourceValues(
                     forKeys: [.fileSizeKey, .contentModificationDateKey]

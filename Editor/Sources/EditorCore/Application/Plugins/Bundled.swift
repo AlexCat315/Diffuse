@@ -58,22 +58,24 @@ enum BundledPlugins {
     /// The package whose language server the editor's language session drives.
     static var languageServer: URL? { plugin(id: PluginLanguageService.pluginID)?.package }
 
-    static func disabled(in project: String) throws -> Set<String> {
-        let url = preferences(in: project)
+    static func disabled(in project: String, applicationWide: Bool = false) throws -> Set<String> {
+        let url = preferences(in: project, applicationWide: applicationWide)
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         return try JSONDecoder().decode(Set<String>.self, from: Data(contentsOf: url))
     }
 
-    static func setEnabled(_ enabled: Bool, id: String, in project: String) throws {
-        var disabled = try disabled(in: project)
+    static func setEnabled(_ enabled: Bool, id: String, in project: String, applicationWide: Bool = false) throws {
+        var disabled = try disabled(in: project, applicationWide: applicationWide)
         if enabled { disabled.remove(id) } else { disabled.insert(id) }
-        let url = preferences(in: project)
+        let url = preferences(in: project, applicationWide: applicationWide)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try AtomicFile.write(JSONEncoder().encode(disabled.sorted()), to: url)
     }
 
-    private static func preferences(in project: String) -> URL {
-        URL(fileURLWithPath: project).appendingPathComponent(".cove/disabled_bundled_plugins.json")
+    private static func preferences(in project: String, applicationWide: Bool) -> URL {
+        guard applicationWide else { return URL(fileURLWithPath: project).appendingPathComponent(".cove/disabled_bundled_plugins.json") }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Diffuse/disabled_bundled_plugins.json")
     }
 }
 
@@ -93,7 +95,7 @@ extension EditorApplication {
         guard pluginSession.bundledStartup == nil else { return }
         pluginSession.bundledStartup = Task { @MainActor [weak self] in
             guard let self, !self.isShuttingDown else { return }
-            let disabled = (try? BundledPlugins.disabled(in: self.projectDirectory)) ?? []
+            let disabled = (try? BundledPlugins.disabled(in: self.projectDirectory, applicationWide: self.pluginSession.peers != nil)) ?? []
             for plugin in BundledPlugins.catalog where !disabled.contains(plugin.id) {
                 guard !Task.isCancelled, !self.isShuttingDown else { return }
                 await self.enableBundledPlugin(plugin)
@@ -109,7 +111,10 @@ extension EditorApplication {
     /// Turns a bundled plugin on or off for this project, wherever it runs.
     @MainActor
     public func setBundledPlugin(_ plugin: BundledPlugin, enabled: Bool) async {
-        if enabled { await enableBundledPlugin(plugin) }
+        if enabled {
+            await enableBundledPlugin(plugin)
+            for peer in pluginSession.peers?() ?? [] where peer !== self { await peer.enableBundledPlugin(plugin) }
+        }
         else { await disablePluginFromManagement(id: plugin.id) }
         rebuildAgentSurfaces()
         await workstation.versionControl.refresh()

@@ -2,9 +2,9 @@ name: Plugin runtimes
 on:
   push:
     branches: [main]
-    paths: ['Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Build/**', 'Tools/Developer/Sources/Validation/IOS/**', 'Editor/cove.json', 'cove', 'cove.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-plugins.yml']
+    paths: ['Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'PluginSDK/**', 'Editor/Plugins/**', 'bun.lock', 'package.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Build/**', 'Editor/cove.json', 'cove', 'cove.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-plugins.yml']
   pull_request:
-    paths: ['Engine/Sources/Bridge/CWasmtimeBridge/**', 'Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'Engine/Validation/Plugins/**', 'Engine/third-party/wasmtime/**', 'Platforms/Web/Plugins/**', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Build/**', 'Tools/Developer/Sources/Validation/IOS/**', 'Editor/cove.json', 'cove', 'cove.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-plugins.yml']
+    paths: ['Engine/Sources/Plugin*/**', 'Engine/Tests/PluginRuntimeTests/**', 'PluginSDK/**', 'Editor/Plugins/**', 'bun.lock', 'package.json', 'Tools/Developer/Package.swift', 'Tools/Developer/Sources/Build/**', 'Editor/cove.json', 'cove', 'cove.cmd', '.github/actions/fetch-sdk/**', '.github/workflows/ci-plugins.yml']
   workflow_dispatch:
 
 concurrency:
@@ -17,9 +17,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {runner: xcode-27, platform: macos-arm64, probe: Engine/build/plugin-probe/CovePluginProbe}
-          - {runner: ubuntu-latest, platform: linux-x86_64, probe: Engine/build/plugin-probe/CovePluginProbe}
-          - {runner: windows-2025-vs2026, platform: windows-x86_64, probe: Engine/build/plugin-probe/Release/CovePluginProbe.exe}
+          - {runner: xcode-27, platform: macos-arm64}
+          - {runner: ubuntu-latest, platform: linux-x86_64}
+          - {runner: windows-2025-vs2026, platform: windows-x86_64}
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7.0.1
@@ -35,42 +35,15 @@ jobs:
         with:
           cmakeVersion: '4.4.4'
           ninjaVersion: '1.13.2'
-      - name: Verify staging transactions
-        run: swift test --package-path Tools/Developer --filter PluginStagingTests
-      - name: Stage pinned runtime and build portable probe
+      - name: Prepare the pinned Bun runtime and TypeScript plugins
         shell: bash
-        run: |
-          ./cove studio plugins stage --platform '${{ matrix.platform }}'
-          cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe -DCOVE_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/${{ matrix.platform }}"
-          cmake --build Engine/build/plugin-probe --config Release --parallel 4
-          ./cove studio plugins verify --probe '${{ matrix.probe }}'
-      - name: Android static-link gate
-        if: runner.os == 'Linux'
+        run: ./cove studio plugins prepare
+      - name: Verify public SDK and conversation concurrency
         shell: bash
-        run: |
-          ./cove studio plugins stage --platform android-arm64
-          cmake -S Engine/Validation/Plugins -B Engine/build/plugin-android -G Ninja \
-            -DCOVE_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/android-arm64" \
-            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
-            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=28
-          cmake --build Engine/build/plugin-android --parallel 4
-      - name: iOS Pulley device build and simulator execution
-        if: runner.os == 'macOS'
+        run: ./cove studio plugins verify
+      - name: Build desktop editor and native broker
         shell: bash
-        run: |
-          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-          ./cove studio plugins stage --platform ios-arm64
-          ./cove studio plugins stage --platform ios-arm64-simulator
-          cmake -S Engine/Validation/Plugins -B Engine/build/plugin-ios -G Ninja \
-            -DCOVE_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/ios-arm64-simulator" \
-            -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphonesimulator \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0
-          cmake --build Engine/build/plugin-ios --parallel 4
-          ./cove studio plugins prepare --probe '${{ matrix.probe }}' --output "$RUNNER_TEMP/plugin-fixtures"
-          simulator_id=$(./cove studio ios-simulator udid --prefix iPhone)
-          xcrun simctl boot "$simulator_id"
-          xcrun simctl bootstatus "$simulator_id" -b
-          xcrun simctl spawn "$simulator_id" "$PWD/Engine/build/plugin-ios/CovePluginProbe.app/CovePluginProbe" \
-            "$RUNNER_TEMP/plugin-fixtures/reader.coveplugin/component.wasm" \
-            "$RUNNER_TEMP/plugin-fixtures/scene-query.coveplugin/component.wasm" \
-            "$RUNNER_TEMP/plugin-fixtures/infinite.coveplugin/component.wasm" native
+        run: ./cove build Editor
+      - name: Verify native contract, lifecycle and broker
+        shell: bash
+        run: ./cove test Engine --filter Plugin

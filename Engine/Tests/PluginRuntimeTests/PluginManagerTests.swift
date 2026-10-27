@@ -32,21 +32,15 @@ struct PluginManagerTests {
         var manifest = CovePluginManifest(id: id, version: 1, name: id, description: "Fixture", access: .read,
                                           requires: requires)
         manifest.activation = events
+        if runtime { manifest.runtime = .init() }
         if !runtime {
             try manifest.contributes.set(LanguageContributionPoint.self,
                 descriptors: [LanguageContribution(id: "fixture", title: "Fixture", extensions: ["fixture"])])
         }
         try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent("plugin.json"))
         if runtime {
-            try Data([0, 0x61, 0x73, 0x6D, 0x0D, 0, 1, 0]).write(to: root.appendingPathComponent("component.wasm"))
-            try Data("""
-            package fixture:lazy;
-            interface capabilities {
-              record inspect-input { enabled: bool }
-              inspect: func(input: inspect-input) -> string;
-            }
-            world plugin { export capabilities; }
-            """.utf8).write(to: root.appendingPathComponent("capabilities.wit"))
+            try Data("export default {}".utf8).write(to: root.appendingPathComponent("plugin.js"))
+            try Data(#"{"version":1,"entries":[{"name":"inspect","title":"Inspect","description":"","input":{"record":{"enabled":"bool"}}}]}"#.utf8).write(to: root.appendingPathComponent("capabilities.json"))
         }
         return root
     }
@@ -54,7 +48,7 @@ struct PluginManagerTests {
     private func authorize(_ url: URL) throws -> PluginAuthorizationRecord {
         let package = try PluginPackageLoader().load(at: url)
         return try PluginAuthorizationRecord(inspection: PluginInspection(package: package,
-            contracts: PluginWITContractDeriver.contracts(for: package)))
+            contracts: PluginContractDeriver.contracts(for: package)))
     }
 
     private func driver(_ calls: Calls, failing: String? = nil) -> PluginRuntimeDriver {
@@ -63,7 +57,7 @@ struct PluginManagerTests {
             calls.add("activate:" + package.manifest.id)
             if package.manifest.id == failing { throw PluginManagerError.runtimeUnavailable }
             let binding = try PluginExecutionBinding(pluginPath: url.path,
-                inspection: PluginInspection(package: package, contracts: PluginWITContractDeriver.contracts(for: package)),
+                inspection: PluginInspection(package: package, contracts: PluginContractDeriver.contracts(for: package)),
                 authorization: authorization, hostGeneration: 1)
             return PluginRuntimeActivation(binding: binding)
         }, deactivate: { calls.add("deactivate:" + $0.pluginID) }, stop: { calls.add("stop") })
@@ -138,14 +132,26 @@ struct PluginManagerTests {
         let calls = Calls(), manager = PluginManager(registrar: registrar)
         manager.configureRuntime(driver(calls, failing: "fixture.provider"))
         for url in [provider, dependent, data] { _ = try await manager.enable(at: url, authorization: authorize(url)) }
-        do { try await manager.disable(id: "fixture.provider"); Issue.record("dependency must protect disable") }
-        catch is RequiredPluginStillNeeded {}
         do { _ = try await manager.activate(id: "fixture.dependent"); Issue.record("activation must fail") }
         catch PluginManagerError.runtimeUnavailable {}
         #expect(manager.enabledManifests.keys.sorted() == ["fixture.data"])
         #expect(catalog.snapshot.values.count == 1)
         #expect(calls.values == ["activate:fixture.provider"])
         #expect(manager.statuses.filter { $0.phase == .failed }.count == 2)
+    }
+
+    @Test("disabling an owner withdraws dependent plugins before the owner")
+    func disableCascades() async throws {
+        let provider = try package(id: "fixture.provider")
+        let dependent = try package(id: "fixture.dependent", requires: [.init(kind: .plugin, id: "fixture.provider")])
+        defer { for url in [provider, dependent] { try? FileManager.default.removeItem(at: url) } }
+        let calls = Calls(), manager = PluginManager(registrar: ContributionRegistrar())
+        manager.configureRuntime(driver(calls))
+        for url in [provider, dependent] { _ = try await manager.enable(at: url, authorization: authorize(url)) }
+        _ = try await manager.activate(id: "fixture.dependent")
+        try await manager.disable(id: "fixture.provider")
+        #expect(manager.enabledManifests.isEmpty)
+        #expect(calls.values.suffix(2) == ["deactivate:fixture.dependent", "deactivate:fixture.provider"])
     }
 
     @Test("startup remembered before enable; workspace globs and URI events route precisely")

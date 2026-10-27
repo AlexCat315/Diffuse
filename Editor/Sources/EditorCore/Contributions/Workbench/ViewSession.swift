@@ -3,8 +3,8 @@ import CoveUICompose
 import PluginRuntime
 
 /// One plugin view: the state its entry point last returned, the component
-/// tree to draw and the values of its controls. The plugin keeps no memory
-/// between calls, so the session hands the state back with every event.
+/// tree to draw and the values of its controls. Persistent plugin processes
+/// keep their own services; view state is also handed back with every event.
 /// Events run one at a time, in order; typing only reaches the plugin for
 /// fields that ask for `change`, and then debounced.
 public final class PluginViewSession: _ObservableObject, @unchecked Sendable {
@@ -25,17 +25,22 @@ public final class PluginViewSession: _ObservableObject, @unchecked Sendable {
     private var pluginValues: [String: PluginJSON] = [:]
     private var state: PluginJSON?
     private let invoke: Invoke
+    private let uiQueue: PluginUIQueue
     private var tail: Task<Void, Never>?
     /// Calls queued or running; the view is busy until it reaches zero.
     private var pending = 0
     private var pendingChange: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
+    private var isCancelled = false
+    private var refreshGeneration: UInt64 = 0
     private let publisher = _ObservablePublisher<PluginViewSession>()
 
     static let changeDelay: Duration = .milliseconds(300)
 
-    init(source: PluginContentSource, invoke: @escaping Invoke) {
+    init(source: PluginContentSource, invoke: @escaping Invoke, uiQueue: PluginUIQueue = PluginUIQueue()) {
         self.source = source
         self.invoke = invoke
+        self.uiQueue = uiQueue
     }
 
     /// Draws the view again from the current state.
@@ -58,20 +63,28 @@ public final class PluginViewSession: _ObservableObject, @unchecked Sendable {
         publisher.send()
         guard let action else { return }
         pendingChange?.cancel()
-        pendingChange = Task { @MainActor [weak self] in
+        let event = UIEvent(action: action, value: value, values: values)
+        let uiQueue = uiQueue
+        pendingChange = Task.detached { [weak self] in
             try? await Task.sleep(for: Self.changeDelay)
-            guard let self, !Task.isCancelled else { return }
-            enqueue(UIEvent(action: action, value: value, values: values))
+            guard !Task.isCancelled else { return }
+            uiQueue.schedule { [weak self] in self?.enqueue(event) }
         }
     }
 
     func cancel() {
+        isCancelled = true
+        refreshTask?.cancel()
+        refreshGeneration &+= 1
         pendingChange?.cancel()
         tail?.cancel()
     }
 
     @MainActor
     private func enqueue(_ event: UIEvent?) {
+        guard !isCancelled else { return }
+        refreshTask?.cancel()
+        refreshGeneration &+= 1
         let previous = tail
         pending += 1
         publish { $0.isBusy = true }
@@ -86,6 +99,18 @@ public final class PluginViewSession: _ObservableObject, @unchecked Sendable {
                 adoptValues(from: result.ui, afterEvent: event != nil)
                 publish { $0.ui = result.ui; $0.failure = nil }
                 effectHandler?(result.effects)
+                if let milliseconds = result.refreshAfterMilliseconds {
+                    let generation = refreshGeneration
+                    let uiQueue = uiQueue
+                    refreshTask = Task.detached { [weak self] in
+                        try? await Task.sleep(for: .milliseconds(milliseconds))
+                        guard !Task.isCancelled else { return }
+                        uiQueue.schedule { [weak self] in
+                            guard let self, self.refreshGeneration == generation else { return }
+                            self.render()
+                        }
+                    }
+                }
             } catch {
                 guard !Task.isCancelled else { return }
                 publish { $0.failure = error.localizedDescription }

@@ -12,6 +12,14 @@ struct PluginNodeRenderer: @unchecked Sendable {
     func render(_ node: UINode) -> AnyView {
         var view = content(node)
         if let flex = node.flex { view = AnyView(view.flex(Float(flex)).frame(minWidth: 0)) }
+        if let width = node.width { view = AnyView(view.frame(width: .points(Float(width))).flex(0, shrink: 0, basis: Float(width))) }
+        if let maximum = node.maxWidth { view = AnyView(view.frame(maxWidth: Float(maximum))) }
+        if let minimum = node.minHeight { view = AnyView(view.frame(minHeight: Float(minimum))) }
+        if let background = node.background {
+            let color: SemanticColorRef = switch background { case .canvas: .background; case .surface: .surface; case .raised: .surfaceRaised }
+            view = AnyView(view.background(color))
+        }
+        if let radius = node.cornerRadius { view = AnyView(view.cornerRadius(Float(radius))) }
         if let key = node.key { view = AnyView(view.id(key)) }
         return view
     }
@@ -97,6 +105,7 @@ struct PluginNodeRenderer: @unchecked Sendable {
         })
         return AnyView(TextField(field.placeholder ?? "", text: text) { input in
             input.behavior.secure = field.secure
+            if field.multiline { input.layout.axis = .vertical; input.layout.maxVisibleLines = 6 }
             if let submit = field.submit {
                 input.events.onSubmit = { send(submit, value: session.values[field.id]) }
             }

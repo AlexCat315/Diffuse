@@ -7,36 +7,27 @@ public enum PluginImportPermission: String, Codable, Sendable, CaseIterable, Has
     case assetMetadataQuery = "cove:asset/metadata-query"
     case process = "cove:process/host"
     case http = "cove:http/host"
+    case editor = "diffuse:editor/host"
+    case service = "cove:service/host"
 
-    public var isSnapshot: Bool { self != .process && self != .http }
+    public var isSnapshot: Bool { [.sceneQuery, .selectionQuery, .assetMetadataQuery].contains(self) }
 
-    /// Bounded host requests. Snapshot imports expose immutable revision data;
-    /// process and http imports expose nonblocking operations on host-owned resources.
-    public var witInterface: String {
-        "interface query { query: func(request: string) -> string; }"
-    }
 }
 
 public struct PluginResourceLimits: Codable, Sendable, Equatable {
-    public var maximumMemoryBytes: UInt64
     public var discoveryTimeoutMilliseconds: UInt64
     public var preparationTimeoutMilliseconds: UInt64
     public var maximumOutputBytes: Int
     public var maximumCapabilities: Int
-    public var fuelPerInvocation: UInt64
 
-    public init(maximumMemoryBytes: UInt64 = 64 * 1_024 * 1_024,
-                discoveryTimeoutMilliseconds: UInt64 = 2_000,
+    public init(discoveryTimeoutMilliseconds: UInt64 = 2_000,
                 preparationTimeoutMilliseconds: UInt64 = 5_000,
                 maximumOutputBytes: Int = 1_024 * 1_024,
-                maximumCapabilities: Int = 64,
-                fuelPerInvocation: UInt64 = 20_000_000) {
-        self.maximumMemoryBytes = min(maximumMemoryBytes, 64 * 1_024 * 1_024)
+                maximumCapabilities: Int = 64) {
         self.discoveryTimeoutMilliseconds = min(discoveryTimeoutMilliseconds, 2_000)
         self.preparationTimeoutMilliseconds = min(preparationTimeoutMilliseconds, 5_000)
         self.maximumOutputBytes = min(maximumOutputBytes, 1_024 * 1_024)
         self.maximumCapabilities = min(maximumCapabilities, 64)
-        self.fuelPerInvocation = min(fuelPerInvocation, 20_000_000)
     }
 
     public static let secureDefault = PluginResourceLimits()
@@ -46,9 +37,7 @@ public struct PluginResourceLimits: Codable, Sendable, Equatable {
     /// the runtime can hold; the preparation deadline still bounds each call.
     public static let hostEntryPoint: PluginResourceLimits = {
         var limits = PluginResourceLimits()
-        limits.maximumMemoryBytes = 256 * 1_024 * 1_024
         limits.maximumOutputBytes = 256 * 1_024 * 1_024
-        limits.fuelPerInvocation = 1_000_000_000_000
         return limits
     }()
 }
@@ -201,7 +190,7 @@ public enum PluginManifestValidator {
               Set(manifest.resources.map(\.path)).count == manifest.resources.count,
               manifest.resources.count <= 128,
               manifest.resources.allSatisfy({ !$0.id.isEmpty && !$0.kind.isEmpty && PluginResource.isValidPath($0.path) }),
-              manifest.runtime.map({ $0.component == "component.wasm" && $0.wit == "capabilities.wit" && $0.compatibility == 1 }) ?? true,
+              manifest.runtime.map({ $0.engine == "bun" && $0.entry == "plugin.js" && $0.compatibility == 1 }) ?? true,
               Set(manifest.activation).count == manifest.activation.count,
               manifest.activation.allSatisfy(PluginActivationEvent.isValid) else {
             throw PluginManifestValidationError.invalidContribution("package")

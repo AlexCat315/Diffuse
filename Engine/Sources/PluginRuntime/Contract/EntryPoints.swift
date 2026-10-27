@@ -26,7 +26,7 @@ extension ValidatedPluginPackage {
             || ((try? manifest.contributes.decode(AIHarnessContributionPoint.self)) ?? []).contains { $0.entryPoint == capability }
     }
 
-    public func inputSchema(for capability: WITCapabilityInput) -> JSONSchema {
+    public func inputSchema(for capability: PluginEntryContract) -> JSONSchema {
         isHostEntryPoint(capability.name) ? capability.inputSchema.withoutSizeLimits : capability.inputSchema
     }
 

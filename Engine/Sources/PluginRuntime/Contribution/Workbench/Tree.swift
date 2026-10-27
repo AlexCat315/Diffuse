@@ -7,6 +7,7 @@ public struct UINode: Sendable, Equatable {
     public enum Align: String, Codable, Sendable { case start, center, end, stretch }
     public enum TextStyle: String, Codable, Sendable { case body, caption, label, strong, mono, title }
     public enum ButtonStyle: String, Codable, Sendable { case primary, secondary, ghost, danger }
+    public enum Background: String, Codable, Sendable { case canvas, surface, raised }
 
     public struct Stack: Sendable, Equatable {
         public var children: [UINode]
@@ -35,6 +36,7 @@ public struct UINode: Sendable, Equatable {
         public var placeholder: String?
         public var value: String?
         public var secure = false
+        public var multiline = false
         /// Raised on Return.
         public var submit: String?
         /// Raised while typing, debounced by the host.
@@ -87,6 +89,11 @@ public struct UINode: Sendable, Equatable {
     /// Keeps a component's identity, and its host-held state, across renders.
     public var key: String?
     public var flex: Int?
+    public var width: Int?
+    public var maxWidth: Int?
+    public var minHeight: Int?
+    public var background: Background?
+    public var cornerRadius: Int?
     public var kind: Kind
 
     public init(_ kind: Kind, key: String? = nil, flex: Int? = nil) {
@@ -104,13 +111,18 @@ extension UINode: Decodable {
     private enum Keys: String, CodingKey {
         case type, key, flex, children, child, spacing, padding, align, title, text, style, tone, name, percent
         case icon, action, arguments, disabled, id, placeholder, value, secure, submit, change, label, options
-        case expanded, columns, rows, cells
+        case expanded, columns, rows, cells, width, maxWidth, minHeight, background, cornerRadius, multiline
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         key = try c.decodeIfPresent(String.self, forKey: .key)
         flex = try c.decodeIfPresent(Int.self, forKey: .flex)
+        width = try c.decodeIfPresent(Int.self, forKey: .width)
+        maxWidth = try c.decodeIfPresent(Int.self, forKey: .maxWidth)
+        minHeight = try c.decodeIfPresent(Int.self, forKey: .minHeight)
+        background = try c.decodeIfPresent(Background.self, forKey: .background)
+        cornerRadius = try c.decodeIfPresent(Int.self, forKey: .cornerRadius)
         func string(_ key: Keys) throws -> String { try c.decode(String.self, forKey: key) }
         func optional(_ key: Keys) throws -> String? { try c.decodeIfPresent(String.self, forKey: key) }
         func children() throws -> [UINode] { try c.decodeIfPresent([UINode].self, forKey: .children) ?? [] }
@@ -142,6 +154,7 @@ extension UINode: Decodable {
             kind = .textField(TextField(id: try string(.id), placeholder: try optional(.placeholder),
                                         value: try optional(.value),
                                         secure: try c.decodeIfPresent(Bool.self, forKey: .secure) ?? false,
+                                        multiline: try c.decodeIfPresent(Bool.self, forKey: .multiline) ?? false,
                                         submit: try optional(.submit), change: try optional(.change)))
         case "toggle":
             kind = .toggle(Toggle(id: try string(.id), label: try optional(.label),
@@ -181,7 +194,11 @@ extension UINode {
     private func validate(depth: Int, count: inout Int, ids: inout Set<String>) -> Bool {
         count += 1
         guard depth <= Self.maximumDepth, count <= Self.maximumNodes,
-              key.map { Self.isText($0) } ?? true, flex.map({ (0...100).contains($0) }) ?? true else { return false }
+              key.map { Self.isText($0) } ?? true, flex.map({ (0...100).contains($0) }) ?? true,
+              width.map({ (1...4096).contains($0) }) ?? true,
+              minHeight.map({ (0...4096).contains($0) }) ?? true,
+              cornerRadius.map({ (0...32).contains($0) }) ?? true,
+              maxWidth.map({ (1...4096).contains($0) }) ?? true else { return false }
         func all(_ nodes: [UINode]) -> Bool {
             nodes.allSatisfy { $0.validate(depth: depth + 1, count: &count, ids: &ids) }
         }

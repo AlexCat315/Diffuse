@@ -27,7 +27,7 @@ public enum AIHarnessContributionPoint: ContributionPointSpec {
         }
     }
 
-    public static func validateRuntime(_ harness: AIHarnessContribution, contract: WITContract?) throws {
+    public static func validateRuntime(_ harness: AIHarnessContribution, contract: PluginContract?) throws {
         guard contract?.capabilityInputs.first(where: { $0.name == harness.entryPoint })?.inputType == harnessInputType else {
             throw PluginManifestValidationError.invalidContribution(id)
         }
@@ -35,4 +35,4 @@ public enum AIHarnessContributionPoint: ContributionPointSpec {
 }
 
 /// `record { turn: string }`: the step's input as JSON.
-let harnessInputType = WITValueType.record([WITRecordField(name: "turn", type: .string)])
+let harnessInputType = PluginInputType.record([PluginInputField(name: "turn", type: .string)])

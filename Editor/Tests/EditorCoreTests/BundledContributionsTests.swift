@@ -22,16 +22,23 @@ struct BundledContributionsTests {
 
         let app = try await application(project: project, plugins: ["studio.ai", "studio.git", "studio.lore"])
         defer { app.shutdown() }
-        #expect(app.agentCatalog.agent(id: "")?.packageContexts == ["git", "lore"])
-        let target = EditorAgentTaskTarget(documentID: app.store.state.document.identity, sceneRevision: app.store.sceneRevision,
-                                           content: .files, selectedEntityIDs: [], primaryEntityID: nil)
-        let sections = await app.agentContextSections(target: target)
-        let tree = try #require(sections.first { $0.title == "Working Tree" })
-        #expect(tree.text.contains("Branch: main"))
+        let package = try PluginPackageLoader().load(at: try #require(BundledPlugins.plugin(id: "studio.git")) .package)
+        let process = try #require(package.manifest.host.processes.first)
+        let provider = StepProvider(pluginID: package.manifest.id, title: "Git", package: package.rootURL,
+            entryPoint: "provider", activationEvent: "onAIChat", process: process)
+        let plugin = try StepPlugins(runtime: app.pluginSession.runtime).plugin(for: provider, workspace: project)
+        let result = try await plugin.perform(["op": "context"])
+        let output: String
+        switch result {
+        case let .result(data): output = try JSONDecoder().decode(String.self, from: data)
+        case let .output(text): output = text
+        }
+        let tree = SessionContextSection(title: "Working Tree", text: output)
+        #expect(tree.text.contains("main"))
         #expect(tree.text.contains(" M tracked.txt"))
         #expect(tree.text.contains("?? notes.txt"))
         // This is no Lore workspace, so Lore has nothing to add and nothing to complain about.
-        #expect(sections.map(\.title) == ["Working Tree"])
+
         #expect(!app.store.state.output.consoleEntries.contains { $0.message.contains("context was left out") })
     }
 

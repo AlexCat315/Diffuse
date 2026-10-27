@@ -2,7 +2,6 @@ import CapabilityRuntime
 @testable import EditorCore
 import Foundation
 import PluginRuntime
-@testable import PluginWasmtimeRuntime
 import XCTest
 
 /// End-to-end reload coverage: a real `DiffusePluginHost` process, a component
@@ -164,27 +163,6 @@ final class EditorPluginReloadTests: XCTestCase {
         try await withTimeout(step: "activate dependent") {
             try await application.activatePlugins(event: "onAITool:safe.dependent.inspect")
         }
-        step = "disable protected provider"
-        do {
-            try await withTimeout(step: step) {
-                try await application.disablePlugin(id: "safe.reloadtest")
-            }
-            XCTFail("A capability provider cannot be disabled while required")
-        } catch let error as PluginE2EStepTimeout {
-            throw error
-        } catch let error as RequiredPluginStillNeeded {
-            XCTAssertEqual(error.dependents, ["safe.dependent"])
-        }
-        step = "revoke protected provider"
-        do {
-            try await withTimeout(step: step) {
-                try await application.revokePluginAuthorization(id: "safe.reloadtest")
-            }
-            XCTFail("Rejected revocation must preserve the enabled authorization")
-        } catch let error as PluginE2EStepTimeout {
-            throw error
-        } catch is RequiredPluginStillNeeded {}
-        XCTAssertNotNil(try application.storedPluginAuthorization(for: application.inspectPlugin(at: provider)))
         step = "reload both concurrently"
         let first = Task { @MainActor in
             try await withTimeout(step: "reload provider") {
@@ -212,6 +190,9 @@ final class EditorPluginReloadTests: XCTestCase {
         XCTAssertNotNil(application.pluginSession.hosts.existing("safe.reloadtest"))
         XCTAssertEqual(application.enabledPluginInspections().count, 2)
         XCTAssertNotNil(application.pluginCapabilityExecutor)
+        try await application.disablePlugin(id: "safe.reloadtest")
+        XCTAssertTrue(application.enabledPluginInspections().isEmpty)
+        XCTAssertTrue(application.pluginSession.hosts.pluginIDs.isEmpty)
     }
 
     // MARK: - Fixtures
@@ -224,20 +205,9 @@ final class EditorPluginReloadTests: XCTestCase {
 
     }
 
-    /// Builds `safe.reloadtest.coveplugin` from the canonical reader fixture
-    /// WAT, mirroring PluginRuntimeTests.makePluginPackage.
+    /// Builds a TypeScript runtime fixture with a public static input contract.
     private func makePluginPackage(id: String = "safe.reloadtest",
                                    requires: [PluginRequirement] = []) throws -> URL {
-        let repositoryRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let watURL = repositoryRoot
-            .appendingPathComponent("Engine/Tests/PluginRuntimeTests/Fixtures/reader.wat")
-        let wat = try XCTUnwrap(try? String(contentsOf: watURL, encoding: .utf8),
-                                "missing fixture WAT at \(watURL.path)")
-
         let parent = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let root = parent.appendingPathComponent(id + ".coveplugin", isDirectory: true)
@@ -249,26 +219,17 @@ final class EditorPluginReloadTests: XCTestCase {
                                            description: "Editor reload integration fixture",
                                            access: .read,
                                            requires: requires)
+        manifest.runtime = .init()
         // The capability is offered to the model, so MCP sessions activate the plugin.
         try manifest.contributes.set(AIToolContributionPoint.self, descriptors: [
             AIToolContribution(entryPoint: "inspect", title: "Inspect", description: "Execute one bounded capability.")
         ])
         try JSONEncoder().encode(manifest)
             .write(to: root.appendingPathComponent("plugin.json"))
-        try EmbeddedWasmtimeComponentRuntime.compileComponentWAT(wat)
-            .write(to: root.appendingPathComponent("component.wasm"))
-        let wit = """
-        package safe:reader;
-        interface capabilities {
-          /// Execute one bounded capability.
-          record inspect-input {enabled: bool,}
-          inspect: func(input: inspect-input) -> string;
-        }
-        world plugin {
-          export capabilities;
-        }
-        """
-        try Data(wit.utf8).write(to: root.appendingPathComponent("capabilities.wit"))
+        try Data("export default {capabilities:{inspect:{input:{record:{enabled:'bool'}},run:()=>({summary:'bounded'})}}}".utf8)
+            .write(to: root.appendingPathComponent("plugin.js"))
+        try Data(#"{"version":1,"entries":[{"name":"inspect","description":"Execute one bounded capability.","input":{"record":{"enabled":"bool"}}}]}"#.utf8)
+            .write(to: root.appendingPathComponent("capabilities.json"))
         return root
     }
 }

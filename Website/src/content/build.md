@@ -29,7 +29,7 @@ git submodule update --init --recursive
 
 - 安装 SDK 发布的原生依赖
 - 构建 Studio 的 FFmpeg、OpenEXR / Imath
-- 准备固定版本的 Wasmtime
+- 准备固定版本的 Bun 桌面插件运行时
 - 在 Windows 下自动初始化 MSVC 工具链
 
 ## 日常开发

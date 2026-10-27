@@ -15,6 +15,9 @@ final class PluginContributions: Sendable {
     let documentViews = ContributionCatalog<ValidatedPluginPackage>()
     let contexts = ContributionCatalog<ValidatedPluginPackage>()
     let harnesses = ContributionCatalog<ValidatedPluginPackage>()
+    let services = ContributionCatalog<ValidatedPluginPackage>()
+    let extensionPoints = ContributionCatalog<ValidatedPluginPackage>()
+    let extensions = ContributionCatalog<ValidatedPluginPackage>()
 
     /// Every catalog the workbench reads, in a fixed order.
     var workbench: [ContributionCatalog<ValidatedPluginPackage>] { [commands, panels, menus, toolbar, documentViews] }
@@ -91,6 +94,15 @@ final class PluginContributions: Sendable {
         // Tools reach the model through the capability registry, which reads them
         // from the manifest; nothing else holds them.
         try registrar.register(AIToolContributionPoint.self) { _, _ in Registration {} }
+        try registrar.register(PluginServiceContributionPoint.self) { [services] values, package in
+            try services.install(values, package: package, point: PluginServiceContributionPoint.self, id: { $0.id })
+        }
+        try registrar.register(PluginExtensionPointContributionPoint.self) { [extensionPoints] values, package in
+            try extensionPoints.install(values, package: package, point: PluginExtensionPointContributionPoint.self, id: { $0.id })
+        }
+        try registrar.register(PluginExtensionContributionPoint.self) { [extensions] _, package in
+            try extensions.register([package], pluginID: package.manifest.id)
+        }
         return registrar
     }
 

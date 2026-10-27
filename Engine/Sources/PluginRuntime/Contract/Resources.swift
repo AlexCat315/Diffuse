@@ -21,18 +21,18 @@ public struct PluginResource: Codable, Sendable, Equatable {
 }
 
 public struct PluginRuntimeDeclaration: Codable, Sendable, Equatable {
-    public var component = "component.wasm"
-    public var wit = "capabilities.wit"
+    public var engine = "bun"
+    public var entry = "plugin.js"
     public var compatibility = 1
 
     public init() {}
 
-    private enum CodingKeys: String, CodingKey { case component, wit, compatibility }
+    private enum CodingKeys: String, CodingKey { case engine, entry, compatibility }
 
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        component = try values.decodeIfPresent(String.self, forKey: .component) ?? component
-        wit = try values.decodeIfPresent(String.self, forKey: .wit) ?? wit
+        engine = try values.decode(String.self, forKey: .engine)
+        entry = try values.decode(String.self, forKey: .entry)
         compatibility = try values.decodeIfPresent(Int.self, forKey: .compatibility) ?? compatibility
     }
 }

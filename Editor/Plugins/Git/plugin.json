@@ -7,7 +7,9 @@
   "imports": [
     "cove:process/host"
   ],
-  "composable_host_capabilities": [],
+  "composable_host_capabilities": [
+
+  ],
   "host": {
     "processes": [
       {
@@ -66,8 +68,8 @@
     ]
   },
   "runtime": {
-    "component": "component.wasm",
-    "wit": "capabilities.wit",
+    "engine": "bun",
+    "entry": "plugin.js",
     "compatibility": 1
   }
 }

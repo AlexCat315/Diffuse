@@ -113,6 +113,10 @@ private struct AgentTaskList: View {
                     Text(L("New Task")).font(.label).foregroundColor(.onSurface)
                 }.padding(horizontal: 10).frame(width: .percent(100), height: .points(32))
             }.buttonStyle(.ghost).frame(width: .percent(100)).debugName("editor-agent-new-task")
+            // A workspace with no project is a conversation, not a project: its
+            // tasks sit above the Projects heading instead of inside it, so the
+            // untitled workspace never reads as a placeholder project row.
+            if app.isUntitledWorkspace { AnyView(tasks(store)) }
             if let projects, let list {
                 Row(alignment: .center, spacing: 4) {
                     Text(L("Projects")).font(.caption).foregroundColor(.onSurfaceMuted).flex(1, shrink: 1)
@@ -120,9 +124,6 @@ private struct AgentTaskList: View {
                         MainActor.assumeIsolated { projects.requestOpenFolder() }
                     }.buttonStyle(EditorChromeButtonStyle(height: 22)).debugName("editor-agent-open-folder")
                 }.padding(EdgeInsets(top: 14, leading: 10, bottom: 4, trailing: 4))
-                // An untitled workspace is not a project: its tasks show without
-                // a project heading, and it never appears in the list.
-                if app.isUntitledWorkspace { AnyView(tasks(store)) }
                 for entry in list.wrappedValue where !EditorScratchWorkspace.isScratch(entry.directory) {
                     if entry.directory == app.projectDirectory {
                         AnyView(Text(entry.name, lineLimit: 1).truncated().font(.bodyStrong).foregroundColor(.onSurface)

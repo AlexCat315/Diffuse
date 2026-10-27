@@ -1,7 +1,6 @@
 import Foundation
 import Testing
 import PluginRuntime
-import PluginWasmtimeRuntime
 import CapabilityRuntime
 import LanguageServerRuntime
 internal import CoveProcess
@@ -177,13 +176,9 @@ struct BundledSwiftSupportTests {
                 }
                 return object["id"] as? String == manifestID
             } ?? plugins.appendingPathComponent(name)
-            // Declarative packages own no component, so they ship no contract.
-            let shipsContract = FileManager.default.fileExists(
-                atPath: package.appendingPathComponent("capabilities.wit").path)
-            for file in ["plugin.json"] + (shipsContract ? ["capabilities.wit"] : []) {
-                #expect(try Data(contentsOf: source.appendingPathComponent(file)) == Data(contentsOf: package.appendingPathComponent(file)),
-                        "\(package.lastPathComponent)/\(file) is out of date; run cove plugin build")
-            }
+            let sourceManifest = try JSONDecoder().decode(CovePluginManifest.self, from: Data(contentsOf: source.appendingPathComponent("plugin.json")))
+            let builtManifest = try PluginPackageLoader().load(at: package).manifest
+            #expect(sourceManifest == builtManifest, "\(name) manifest is out of date; run cove studio plugins prepare")
         }
     }
 
@@ -191,9 +186,9 @@ struct BundledSwiftSupportTests {
         let package = try PluginPackageLoader().load(at: try #require(BundledPlugins.languageServer))
         #expect(package.manifest.id == "studio.swift-support")
         #expect(package.manifest.host.processes.first?.command == "sourcekit-lsp")
-        let runtime = try EmbeddedWasmtimeComponentRuntime()
+        let runtime = BunPluginRuntime(processes: PluginProcessService(), http: PluginHTTPService())
         try runtime.validateComponent(package, limits: .secureDefault)
-        let inspection = PluginInspection(package: package, contracts: PluginWITContractDeriver.contracts(for: package))
+        let inspection = PluginInspection(package: package, contracts: PluginContractDeriver.contracts(for: package))
         let binding = try PluginExecutionBinding(pluginPath: package.rootURL.path, inspection: inspection,
             authorization: PluginAuthorizationRecord(inspection: inspection), hostGeneration: 0)
         let registry = try PluginCapabilityRegistryBuilder.build(base: .aiDefault, bindings: [binding])

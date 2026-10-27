@@ -35,7 +35,7 @@ public enum AIContextContributionPoint: ContributionPointSpec {
 
     /// A context entry point is either a plain call, or a step-protocol entry
     /// point whose commands the editor runs under the package's process permission.
-    public static func validateRuntime(_ context: AIContextContribution, contract: WITContract?) throws {
+    public static func validateRuntime(_ context: AIContextContribution, contract: PluginContract?) throws {
         let inputType = contract?.capabilityInputs.first(where: { $0.name == context.entryPoint })?.inputType
         guard inputType == aiContextInputType || inputType == stepInputType else {
             throw PluginManifestValidationError.invalidContribution(id)
@@ -45,5 +45,5 @@ public enum AIContextContributionPoint: ContributionPointSpec {
 
 /// `record { content: string, selection: string }`: what the window centers on and
 /// the selected scene references as a JSON array.
-let aiContextInputType = WITValueType.record([WITRecordField(name: "content", type: .string),
-                                              WITRecordField(name: "selection", type: .string)])
+let aiContextInputType = PluginInputType.record([PluginInputField(name: "content", type: .string),
+                                              PluginInputField(name: "selection", type: .string)])

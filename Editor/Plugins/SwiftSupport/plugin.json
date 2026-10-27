@@ -7,13 +7,17 @@
   "imports": [
     "cove:process/host"
   ],
-  "composable_host_capabilities": [],
+  "composable_host_capabilities": [
+
+  ],
   "host": {
     "processes": [
       {
         "id": "language-server",
         "command": "sourcekit-lsp",
-        "argumentPrefix": [],
+        "argumentPrefix": [
+
+        ],
         "allowsAdditionalArguments": true,
         "environmentKeys": [
           "PATH",
@@ -41,7 +45,9 @@
       {
         "id": "package",
         "command": "swift",
-        "argumentPrefix": [],
+        "argumentPrefix": [
+
+        ],
         "allowsAdditionalArguments": true,
         "environmentKeys": [
           "PATH",
@@ -102,14 +108,16 @@
       {
         "id": "dependencies",
         "title": "Dependencies",
-        "extensions": ["resolved"],
+        "extensions": [
+          "resolved"
+        ],
         "entryPoint": "view"
       }
     ]
   },
   "runtime": {
-    "component": "component.wasm",
-    "wit": "capabilities.wit",
+    "engine": "bun",
+    "entry": "plugin.js",
     "compatibility": 1
   }
 }

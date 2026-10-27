@@ -112,45 +112,18 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
     }
 
     func testFormatEntryPointMustMatchTheDocumentInputContract() throws {
-        let root = try makeFormattingPackage(wit: """
-        package safe:formatter;
-        interface capabilities {
-          record format-input { text: string }
-          format: func(input: format-input) -> string;
-        }
-        world plugin {
-          export capabilities;
-        }
-        """)
+        let root = try makeFormattingPackage(contract: #"{"version":1,"entries":[{"name":"format","input":{"record":{"text":"string"}}}]}"#)
         defer { try? FileManager.default.removeItem(at: root) }
         XCTAssertNoThrow(try PluginPackageLoader().load(at: root))
 
-        let missing = try makeFormattingPackage(wit: """
-        package safe:formatter;
-        interface capabilities {
-          record formatter-input { text: string }
-          formatter: func(input: formatter-input) -> string;
-        }
-        world plugin {
-          export capabilities;
-        }
-        """)
+        let missing = try makeFormattingPackage(contract: #"{"version":1,"entries":[{"name":"formatter","input":{"record":{"text":"string"}}}]}"#)
         defer { try? FileManager.default.removeItem(at: missing) }
         XCTAssertThrowsError(try PluginPackageLoader().load(at: missing)) { error in
             XCTAssertEqual(error as? PluginManifestValidationError,
                            .invalidContribution("cove.language/v1"))
         }
 
-        let wrongInput = try makeFormattingPackage(wit: """
-        package safe:formatter;
-        interface capabilities {
-          record format-input { document: string }
-          format: func(input: format-input) -> string;
-        }
-        world plugin {
-          export capabilities;
-        }
-        """)
+        let wrongInput = try makeFormattingPackage(contract: #"{"version":1,"entries":[{"name":"format","input":{"record":{"document":"string"}}}]}"#)
         defer { try? FileManager.default.removeItem(at: wrongInput) }
         XCTAssertThrowsError(try PluginPackageLoader().load(at: wrongInput)) { error in
             XCTAssertEqual(error as? PluginManifestValidationError,
@@ -183,7 +156,7 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
         }
     }
 
-    private func makeFormattingPackage(wit: String) throws -> URL {
+    private func makeFormattingPackage(contract: String) throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
             .appendingPathExtension("coveplugin")
@@ -194,10 +167,11 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
             "extensions": ["tex"],
             "format": ["entryPoint": "format"],
         ]
-        try validManifest(language: language).write(to: root.appendingPathComponent("plugin.json"))
-        try Data([0x00, 0x61, 0x73, 0x6D, 0x0D, 0x00, 0x01, 0x00])
-            .write(to: root.appendingPathComponent("component.wasm"))
-        try Data(wit.utf8).write(to: root.appendingPathComponent("capabilities.wit"))
+        var manifest = try JSONSerialization.jsonObject(with: validManifest(language: language)) as! [String: Any]
+        manifest["runtime"] = ["engine": "bun", "entry": "plugin.js", "compatibility": 1]
+        try JSONSerialization.data(withJSONObject: manifest).write(to: root.appendingPathComponent("plugin.json"))
+        try Data("export default {capabilities:{}}".utf8).write(to: root.appendingPathComponent("plugin.js"))
+        try Data(contract.utf8).write(to: root.appendingPathComponent("capabilities.json"))
         return root
     }
 
@@ -221,8 +195,8 @@ final class EditorPluginManagementSecurityTests: XCTestCase {
         )
         return EditorPluginInspectionSummary(
             inspection: PluginInspection(manifest: manifest,
-                                         componentHash: "component",
-                                         witHash: "wit",
+                                         codeHash: "component",
+                                         contractHash: "wit",
                                          contracts: [contract]),
             hasReusableAuthorization: false
         )

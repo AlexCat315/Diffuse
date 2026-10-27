@@ -16,8 +16,8 @@ struct PluginRequirementTests {
 
     private func inspection(_ requires: [PluginRequirement]) -> PluginInspection {
         PluginInspection(manifest: manifest(requires),
-                         componentHash: "component",
-                         witHash: "wit",
+                         codeHash: "component",
+                         contractHash: "wit",
                          contracts: [])
     }
 
@@ -193,8 +193,8 @@ struct PluginRequirementTests {
             let contract = CapabilityContract(id: id + ".inspect", version: version,
                 title: "Inspect", description: "Fixture", domain: "plugin", access: .read,
                 releasePhase: .stable, inputSchema: .object(properties: [:]), source: .plugin(id))
-            let inspection = PluginInspection(manifest: manifest, componentHash: "code",
-                                             witHash: "wit", contracts: [contract])
+            let inspection = PluginInspection(manifest: manifest, codeHash: "code",
+                                             contractHash: "wit", contracts: [contract])
             return try PluginExecutionBinding(pluginPath: "/" + id, inspection: inspection,
                 authorization: PluginAuthorizationRecord(inspection: inspection), hostGeneration: 1)
         }

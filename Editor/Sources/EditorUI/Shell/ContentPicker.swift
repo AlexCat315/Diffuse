@@ -19,20 +19,23 @@ struct EditorContentPicker: View {
     let content: EditorContent
     let onCommand: (EditorCommand) -> Void
     @State private var isPresented = false
+    private let surfaceObject: EditorAssistantSurface
     private var surface: Observed<EditorAssistantSurface, EditorAssistantSurface.State>
 
     init(app: EditorApplication, content: EditorContent, onCommand: @escaping (EditorCommand) -> Void) {
         self.app = app
         self.content = content
         self.onCommand = onCommand
-        surface = Observed(\.state, on: EditorAssistantSurface.of(app))
+        let surface = EditorAssistantSurface.of(app)
+        surfaceObject = surface
+        self.surface = Observed(\.state, on: surface)
     }
 
     @ViewBuilder
     var body: some View {
         // The agent view shows its own canvas; the picker belongs to the workbench.
         Box(direction: .row, alignItems: .center, spacing: 0) {
-            if surface.wrappedValue.view == .make {
+            if surfaceObject.view == .make {
                 Popover(isPresented: $isPresented, width: 180, surface: .content, overflow: .flip) {
                     Row(alignment: .center, spacing: 6) {
                         Icon(content.icon, size: 12, color: .onSurfaceVariant)

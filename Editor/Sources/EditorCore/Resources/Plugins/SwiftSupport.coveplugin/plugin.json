@@ -102,14 +102,16 @@
       {
         "id": "dependencies",
         "title": "Dependencies",
-        "extensions": ["resolved"],
+        "extensions": [
+          "resolved"
+        ],
         "entryPoint": "view"
       }
     ]
   },
   "runtime": {
-    "component": "component.wasm",
-    "wit": "capabilities.wit",
+    "engine": "bun",
+    "entry": "plugin.js",
     "compatibility": 1
   }
 }

@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "Preserve", "moduleResolution": "Bundler",
+    "strict": true, "noEmit": true, "allowImportingTsExtensions": true,
+    "types": ["bun"], "skipLibCheck": true
+  },
+  "include": ["src", "tests", "../Editor/Plugins/*/src/**/*.ts"]
+}

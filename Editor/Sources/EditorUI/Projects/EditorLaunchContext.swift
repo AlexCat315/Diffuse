@@ -44,8 +44,18 @@ final class EditorLaunchContext: @unchecked Sendable {
     private(set) var shellState: EditorRootViewFactory.EditorShellState?
 
     var bundle: EditorLaunchBundle? { activeDirectory.flatMap { loaded[$0] } }
-    var isProjectLoaded: Bool { bundle != nil }
-    var loadedBundles: [EditorLaunchBundle] { projects.compactMap { loaded[$0.directory] } }
+    /// Whether a real project is in front. The untitled workspace is a loaded
+    /// editor but not a project, so it does not count here.
+    var isProjectLoaded: Bool {
+        activeDirectory.map { !EditorScratchWorkspace.isScratch($0) } ?? false
+    }
+    /// Every loaded editor, including the untitled one, which is not a project
+    /// and therefore never appears in `projects`.
+    var loadedBundles: [EditorLaunchBundle] {
+        let listed = projects.compactMap { loaded[$0.directory] }
+        let listedDirectories = Set(projects.map(\.directory))
+        return listed + Array(loaded.filter { !listedDirectories.contains($0.key) }.values)
+    }
     private let publisher = _ObservablePublisher<EditorLaunchContext>()
 
     init(renderDevice: Device,
@@ -68,7 +78,10 @@ final class EditorLaunchContext: @unchecked Sendable {
     /// `front` folder (`--project-dir`) joins the list and takes the front.
     @MainActor func restoreProjects(front: String? = nil) throws {
         let saved = EditorProjectList.load()
-        projects = saved.paths.compactMap { path in
+        // An earlier build saved the fallback workspace as a project named
+        // "Untitled". It is not one, so it is dropped on the way in as well as
+        // on the way out — otherwise it would come back on the next launch.
+        projects = saved.paths.filter { !EditorScratchWorkspace.isScratch($0) }.compactMap { path in
             (try? EditorProjectLifecycle.inspect(URL(fileURLWithPath: path, isDirectory: true), validateScene: false))
                 .map { EditorProjectEntry(directory: $0.directory.path, name: $0.name) }
         }
@@ -141,18 +154,17 @@ final class EditorLaunchContext: @unchecked Sendable {
     /// project first. Returns false when even that could not be opened.
     @MainActor @discardableResult
     func openScratchWorkspace() -> Bool {
-        let location: EditorProjectLocation
-        do { location = try EditorScratchWorkspace.prepare() }
+        let directory: URL
+        do { directory = try EditorScratchWorkspace.prepare() }
         catch {
             openFailure = error.localizedDescription
             publisher.send()
             display?.requestDisplay()
             return false
         }
-        let path = location.directory.path
-        if !projects.contains(where: { $0.directory == path }) {
-            projects.append(EditorProjectEntry(directory: path, name: L("Untitled")))
-        }
+        let path = directory.path
+        // The untitled workspace is not a project: it never joins the window's
+        // project list, it only backs the editor while no project is open.
         do { try activate(path) }
         catch {
             projects.removeAll { $0.directory == path }
@@ -231,6 +243,8 @@ final class EditorLaunchContext: @unchecked Sendable {
     }
 
     private func persist() {
+        let catalog = Dictionary(uniqueKeysWithValues: projects.map { ($0.directory, $0.name) })
+        for bundle in loadedBundles { bundle.app.setPluginWorkspaceCatalog(catalog) }
         // The scratch workspace is created on demand in Application Support, so
         // it stays out of the saved list: the next launch restores the user's
         // own projects instead of reopening it.
@@ -339,6 +353,15 @@ final class EditorLaunchContext: @unchecked Sendable {
             initialAISettings: shellState?.aiSettings ?? .default,
             initialCapabilitySettings: shellState?.capabilitySettings ?? .default
         )
+        app.setPluginPeers { [weak self] in self?.loadedBundles.map(\.app) ?? [] }
+        app.setPluginWorkspaceResolver { [weak self] directory in
+            guard let self, self.projects.contains(where: { $0.directory == directory }) else { throw PluginCommandError.unavailable }
+            if let loaded = self.loaded[directory] { return loaded.app }
+            let next = try self.makeBundle(directory: directory)
+            self.loaded[directory] = next
+            self.persist()
+            return next.app
+        }
         app.setCloseProjectHandler { [weak self, weak app] in
             MainActor.assumeIsolated {
                 guard let self, let app else { return }

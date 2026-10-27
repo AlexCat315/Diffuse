@@ -77,6 +77,11 @@ public struct LanguageCatalog: Sendable {
         }
     }
 
+    /// Whether any enabled package contributes a language service. The UI asks
+    /// this instead of naming a plugin, so a different package can serve the
+    /// language without any editor change.
+    public var hasLanguageService: Bool { languages.contains { $0.server != nil } }
+
     public func descriptor(forExtension ext: String) -> LanguageDescriptor? {
         let ext = ext.lowercased()
         guard !ext.isEmpty,

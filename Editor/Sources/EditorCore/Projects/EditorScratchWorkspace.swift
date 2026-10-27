@@ -28,11 +28,29 @@ public enum EditorScratchWorkspace {
             == canonicalPath()
     }
 
-    /// Creates the folder when it is missing and makes sure it is a valid
-    /// project, so `EditorApplication` can open it like any other.
-    public static func prepare() throws -> EditorProjectLocation {
+    /// Creates the folder when it is missing.
+    ///
+    /// Deliberately **not** a project: no `.cove/project.json`, no descriptor, no
+    /// name. `EditorApplication` only needs a directory to root its caches and
+    /// the agent's file tools in, and `EditorProjectLifecycle.inspect` is never
+    /// run against this path, so nothing can mistake it for something the user
+    /// opened.
+    public static func prepare() throws -> URL {
         let directory = directory()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return try EditorProjectLifecycle.adopt(directory)
+        removeStaleDescriptor(in: directory)
+        return directory
+    }
+
+    /// Before this workspace existed, opening it went through the project
+    /// adoption path, which wrote a descriptor named "Untitled". That is
+    /// exactly the placeholder this workspace replaces, so every open removes
+    /// it — otherwise an existing install keeps listing a project the user
+    /// never made. Only this one file inside the editor's own folder is
+    /// touched; nothing of the user's is involved.
+    private static func removeStaleDescriptor(in directory: URL) {
+        let descriptor = directory.appendingPathComponent(".cove/project.json")
+        guard FileManager.default.fileExists(atPath: descriptor.path) else { return }
+        try? FileManager.default.removeItem(at: descriptor)
     }
 }

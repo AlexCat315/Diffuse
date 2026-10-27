@@ -29,10 +29,14 @@ final class PluginSession: @unchecked Sendable {
     var agents = AgentCatalog.empty
     var agentRevision: UInt64?
     let workbench = WorkbenchSession()
+    var workspaceCatalog: [String: String] = [:]
     var aiProvider: AIProviderDescriptor?
     var packageMonitor: PluginPackageMonitor?
     var bundledStartup: Task<Void, Never>?
     @MainActor var projection: Task<Void, Error>?
+    let serviceJobs = PluginServiceJobs()
+    var workspaceResolver: (@MainActor @Sendable (String) throws -> EditorApplication)?
+    var peers: (@MainActor @Sendable () -> [EditorApplication])?
 
     init(projectDirectory: String,
          hostExecutable: @escaping @Sendable () throws -> URL,
@@ -48,6 +52,8 @@ final class PluginSession: @unchecked Sendable {
     }
 
     func stop() {
+        if Thread.isMainThread { MainActor.assumeIsolated { serviceJobs.cancelAll() } }
+        else { workbench.uiQueue.schedule { [serviceJobs] in serviceJobs.cancelAll() } }
         bundledStartup?.cancel()
         bundledStartup = nil
         packageMonitor?.stop()

@@ -59,37 +59,6 @@ let nativeLinkOrderSettings: [LinkerSetting] =
         ]
         : []
 
-let wasmtimeProducts: [Product] = [
-    .library(name: "PluginWasmtimeRuntime", targets: ["PluginWasmtimeRuntime"]),
-    .executable(name: "PluginRuntimeProbe", targets: ["PluginRuntimeProbe"]),
-]
-let wasmtimeTargets: [Target] = [
-    .binaryTarget(name: "Wasmtime", path: "\(nativeArtifactRoot)/Wasmtime.artifactbundle"),
-    .target(
-        name: "CWasmtimeBridge",
-        dependencies: ["Wasmtime"],
-        path: "Sources/Bridge/CWasmtimeBridge",
-        publicHeadersPath: "include",
-        cSettings: [.define("WASM_API_EXTERN", to: ""), .define("WASI_API_EXTERN", to: "")],
-        linkerSettings: [
-            .linkedFramework("CoreFoundation", .when(platforms: [.macOS, .iOS])),
-            .linkedLibrary("pthread", .when(platforms: [.linux])),
-            .linkedLibrary("dl", .when(platforms: [.linux, .android])),
-            .linkedLibrary("m", .when(platforms: [.linux, .android])),
-            .linkedLibrary("ws2_32", .when(platforms: [.windows])),
-            .linkedLibrary("advapi32", .when(platforms: [.windows])),
-            .linkedLibrary("userenv", .when(platforms: [.windows])),
-            .linkedLibrary("ntdll", .when(platforms: [.windows])),
-            .linkedLibrary("shell32", .when(platforms: [.windows])),
-            .linkedLibrary("ole32", .when(platforms: [.windows])),
-            .linkedLibrary("bcrypt", .when(platforms: [.windows])),
-        ]
-    ),
-    .target(name: "PluginWasmtimeRuntime", dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "CWasmtimeBridge", "PluginRuntime"]),
-    .executableTarget(name: "PluginRuntimeProbe", dependencies: ["PluginWasmtimeRuntime", "PluginRuntime"],
-                      path: "Validation/Plugins/Swift"),
-]
-
 let package = Package(
     name: "DiffuseRuntime",
     platforms: [.macOS(.v26), .iOS(.v26)],
@@ -237,7 +206,8 @@ let package = Package(
         ),
         .target(
             name: "PluginRuntime",
-            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "CapabilityRuntime", .product(name: "CoveProcess", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI")]
+            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "CapabilityRuntime", .product(name: "CoveProcess", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI")],
+            resources: [.copy("Resources")]
         ),
         .target(name: "LanguageServerRuntime", dependencies: [.product(name: "CoveProcess", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI")]),
         .target(
@@ -548,9 +518,3 @@ let package = Package(
     cxxLanguageStandard: .cxx17
 )
 
-package.products.append(contentsOf: wasmtimeProducts)
-package.targets.append(contentsOf: wasmtimeTargets)
-for targetName in ["DiffusePluginHost", "PluginRuntimeTests"] {
-    package.targets.first(where: { $0.name == targetName })?
-        .dependencies.append("PluginWasmtimeRuntime")
-}

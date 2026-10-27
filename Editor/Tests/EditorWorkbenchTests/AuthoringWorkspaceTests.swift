@@ -94,7 +94,7 @@ struct AuthoringWorkspaceTests {
         let selected = app.store.selectedEntityIDs
         let identity = app.store.state.document.identity
         let revision = app.scene.revision
-        #expect(EditorAssistantSurface.of(app).state.view == .agent)
+        #expect(EditorAssistantSurface.of(app).view == .agent)
         EditorAssistantSurface.of(app).show(.make)
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
         graph.install(root: EditorRootView(app: app, controller: controller, registry: registry))

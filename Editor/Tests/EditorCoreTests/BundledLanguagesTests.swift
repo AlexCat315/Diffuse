@@ -1,6 +1,5 @@
 import Foundation
 import PluginRuntime
-import PluginWasmtimeRuntime
 import Testing
 @testable import EditorCore
 
@@ -34,7 +33,7 @@ struct BundledLanguagesTests {
         let package = try PluginPackageLoader().load(at: url)
         let format = try #require(((try? package.manifest.contributes.decode(LanguageContributionPoint.self)) ?? []).first { $0.id == "latex" }?.format)
         #expect(format.entryPoint == "format")
-        let runtime = try EmbeddedWasmtimeComponentRuntime()
+        let runtime = BunPluginRuntime(processes: PluginProcessService(), http: PluginHTTPService())
         let output = try runtime.prepare(
             package,
             capabilityID: package.manifest.id + "." + format.entryPoint,

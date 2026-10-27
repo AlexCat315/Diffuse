@@ -1,0 +1,75 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "diffuse-plugins",
+    },
+    "Editor/Plugins/AI": {
+      "name": "@diffuse/plugin-ai",
+      "dependencies": {
+        "@diffuse/plugin-sdk": "workspace:*",
+      },
+    },
+    "Editor/Plugins/Git": {
+      "name": "@diffuse/plugin-git",
+      "dependencies": {
+        "@diffuse/plugin-sdk": "workspace:*",
+      },
+    },
+    "Editor/Plugins/Languages": {
+      "name": "@diffuse/plugin-languages",
+      "dependencies": {
+        "@diffuse/plugin-sdk": "workspace:*",
+      },
+    },
+    "Editor/Plugins/Lore": {
+      "name": "@diffuse/plugin-lore",
+      "dependencies": {
+        "@diffuse/plugin-sdk": "workspace:*",
+      },
+    },
+    "Editor/Plugins/SwiftSupport": {
+      "name": "@diffuse/plugin-swift",
+      "dependencies": {
+        "@diffuse/plugin-sdk": "workspace:*",
+      },
+    },
+    "PluginSDK": {
+      "name": "@diffuse/plugin-sdk",
+      "version": "0.1.0",
+      "bin": {
+        "diffuse-plugin": "./src/cli.ts",
+      },
+      "dependencies": {
+        "typescript": "5.9.3",
+      },
+      "devDependencies": {
+        "@types/bun": "1.3.11",
+      },
+    },
+  },
+  "packages": {
+    "@diffuse/plugin-ai": ["@diffuse/plugin-ai@workspace:Editor/Plugins/AI"],
+
+    "@diffuse/plugin-git": ["@diffuse/plugin-git@workspace:Editor/Plugins/Git"],
+
+    "@diffuse/plugin-languages": ["@diffuse/plugin-languages@workspace:Editor/Plugins/Languages"],
+
+    "@diffuse/plugin-lore": ["@diffuse/plugin-lore@workspace:Editor/Plugins/Lore"],
+
+    "@diffuse/plugin-sdk": ["@diffuse/plugin-sdk@workspace:PluginSDK"],
+
+    "@diffuse/plugin-swift": ["@diffuse/plugin-swift@workspace:Editor/Plugins/SwiftSupport"],
+
+    "@types/bun": ["@types/bun@1.3.11", "", { "dependencies": { "bun-types": "1.3.11" } }, "sha512-5vPne5QvtpjGpsGYXiFyycfpDF2ECyPcTSsFBMa0fraoxiQyMJ3SmuQIGhzPg2WJuWxVBoxWJ2kClYTcw/4fAg=="],
+
+    "@types/node": ["@types/node@26.6.5", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
+
+    "bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
+
+    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "undici-types": ["undici-types@8.9.0", "", {}, "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg=="],
+  }
+}

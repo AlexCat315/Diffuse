@@ -21,6 +21,8 @@ public struct PanelContribution: Codable, Sendable, Equatable {
     public var icon: String?
     public var view: String?
     public var entryPoint: String?
+    /// Registers a top-level mode rendered by this panel's own entry point.
+    public var surface: String?
 
     public init(id: String, title: String, slot: String? = nil, icon: String? = nil, content: Content) {
         self.id = id
@@ -47,14 +49,15 @@ public enum PanelContributionPoint: ContributionPointSpec {
         guard ContributionValidation.identifier(panel.id), ContributionValidation.title(panel.title),
               panel.slot.map({ ["leading", "center", "trailing", "bottom"].contains($0) }) ?? true,
               panel.icon.map({ $0.range(of: #"^[a-z0-9_-]{1,64}$"#, options: .regularExpression) != nil }) ?? true,
-              (panel.view == nil) != (panel.entryPoint == nil),
-              panel.view.map({ $0.range(of: #"^[a-z][a-z0-9.-]{0,63}$"#, options: .regularExpression) != nil }) ?? true,
-              panel.entryPoint.map(ContributionValidation.identifier) ?? true else {
+              panel.view == nil, panel.entryPoint.map(ContributionValidation.identifier) == true else {
+            throw PluginManifestValidationError.invalidContribution(id)
+        }
+        guard panel.surface.map({ ContributionValidation.identifier($0) && panel.entryPoint != nil }) ?? true else {
             throw PluginManifestValidationError.invalidContribution(id)
         }
     }
 
-    public static func validateRuntime(_ panel: PanelContribution, contract: WITContract?) throws {
+    public static func validateRuntime(_ panel: PanelContribution, contract: PluginContract?) throws {
         guard case let .entryPoint(entryPoint) = panel.content else { return }
         guard contract?.capabilityInputs.first(where: { $0.name == entryPoint })?.inputType == viewInputType else {
             throw PluginManifestValidationError.invalidContribution(id)

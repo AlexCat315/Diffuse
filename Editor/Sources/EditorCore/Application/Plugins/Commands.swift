@@ -14,14 +14,22 @@ public enum PluginCommandError: Error, Sendable, Equatable, LocalizedError {
 }
 
 extension EditorApplication {
+    /// Captured inside the window's presentation boundary, then safely used by plugin pipes and timers.
+    public func setPluginWorkScheduler(_ enqueue: ((@escaping () -> Void) -> Void)?) {
+        pluginSession.workbench.uiQueue.install(enqueue)
+    }
     /// Commands, panels and views of the enabled packages.
     public var workbenchCatalog: WorkbenchCatalog { pluginSession.workbench.catalog }
 
     /// The observable source of ``workbenchCatalog``.
     public var workbench: WorkbenchSession { pluginSession.workbench }
 
-    /// The panel that holds the agent conversation, while an agent is enabled.
-    public var agentPanelID: String? { isAgentEnabled ? workbenchCatalog.panel(view: .agent)?.id : nil }
+    /// The panel that holds the agent conversation, while a package declares
+    /// that view *and* contributes an agent to hold it. Either half may come
+    /// from any package; neither is a flag for one particular plugin.
+    public var agentPanelID: String? {
+        isAgentEnabled ? workbenchCatalog.panel(view: .agent)?.id : nil
+    }
 
     /// Called on the main actor whenever a package adds or removes a command or panel.
     public func setWorkbenchChangeHandler(_ handler: @escaping @MainActor () -> Void) {
@@ -52,8 +60,21 @@ extension EditorApplication {
     @MainActor
     public func viewSession(for panel: ContributedPanel) -> PluginViewSession {
         viewSession(.panel(panel), entryPoint: panel.entryPoint, viewID: panel.id) { [weak self] in
-            ["content": .string(self?.store.state.content.rawValue ?? "")]
+            guard let self else { throw PluginCommandError.unavailable }
+            let storage = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Diffuse/Plugins/" + panel.pluginID).path
+            return ["content": .string(self.store.state.content.rawValue),
+                    "workspace": .string(self.isUntitledWorkspace ? "" : self.projectDirectory),
+                    "storage": .string(storage),
+                    "projects": .array(self.pluginSession.workspaceCatalog.keys.sorted().map { path in
+                        .object(["directory": .string(path), "name": .string(self.pluginSession.workspaceCatalog[path]!)])
+                    })]
         }
+    }
+
+    /// Read-only workspace context shared by every plugin view in this window.
+    public func setPluginWorkspaceCatalog(_ projects: [String: String]) {
+        pluginSession.workspaceCatalog = projects
     }
 
     /// The session of a document shown in a package's view. Each call passes

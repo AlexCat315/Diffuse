@@ -3,8 +3,22 @@ import Foundation
 /// The version control systems the editor can drive, each through a bundled
 /// plugin. Git suits code and text; Lore (Epic Games) adds a server-backed
 /// store and file locks for large binary assets.
-public enum VersionControlSystem: String, Codable, Sendable, CaseIterable, Hashable {
-    case git, lore
+public struct VersionControlSystem: RawRepresentable, Codable, Sendable, CaseIterable, Hashable {
+    public let rawValue: String
+    public init?(rawValue: String) {
+        guard rawValue.range(of: #"^[a-z][a-z0-9-]{0,31}$"#, options: .regularExpression) != nil else { return nil }
+        self.rawValue = rawValue
+    }
+    public static let git = VersionControlSystem(rawValue: "git")!
+    public static let lore = VersionControlSystem(rawValue: "lore")!
+    public static var allCases: [VersionControlSystem] { VersionControlProvider.bundled.map(\.system) }
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        guard let value = Self(rawValue: raw) else { throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid VCS identifier") }
+        self = value
+    }
+    public func encode(to encoder: Encoder) throws { var container = encoder.singleValueContainer(); try container.encode(rawValue) }
 
     /// The display name its plugin contributes.
     public var title: String { VersionControlProvider.provider(for: self)?.contribution.title ?? rawValue }

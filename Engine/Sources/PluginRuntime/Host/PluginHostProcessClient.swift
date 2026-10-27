@@ -3,7 +3,7 @@ public import Foundation
 private import CoveProcess
 private import CoveLogging
 
-public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConvertible {
+public enum PluginHostClientError: Error, LocalizedError, Sendable, Equatable, CustomStringConvertible {
     case launchFailed(String)
     case communicationFailed
     case timedOut
@@ -21,16 +21,20 @@ public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConve
         case let .requestRejected(reason): return "DiffusePluginHost rejected the request: \(reason)"
         }
     }
+    public var errorDescription: String? { description }
 }
 
 /// Owns the host lifetime. Framing consumes the shared process stream with one request deadline.
 public final class PluginHostProcessClient: @unchecked Sendable {
     public let executableURL: URL
     public let launchArguments: [String]
-    public var generation: UInt64 { lock.withLock { _generation } }
+    // UI validation must never wait for the request lock: an in-flight request can call back into that UI.
+    public var generation: UInt64 { generationLock.withLock { _generation } }
     public var onInvalidation: (@Sendable (UInt64) -> Void)?
+    public var onHostCall: (@Sendable (PluginHostServiceCall) throws -> Data)?
 
     private let lock = NSLock()
+    private let generationLock = NSLock()
     private var session: ProcessSession?
     private var pending = Data()
     private var diagnostics = PluginHostDiagnostics()
@@ -57,6 +61,7 @@ public final class PluginHostProcessClient: @unchecked Sendable {
                     guard let session else { throw PluginHostClientError.communicationFailed }
                     let deadline = Date().addingTimeInterval(Double(timeoutMilliseconds) / 1000)
                     try session.write(PluginHostFrameCodec.encode(request))
+                    while true {
                     let header = try readExactly(4, until: deadline)
                     let length = header.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
                     guard length <= PluginHostFrameCodec.maximumFrameBytes else {
@@ -66,13 +71,24 @@ public final class PluginHostProcessClient: @unchecked Sendable {
                     frame.append(try readExactly(Int(length), until: deadline))
                     let response = try PluginHostFrameCodec.decode(PluginHostResponse.self, from: frame)
                     guard response.id == request.id else { throw PluginHostClientError.mismatchedResponse }
+                    if let hostCall = response.hostCall {
+                        var reply = PluginHostRequest(id: request.id, method: .hostResult)
+                        do {
+                            guard let handler = onHostCall else { throw BunRuntimeError.rejected("Host service is unavailable") }
+                            reply.input = try handler(hostCall)
+                        } catch { reply.hostError = error.localizedDescription }
+                        try session.write(PluginHostFrameCodec.encode(reply))
+                        continue
+                    }
                     return response
+                    }
                 } catch {
+                    LogSystem.logger("com.cove.plugin.transport").error("Plugin transport failed", metadata: ["error": "\(String(describing: error))"])
                     stopLocked()
-                    _generation &+= 1
+                    generationLock.withLock { _generation &+= 1 }
                     if !didRestart { didRestart = true; try? launch() }
-                    if let onInvalidation { invalidation = (onInvalidation, _generation) }
-                    throw PluginHostClientError.hostRestarted(generation: _generation)
+                    if let onInvalidation { invalidation = (onInvalidation, generation) }
+                    throw PluginHostClientError.hostRestarted(generation: generation)
                 }
             }
         } catch {
@@ -83,8 +99,8 @@ public final class PluginHostProcessClient: @unchecked Sendable {
 
     public func stop() {
         lock.withLock {
-            if session != nil { _generation &+= 1 }
-            stopLocked()
+            if session != nil { generationLock.withLock { _generation &+= 1 } }
+            stopLocked(graceful: true)
         }
     }
 
@@ -102,7 +118,14 @@ public final class PluginHostProcessClient: @unchecked Sendable {
         catch { throw PluginHostClientError.launchFailed(String(describing: error)) }
     }
 
-    private func stopLocked() {
+    private func stopLocked(graceful: Bool = false) {
+        if graceful, let session {
+            session.closeInput()
+            let deadline = Date().addingTimeInterval(1.5)
+            while session.isRunning, Date() < deadline {
+                guard (try? session.nextEvent(until: deadline)) != nil else { break }
+            }
+        }
         session?.cancel()
         session = nil
         pending.removeAll(keepingCapacity: true)

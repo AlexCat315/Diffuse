@@ -31,7 +31,7 @@ The SDK has no dependency on Studio tooling.
 | `shader compile\|rebuild\|bootstrap-slang` | CI / build | Compile Slang artifacts and stage `slangc` |
 | `vulkan bootstrap` | CI / build | Build pinned Vulkan headers/loader |
 | `media [--platform N] [--check]` | CI | Build pinned LGPL FFmpeg |
-| `plugins stage\|prepare\|verify` | CI | Stage Wasmtime and run the portable probe |
+| `plugins stage\|prepare\|verify` | CI | Stage Bun, build TypeScript packages and verify SDK contracts |
 | `native-bootstrap [--force]` | CI / build | Build Engine + CoveUI native dependencies |
 | `ios-native [--sdk S] [--arch A]` | CI / build | Stage isolated iOS native dependencies |
 | `ios-simulator udid\|validate` | CI | Pick a simulator and verify a built `.app` renders |
@@ -39,7 +39,7 @@ The SDK has no dependency on Studio tooling.
 | `devtools <operation>` | Manual / Dev | Drive or inspect a running app's DevTools endpoint |
 | `android <operation>` | Manual | Android device validation harnesses |
 | `export-game PROJECT --id ID` | Build | Export a Studio project through the SDK Android backend |
-| `plugin-build DIRECTORY` | Build | Compile a Studio WASI plugin |
+| `plugin-build DIRECTORY` | Build | Build a TypeScript plugin |
 | `browser <operation>` | CI / Manual / Dev | Headless Chromium checks over CDP |
 | `gpu-regression run\|verify DIR` | CI | Run and verify the GPU regression inventory |
 
@@ -56,7 +56,7 @@ Gate legend:
 `crystal-rush` and `agent-diagnostics` are manual checks. `devtools session`
 is a manual check; `query-ui`, `input-ui`, `capture-ui` and `record-timings`
 are development clients, not validation gates. `android` operations require a
-device; `browser verify`, `verify-dev` and `web-plugins` are CI checks, while
+device; `browser verify`, `verify-dev` are CI checks, while
 `native-demo` is manual and `dev`, `serve` and `build-fonts` are
 development/build utilities.
 

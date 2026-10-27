@@ -5,7 +5,7 @@ internal import ToolSupport
 
 /// Builds the Engine and CoveUI native C/C++ dependencies.
 ///
-/// Replaces the repository-root `bootstrap.py`. Media (FFmpeg) and Wasmtime are
+/// Replaces the repository-root `bootstrap.py`. Media (FFmpeg) and Bun are
 /// independent dependency graphs, so this tool only rebuilds them when their
 /// readiness gates report stale output; the graphics libraries are always
 /// configured incrementally unless `--force` invalidates the build stamps.
@@ -13,7 +13,7 @@ package enum NativeBootstrap {
   static let usage = """
     cove-dev native-bootstrap [--force]
 
-      --force  Discard Engine/build/native and restage Media and Wasmtime
+      --force  Discard Engine/build/native and restage Media and Bun
                even when they already verify.
     """
 

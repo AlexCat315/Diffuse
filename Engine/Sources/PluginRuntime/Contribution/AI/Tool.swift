@@ -29,7 +29,7 @@ public enum AIToolContributionPoint: ContributionPointSpec {
         }
     }
 
-    public static func validateRuntime(_ tool: AIToolContribution, contract: WITContract?) throws {
+    public static func validateRuntime(_ tool: AIToolContribution, contract: PluginContract?) throws {
         guard contract?.capabilityInputs.contains(where: { $0.name == tool.entryPoint }) == true else {
             throw PluginManifestValidationError.invalidContribution(id)
         }

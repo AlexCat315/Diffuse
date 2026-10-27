@@ -3,6 +3,14 @@ setlocal
 if not defined COVE_SWIFT_EXECUTABLE set "COVE_SWIFT_EXECUTABLE=swift"
 call :select_sdk
 if errorlevel 1 exit /b %errorlevel%
+if /i "%~1"=="plugin" (
+    if /i "%~2"=="build" (
+        set "DIFFUSE_ARGS=plugin-build"
+        shift
+        shift
+        goto collect
+    )
+)
 if /i not "%~1"=="studio" goto forward
 set "DIFFUSE_ARGS="
 shift

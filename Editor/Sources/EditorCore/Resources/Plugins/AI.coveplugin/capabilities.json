@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "name": "complete",
+      "input": {
+        "record": {
+          "request": "string"
+        }
+      },
+      "title": "complete",
+      "description": ""
+    },
+    {
+      "name": "view",
+      "input": {
+        "record": {
+          "view": "string",
+          "state": "string",
+          "event": "string",
+          "context": "string"
+        }
+      },
+      "title": "view",
+      "description": ""
+    }
+  ]
+}

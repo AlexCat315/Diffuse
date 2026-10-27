@@ -4,8 +4,12 @@
   "name": "Cove Default",
   "description": "Default editor theme",
   "access": "read",
-  "imports": [],
-  "composable_host_capabilities": [],
+  "imports": [
+
+  ],
+  "composable_host_capabilities": [
+
+  ],
   "resources": [
     {
       "id": "default-theme",

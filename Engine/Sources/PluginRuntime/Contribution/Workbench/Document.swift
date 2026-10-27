@@ -36,7 +36,7 @@ public enum DocumentViewContributionPoint: ContributionPointSpec {
         }
     }
 
-    public static func validateRuntime(_ view: DocumentViewContribution, contract: WITContract?) throws {
+    public static func validateRuntime(_ view: DocumentViewContribution, contract: PluginContract?) throws {
         guard contract?.capabilityInputs.first(where: { $0.name == view.entryPoint })?.inputType == viewInputType else {
             throw PluginManifestValidationError.invalidContribution(id)
         }

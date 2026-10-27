@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "name": "format",
+      "input": {
+        "record": {
+          "text": "string"
+        }
+      },
+      "title": "format",
+      "description": ""
+    }
+  ]
+}

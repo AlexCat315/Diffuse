@@ -105,7 +105,7 @@ git submodule update --init --recursive
 ./cove build Editor
 ```
 
-`./cove` uses the shared Cove SDK declared by `Editor/cove.json`, or `COVE_SDK_ROOT` for a local development checkout. `cove studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg and OpenEXR/Imath dependencies, and stages the pinned Wasmtime runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
+`./cove` uses the shared Cove SDK declared by `Editor/cove.json`, or `COVE_SDK_ROOT` for a local development checkout. `cove studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg and OpenEXR/Imath dependencies, and stages the pinned Bun desktop runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
 
 After the first bootstrap, day-to-day development only needs:
 
@@ -138,7 +138,7 @@ The SDK's portable core, DevTools server, browser prototype and examples live in
 | Imath | CMake source build | submodule under `Engine/third-party/imath` |
 | OpenEXR | CMake source build | submodule under `Engine/third-party/openexr` |
 | Natsel | Swift Package Manager | `AlexCat315/Natsel` main; commit recorded in lockfiles |
-| Wasmtime | pinned official C API dynamic library → `.xcframework` | Bytecode Alliance release (SHA-256 verified, macOS) |
+| Bun | TypeScript desktop plugin runtime | pinned 1.4.4 release (SHA-256 verified) |
 
 The pattern is uniform: each SPM package owns its native deps under `<package>/third-party/`, CMake builds them into `<package>/vendor/` (gitignored), and the package consumes them via `.binaryTarget(path:)`.
 
@@ -216,4 +216,4 @@ Diffuse is open source under the [Apache License 2.0](LICENSE). Third-party depe
 
 The product is Diffuse. Runtime modules under `Engine/` remain reusable building blocks. The Editor adds independent text/code documents and a video timeline with cuts, ordering, frame preview, playback, and MP4 export. See [workstation boundaries](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/architecture/workstation.md), [media](Engine/Media/README.md), and [component standards](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/components/standard.md).
 
-New CLI applications include an iOS/iPadOS Xcode host alongside desktop and Android. `cove build MyApp --ios` builds for Simulator; `cove run MyApp --ios --simulator UDID` installs and launches. Devices require `--device ID --team TEAM_ID`. Native Metal/SDL and Wasmtime/Pulley artifacts are staged separately from desktop dependencies.
+New CLI applications include an iOS/iPadOS Xcode host alongside desktop and Android. `cove build MyApp --ios` builds for Simulator; `cove run MyApp --ios --simulator UDID` installs and launches. Devices require `--device ID --team TEAM_ID`. Game export uses its own native dependencies; the Diffuse editor and its Bun plugins target macOS, Windows and Linux.

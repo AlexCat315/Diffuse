@@ -13,6 +13,11 @@ final class PluginHostPool: @unchecked Sendable {
     private let executable: @Sendable () throws -> URL
     /// Called when one plugin's process dies. Only that plugin is affected.
     private let onCrash: @Sendable (String) -> Void
+    private var _hostCallHandler: (@Sendable (String, PluginHostServiceCall) throws -> Data)?
+    var hostCallHandler: (@Sendable (String, PluginHostServiceCall) throws -> Data)? {
+        get { lock.withLock { _hostCallHandler } }
+        set { lock.withLock { _hostCallHandler = newValue } }
+    }
 
     /// `executable` resolves lazily so a project with no plugins never launches
     /// a process.
@@ -29,6 +34,10 @@ final class PluginHostPool: @unchecked Sendable {
             let client = PluginHostProcessClient(executableURL: try executable())
             let notify = onCrash
             client.onInvalidation = { _ in notify(pluginID) }
+            client.onHostCall = { [weak self] call in
+                guard let handler = self?.hostCallHandler else { throw EditorProjectToolError("Plugin host bridge is not configured") }
+                return try handler(pluginID, call)
+            }
             clients[pluginID] = client
             return client
         }

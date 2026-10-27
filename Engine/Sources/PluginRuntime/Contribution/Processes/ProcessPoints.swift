@@ -10,7 +10,7 @@ public enum VersionControlContributionPoint: ContributionPointSpec {
         }
     }
 
-    public static func validateRuntime(_ descriptor: VersionControlContribution, contract: WITContract?) throws {
+    public static func validateRuntime(_ descriptor: VersionControlContribution, contract: PluginContract?) throws {
         guard contract?.capabilityInputs.first(where: { $0.name == VersionControlContribution.entryPoint })?.inputType == stepInputType else {
             throw PluginManifestValidationError.invalidContribution(id)
         }
@@ -28,7 +28,7 @@ public enum TaskContributionPoint: ContributionPointSpec {
         }
     }
 
-    public static func validateRuntime(_ descriptor: TaskContribution, contract: WITContract?) throws {
+    public static func validateRuntime(_ descriptor: TaskContribution, contract: PluginContract?) throws {
         guard contract?.capabilityInputs.first(where: { $0.name == TaskContribution.entryPoint })?.inputType == stepInputType else {
             throw PluginManifestValidationError.invalidContribution(id)
         }

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "name": "provider",
+      "input": {
+        "record": {
+          "request": "string",
+          "stdout": "string"
+        }
+      },
+      "title": "provider",
+      "description": ""
+    }
+  ]
+}

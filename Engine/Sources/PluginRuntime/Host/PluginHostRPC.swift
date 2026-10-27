@@ -7,6 +7,7 @@ public enum PluginHostMethod: String, Codable, Sendable {
     case discover
     case prepare
     case unload
+    case hostResult = "host_result"
 }
 
 public struct PluginHostRequest: Codable, Sendable, Equatable {
@@ -18,6 +19,7 @@ public struct PluginHostRequest: Codable, Sendable, Equatable {
     public var querySnapshot: PluginQuerySnapshot?
     public var authorization: PluginAuthorizationRecord?
     public var processContext: PluginProcessContext?
+    public var hostError: String?
 
     public init(id: UUID = UUID(),
                 method: PluginHostMethod,
@@ -131,7 +133,7 @@ public struct PluginQuerySnapshot: Codable, Sendable, Equatable {
         case .sceneQuery: return scene
         case .selectionQuery: return selection
         case .assetMetadataQuery: return assetMetadata
-        case .process, .http: return nil
+        case .process, .http, .editor, .service: return nil
         }
     }
 }
@@ -141,6 +143,7 @@ public struct PluginHostResponse: Codable, Sendable, Equatable {
     public var ok: Bool
     public var payload: Data?
     public var error: String?
+    public var hostCall: PluginHostServiceCall?
 
     public init(id: UUID, ok: Bool, payload: Data? = nil, error: String? = nil) {
         self.id = id
@@ -148,6 +151,12 @@ public struct PluginHostResponse: Codable, Sendable, Equatable {
         self.payload = payload
         self.error = error
     }
+}
+
+public struct PluginHostServiceCall: Codable, Sendable, Equatable {
+    public var permission: String
+    public var request: Data
+    public init(permission: String, request: Data) { self.permission = permission; self.request = request }
 }
 
 public enum PluginPreparedCapabilityResult: Sendable, Equatable {
@@ -216,16 +225,3 @@ public enum PluginHostFrameCodec {
     }
 }
 
-/// Adapter seam for the pinned Wasmtime Component runtime. Implementations
-/// must configure fuel, memory limits, epoch interruption, and no ambient WASI.
-public protocol WASIComponentRuntime: Sendable {
-    var runtimeVersion: String { get }
-    func validateComponent(_ package: ValidatedPluginPackage,
-                           limits: PluginResourceLimits) throws
-    func prepare(_ package: ValidatedPluginPackage,
-                 capabilityID: String,
-                 input: Data,
-                 querySnapshot: PluginQuerySnapshot?,
-                 limits: PluginResourceLimits) throws -> Data
-    func interrupt(pluginID: String)
-}

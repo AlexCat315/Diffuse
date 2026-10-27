@@ -12,14 +12,14 @@ Diffuse/
 └── .github/workflows/  CI 矩阵与 release
 ```
 
-## 引擎模块（26 个）
+## 引擎模块
 
 | 类别 | 模块 |
 |------|------|
 | 核心 | EngineCore、EngineKernel、EngineMath、Bridge |
 | 渲染 | RenderBackend、CinematicRenderer、ColorPipeline、EXRIO、NativeRendererValidation |
 | 场景 | SceneRuntime、SequenceRuntime、AssetPipeline |
-| 运行时 | AIRuntime、ScriptRuntime、AudioRuntime、PluginRuntime、PluginWasmtimeRuntime |
+| 运行时 | AIRuntime、ScriptRuntime、AudioRuntime、PluginRuntime |
 | AI | IntentRuntime、PerceptionRuntime、ContextMemory、CapabilityRuntime、SemanticPipeline |
 | 其他 | ObservationBus、CardBattleRuntime、DiffusePluginHost、SIMDCompat、NativeRHIPassProbe |
 
@@ -52,9 +52,13 @@ Diffuse/
 
 ## 插件体系
 
-- 原生插件通过 `PluginRuntime` 加载
-- WASM 插件通过 `PluginWasmtimeRuntime`（Wasmtime 49.0.2）在沙箱中运行，iOS 使用 Pulley
-- 插件平台规范见仓库 `specs/plugin-platform`
+编辑器只面向 macOS、Windows、Linux；移动端目录属于 SDK 或游戏运行、导出路径。
+
+插件统一使用 TypeScript，由应用随附的 Bun 执行。`PluginRuntime` 负责静态契约、授权摘要、贡献注册、生命周期和进程通信，`DiffusePluginHost` 代理插件与编辑器服务。
+
+AI 模式、模型通信、会话数据与执行循环位于 `Editor/Plugins/AI`。面板和顶层模式使用同一套公开界面协议；服务和扩展点允许插件继续接入其他插件。插件退出时撤销其贡献，编辑器回到可用模式。
+
+开发入口见[插件开发](/docs/plugin-development)和[服务与 AI 扩展](/docs/plugin-services)。
 
 ## 与 Cove 的边界
 

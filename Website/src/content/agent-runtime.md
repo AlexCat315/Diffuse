@@ -1,64 +1,37 @@
 # Agent 运行时
 
-Diffuse 的核心特色是 AI Agent 驱动。Agent 不是外挂的聊天框，而是深度嵌入引擎的运行时能力。
+AI 模式由 `studio.ai` 插件提供。它使用 TypeScript/Bun 实现模型通信、执行循环、项目分组、独立会话和界面。宿主提供窗口、原生组件以及文档、场景和媒体编辑服务。
 
-## 运行时组成
+## 工作流程
 
-| 模块 | 职责 |
-|------|------|
-| `AIRuntime` | Agent 执行循环与工具调度 |
-| `IntentRuntime` | 解析用户意图，映射为可执行动作 |
-| `PerceptionRuntime` | 感知当前工程与场景状态 |
-| `ContextMemory` | 上下文与长期记忆 |
-| `CapabilityRuntime` | 能力声明与权限控制 |
-| `SemanticPipeline` | 语义分析与信息检索 |
-| `ObservationBus` | 引擎事件的可观察总线 |
-
-## 工作循环
-
-```
-用户自然语言
-   │
-   ▼
-IntentRuntime 意图解析
-   │
-   ▼
-PerceptionRuntime + ContextMemory  感知状态、回忆上下文
-   │
-   ▼
-CapabilityRuntime  匹配可用工具与权限
-   │
-   ▼
-AIRuntime  调度工具调用（可多步、可回滚）
-   │
-   ▼
-ObservationBus  观察引擎执行结果
-   │
-   ▼
-向用户汇报 / 继续下一步
+```text
+会话输入
+   ↓
+AI 插件：会话上下文、选中的 Skill、可用工具
+   ↓
+模型 Provider：流式响应与工具请求
+   ↓
+工具扩展服务 / 编辑器作业
+   ↓
+项目版本与权限校验、场景事务确认
+   ↓
+结果回到原会话，继续执行或结束
 ```
 
-## 统一工具入口
+每个执行绑定自己的会话和项目。切换前台页面不会改变目标，也不会清空其他会话的消息。
 
-文本、代码、视频与场景工作流共用同一个 Agent 工具入口。这意味着同一句"帮我把这段视频的第三段剪掉并加个标题"，可以跨时间线、文本与渲染模块协同完成。
+## 原生编辑服务
 
-## MCP 服务器
+`CapabilityRuntime` 负责能力声明与参数校验，`IntentRuntime` 继续承载场景事务及确认管线。`PerceptionRuntime`、`ContextMemory`、`SemanticPipeline` 和 `ObservationBus` 提供项目感知、记忆和观察服务。
 
-`DiffuseMCP` 实现了 MCP（Model Context Protocol）服务器，把 Diffuse 编辑器与引擎的能力标准化地暴露给外部 LLM agent：
+这些原生模块不决定第三方模型使用什么 HTTP 格式。AI 插件与其他插件通过公开服务接口使用编辑能力。现有 `DiffuseMCP` 也继续使用相同的项目工具与能力入口。
 
-```bash
-./cove internal build-package DiffuseMCP --product DiffuseMCP
-```
+## 扩展
 
-## 插件与 Agent
+AI 插件声明 Provider、工具和 Skill 扩展点。第三方提供服务和业务数据，AI 插件负责发现及使用；插件开发者不需要修改宿主的 Provider 枚举或增加专用页面。
 
-Agent 可以调用插件提供的能力：
+具体契约见[服务与 AI 扩展](/docs/plugin-services)，并发与恢复行为见[项目与会话](/docs/conversations)。
 
-- 原生插件通过 `PluginRuntime` 直接接入
-- WASM 插件通过 `PluginWasmtimeRuntime` 在沙箱中运行，能力通过 `CapabilityRuntime` 受控暴露
+## 退出
 
-## 确定性与安全
-
-- 工具调用经过 `CapabilityRuntime` 的权限校验
-- WASM 插件在 Wasmtime 沙箱中运行，无法直接访问宿主资源
-- 每一步操作都可观察、可回放，便于审计与撤销
+禁用 AI 插件后，其模式和贡献退出，所属执行停止。会话历史保留为用户数据。Bun 插件采用可信桌面扩展模型，不能沿用 Wasm 沙箱的权限承诺。

@@ -109,8 +109,8 @@ final class EditorPluginAuthorizationStoreTests: XCTestCase {
             source: .plugin(pluginID)
         )
         return PluginInspection(manifest: manifest,
-                                componentHash: "component",
-                                witHash: "wit",
+                                codeHash: "component",
+                                contractHash: "wit",
                                 contracts: [contract])
     }
 }

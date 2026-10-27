@@ -1218,8 +1218,8 @@ private func makePluginBinding(
         source: .plugin(pluginID)
     )
     let inspection = PluginInspection(manifest: manifest,
-                                      componentHash: "component-hash",
-                                      witHash: "wit-hash",
+                                      codeHash: "component-hash",
+                                      contractHash: "wit-hash",
                                       contracts: [contract])
     let authorization = try PluginAuthorizationRecord(
         inspection: inspection,

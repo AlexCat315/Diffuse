@@ -48,7 +48,7 @@ struct PluginPlatformTests {
         }
         try FileManager.default.removeItem(at: file)
         try saved.write(to: file)
-        try Data().write(to: root.appendingPathComponent("capabilities.wit"))
+        try Data().write(to: root.appendingPathComponent("capabilities.json"))
         #expect(throws: PluginPackageError.incompleteRuntime) { try PluginPackageLoader().load(at: root) }
         for path in ["../theme.json", "resources/../theme.json", "/resources/theme.json",
                      "resources//theme.json", "resources\\theme.json"] {

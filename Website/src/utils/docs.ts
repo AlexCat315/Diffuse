@@ -12,6 +12,9 @@ export interface DocGroup {
 import build from '@/content/build.md?raw'
 import architecture from '@/content/architecture.md?raw'
 import agentRuntime from '@/content/agent-runtime.md?raw'
+import pluginDevelopment from '@/content/plugin-development.md?raw'
+import pluginServices from '@/content/plugin-services.md?raw'
+import conversations from '@/content/conversations.md?raw'
 
 export const docGroups: DocGroup[] = [
   {
@@ -23,7 +26,12 @@ export const docGroups: DocGroup[] = [
   },
   {
     group: 'AI 与扩展',
-    items: [{ slug: 'agent-runtime', title: 'Agent 运行时', raw: agentRuntime }],
+    items: [
+      { slug: 'conversations', title: '项目与会话', raw: conversations },
+      { slug: 'plugin-development', title: '插件开发', raw: pluginDevelopment },
+      { slug: 'plugin-services', title: '服务与 AI 扩展', raw: pluginServices },
+      { slug: 'agent-runtime', title: 'Agent 运行时', raw: agentRuntime },
+    ],
   },
 ]
 

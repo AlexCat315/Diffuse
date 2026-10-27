@@ -1,0 +1,6 @@
+{
+  "name": "diffuse-plugins", "private": true, "type": "module",
+  "packageManager": "bun@1.4.4",
+  "workspaces": ["PluginSDK", "Editor/Plugins/Git", "Editor/Plugins/Lore", "Editor/Plugins/Languages", "Editor/Plugins/SwiftSupport", "Editor/Plugins/AI"],
+  "scripts": { "test:plugins": "bun test PluginSDK/tests Editor/Plugins", "build:plugins": "bun PluginSDK/src/build-bundled.ts" }
+}

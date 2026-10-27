@@ -47,7 +47,9 @@ struct EditorTitleBar: View {
                         breadcrumb(focus).flex(0, shrink: 1).frame(minWidth: 0, maxWidth: 320).clipped().id("title-selection")
                     }
                     WindowDragRegion().flex().frame(minWidth: 8).id("title-drag")
-                    if app.isAgentEnabled { EditorViewSwitch(app: app).id("title-view") }
+                    // One view needs no switch; a second view appears only when
+                    // a package declares one.
+                    if app.studioViewSegments.count > 1 { EditorViewSwitch(host: app).id("title-view") }
                     WindowDragRegion().flex().frame(minWidth: 8).id("title-drag-fill")
                     if width >= 900, !workbench.wrappedValue.toolbarItems.isEmpty {
                         PluginToolbar(items: workbench.wrappedValue.toolbarItems, onCommand: onCommand).id("title-plugins")

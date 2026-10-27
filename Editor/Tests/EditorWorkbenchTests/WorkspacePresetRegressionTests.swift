@@ -16,7 +16,9 @@ struct WorkspacePresetRegressionTests {
         EditorLocalizationPreferences.language = .simplifiedChinese
         defer { EditorLocalizationPreferences.language = previous }
         let catalog = EditorCommandCatalog.make(EditorCommandContext(content: .scene))
-        #expect(catalog.menus.map(\.title) == ["文件", "编辑", "选择", "世界", "视图", "智能体", "运行", "窗口", "帮助"])
+        // No app, so no agent plugin: the agent menu is absent rather than empty.
+        #expect(catalog.menus.map(\.title) == ["文件", "编辑", "选择", "世界", "视图", "运行", "窗口", "帮助"])
+        #expect(!catalog.menus.contains { $0.id == "agent" })
         let view = try #require(catalog.menus.first { $0.id == "view" })
         let nested = view.items.compactMap { item -> String? in
             if case let .submenu(menu) = item { return menu.title }

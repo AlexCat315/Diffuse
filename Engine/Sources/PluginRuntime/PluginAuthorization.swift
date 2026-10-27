@@ -26,9 +26,9 @@ public enum PluginCapabilityValidationError: Error, Sendable, Equatable, CustomS
 
 /// Builds the complete model-facing contract from package identity/authority
 /// and WIT-derived input types. Runtime Component output is never consulted.
-public enum PluginWITContractDeriver {
+public enum PluginContractDeriver {
     public static func contracts(for package: ValidatedPluginPackage) -> [CapabilityContract] {
-        (package.runtime?.witContract.capabilityInputs ?? []).map { input in
+        (package.runtime?.contract.capabilityInputs ?? []).map { input in
             // A tool declaration is what the model reads; WIT docs describe the rest.
             let tool = package.manifest.aiTool(entryPoint: input.name)
             return CapabilityContract(
@@ -51,8 +51,8 @@ public enum PluginWITContractDeriver {
 /// exact code, WIT boundary, manifest authority, and AI-visible contracts.
 public struct PluginInspection: Codable, Sendable, Equatable {
     public var manifest: CovePluginManifest
-    public var componentHash: String?
-    public var witHash: String?
+    public var codeHash: String?
+    public var contractHash: String?
     public var resourceHashes: [String: String] = [:]
     public var contracts: [CapabilityContract]
 
@@ -60,18 +60,18 @@ public struct PluginInspection: Codable, Sendable, Equatable {
                 contracts: [CapabilityContract]) {
         manifest = package.manifest
         resourceHashes = package.resourceHashes
-        componentHash = package.runtime?.componentHash
-        witHash = package.runtime?.witHash
+        codeHash = package.runtime?.codeHash
+        contractHash = package.runtime?.contractHash
         self.contracts = contracts.sorted { $0.id < $1.id }
     }
 
     public init(manifest: CovePluginManifest,
-                componentHash: String?,
-                witHash: String?,
+                codeHash: String?,
+                contractHash: String?,
                 contracts: [CapabilityContract]) {
         self.manifest = manifest
-        self.componentHash = componentHash
-        self.witHash = witHash
+        self.codeHash = codeHash
+        self.contractHash = contractHash
         self.contracts = contracts.sorted { $0.id < $1.id }
     }
 }
@@ -93,8 +93,8 @@ public enum PluginAuthorizationError: Error, Sendable, Equatable, CustomStringCo
 public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
     public var pluginID: String
     public var pluginVersion: Int
-    public var componentHash: String?
-    public var witHash: String?
+    public var codeHash: String?
+    public var contractHash: String?
     public var imports: [PluginImportPermission]
     public var access: CapabilityAccess
     public var composableHostCapabilities: [String]
@@ -114,8 +114,8 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
         resourceHashes = inspection.resourceHashes
         pluginID = inspection.manifest.id
         pluginVersion = inspection.manifest.version
-        componentHash = inspection.componentHash
-        witHash = inspection.witHash
+        codeHash = inspection.codeHash
+        contractHash = inspection.contractHash
         imports = inspection.manifest.imports
         access = inspection.manifest.access
         composableHostCapabilities = inspection.manifest.composableHostCapabilities
@@ -139,8 +139,8 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
             && resourceHashes == inspection.resourceHashes
             && pluginID == inspection.manifest.id
             && pluginVersion == inspection.manifest.version
-            && componentHash == inspection.componentHash
-            && witHash == inspection.witHash
+            && codeHash == inspection.codeHash
+            && contractHash == inspection.contractHash
             && imports == inspection.manifest.imports
             && access == inspection.manifest.access
             && composableHostCapabilities == inspection.manifest.composableHostCapabilities
@@ -161,10 +161,10 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
         let object: [String: Any] = [
             "plugin_id": pluginID,
             "plugin_version": pluginVersion,
-            "component_hash": componentHash as Any? ?? NSNull(),
+            "component_hash": codeHash as Any? ?? NSNull(),
             "manifest_hash": manifestHash,
             "resource_hashes": resourceHashes,
-            "wit_hash": witHash as Any? ?? NSNull(),
+            "wit_hash": contractHash as Any? ?? NSNull(),
             "imports": imports.map(\.rawValue).sorted(),
             "access": access.rawValue,
             "host": try! JSONSerialization.jsonObject(with: JSONEncoder().encode(host)),
@@ -314,7 +314,7 @@ public enum PluginCapabilityRegistryBuilder {
         var remaining = bindings.sorted { $0.pluginID < $1.pluginID }
         // Runtime dependencies are activated first by PluginManager. Pure
         // declarations can satisfy package requirements without a binding.
-        var plugins = Dictionary(uniqueKeysWithValues: declarations.filter { $0.componentHash == nil }.map {
+        var plugins = Dictionary(uniqueKeysWithValues: declarations.filter { $0.codeHash == nil }.map {
             ($0.manifest.id, $0.manifest.version)
         })
         var capabilities = Dictionary(uniqueKeysWithValues: base.allVerbs().compactMap { id in

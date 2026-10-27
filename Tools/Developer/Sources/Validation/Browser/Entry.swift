@@ -25,7 +25,6 @@ package enum Browser {
     case "verify-dev": try VerifyDevOperation.run(flags)
     case "serve": try ServeOperation.run(flags)
     case "build-fonts": try BuildFontsOperation.run(flags)
-    case "web-plugins": try WebPluginsOperation.run(flags)
     case "-h", "--help": Terminal.info(usage)
     default:
       throw ToolError.message(
@@ -34,7 +33,7 @@ package enum Browser {
   }
 
   static let operations = [
-    "verify", "native-demo", "dev", "verify-dev", "serve", "build-fonts", "web-plugins",
+    "verify", "native-demo", "dev", "verify-dev", "serve", "build-fonts",
   ]
 
   static let usage = """
@@ -46,7 +45,6 @@ package enum Browser {
       verify-dev   Exercise real Swift rebuilds, checkpoint retention and failed-build recovery
       serve        Serve the built Browser/dist directory over http.server-compatible HTTP
       build-fonts  Build the pinned FreeType/HarfBuzz submodules for the WASI SDK
-      web-plugins  Run the Component -> Jco -> isolated Worker browser gate
 
       verify      [--require-webgpu] [--require-hardware-gpu] [--skip-native] [--native-only]
                   [--dist PATH] [--screenshot PATH]
@@ -55,7 +53,6 @@ package enum Browser {
       verify-dev
       serve       [--port PORT] [--dist PATH]
       build-fonts
-      web-plugins --host PATH --probe PATH
 
     Every operation runs against the checkout discovered from the current
     directory (or COVE_ROOT); the browser build lives in CoveUI/Browser.

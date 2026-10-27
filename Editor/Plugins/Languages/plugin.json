@@ -4,8 +4,12 @@
   "name": "Text Languages",
   "description": "Names, icons, grammar, outline and formatting for text languages the editor recognises without a language server.",
   "access": "read",
-  "imports": [],
-  "composable_host_capabilities": [],
+  "imports": [
+
+  ],
+  "composable_host_capabilities": [
+
+  ],
   "contributes": {
     "cove.language/v1": [
       {
@@ -104,8 +108,8 @@
     ]
   },
   "runtime": {
-    "component": "component.wasm",
-    "wit": "capabilities.wit",
+    "engine": "bun",
+    "entry": "plugin.js",
     "compatibility": 1
   }
 }

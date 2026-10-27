@@ -14,7 +14,7 @@ public final class PluginManager: @unchecked Sendable {
 
         init(_ package: ValidatedPluginPackage) {
             self.package = package
-            inspection = PluginInspection(package: package, contracts: PluginWITContractDeriver.contracts(for: package))
+            inspection = PluginInspection(package: package, contracts: PluginContractDeriver.contracts(for: package))
         }
     }
 
@@ -126,9 +126,7 @@ public final class PluginManager: @unchecked Sendable {
     public func disable(id: String) async throws {
         try await enqueue {
             guard self.enabledManifests[id] != nil else { throw PluginManagerError.notEnabled(id) }
-            let dependents = self.dependents(of: id)
-            guard dependents.isEmpty else { throw RequiredPluginStillNeeded(pluginID: id, dependents: dependents) }
-            try await self.withdraw([id], failure: nil)
+            try await self.withdraw(self.dependentClosure(of: id), failure: nil)
         }
     }
 

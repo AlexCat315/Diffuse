@@ -200,7 +200,12 @@ private struct Builder {
     }
 
     var menus: [EditorCommandMenu] {
-        [file, edit, select, world, view, agent, run, window, help].map(placingContributions)
+        // The agent is a plugin. With it disabled its menu must not exist at
+        // all — no title, no "Set up Assistant", no shortcut into a view that
+        // has nothing behind it.
+        let core = [file, edit, select, world, view]
+        let tail = [run, window, help]
+        return (core + (agentMenu.map { [$0] } ?? []) + tail).map(placingContributions)
     }
 
     /// Package commands no menu holds; the menus already feed the palette the rest.
@@ -328,14 +333,11 @@ private struct Builder {
         ])
     }
 
-    private var agent: EditorCommandMenu {
+    /// Nil while no agent plugin is enabled: the editor contributes no agent
+    /// menu of its own.
+    private var agentMenu: EditorCommandMenu? {
         // Pending reviews sit at the top of the Agent thread, so one entry serves both.
-        guard context.agentPanelID != nil else {
-            return menu("agent", "Agent", [
-                entry("agent.intent", "Set up Assistant", "assistant agent setup 助手 设置", .init(.letter("k")), command: .openSettings,
-                      inPalette: false),
-            ])
-        }
+        guard context.agentPanelID != nil else { return nil }
         return menu("agent", "Agent", [
             entry("agent.intent", "Ask Cove...", "", .init(.letter("k")), command: .focusAssistant, inPalette: false),
             entry("agent.show", "Agent", "agent assistant conversation review approval 智能体 对话 审阅",

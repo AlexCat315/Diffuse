@@ -248,8 +248,15 @@ public enum EditorReducer {
                 state.assistant.chatMessages[idx].assistantState = assistantState
             }
         case .clearChatHistory:
+            // Everything the conversation produced goes with it. A pending
+            // review is an assistant-authored plan, not project content, and it
+            // is persisted: leaving it behind would restore a review for a
+            // conversation — and possibly a plugin — that no longer exists.
             state.assistant.chatMessages.removeAll()
             state.assistant.agentCanvas = nil
+            state.assistant.pendingConfirmationRequest = nil
+            state.assistant.aiStatusMessage = nil
+            state.assistant.aiWarnings = []
         case let .setAgentCanvas(content):
             state.assistant.agentCanvas = content
         case let .setOperation(operation):

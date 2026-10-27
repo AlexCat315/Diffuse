@@ -13,18 +13,11 @@ struct PluginProcessTests {
         var permissions = PluginHostPermissions(); permissions.processes = [rule]
         let manifest = CovePluginManifest(id: id, version: 1, name: "Process test", description: "fixture", access: .read,
                                           imports: [.process], host: permissions)
-        let wit = try WITContractParser.parse(Data("""
-        package test:process;
-        interface capabilities {
-          record launch-input { enabled: bool }
-          launch: func(input: launch-input) -> string;
-        }
-        world plugin { import cove:process/host; export capabilities; }
-        """.utf8), grantedImports: [.process])
+        let wit = try BunPluginContract.decode(Data(#"{"version":1,"entries":[{"name":"launch","title":"Launch","description":"","input":{"record":{"enabled":"bool"}}}]}"#.utf8), imports: [.process])
         let package = ValidatedPluginPackage(rootURL: URL(fileURLWithPath: "/tmp/test.coveplugin"), manifest: manifest,
-            runtime: ValidatedPluginComponent(componentURL: URL(fileURLWithPath: "/tmp/component.wasm"), witURL: URL(fileURLWithPath: "/tmp/capabilities.wit"),
-            witContract: wit, componentHash: "code", witHash: "contract"))
-        return PluginInspection(package: package, contracts: PluginWITContractDeriver.contracts(for: package))
+            runtime: ValidatedPluginRuntime(entryURL: URL(fileURLWithPath: "/tmp/component.wasm"), contractURL: URL(fileURLWithPath: "/tmp/capabilities.wit"),
+            contract: wit, codeHash: "code", contractHash: "contract"))
+        return PluginInspection(package: package, contracts: PluginContractDeriver.contracts(for: package))
     }
     private func mount(_ service: PluginProcessService, _ inspection: PluginInspection) throws {
         var context = PluginProcessContext(workspace: FileManager.default.temporaryDirectory)

@@ -68,19 +68,24 @@ struct SourceControlPanel: View, @unchecked Sendable {
                     }
                 }.font(.body).frame(width: .percent(100), minHeight: 40).debugName("source-control-message")
                 Row(alignment: .center, spacing: 6) {
-                    Button(isEnabled: hasChanges && !isDrafting && app.isAIAvailable,
-                           tooltip: app.isAIAvailable ? L("Draft a message from the changes") : L("Set an AI provider in Settings to enable.")) {
-                        draftMessage()
-                    } label: {
-                        Row(alignment: .center, spacing: 5) {
-                            if isDrafting { Spinner(size: 10) } else {
-                                Icon(UIIcons.Status.sparkles, size: 11, color: EditorThemeTokens.assistantColor)
+                    // Drafting is the agent plugin's work. With the plugin off
+                    // there is no assistant to draft for, so the control is not
+                    // merely disabled: it is not there.
+                    if app.isAgentEnabled {
+                        Button(isEnabled: hasChanges && !isDrafting && app.isAIAvailable,
+                               tooltip: app.isAIAvailable ? L("Draft a message from the changes") : L("Set an AI provider in Settings to enable.")) {
+                            draftMessage()
+                        } label: {
+                            Row(alignment: .center, spacing: 5) {
+                                if isDrafting { Spinner(size: 10) } else {
+                                    Icon(UIIcons.Status.sparkles, size: 11, color: EditorThemeTokens.assistantColor)
+                                }
+                                Text(L("Generate")).font(.caption)
                             }
-                            Text(L("Generate")).font(.caption)
-                        }
-                    }.buttonStyle(EditorChromeButtonStyle(height: 24, agent: true))
-                        .background(EditorThemeTokens.assistantColor.opacity(0.10)).cornerRadius(6)
-                        .debugName("source-control-generate")
+                        }.buttonStyle(EditorChromeButtonStyle(height: 24, agent: true))
+                            .background(EditorThemeTokens.assistantColor.opacity(0.10)).cornerRadius(6)
+                            .debugName("source-control-generate")
+                    }
                     Spacer(minLength: 0)
                     if let operation = snapshot.operation {
                         Spinner(size: 10)

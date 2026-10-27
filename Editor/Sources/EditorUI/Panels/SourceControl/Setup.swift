@@ -67,6 +67,7 @@ struct SourceControlSetup: View, @unchecked Sendable {
         switch system {
         case .git: L("Install Git (on macOS: xcode-select --install), then check again.")
         case .lore: L("Install the Lore CLI from github.com/EpicGames/lore (it installs to ~/.local/bin), then check again.")
+        default: system.title
         }
     }
 }

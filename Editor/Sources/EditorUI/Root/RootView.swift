@@ -13,6 +13,7 @@ struct EditorRootView: View {
     var projects: EditorLaunchContext?
     @State private var windowWidth: Float = 1280
     @State private var windowHeight: Float = 720
+    private let surface: EditorAssistantSurface
     private var session: Observed<EditorAssistantSurface, EditorAssistantSurface.State>
 
     init(app: EditorApplication, controller: WorkspaceController, registry: WorkspacePanelRegistry,
@@ -21,11 +22,17 @@ struct EditorRootView: View {
         self.controller = controller
         self.registry = registry
         self.projects = projects
-        session = Observed(\.state, on: EditorAssistantSurface.of(app))
+        let surface = EditorAssistantSurface.of(app)
+        self.surface = surface
+        session = Observed(\.state, on: surface)
     }
 
     var body: some View {
         StoreScope(app.store) { store in
+            let _ = app.setPluginWorkScheduler(UIWorkSchedulerHolder.enqueue)
+            // Redraw when the agent's own view state changes; `surface.view`
+            // then decides whether that state is reachable at all.
+            let _ = session.wrappedValue
             let cb = EditorCallbacks(app: app, controller: controller, registry: registry,
                                      commandPaletteVisible: store.commandPaletteVisible)
             EditorPresentationBoundary(presentation: store.presentation,
@@ -39,11 +46,13 @@ struct EditorRootView: View {
                             EditorTitleBar(app: app, width: windowWidth, projects: projects, onCommand: cb.handleMenuCommand)
                         }
                         // You work in the canvas; the agent works in its own view of the same project.
-                        let agent = app.isAgentEnabled && session.wrappedValue.view == .agent
+                        // A disabled agent plugin has no view at all, so the workbench takes the window.
                         Box(direction: .row, alignItems: .stretch, spacing: 0) {
-                            if agent {
-                                EditorAgentView(app: app, controller: controller, registry: registry,
-                                                width: windowWidth, projects: projects)
+                            if let panel = app.workbenchCatalog.panels.first(where: { panel in
+                                guard let name = panel.surface else { return false }
+                                return EditorStudioView(panel.pluginID + "." + name) == surface.view
+                            }) {
+                                PluginSurface(app: app, panel: panel)
                             } else {
                                 EditorActivityRail(app: app, controller: controller, onCommand: cb.handleMenuCommand)
                                 WorkspaceView(controller: controller, compact: windowWidth < 1000) {
@@ -74,8 +83,13 @@ struct EditorRootView: View {
                                                availableHeight: windowHeight)
                     if let pendingClose = store.pendingCloseRequest {
                         UnsavedChangesDialog(app: app, request: pendingClose)
+                    } else if let confirmation = store.pendingConfirmationRequest {
+                        ModalBarrier {
+                            AgentReview(app: app, request: confirmation)
+                                .padding(24).frame(width: 640).background(.surfaceFloating).cornerRadius(14)
+                        }
                     }
-                    if EditorAppLaunchOptions.reviewPluginPath != nil {
+                    if store.pluginManagement.candidate != nil {
                         LaunchPluginReview(app: app, management: store.pluginManagement)
                     }
                 }

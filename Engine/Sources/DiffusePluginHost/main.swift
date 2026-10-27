@@ -8,7 +8,7 @@ defer { LogSystem.flush() }
 import IntentRuntime
 import CapabilityRuntime
 import PluginRuntime
-import PluginWasmtimeRuntime
+
 
 private func createSecureDirectory(at url: URL,
                                    withIntermediateDirectories: Bool) throws {
@@ -17,49 +17,12 @@ private func createSecureDirectory(at url: URL,
 
 let processService = PluginProcessService()
 let httpService = PluginHTTPService()
-let runtime = try EmbeddedWasmtimeComponentRuntime(processes: processService,
-                                                   http: httpService)
-let runtimeMode = runtime.usesInterpreter ? "embedded-pulley" : "embedded"
+let runtime = BunPluginRuntime(processes: processService, http: httpService)
 let capabilityRegistry = CapabilityRegistry.aiDefault
 let loader = PluginPackageLoader(registry: capabilityRegistry)
 let limits = PluginResourceLimits.secureDefault
-if CommandLine.arguments.count > 1 {
-    if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--compile-component" {
-        let source = try String(contentsOfFile: CommandLine.arguments[2], encoding: .utf8)
-        try AtomicFile.write(EmbeddedWasmtimeComponentRuntime.compileComponentWAT(source), to: URL(fileURLWithPath: CommandLine.arguments[3]))
-        exit(0)
-    }
-    // `cove plugin build`: the shell and guest bindings for a WIT contract,
-    // then the shell compiled around the guest's core module.
-    if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--component-shell" {
-        let contract = try WITContractParser.parse(Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[2])),
-                                                   grantedImports: Set(PluginImportPermission.allCases))
-        let shell = try PluginComponentBuild.shell(for: contract)
-        let directory = URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true)
-        try AtomicFile.write(Data(shell.wat.utf8), to: directory.appendingPathComponent("shell.wat"))
-        try AtomicFile.write(Data(shell.bindings.utf8), to: directory.appendingPathComponent("Exports.swift"))
-        exit(0)
-    }
-    if CommandLine.arguments.count == 5, CommandLine.arguments[1] == "--link-component" {
-        let shell = try EmbeddedWasmtimeComponentRuntime.compileComponentWAT(
-            String(contentsOfFile: CommandLine.arguments[2], encoding: .utf8))
-        let core = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[3]))
-        try AtomicFile.write(PluginComponentBuild.link(shell: shell, core: core), to: URL(fileURLWithPath: CommandLine.arguments[4]))
-        exit(0)
-    }
-    guard CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--export-web" else {
-        throw WebPackageExportError.usage
-    }
-    do {
-        try exportWebPackage(at: URL(fileURLWithPath: CommandLine.arguments[2]),
-                             loader: loader, runtime: runtime, limits: limits, registry: capabilityRegistry)
-        exit(0)
-    } catch {
-        LogSystem.logger("com.cove.engine.plugin").error("Web package validation failed: \(error)")
-        LogSystem.flush()
-        exit(1)
-    }
-}
+var currentRequestID: UUID?
+guard CommandLine.arguments.count == 1 else { fatalError("DiffusePluginHost accepts no build commands; use diffuse-plugin build") }
 let stagingRoot = FileManager.default.temporaryDirectory
     .appendingPathComponent("DiffusePluginHost-\(UUID().uuidString)", isDirectory: true)
 try? createSecureDirectory(at: stagingRoot, withIntermediateDirectories: true)
@@ -82,9 +45,9 @@ func packagesMatch(_ lhs: ValidatedPluginPackage,
                    _ rhs: ValidatedPluginPackage) -> Bool {
     lhs.rootURL == rhs.rootURL
         && lhs.manifest == rhs.manifest
-        && lhs.runtime?.witContract == rhs.runtime?.witContract
-        && lhs.runtime?.componentHash == rhs.runtime?.componentHash
-        && lhs.runtime?.witHash == rhs.runtime?.witHash
+        && lhs.runtime?.contract == rhs.runtime?.contract
+        && lhs.runtime?.codeHash == rhs.runtime?.codeHash
+        && lhs.runtime?.contractHash == rhs.runtime?.contractHash
         && lhs.resourceHashes == rhs.resourceHashes
 }
 
@@ -97,15 +60,15 @@ func stagedExecutionCopy(of package: ValidatedPluginPackage) throws -> Validated
                                isDirectory: true)
     try createSecureDirectory(at: destination, withIntermediateDirectories: false)
     do {
-        for name in ["plugin.json", "component.wasm", "capabilities.wit"] + (package.resourceHashes.isEmpty ? [] : ["resources"]) {
+        for name in ["plugin.json", "plugin.js", "capabilities.json"] + (package.resourceHashes.isEmpty ? [] : ["resources"]) {
             try FileManager.default.copyItem(at: package.rootURL.appendingPathComponent(name),
                                              to: destination.appendingPathComponent(name))
         }
         let copy = try loader.load(at: destination)
         guard copy.manifest == package.manifest,
-              copy.runtime?.witContract == package.runtime?.witContract,
-              copy.runtime?.componentHash == package.runtime?.componentHash,
-              copy.runtime?.witHash == package.runtime?.witHash,
+              copy.runtime?.contract == package.runtime?.contract,
+              copy.runtime?.codeHash == package.runtime?.codeHash,
+              copy.runtime?.contractHash == package.runtime?.contractHash,
               copy.resourceHashes == package.resourceHashes else {
             throw PluginHostStagingError.packageChangedDuringStaging
         }
@@ -121,7 +84,7 @@ func inspectExecutionCopy(of package: ValidatedPluginPackage) throws
     let executionCopy = try stagedExecutionCopy(of: package)
     do {
         try runtime.validateComponent(executionCopy, limits: limits)
-        let contracts = PluginWITContractDeriver.contracts(for: executionCopy)
+        let contracts = PluginContractDeriver.contracts(for: executionCopy)
         return (executionCopy,
                 PluginInspection(package: package, contracts: contracts))
     } catch {
@@ -158,13 +121,14 @@ func readRequest() throws -> PluginHostRequest? {
 func response(for request: PluginHostRequest) -> PluginHostResponse {
     do {
         switch request.method {
+        case .hostResult: throw BunRuntimeError.protocolFailure
         case .handshake:
             let payload = try JSONSerialization.data(withJSONObject: [
-                "protocol_version": 5,
-                "wasmtime_version": runtime.runtimeVersion,
-                "runtime_mode": runtimeMode,
+                "protocol_version": 6,
+                "runtime": "bun", "runtime_version": runtime.runtimeVersion,
+                "runtime_mode": "trusted-extension-process",
                 "maximum_frame_bytes": PluginHostFrameCodec.maximumFrameBytes,
-                "ambient_wasi": false,
+                "sandboxed": false,
             ], options: [.sortedKeys])
             return PluginHostResponse(id: request.id, ok: true, payload: payload)
         case .validatePackage:
@@ -311,10 +275,23 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
     }
 }
 
+runtime.hostCall = { call in
+    guard let id = currentRequestID else { throw BunRuntimeError.protocolFailure }
+    var response = PluginHostResponse(id: id, ok: true)
+    response.hostCall = call
+    FileHandle.standardOutput.write(try PluginHostFrameCodec.encode(response))
+    guard let reply = try readRequest(), reply.id == id, reply.method == .hostResult else { throw BunRuntimeError.protocolFailure }
+    if let error = reply.hostError { throw BunRuntimeError.rejected(error) }
+    guard let input = reply.input else { throw BunRuntimeError.protocolFailure }
+    return input
+}
+
 while true {
     do {
         guard let request = try readRequest() else { break }
+        currentRequestID = request.id
         let frame = try PluginHostFrameCodec.encode(response(for: request))
+        currentRequestID = nil
         FileHandle.standardOutput.write(frame)
     } catch {
         LogSystem.logger("com.cove.engine.plugin").error("Plugin host protocol failed", metadata: ["error": "\(error)"])
@@ -325,5 +302,6 @@ while true {
 for pluginID in loadedPackages.keys {
     processService.unmount(pluginID: pluginID)
     httpService.unmount(pluginID: pluginID)
+    runtime.interrupt(pluginID: pluginID)
 }
 try? FileManager.default.removeItem(at: stagingRoot)

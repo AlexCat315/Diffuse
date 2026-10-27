@@ -34,7 +34,7 @@ public enum CommandContributionPoint: ContributionPointSpec {
         }
     }
 
-    public static func validateRuntime(_ command: CommandContribution, contract: WITContract?) throws {
+    public static func validateRuntime(_ command: CommandContribution, contract: PluginContract?) throws {
         guard contract?.capabilityInputs.first(where: { $0.name == command.entryPoint })?.inputType == commandInputType else {
             throw PluginManifestValidationError.invalidContribution(id)
         }
@@ -76,5 +76,5 @@ public enum PluginWorkbenchResultError: Error, Sendable, Equatable, LocalizedErr
 
 /// `record { command: string, arguments: string }`: the command's identifier
 /// and its arguments as a JSON object.
-let commandInputType = WITValueType.record([WITRecordField(name: "command", type: .string),
-                                            WITRecordField(name: "arguments", type: .string)])
+let commandInputType = PluginInputType.record([PluginInputField(name: "arguments", type: .string),
+                                            PluginInputField(name: "command", type: .string)])

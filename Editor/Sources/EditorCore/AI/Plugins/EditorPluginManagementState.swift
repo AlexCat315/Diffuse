@@ -42,8 +42,8 @@ public struct EditorPluginInspectionSummary: Codable, Sendable, Equatable, Ident
     public var processPermissions: [String]
     public var composableHostCapabilities: [String]
     public var capabilities: [EditorPluginCapabilitySummary]
-    public var componentHash: String?
-    public var witHash: String?
+    public var codeHash: String?
+    public var contractHash: String?
     public var resourceHashes: [String: String]
     public var contributionPoints: [String]
     public var hasReusableAuthorization: Bool
@@ -75,8 +75,8 @@ public struct EditorPluginInspectionSummary: Codable, Sendable, Equatable, Ident
                                           access: $0.access.rawValue,
                                           schemaHash: $0.schemaHash)
         }.sorted { $0.id < $1.id }
-        componentHash = inspection.componentHash
-        witHash = inspection.witHash
+        codeHash = inspection.codeHash
+        contractHash = inspection.contractHash
         resourceHashes = inspection.resourceHashes
         contributionPoints = manifest.contributes.pointIDs
         self.hasReusableAuthorization = hasReusableAuthorization

@@ -2,9 +2,20 @@ import Foundation
 import PluginRuntime
 
 /// A view the host provides for a plugin panel to name.
-public enum WorkbenchView: String, Sendable {
-    /// The agent conversation, shown only while an agent is enabled.
-    case agent
+///
+/// Open on purpose. A package names the view it wants through
+/// `cove.ui.panel/v1`, so the editor never keeps a list of the plugins allowed
+/// to add one — and never needs a flag per plugin to ask whether it is there.
+/// The host decides which named views it can draw; a name it cannot draw stays
+/// an ordinary workbench panel.
+public struct WorkbenchView: RawRepresentable, Hashable, Sendable {
+    public let rawValue: String
+
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// The agent conversation. It exists because a package declared a panel for
+    /// it, not because a particular plugin is switched on.
+    public static let agent = WorkbenchView(rawValue: "agent")
 }
 
 /// One enabled `cove.command/v1` contribution.
@@ -45,13 +56,15 @@ public struct ContributedPanel: Sendable, Equatable, Identifiable {
     public let slot: String
     public let icon: String?
     public let content: Content
+    public let surface: String?
     let entryPoint: String?
 
     init?(pluginID: String, contribution: PanelContribution) {
         switch contribution.content {
         case let .view(name):
-            guard let view = WorkbenchView(rawValue: name) else { return nil }
-            content = .view(view)
+            // Any name is accepted here: whether the host can draw it is the
+            // host's decision, not a reason to drop the contribution.
+            content = .view(WorkbenchView(rawValue: name))
             entryPoint = nil
         case let .entryPoint(entryPoint):
             content = .model
@@ -62,6 +75,7 @@ public struct ContributedPanel: Sendable, Equatable, Identifiable {
         title = contribution.title
         slot = contribution.slot ?? "trailing"
         icon = contribution.icon
+        surface = contribution.surface
     }
 }
 

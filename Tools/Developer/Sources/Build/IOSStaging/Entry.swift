@@ -9,17 +9,15 @@ internal import ToolSupport
 /// CoveUI third-party CMake graphs into `build/ios-*/` with an iOS sysroot.
 package enum IOSStaging {
   static let usage = """
-    cove-dev ios-native [--sdk iphoneos|iphonesimulator] [--arch arm64|x86_64] [--plugins|--no-plugins]
+    cove-dev ios-native [--sdk iphoneos|iphonesimulator] [--arch arm64|x86_64]
 
       --sdk      iOS SDK to target; defaults to iphonesimulator.
       --arch     Architecture to build; defaults to arm64. Devices require arm64.
-      --plugins  Build the Wasmtime/Pulley runtime (requires a Rust target).
     """
 
   package static func run(_ arguments: [String]) throws {
     var sdk = "iphonesimulator"
     var arch = "arm64"
-    var plugins = true
     var index = 0
     while index < arguments.count {
       switch arguments[index] {
@@ -30,8 +28,6 @@ package enum IOSStaging {
         sdk = try value(arguments, &index)
       case "--arch":
         arch = try value(arguments, &index)
-      case "--plugins": plugins = true
-      case "--no-plugins": plugins = false
       default: throw ToolError.message("unrecognized arguments: \(arguments[index])")
       }
       index += 1
@@ -44,11 +40,11 @@ package enum IOSStaging {
       throw ToolError.message(
         "argument --arch: invalid choice: '\(arch)' (choose from 'arm64', 'x86_64')")
     }
-    try stage(sdk: sdk, arch: arch, plugins: plugins)
+    try stage(sdk: sdk, arch: arch)
   }
 
   /// Runs the same build for the SDK/arch selected by the iOS application build.
-  private static func stage(sdk: String, arch: String, plugins: Bool) throws {
+  private static func stage(sdk: String, arch: String) throws {
     #if !os(macOS)
       throw ToolError.message("iOS builds require macOS; devices require arm64")
     #else
@@ -69,7 +65,7 @@ package enum IOSStaging {
       try Shell.inherit([sdkRoot.appendingPathComponent("cove").path, "setup", "--ios", "--sdk", sdk, "--arch", arch])
       for package in [engineRoot] {
         let build = package.appendingPathComponent("build/\(variant)")
-        var command = [
+        let command = [
           "cmake", "-S", package.appendingPathComponent("third-party").path,
           "-B", build.appendingPathComponent("native").path,
           "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_SYSTEM_NAME=iOS",
@@ -79,14 +75,10 @@ package enum IOSStaging {
         ]
         var targets: [String]
         if package == engineRoot {
-          command += [
-            "-DCOVE_STAGE_WASMTIME=" + (plugins ? "ON" : "OFF"),
-          ]
           // The Engine package resolves ocio_openexr from the staged artifact
           // root, so iOS must build and stage the EXR stack like every other
           // native dependency; a missing bundle breaks package resolution.
           targets = ["stage_ocio_openexr"]
-          if plugins { targets.append("stage_wasmtime") }
         } else { targets = [] }
         try Shell.inherit(command)
         try Shell.inherit(

@@ -66,8 +66,8 @@
     ]
   },
   "runtime": {
-    "component": "component.wasm",
-    "wit": "capabilities.wit",
+    "engine": "bun",
+    "entry": "plugin.js",
     "compatibility": 1
   }
 }

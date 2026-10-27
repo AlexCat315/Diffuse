@@ -46,7 +46,7 @@ final class PluginLanguageService: @unchecked Sendable {
             return try JSONDecoder().decode(PluginProcessUpdate.self, from: data)
         }
         var start = PluginProcessRequest(.start)
-        start.permission = LanguageCatalog.served?.server?.process.id
+        start.permission = (try? binding.inspection.manifest.contributes.decode(LanguageContributionPoint.self))?.compactMap(\.server).first?.process
         start.arguments = command.arguments
         let keys = Set(binding.authorization.host.processes.first { $0.id == start.permission }?.environmentKeys ?? [])
         start.environment = command.environment.filter { keys.contains($0.key) }

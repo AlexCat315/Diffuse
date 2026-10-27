@@ -125,6 +125,7 @@ Editor/.build/
 
 # CMake-produced third-party artifacts (per-package, built locally)
 Engine/vendor/
+Engine/Sources/PluginRuntime/Resources/bun/
 
 *.o
 
@@ -146,3 +147,6 @@ examples/*/Scripts/.cove/
 # Independent media dependency artifacts
 Engine/Media/vendor/
 .workbuddy-ai/
+
+/Engine/Sources/PluginRuntime/Resources/plugin-sdk/
+/PluginSDK/*.tgz

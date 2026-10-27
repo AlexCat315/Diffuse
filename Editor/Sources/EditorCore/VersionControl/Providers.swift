@@ -65,7 +65,7 @@ struct VersionControlProvider: Sendable {
 extension StepPlugins {
     /// Systems whose command-line tool is installed.
     var installedSystems: Set<VersionControlSystem> {
-        Set(VersionControlProvider.bundled.filter { ContributionTool.locate($0.process.command) != nil }.map(\.system))
+        Set(runtime.versionControlProviders.filter { ContributionTool.locate($0.process.command) != nil }.map(\.system))
     }
 
     func backend(for repository: VersionControlRepository) throws -> any VersionControlBackend {

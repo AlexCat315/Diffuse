@@ -97,7 +97,8 @@ struct LanguageServerStatus: View {
                     fact(L("Memory"), "SourceKit-LSP · \(bytes / 1_048_576) MB")
                 }
             }
-            fact(L("Plugin"), isPluginEnabled ? "Swift Support · " + L("Enabled") : "Swift Support · " + L("Disabled"))
+            fact(L("Language Service"),
+                 isLanguageServiceEnabled ? L("Enabled") : L("Disabled"))
         }.padding(EdgeInsets(top: 4, leading: 14, bottom: 4, trailing: 14))
     }
 
@@ -110,7 +111,7 @@ struct LanguageServerStatus: View {
 
     private var footer: some View {
         let running = snapshot.languageServiceState != .inactive
-        let canStart = isPluginEnabled && !snapshot.documents.isEmpty && snapshot.swiftToolchain != nil
+        let canStart = isLanguageServiceEnabled && !snapshot.documents.isEmpty && snapshot.swiftToolchain != nil
         return Row(alignment: .center, spacing: 8) {
             Button(L(running ? "Restart Server" : "Start Server"), isEnabled: canStart) {
                 isPresented = false
@@ -118,7 +119,7 @@ struct LanguageServerStatus: View {
                 app.workstation.scripts.retryLanguageService()
             }.buttonStyle(.primary).controlSize(.small).debugName("language-server-restart")
             if running {
-                Button(L("Stop Server"), isEnabled: isPluginEnabled) {
+                Button(L("Stop Server"), isEnabled: isLanguageServiceEnabled) {
                     isPresented = false
                     app.workstation.scripts.stopLanguageService()
                 }.buttonStyle(.secondary).controlSize(.small).debugName("language-server-stop")
@@ -135,9 +136,9 @@ struct LanguageServerStatus: View {
 
     // MARK: State
 
-    private var isPluginEnabled: Bool {
-        app.store.pluginManagement.installed.contains { $0.id == "studio.swift-support" && $0.lifecycle.isEnabled }
-    }
+    /// Whether a language service is available at all. Asked of the catalog, not
+    /// of a named plugin: any package may provide the service.
+    private var isLanguageServiceEnabled: Bool { app.languageCatalog.hasLanguageService }
 
     /// Why the service is in its state, most actionable first.
     private var reason: (text: String, isProblem: Bool)? {
@@ -145,8 +146,8 @@ struct LanguageServerStatus: View {
         if snapshot.swiftToolchain == nil {
             return (L("No Swift toolchain was found. Choose or install one under Toolchains."), true)
         }
-        if !isPluginEnabled {
-            return (L("The Swift Support plugin is off. Turn it on in Settings › Extensions."), true)
+        if !isLanguageServiceEnabled {
+            return (L("No language service is enabled. Turn one on in Settings › Extensions."), true)
         }
         if case let .degraded(reason)? = snapshot.languageServiceDetails?.health {
             return (L("Semantic analysis unavailable") + ": " + reason, true)

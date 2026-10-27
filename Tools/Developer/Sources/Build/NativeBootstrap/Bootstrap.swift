@@ -42,18 +42,18 @@ enum Bootstrap {
     let engineDone = root.appendingPathComponent("Engine/vendor/ocio_openexr.artifactbundle")
     let coveUIDone = sdkRoot.appendingPathComponent("vendor/CFreeType.artifactbundle")
     let terminalDone = sdkRoot.appendingPathComponent("vendor/GhosttyVt.artifactbundle")
-    var wasmtimeReady = true
-    do { try PluginStaging.run(["stage", "--check"]) } catch { wasmtimeReady = false }
-    if !wasmtimeReady {
+    var bunReady = true
+    do { try PluginStaging.run(["stage", "--check"]) } catch { bunReady = false }
+    if !bunReady {
       try PluginStaging.run(["stage"])
-      wasmtimeReady = true
+      bunReady = true
     }
 
     if !force,
       FileManager.default.fileExists(atPath: engineDone.path),
       FileManager.default.fileExists(atPath: coveUIDone.path),
       FileManager.default.fileExists(atPath: terminalDone.path),
-      wasmtimeReady
+      bunReady
     {
       print("Native deps already built. Run `cove-dev native-bootstrap --force` to rebuild.")
       return

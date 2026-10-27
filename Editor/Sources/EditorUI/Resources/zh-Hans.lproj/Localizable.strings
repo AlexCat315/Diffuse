@@ -1015,6 +1015,7 @@
 "Swift toolchain updated" = "Swift 工具链已更新";
 "Installation cancelled" = "安装已取消";
 "Projection" = "投影";
+"Language Service" = "语言服务";
 "Enabled" = "启用";
 "Add Script" = "添加脚本";
 "Open Script" = "打开脚本";
@@ -1194,7 +1195,7 @@
 "Memory" = "内存";
 "Plugin" = "插件";
 "No Swift toolchain was found. Choose or install one under Toolchains." = "未找到 Swift 工具链。请在“工具链”中选择或安装。";
-"The Swift Support plugin is off. Turn it on in Settings › Extensions." = "Swift Support 插件已停用，可在“设置 › 扩展”中启用。";
+"No language service is enabled. Turn one on in Settings › Extensions." = "未启用任何语言服务，可在“设置 › 扩展”中启用。";
 "The language service is stopped." = "语言服务已停止。";
 "No open Swift files" = "没有打开的 Swift 文件";
 "%d open Swift file(s), %d game script(s)" = "%d 个打开的 Swift 文件，%d 个游戏脚本";

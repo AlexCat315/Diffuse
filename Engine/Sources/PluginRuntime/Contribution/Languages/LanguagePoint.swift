@@ -17,7 +17,7 @@ public enum LanguageContributionPoint: ContributionPointSpec {
         }
     }
 
-    public static func validateRuntime(_ language: LanguageContribution, contract: WITContract?) throws {
+    public static func validateRuntime(_ language: LanguageContribution, contract: PluginContract?) throws {
         if let format = language.format {
             guard contract?.capabilityInputs.first(where: { $0.name == format.entryPoint })?.inputType
                     == documentFormatInputType else {

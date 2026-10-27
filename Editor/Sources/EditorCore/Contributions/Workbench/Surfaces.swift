@@ -6,6 +6,7 @@ import PluginRuntime
 /// packages describe for it and the shell to tell when it changes. Views
 /// observe `catalog` to follow packages as they come and go.
 public final class WorkbenchSession: _ObservableObject, @unchecked Sendable {
+    let uiQueue = PluginUIQueue()
     public private(set) var catalog = WorkbenchCatalog.empty
     private let publisher = _ObservablePublisher<WorkbenchSession>()
     private var revisions: [UInt64] = []
@@ -43,7 +44,7 @@ public final class WorkbenchSession: _ObservableObject, @unchecked Sendable {
     func session(for source: PluginContentSource, invoke: @escaping PluginViewSession.Invoke,
                  effects: @escaping @MainActor ([UIEffect]) -> Void) -> PluginViewSession {
         if let session = sessions[source.key], session.source == source { return session }
-        let session = PluginViewSession(source: source, invoke: invoke)
+        let session = PluginViewSession(source: source, invoke: invoke, uiQueue: uiQueue)
         session.effectHandler = effects
         sessions[source.key] = session
         session.render()

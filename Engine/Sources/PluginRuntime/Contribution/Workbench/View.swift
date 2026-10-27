@@ -61,6 +61,7 @@ public struct PluginViewResult: Sendable, Equatable {
     public var state: PluginJSON?
     public var ui: UINode
     public var effects: [UIEffect]
+    public var refreshAfterMilliseconds: Int?
 
     public init(state: PluginJSON? = nil, ui: UINode, effects: [UIEffect] = []) {
         self.state = state
@@ -77,6 +78,7 @@ public struct PluginViewResult: Sendable, Equatable {
             var state: PluginJSON?
             var ui: UINode
             var effects: [UIEffect]?
+            var refreshAfterMilliseconds: Int?
         }
         guard json.count <= 1_024 * 1_024, let decoded = try? JSONDecoder().decode(Coding.self, from: json),
               decoded.ui.isValid(), (decoded.effects ?? []).count <= 16,
@@ -85,13 +87,14 @@ public struct PluginViewResult: Sendable, Equatable {
             throw PluginWorkbenchResultError.invalidView
         }
         self.init(state: decoded.state, ui: decoded.ui, effects: decoded.effects ?? [])
+        refreshAfterMilliseconds = decoded.refreshAfterMilliseconds.map { min(10_000, max(100, $0)) }
     }
 }
 
 /// `record { view: string, state: string, event: string, context: string }`:
 /// the view's ID, the state it last returned, the event as JSON (empty to
 /// render only) and what the host knows about where it is shown.
-let viewInputType = WITValueType.record([WITRecordField(name: "view", type: .string),
-                                         WITRecordField(name: "state", type: .string),
-                                         WITRecordField(name: "event", type: .string),
-                                         WITRecordField(name: "context", type: .string)])
+let viewInputType = PluginInputType.record([PluginInputField(name: "context", type: .string),
+                                         PluginInputField(name: "event", type: .string),
+                                         PluginInputField(name: "state", type: .string),
+                                         PluginInputField(name: "view", type: .string)])

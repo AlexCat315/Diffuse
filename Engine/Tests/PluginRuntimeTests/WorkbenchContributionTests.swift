@@ -12,25 +12,19 @@ struct WorkbenchContributionTests {
         """.utf8)
     }
 
-    private func contract(_ functions: String) throws -> WITContract {
-        try WITContractParser.parse(Data("""
-        package test:workbench;
-        interface capabilities {
-        \(functions)
-        }
-        world plugin { export capabilities; }
-        """.utf8), grantedImports: [])
+    private func contract(_ document: String) throws -> PluginContract {
+        try BunPluginContract.decode(Data(document.utf8), imports: [])
     }
 
     @Test("a panel shows either a host view or content its entry point describes")
     func panelContentIsExclusive() throws {
         let valid = try PluginManifestValidator.decodeAndValidate(manifest("""
             {"cove.ui.panel/v1": [
-              {"id": "intent-input", "title": "Harness", "slot": "trailing", "icon": "ai-intent", "view": "agent"},
+              {"id": "intent-input", "title": "Harness", "slot": "trailing", "icon": "ai-intent", "entryPoint": "panel", "surface": "assistant"},
               {"id": "status", "title": "Status", "entryPoint": "panel"}]}
             """))
         let panels = try valid.contributes.decode(PanelContributionPoint.self)
-        #expect(panels.map(\.content) == [.view("agent"), .entryPoint("panel")])
+        #expect(panels.map(\.content) == [.entryPoint("panel"), .entryPoint("panel")])
 
         for invalid in [#"{"id": "x", "title": "X"}"#,
                         #"{"id": "x", "title": "X", "view": "agent", "entryPoint": "panel"}"#,
@@ -44,18 +38,12 @@ struct WorkbenchContributionTests {
 
     @Test("command and panel entry points must take the inputs the host sends")
     func entryPointsMatchTheirInputs() throws {
-        let runtime = try contract("""
-            record command-input { command: string, arguments: string }
-            command: func(input: command-input) -> string;
-            record panel-input { view: string, state: string, event: string, context: string }
-            panel: func(input: panel-input) -> string;
-            """)
+        let runtime = try contract(#"{"version":1,"entries":[{"name":"command","title":"command","description":"","input":{"record":{"command":"string","arguments":"string"}}},{"name":"panel","title":"panel","description":"","input":{"record":{"view":"string","state":"string","event":"string","context":"string"}}}]}"#)
         let command = CommandContribution(id: "refresh", title: "Refresh", entryPoint: "command")
         let panel = PanelContribution(id: "status", title: "Status", content: .entryPoint("panel"))
         try CommandContributionPoint.validateRuntime(command, contract: runtime)
         try PanelContributionPoint.validateRuntime(panel, contract: runtime)
-        try PanelContributionPoint.validateRuntime(
-            PanelContribution(id: "chat", title: "Chat", content: .view("agent")), contract: nil)
+
 
         var swapped = command
         swapped.entryPoint = "panel"
@@ -103,12 +91,7 @@ struct WorkbenchContributionTests {
             }
         }
 
-        let runtime = try contract("""
-            record document-input { view: string, state: string, event: string, context: string }
-            document: func(input: document-input) -> string;
-            record context-input { content: string, selection: string }
-            context: func(input: context-input) -> string;
-            """)
+        let runtime = try contract(#"{"version":1,"entries":[{"name":"document","title":"document","description":"","input":{"record":{"view":"string","state":"string","event":"string","context":"string"}}},{"name":"context","title":"context","description":"","input":{"record":{"content":"string","selection":"string"}}}]}"#)
         let view = DocumentViewContribution(id: "table", title: "Table", extensions: ["csv"], entryPoint: "document")
         try DocumentViewContributionPoint.validateRuntime(view, contract: runtime)
         try AIContextContributionPoint.validateRuntime(
@@ -207,12 +190,7 @@ struct WorkbenchContributionTests {
         #expect(package.isHostEntryPoint("harness"))
         #expect(!package.isHostEntryPoint("other"))
 
-        let runtime = try contract("""
-            record harness-input { turn: string }
-            harness: func(input: harness-input) -> string;
-            record other-input { text: string }
-            other: func(input: other-input) -> string;
-            """)
+        let runtime = try contract(#"{"version":1,"entries":[{"name":"harness","title":"harness","description":"","input":{"record":{"turn":"string"}}},{"name":"other","title":"other","description":"","input":{"record":{"text":"string"}}}]}"#)
         try AIHarnessContributionPoint.validateRuntime(AIHarnessContribution(id: "careful", title: "Careful", entryPoint: "harness"),
                                                        contract: runtime)
         #expect(throws: PluginManifestValidationError.invalidContribution(AIHarnessContributionPoint.id)) {

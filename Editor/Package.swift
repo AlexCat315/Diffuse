@@ -228,7 +228,6 @@ let package = Package(
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "CapabilityRuntime", package: "Engine"),
                 .product(name: "PluginRuntime", package: "Engine"),
-                .product(name: "PluginWasmtimeRuntime", package: "Engine"),
                 .product(name: "CoveUICompose", package: "CoveUI"),
                 .product(name: "CoveUIRuntime", package: "CoveUI"),
             ]

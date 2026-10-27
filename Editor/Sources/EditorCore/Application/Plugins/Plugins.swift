@@ -70,7 +70,7 @@ extension EditorApplication {
         do {
             try pluginSession.authorizationStore.record(authorization)
             if BundledPlugins.plugin(id: inspection.manifest.id) != nil {
-                try BundledPlugins.setEnabled(true, id: inspection.manifest.id, in: projectDirectory)
+                try BundledPlugins.setEnabled(true, id: inspection.manifest.id, in: projectDirectory, applicationWide: pluginSession.peers != nil)
             }
         } catch {
             try? await pluginSession.manager.disable(id: inspection.manifest.id)
@@ -83,6 +83,17 @@ extension EditorApplication {
 
     @MainActor
     func configurePluginRuntime() {
+        pluginSession.hosts.hostCallHandler = { [weak self] owner, call in
+            let waiter = PluginHostCallWaiter()
+            guard let queue = self?.pluginSession.workbench.uiQueue else { throw PluginCommandError.unavailable }
+            queue.schedule { [weak self] in
+                    do {
+                        guard let self else { throw PluginCommandError.unavailable }
+                        waiter.complete(.success(try self.handlePluginHostCall(owner: owner, call: call)))
+                    } catch { waiter.complete(.failure(error)) }
+            }
+            return try waiter.wait()
+        }
         pluginSession.manager.configureRuntime(PluginRuntimeDriver(activate: { [weak self] url, authorization in
             guard let self else { throw PluginManagerError.stopped }
             let (hosts, context) = try await MainActor.run {
@@ -101,6 +112,7 @@ extension EditorApplication {
                 components?.remove(pluginID: binding.pluginID)
             })
         }, deactivate: { [weak self] binding in
+            await MainActor.run { self?.pluginSession.serviceJobs.cancel(owner: binding.pluginID) }
             guard let hosts = await MainActor.run(body: { self?.pluginSession.hosts }) else { return }
             try await Task.detached {
                 // Unloading drops this plugin's process only; its neighbours
@@ -145,10 +157,21 @@ extension EditorApplication {
 
     @MainActor
     public func disablePlugin(id pluginID: String) async throws {
+        let peers = pluginSession.peers?() ?? []
+        for peer in peers where peer !== self && peer.enabledPluginManifests[pluginID] != nil {
+            try await peer.disablePluginLocally(id: pluginID)
+        }
+        try await disablePluginLocally(id: pluginID)
+    }
+
+    @MainActor
+    private func disablePluginLocally(id pluginID: String) async throws {
+        let before = Set(pluginSession.manager.enabledManifests.keys)
         do { try await pluginSession.manager.disable(id: pluginID) }
         catch { try? await synchronizePlugins(); throw error }
-        if BundledPlugins.plugin(id: pluginID) != nil {
-            try BundledPlugins.setEnabled(false, id: pluginID, in: projectDirectory)
+        let removed = before.subtracting(pluginSession.manager.enabledManifests.keys)
+        for id in removed where BundledPlugins.plugin(id: id) != nil {
+            try BundledPlugins.setEnabled(false, id: id, in: projectDirectory, applicationWide: pluginSession.peers != nil)
         }
         try await synchronizePlugins()
     }
@@ -158,7 +181,7 @@ extension EditorApplication {
         do { try await pluginSession.manager.uninstall(id: id) }
         catch { try? await synchronizePlugins(); throw error }
         try pluginSession.authorizationStore.remove(pluginID: id)
-        if BundledPlugins.plugin(id: id) != nil { try BundledPlugins.setEnabled(false, id: id, in: projectDirectory) }
+        if BundledPlugins.plugin(id: id) != nil { try BundledPlugins.setEnabled(false, id: id, in: projectDirectory, applicationWide: pluginSession.peers != nil) }
         try await synchronizePlugins()
     }
 
@@ -440,7 +463,8 @@ extension EditorApplication {
 
     @MainActor
     func activatePluginExecutor(_ executor: PluginCapabilityExecutor?) async {
-        let languageBinding = pluginSession.manager.activeBindings[PluginLanguageService.pluginID]
+        let languageID = languageCatalog.languages.first { $0.server != nil }?.pluginID
+        let languageBinding = languageID.flatMap { pluginSession.manager.activeBindings[$0] }
         let languageWasBound = dynamicScriptManager.languagePlugin.isBound
         if dynamicScriptManager.languagePlugin.bind(languageBinding,
             client: languageBinding.flatMap { pluginSession.hosts.existing($0.pluginID) }) {

@@ -1,0 +1,1 @@
+{"name":"@diffuse/plugin-languages","private":true,"type":"module","dependencies":{"@diffuse/plugin-sdk":"workspace:*"}}

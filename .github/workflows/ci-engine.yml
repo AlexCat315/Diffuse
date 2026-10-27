@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - 'Engine/**'
-      - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
       - '.github/actions/native-dependencies/**'
@@ -20,7 +19,6 @@ on:
   pull_request:
     paths:
       - 'Engine/**'
-      - 'Platforms/Web/Plugins/**'
       - '.github/workflows/ci-engine.yml'
       - '.github/actions/setup-toolchains/**'
       - '.github/actions/native-dependencies/**'
@@ -147,22 +145,6 @@ jobs:
           path: test-results
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Verify browser plugin execution
-        if: runner.os == 'macOS'
-        uses: actions/setup-node@v6
-        with:
-          node-version: '26.10.0'
-      - name: Run Web Component Worker gates
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          npm ci --prefix Platforms/Web/Plugins --ignore-scripts
-          npm test --prefix Platforms/Web/Plugins
-          cmake -S Engine/Validation/Plugins -B Engine/build/plugin-probe -DCOVE_WASMTIME_VARIANT="$PWD/Engine/vendor/Wasmtime.artifactbundle/macos-arm64"
-          cmake --build Engine/build/plugin-probe --parallel 4
-          host_bin=$(swift build --package-path Engine --show-bin-path)
-          ./cove studio browser web-plugins --host "$host_bin/DiffusePluginHost" --probe Engine/build/plugin-probe/CovePluginProbe
 
       - name: Run M7 destruction performance gates
         if: runner.os == 'macOS'

@@ -1,5 +1,6 @@
 import AIRuntime
 import Foundation
+public import PluginRuntime
 
 /// One-shot, tool-less completions the editor asks of the configured model.
 extension EditorApplication {
@@ -34,12 +35,34 @@ extension EditorApplication {
 
     @MainActor
     func completeText(instructions: String, prompt: String, maxTokens: Int? = nil) async throws -> String {
-        await pendingAISetupTask?.value
-        guard let session else {
-            throw EditorProjectToolError(store.state.assistant.aiSettings.isEnabled
-                ? "The configured AI provider has no usable credential."
-                : "No AI provider configured. Choose one in Settings.")
+        let serviceID = "diffuse.ai.completion/v1"
+        let providers = pluginSession.contributions.services.snapshot.values
+        guard let package = providers.first(where: {
+            ((try? $0.value.manifest.contributes.decode(PluginServiceContributionPoint.self)) ?? []).contains { $0.id == serviceID }
+        }), let service = try package.value.manifest.contributes.decode(PluginServiceContributionPoint.self).first(where: { $0.id == serviceID }) else {
+            throw EditorProjectToolError("Enable a plugin providing text completion, then configure its model.")
         }
-        return try await session.complete(instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+        func invoke(_ request: [String: String]) async throws -> [String: Any] {
+            try Task.checkCancellation()
+            let json = try JSONSerialization.data(withJSONObject: request)
+            let value = try await readEntryPoint(pluginID: package.value.manifest.id, entryPoint: service.entryPoint,
+                event: "onService:" + serviceID, input: ["request": String(decoding: json, as: UTF8.self)])
+            return (try JSONSerialization.jsonObject(with: value) as? [String: Any]) ?? [:]
+        }
+        let started = try await invoke(["operation": "start", "instructions": instructions, "prompt": prompt, "maxTokens": String(maxTokens ?? 8192)])
+        guard let handle = started["handle"] as? String else { throw PluginCommandError.unavailable }
+        do {
+            while true {
+                let result = try await invoke(["operation": "poll", "handle": handle])
+                if let error = result["error"] as? String { throw EditorProjectToolError(error) }
+                if result["done"] as? Bool == true { return result["text"] as? String ?? "" }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        } catch {
+            let request = try JSONSerialization.data(withJSONObject: ["operation": "cancel", "handle": handle])
+            _ = try? await readEntryPoint(pluginID: package.value.manifest.id, entryPoint: service.entryPoint,
+                event: "onService:" + serviceID, input: ["request": String(decoding: request, as: UTF8.self)])
+            throw error
+        }
     }
 }

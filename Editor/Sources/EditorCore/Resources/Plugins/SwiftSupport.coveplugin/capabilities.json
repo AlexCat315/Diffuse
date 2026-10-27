@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "name": "language-server",
+      "input": {
+        "record": {
+          "request": "string"
+        }
+      },
+      "title": "language-server",
+      "description": ""
+    },
+    {
+      "name": "tasks",
+      "input": {
+        "record": {
+          "request": "string",
+          "stdout": "string"
+        }
+      },
+      "title": "tasks",
+      "description": ""
+    },
+    {
+      "name": "view",
+      "input": {
+        "record": {
+          "view": "string",
+          "state": "string",
+          "event": "string",
+          "context": "string"
+        }
+      },
+      "title": "view",
+      "description": ""
+    }
+  ]
+}
