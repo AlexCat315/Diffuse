@@ -110,4 +110,7 @@ final class NativeParticlePass {
             rasterization: RasterizationState(cullMode: .none),depthStencil: DepthStencilState(depthCompare: .lessOrEqual,depthWriteEnabled: false),label: "native-particles"))
         pipelines[key] = result; return result
     }
+    func prewarm(hdr: Bool) throws {
+        for blend in ParticleBlendMode.allCases { _ = try pipeline(hdr: hdr, blend: blend) }
+    }
 }

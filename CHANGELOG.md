@@ -2,16 +2,20 @@
 
 ## Unreleased
 
+- 编辑器与 Player 在后台准备着色器与管线后再启动渲染；状态栏/加载页显示步骤，支持取消与重试，失败写入控制台，准备期间保持界面响应。
+- `NativeRenderer.prepared` 按初始设置预热材质、后处理、粒子图形与默认 64 工作组计算管线；自定义粒子尺寸可显式传入。
+- 引擎加载按源指纹验证的 macOS、iOS 与模拟器预编译 Metal 库，并补齐 Windows DXIL 及固定工作组变体。
+
 - 将编辑器 MCP 服务统一改名为 `DiffuseMCP`，同步模块、环境变量、安装检查、发布产物与 CI；移除旧 GuavaMcp 构建目录。
 - 修复依赖视图对 branch/revision 锁定的验证，以及脚本编译器在重复 C 模块声明中选择生成映射的稳定性。
 
 - Windows 包边界检查优先调用已安装 SDK 的 `cove.exe`，源码仓库才回退到 `cove.cmd`，修复安装后找不到命令的问题。
 
-- 同步 Cove SDK 0.2.7：提供 `@TrackStateReads` 字段读取推导和 Metal GPU 时间戳；UI 默认保留 4x，普通内容、磨砂与揭幕统一使用临时 MSAA；需要显存的后端采用 16 MiB 工作区预算，跨通道只保留已解析图像；DevTools 区分逻辑容量和 MSAA 分配，解析 1x 仍可按窗口启用。
+- 同步 Cove SDK 0.2.8：提供 `@TrackStateReads` 字段读取推导和 Metal GPU 时间戳；UI 默认保留 4x，普通内容、磨砂与揭幕统一使用临时 MSAA；需要显存的后端采用 16 MiB 工作区预算，跨通道只保留已解析图像；DevTools 区分逻辑容量和 MSAA 分配，解析 1x 仍可按窗口启用。
 
 - Engine 原生依赖构建使用 Diffuse 自带的 CMake 平台与产物清单辅助文件，不再假设已安装的 Cove SDK 包含原生源码构建工具。
 
-- 编辑器改名为 Diffuse，Cove SDK、模块、CLI、工作区配置、发布包与插件宿主名称同步迁移；固定依赖 Cove SDK 0.2.7。
+- 编辑器改名为 Diffuse，Cove SDK、模块、CLI、工作区配置、发布包与插件宿主名称同步迁移；固定依赖 Cove SDK 0.2.8。
 
 - SDK 安装器按固定版本获取，不再依赖 Latest 中的安装脚本；显式本地 SDK 覆盖支持联调，并统一使用物理路径，避免目录改名后的编译缓存冲突。
 - 固定分辨率游戏预览生成有效区域内的 GPU mip 金字塔，UI 按显示像素选择 LOD，避免缩小时采入容量 padding；旧快照继续拥有各级纹理。

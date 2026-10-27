@@ -1,0 +1,164 @@
+{
+  "stage": "fragment",
+  "format": "metallib",
+  "entryPoint": "outlineFragment",
+  "code": "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b24gMzIwMjMuOTIxIChtZXRhbGZlLTMyMDIzLjkyMS42KU1ldGFsYWlyLmNvbXBpbGUuZGVub3Jtc19kaXNhYmxlYWlyLmNvbXBpbGUuZmFzdF9tYXRoX2VuYWJsZWFpci5jb21waWxlLmZyYW1lYnVmZmVyX2ZldGNoX2VuYWJsZWFpci5yZW5kZXJfdGFyZ2V0YWlyLmFyZ190eXBlX25hbWVmbG9hdDRhaXIuYXJnX25hbWVvdXRwdXRfMGFpci5mcmFnbWVudF9pbnB1dHVzZXIoVEVYQ09PUkQpYWlyLmNlbnRlcmFpci5wZXJzcGVjdGl2ZWZsb2F0M2NvbG9yXzBhaXIuYXJnX3VudXNlZHVzZXIoVEVYQ09PUkRfMSlmbG9hdDJ1dl8wdXNlcihURVhDT09SRF8yKW5vcm1hbF8wdXNlcihURVhDT09SRF8zKXRhbmdlbnRfMHVzZXIoVEVYQ09PUkRfNCliaXRhbmdlbnRfMHVzZXIoVEVYQ09PUkRfNSl3b3JsZFBvc2l0aW9uXzB1c2VyKFRFWENPT1JEXzYpZmxvYXRkZXB0aF8wdXNlcihURVhDT09SRF83KW1hdGVyaWFsSW5kZXhfMGFpci5wb3NpdGlvbmFpci5ub19wZXJzcGVjdGl2ZXBvc2l0aW9uXzBhaXIudGV4dHVyZWFpci5sb2NhdGlvbl9pbmRleGFpci5zYW1wbGV0ZXh0dXJlMmQ8ZmxvYXQsIHNhbXBsZT5iYXNlVGV4dHVyZV8xYWlyLnNhbXBsZXJzYW1wbGVybWVzaFNhbXBsZXJfMWFpci5idWZmZXJhaXIucmVhZGFpci5hZGRyZXNzX3NwYWNlYWlyLnN0cnVjdF90eXBlX2luZm9fX2VsZW1zbWV0YWw6OmFycmF5ZGF0YV8wX01hdHJpeFN0b3JhZ2VfZmxvYXQ0eDRfQ29sTWFqb3JuYXR1cmFsXzBtdnBfMG1vZGVsXzBjb2xvclRpbnRfMG1hdGVyaWFsXzBhaXIuYXJnX3R5cGVfc2l6ZWFpci5hcmdfdHlwZV9hbGlnbl9zaXplRHJhd1VuaWZvcm1zX25hdHVyYWxfMGRyYXdfMQAABskAAAAAAAAwgmAVIwjdNYJgGSMI1jGCYCEjCFYygmApIwjWMoJgMSMIVjOCYDkjCA8wgmA9IwgWNIJgRSMI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",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "draw",
+        "slot": 0,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "instances",
+        "slot": 1,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 160
+        }
+      },
+      {
+        "name": "meshSampler",
+        "slot": 2,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "baseTexture",
+        "slot": 3,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "skinParameters",
+        "slot": 11,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "jointPalette",
+        "slot": 12,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 64
+        }
+      },
+      {
+        "name": "sceneLights",
+        "slot": 4,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "normalTexture",
+        "slot": 5,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "mrTexture",
+        "slot": 6,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "shadow",
+        "slot": 7,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "shadowSampler",
+        "slot": 8,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "shadowTexture",
+        "slot": 9,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "iblTexture",
+        "slot": 10,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "style",
+        "slot": 13,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      }
+    ],
+    "specializationConstants": [],
+    "threadgroupSpecialization": {
+      "x": null,
+      "y": null,
+      "z": null
+    },
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19; Apple Metal",
+  "sourceFingerprint": "11b25de4998d8c69b28c7b59c7bc12cddde0f9af2f56a60d61f5556446d31190"
+}

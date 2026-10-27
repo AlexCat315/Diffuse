@@ -123,6 +123,17 @@ public final class EngineHost: @unchecked Sendable {
     public var currentInputEvents: [InputEvent] {
         state.withLock { $0.currentInputEvents }
     }
+    public var isStarted: Bool { state.withLock { $0.started } }
+
+    /// Returns an owned renderer without starting simulation or a render thread.
+    /// The host publishes it after checking its loading task is still current.
+    public func prepareRenderer(renderSurface: RenderSurfaceDescriptor? = nil,
+        enableViewportSurface: Bool = false, initialSettings: RenderSettings = RenderSettings(),
+        onProgress: @escaping @Sendable (ResourcePreparationProgress) -> Void = { _ in }) async throws -> sending NativeRenderer? {
+        guard let device = renderDevice, renderSurface != nil || enableViewportSurface else { return nil }
+        return try await NativeRenderer.prepared(device: device, surface: renderSurface, inGameUI: inGameUI,
+            initialSettings: initialSettings, onProgress: onProgress)
+    }
 
     /// A supplied consumer receives the normal RenderPacket stream, allowing
     /// isolated native passes to run without changing the default renderer.

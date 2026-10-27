@@ -63,6 +63,14 @@ final class NativeParticleSimulation {
     private var pending: [NativeParticleSimulationReadback] = []
     init(device: Device) { self.device = device }
 
+    func prewarm(workgroupSizes: [Int]) throws {
+        for size in Set(workgroupSizes).sorted() {
+            guard (1...256).contains(size) else { throw RHIError.invalidArgument("particle workgroup size must be in 1...256") }
+            if programs[size] == nil { programs[size] = try NativeParticleSimulationKernels(device: device, workgroupSize: size) }
+            if instancePrograms[size] == nil { instancePrograms[size] = try NativeParticleInstanceKernels(device: device, workgroupSize: size) }
+        }
+    }
+
     func prepare(scene: RenderScene, deltaTime: Float, elapsedTime: Float, into commands: CommandBuffer) throws -> NativeParticleSimulationUpdate {
         var update = NativeParticleSimulationUpdate()
         let gpuCount = scene.particleSimulationBatches.filter { $0.plan.usesGPU && $0.renderOnGPU && $0.particleCount > 0 }.reduce(0) { $0+$1.renderInstanceCount }

@@ -306,14 +306,12 @@ public final class EditorApplication: @unchecked Sendable {
         subscriptions.events = events.subscribe { [weak self] event in
             self?.handlePlatformEvent(event)
         }
-        engine.start(renderSurface: nil, enableViewportSurface: true)
+        prepareRendererAtLaunch()
         // 默认启用离屏渲染，让引擎渲染到一个 viewport 纹理交给编辑器显示。
         // 不开启 viewportResolve 时 UI 会一直停在 "Waiting for first render packet"。
         queueTrackedRenderSettings(makeViewportRenderSettings(
             shadowsEnabled: store.state.shadows.enabled,
             shadingMode: store.state.viewport.shadingMode))
-        store.dispatch(.setConnected(true))
-        logConsole("Editor connected to runtime")
     }
 
     public func tick(deltaTime: Double) {
@@ -410,6 +408,7 @@ public final class EditorApplication: @unchecked Sendable {
         subscriptions.console.stop()
         guard !isShuttingDown else { return }
         isShuttingDown = true
+        cancelRendererPreparation()
         diagnosticSession.close()
         scene.scriptRuntime.isGameplayExecutionEnabled = false
         scene.scriptRuntime.stop(in: &scene.scene)

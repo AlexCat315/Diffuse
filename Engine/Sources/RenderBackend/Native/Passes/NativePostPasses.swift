@@ -28,15 +28,22 @@ final class NativePostPasses {
         return texture
     }
     var snapshot: Texture? { targets?.snapshot }
+    func prewarm(settings: RenderSettings) throws {
+        let fullscreen: Set<RenderPassKind> = [.ssao, .ssr, .taa, .bloom, .fxaa, .inkPaperPost]
+        for kind in RenderFramePlanner.makePlan(settings: settings).passes where fullscreen.contains(kind) {
+            _ = try pipeline(for: kind)
+        }
+    }
+    private func pipeline(for kind: RenderPassKind) throws -> NativeFullscreenPass {
+        if let existing = pipelines[kind] { return existing }
+        let result = try NativeFullscreenPass(device: device, shader: kind == .inkPaperPost ? "ink_paper_post" : kind.rawValue,
+            colorFormat: kind == .fxaa ? .bgra8Unorm : .rgba16Float)
+        pipelines[kind] = result
+        return result
+    }
     func encode<T>(kind: RenderPassKind, input: Texture, secondary: Texture, output: Texture,
                    uniforms: T, size: RenderDrawableSize, into commands: CommandBuffer) throws {
-        let pipeline: NativeFullscreenPass
-        if let existing = pipelines[kind] { pipeline = existing }
-        else {
-            pipeline = try NativeFullscreenPass(device: device,shader: kind == .inkPaperPost ? "ink_paper_post" : kind.rawValue,
-                colorFormat: kind == .fxaa ? .bgra8Unorm : .rgba16Float)
-            pipelines[kind] = pipeline
-        }
+        let pipeline = try pipeline(for: kind)
         guard let targets else { throw RHIError.outOfMemory }
         let frame = PostEffectUniforms.frame(used: size,capacity: targets.size)
         try pipeline.encode(size: size,color: RenderColorTarget(texture: output,loadAction: .clear(.zero)),entries: [

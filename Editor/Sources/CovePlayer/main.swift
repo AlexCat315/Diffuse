@@ -19,7 +19,33 @@ import NativeRHI
 /// Holds the most recent rendered viewport surface and invalidates observers
 /// (ViewGraph scopes) whenever it changes, triggering `GamePlayerRootView` to
 /// recompose automatically via `ObservableStateTracking`.
+private enum PlayerPreparationState {
+    case preparing(ResourcePreparationProgress?), ready, failed(String), cancelled
+}
 private final class GamePlayerState: @unchecked Sendable {
+    private var preparationValue = PlayerPreparationState.preparing(nil)
+    private var generation: UInt64 = 0
+    private var sequence: UInt64 = 0
+    var preparationTask: Task<Void, Never>?
+    var retryPreparation: (() -> Void)?
+    var preparation: PlayerPreparationState { registrar.access("preparation"); return preparationValue }
+    func beginPreparation() -> UInt64 {
+        preparationTask?.cancel(); generation &+= 1; sequence = 0
+        preparationValue = .preparing(nil); registrar.invalidate("preparation"); return generation
+    }
+    func progress(_ value: ResourcePreparationProgress, generation: UInt64) {
+        guard self.generation == generation, value.sequence > sequence,
+              case .preparing = preparationValue else { return }
+        sequence = value.sequence; preparationValue = .preparing(value); registrar.invalidate("preparation")
+    }
+    func complete(_ value: PlayerPreparationState, generation: UInt64) {
+        guard self.generation == generation else { return }
+        preparationValue = value; preparationTask = nil; registrar.invalidate("preparation")
+    }
+    func cancelPreparation() {
+        preparationTask?.cancel(); preparationTask = nil; generation &+= 1
+        preparationValue = .cancelled; registrar.invalidate("preparation")
+    }
     private let registrar = ObservableStateRegistrar()
     private var _viewportSurface: ViewportSurfaceState = .init()
 
@@ -48,6 +74,8 @@ private struct GamePlayerRootView: View {
     let state: GamePlayerState
 
     var body: some View {
+        switch state.preparation {
+        case .ready:
         ViewportHost(
             surface: state.viewportSurface,
             automaticallyFocus: true,
@@ -60,6 +88,46 @@ private struct GamePlayerRootView: View {
             EmptyView()
         }
         .flex()
+        case let .preparing(progress):
+            Column(alignment: .center, spacing: 12) {
+                Spinner(size: 18)
+                Text("Preparing shaders…")
+                if let step = progress?.currentStep { Text(step).font(.caption) }
+                if let fraction = progress?.fraction {
+                    ProgressView(value: fraction).frame(width: 240)
+                }
+                Button("Cancel") { state.cancelPreparation() }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        case let .failed(message):
+            Column(alignment: .center, spacing: 12) {
+                Text("Shader preparation failed")
+                Text(message).font(.caption)
+                Button("Retry") { state.retryPreparation?() }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .cancelled:
+            Column(alignment: .center, spacing: 12) {
+                Text("Shader preparation cancelled")
+                Button("Retry") { state.retryPreparation?() }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+@MainActor
+private func startPlayerPreparation(app: GameApplication, state: GamePlayerState) {
+    let generation = state.beginPreparation()
+    state.preparationTask = Task { @MainActor in
+        do {
+            try await app.bootstrapPrepared { progress in
+                Task { @MainActor in state.progress(progress, generation: generation) }
+            }
+            try Task.checkCancellation()
+            state.complete(.ready, generation: generation)
+        } catch is CancellationError {
+            state.complete(.cancelled, generation: generation)
+        } catch {
+            state.complete(.failed(String(describing: error)), generation: generation)
+        }
     }
 }
 
@@ -108,8 +176,12 @@ private func runPlayer() throws {
         playerState.update(surface: surface)
     }
 
-    app.bootstrap()
-    defer { app.shutdown() }
+    playerState.retryPreparation = { [weak app, weak playerState] in
+        guard let app, let playerState else { return }
+        startPlayerPreparation(app: app, state: playerState)
+    }
+    startPlayerPreparation(app: app, state: playerState)
+    defer { playerState.cancelPreparation(); app.shutdown() }
 
 
     try Application.run(

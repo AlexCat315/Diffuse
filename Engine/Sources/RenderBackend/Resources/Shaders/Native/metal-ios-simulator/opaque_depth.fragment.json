@@ -1,0 +1,164 @@
+{
+  "stage": "fragment",
+  "format": "metallib",
+  "entryPoint": "depthFragment",
+  "code": "TVRMQgEAAgAJAACHGgAAADMUAAAAAAAAWAAAAAAAAACDAAAAAAAAAOMAAAAAAAAACAAAAAAAAADrAAAAAAAAAAgAAAAAAAAA8wAAAAAAAABAEwAAAAAAAAEAAACDAAAATkFNRQ4AZGVwdGhGcmFnbWVudABUWVBFAQABSEFTSCAAHJiSydfBK0ZULe5+q80fVpg70EDzRmYduMxQcOTAjPdNRFNaCABAEwAAAAAAAE9GRlQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFZFUlMIAAIACAADAAIARU5EVEVORFQEAAAARU5EVAQAAABFTkRU3sAXCwAAAAAUAAAAKBMAAP////9CQ8DeNRQAAAMAAABiDDAkgBAFyBQAAAAhDAAAYQQAAAsCIQACAAAAFgAAAAeBI5FByARJBhAyOZIBhAwlBQgZHgSLYoAYRQJCkgtCxBAyFDgIGEsKMmKISHDEISNEEoeMEEGSAmTICLEUIENGiCDJATJihBgqKCqQMXywXJEgxsgAAACJIAAAQQAAADIiiAkgYkYAISskmBghJSSYGBknDIWkkGBiZFwgJGaCAAxGAGYAhhGGYBhBCOYIgmEEIkBKmiJKmPx/Iq6JiojfHv5pjAAYRDACjKQpooTJ/yWAeRYi+qcxAmAQARGUoJhpmgd6kId6GAd6cIN2KAd6CAd20AM9CAd5kIdwyIcUKAgH0hRRwuT/JjBFyMVOTgQYxF8sDjDhF/5zzmICiRM1wERFwPLTKViwk6aIEia/iwDLbZDCiRjpb4CJioDlpxPBMEUxiNAIxgGEQRAEIQiI4kgcekwAUDRHgByhmOYIwGAYQaiMQh3JMAwBYVV0GWEYKBsIUIFqjgAUBhEKYQoAAAAAURgAAH0AAAAb6iP4/////wFYA8AUAAnoAyIc4AEe5OEd8KENzKEe3GEc2sAc4KEN2iEc6AEdAHqQh3ooB4AwB3kIh3YohzaAh3dIB3egh3KQByAc2IEdAKId0sEd2oAdyuEcwoEd2sAeymEc6OEd5KEN7iEdyIEe0AGIAznAA2Bwh3doA3Goh3RgB3pIB3eYB4Bwh3dog3RwB3OYhzYwB3hog3YIB3pAB4Ae5KEeygEg3OEd2sAdwsEd5qENzAEe2qAdwoEe0AGgB3moh3IACHd4hzaYh3Q4B3coB3JoA30oB3l4h3loA3OAhzZoh3CgB3QA6EEe6qEcAMId3qEN6EEewgEe4CEd3OEc2qAdwoEe0AGgB3moh3IAiHmgh3AYh3VoA3iQh3egh3IYB3p4B3loA3GoB3Mwh3KQhzaYh3TQh3IA8AAg6sEd5iEczKEc2sAc4KEN2iEc6AEdAHqQh3ooB2ADISQAKWwgBgUghQ0Z0QCkMIRDOshDG4hDPZiDOZSDPLSBO7xDG4QDO6RDOMwDsAEp/v///38ATAGQgD7Y4Bj/////PwBtAJgC4AeABFRAH2wwjgBYgGqDgQjAAlQblOT/////B2ANAFMAJKAPNiDK/////w/AGgAS0AcblOX/////B6ANAAmogD7YYDD/////PwAS0AcAAEkYAAAGAAAAE4hAGIgJQTFhMA5kQpBMCJQJw3IgEwIGE8YgHNJBHuyADn7BHuQAD9ogHOABHtihHNogHd5hHuTADtwADtwADtpgHtKhHeqBHcKBHt5BHjbcRjm0ATzogR3QgR7YAR3ogR3QQRukQxzoAR7oAR60QTrggR7ggR7gQRukQxzYgR7EgR3oQRzYQRukwxzIgR7MgRzowRzIQRukgx3QgR7YAR3ogR3QQRuYwxzIgR7MgRzowRzIQRuYgx3QgR7YAR3ogR3QQRvYQxzYgR7EgR3oQRzYQRvYgxzQgR7MgRzowRzIQRvYwxzIgR7MgRzowRzIQRvYAx3ggR7YAR3ogR3QQRvYgx3QgR7YAR3ogR3QQRvYQx7YgR7EgRzggR7EgRzgQRvYQxzIAR7oQRzIAR7oQRzIAR60gT3EQR7IgR7IQR3YgR7IQR3YQRvYgxzUgR3ogRzUgR3ogRzUgR20gT3UQRzIgR7UQRzIgR7UQRzIQRvYQxzAgRzQgR7EARzIAR3oQRzAgRzQQRu4Ax7oQRzYgR7MgRxohDBkMxDPdHwRYDBEMw2pgOYBACAAAAAQAAAAAABogCFVQ0VAAAgAAAACAAAAAAANMKQKAzC4gAAYAAAABAAAAAAAGmBIFQpOBgQAAQAAIAAAAAAA0ABDqldwMiAACAAAAAEAAAAAgAaQ2CBQdIwAACALBA4AAAAyHpgUGRFMkIwJJkfGBEOqiqAECqEcyqcABQqiQEYAyqAUiqEkiqIsCqMAAwpUoIAFiBtL2AAAALEYAAClAAAAMwiAHMThHGYUAT2IQziEw4xCgAd5eAdzmHEM5gAP7RAO9IAOMwxCHsLBHc6hHGYwBT2IQziEgxvMAz3IQz2MAz3MeIx0cAd7CAd5SIdwcAd6cAN2eIdwIIcZzBEO7JAO4TAPbjAP4/AO8FAOMxDEHd4hHNghHcJhHmYwiTu8gzvQQzm0Azy8gzyEAzvM8BR2YAd7aAc3aIdyaAc3gIdwkIdwYAd2KAd2+AV2eId3gIdfCIdxGIdymId5mIEs7vAO7uAO9cAO7DADYsihHOShHMyhHOShHNxhHMohHMSBHcphBtaQQznIQzmYQznIQzm4wziUQziIAzuUwy+8gzz8gjvUAzuwwwzHaYdwWIdycIN0aAd4YId0GId0oIcZzlMP7gAP8lAO5JAO40AP4SAO7FAOMyAoHdzBHsJBHtIhHNyBHtzgHOThHeoBHmYYUTiwQzqcgzvMUCR2YAd7aAc3YId3eAd4mFFM9JAP8FAOMx5qHsphHOghHd7BHX4BHuShHMwhHfBhBlSFgzjMwzuwQz3QQzn8wjzkQzuIwzuww4zFCod5mId3GId0CAd6KAdymIFc4xAO7MAO5VAO8zAjwdJBHuThF9jhHd4BHmZIGTuwgz20gxuEwziMQznMwzy4wTnIwzvUAzzMSLRxCAd2YAdxCIdxWIcZ28YO7GAP7eAG8CAP5TAP5SAP9lAObhAO4zAO5TAP8+AG6eAO5FAO+DAj4uxhHMKBHdjhF+whHeYhHcQhHdghHeghH2YgnTu8Qz24AzmUgznMWLxwcAd3eAd6CAd6SId3cIcZzocO5RAO8BAO7MAO7zAO85AO9FAOMygwCId0kAc3MId6cIdxoId0eAd3+IVzkId3qAd4mAcAAAAAeSAAALIBAAByHkggQ4gMGQlyMkggI4GMkZHRRKAQKGQ8MTJCjpAho2gKeECHAQAAi9JY2AZt0BwUG0cGkqM8kcEcDmQQEAIl0AI9UHFAD0QcjGQoi6RgzXI0ChJRB2OkQXEsSnRZBgBTREsgVmVyc2lvbndjaGFyX3NpemVmcmFtZS1wb2ludGVyYWlyLm1heF9kZXZpY2VfYnVmZmVyc2Fpci5tYXhfY29uc3RhbnRfYnVmZmVyc2Fpci5tYXhfdGhyZWFkZ3JvdXBfYnVmZmVyc2Fpci5tYXhfdGV4dHVyZXNhaXIubWF4X3JlYWRfd3JpdGVfdGV4dHVyZXNhaXIubWF4X3NhbXBsZXJzQXBwbGUgbWV0YWwgdmVyc2lvbiAzMjAyMy45MjEgKG1ldGFsZmUtMzIwMjMuOTIxLjYpTWV0YWxhaXIuY29tcGlsZS5kZW5vcm1zX2Rpc2FibGVhaXIuY29tcGlsZS5mYXN0X21hdGhfZW5hYmxlYWlyLmNvbXBpbGUuZnJhbWVidWZmZXJfZmV0Y2hfZW5hYmxlYWlyLmZyYWdtZW50X2lucHV0dXNlcihURVhDT09SRClhaXIuY2VudGVyYWlyLnBlcnNwZWN0aXZlYWlyLmFyZ190eXBlX25hbWVmbG9hdDNhaXIuYXJnX25hbWVjb2xvcl8xYWlyLmFyZ191bnVzZWR1c2VyKFRFWENPT1JEXzEpZmxvYXQydXZfMXVzZXIoVEVYQ09PUkRfMilub3JtYWxfMXVzZXIoVEVYQ09PUkRfMyl0YW5nZW50XzF1c2VyKFRFWENPT1JEXzQpYml0YW5nZW50XzF1c2VyKFRFWENPT1JEXzUpd29ybGRQb3NpdGlvbl8xdXNlcihURVhDT09SRF82KWZsb2F0ZGVwdGhfMXVzZXIoVEVYQ09PUkRfNyltYXRlcmlhbEluZGV4XzFhaXIuZnJvbnRfZmFjaW5nYm9vbGZyb250XzJhaXIucG9zaXRpb25haXIubm9fcGVyc3BlY3RpdmVmbG9hdDRwb3NpdGlvbl8xYWlyLnRleHR1cmVhaXIubG9jYXRpb25faW5kZXhhaXIuc2FtcGxldGV4dHVyZTJkPGZsb2F0LCBzYW1wbGU+YmFzZVRleHR1cmVfMWFpci5zYW1wbGVyc2FtcGxlcm1lc2hTYW1wbGVyXzFhaXIuYnVmZmVyYWlyLnJlYWRhaXIuYWRkcmVzc19zcGFjZWFpci5zdHJ1Y3RfdHlwZV9pbmZvX19lbGVtc21ldGFsOjphcnJheWRhdGFfMF9NYXRyaXhTdG9yYWdlX2Zsb2F0NHg0X0NvbE1ham9ybmF0dXJhbF8wbXZwXzBtb2RlbF8wY29sb3JUaW50XzBtYXRlcmlhbF8wYWlyLmFyZ190eXBlX3NpemVhaXIuYXJnX3R5cGVfYWxpZ25fc2l6ZURyYXdVbmlmb3Jtc19uYXR1cmFsXzBkcmF3XzGGywAAAAAAADCCUBUjCBw2glAZIwjVMYJQISMIVTKCUCkjCNUyglAxIwhVM4JQOSMI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",
+  "interface": {
+    "threadgroupSize": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "bindings": [
+      {
+        "name": "draw",
+        "slot": 0,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "instances",
+        "slot": 1,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 160
+        }
+      },
+      {
+        "name": "meshSampler",
+        "slot": 2,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "baseTexture",
+        "slot": 3,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "skinParameters",
+        "slot": 11,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "jointPalette",
+        "slot": 12,
+        "space": 0,
+        "type": "storageBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 64
+        }
+      },
+      {
+        "name": "sceneLights",
+        "slot": 4,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "normalTexture",
+        "slot": 5,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "mrTexture",
+        "slot": 6,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "shadow",
+        "slot": 7,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "shadowSampler",
+        "slot": 8,
+        "space": 0,
+        "type": "sampler",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "shadowTexture",
+        "slot": 9,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "iblTexture",
+        "slot": 10,
+        "space": 0,
+        "type": "texture",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      },
+      {
+        "name": "style",
+        "slot": 13,
+        "space": 0,
+        "type": "uniformBuffer",
+        "buffer": {
+          "readOnly": true,
+          "elementStride": 0
+        }
+      }
+    ],
+    "specializationConstants": [],
+    "threadgroupSpecialization": {
+      "x": null,
+      "y": null,
+      "z": null
+    },
+    "pushConstants": []
+  },
+  "compiler": "Slang 2026.19; Apple Metal",
+  "sourceFingerprint": "0e851e3c9ae0fa312fb59b8315829e463e945fb36fbbf05a74e317b9ef1d02f4"
+}

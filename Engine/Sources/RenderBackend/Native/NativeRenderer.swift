@@ -38,19 +38,46 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     public var colorTexture: Texture? { targets?.color?.texture }
     public var residentMeshCount: Int { meshes.residentCount }
 
-    public init(device: Device, surface: RenderSurfaceDescriptor? = nil, assets: AssetRegistry = .shared, inGameUI: (any InGameUIProviding)? = nil) throws {
+    public init(device: Device, surface: RenderSurfaceDescriptor? = nil, assets: AssetRegistry = .shared,
+                inGameUI: (any InGameUIProviding)? = nil, preparation: ResourcePreparationContext? = nil,
+                initialSettings: RenderSettings = RenderSettings(), particleWorkgroupSizes: [Int] = [64]) throws {
         self.inGameUI = inGameUI
         self.device = device; windowTarget = surface.map { NativeWindowTarget(device: device, surface: $0) }
-        meshes = try NativeMeshStore(device: device, registry: assets)
-        meshPass = try NativeMeshPass(device: device)
+        meshes = try rendererPreparationStep(preparation, "Meshes") { try NativeMeshStore(device: device, registry: assets) }
+        meshPass = try rendererPreparationStep(preparation, "Materials") {
+            let pass = try NativeMeshPass(device: device)
+            if preparation != nil { try pass.prewarm(settings: initialSettings) }
+            return pass
+        }
         deformables = NativeDeformableMeshes(device: device)
-        lighting = try NativeLightingResources(device: device)
-        shadows = try NativeShadowPass(device: device)
-        hdrPasses = try NativeHDRPasses(device: device)
-        grid = try NativeEditorGridPass(device: device)
-        post = try NativePostPasses(device: device)
-        particles = try NativeParticlePass(device: device)
-        particleSimulation = NativeParticleSimulation(device: device)
+        lighting = try rendererPreparationStep(preparation, "Lighting") { try NativeLightingResources(device: device) }
+        shadows = try rendererPreparationStep(preparation, "Shadows") { try NativeShadowPass(device: device) }
+        hdrPasses = try rendererPreparationStep(preparation, "HDR") { try NativeHDRPasses(device: device) }
+        grid = try rendererPreparationStep(preparation, "Grid") { try NativeEditorGridPass(device: device) }
+        post = try rendererPreparationStep(preparation, "Post-processing") {
+            let pass = try NativePostPasses(device: device)
+            if preparation != nil { try pass.prewarm(settings: initialSettings) }
+            return pass
+        }
+        let particleResources = try rendererPreparationStep(preparation, "Particles") {
+            let pass = try NativeParticlePass(device: device)
+            let simulation = NativeParticleSimulation(device: device)
+            if preparation != nil {
+                try pass.prewarm(hdr: initialSettings.shading.pbr)
+                try simulation.prewarm(workgroupSizes: particleWorkgroupSizes)
+            }
+            return (pass, simulation)
+        }
+        particles = particleResources.0; particleSimulation = particleResources.1
+    }
+    public static func prepared(device: Device, surface: RenderSurfaceDescriptor? = nil,
+        assets: AssetRegistry = .shared, inGameUI: (any InGameUIProviding)? = nil,
+        initialSettings: RenderSettings = RenderSettings(), particleWorkgroupSizes: [Int] = [64],
+        onProgress: @escaping @Sendable (ResourcePreparationProgress) -> Void = { _ in }) async throws -> sending NativeRenderer {
+        try await device.prepareResources(label: "Preparing shaders", totalSteps: 8, onProgress: onProgress) { context in
+            try NativeRenderer(device: device, surface: surface, assets: assets, inGameUI: inGameUI,
+                preparation: context, initialSettings: initialSettings, particleWorkgroupSizes: particleWorkgroupSizes)
+        }
     }
     public func initialize() { Logger.renderer.info("NativeRenderer ready (\(device.deviceName))") }
     public func currentFrameStats() -> RenderFrameStats { lastFrameStats }
@@ -293,4 +320,10 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         let replacement = try NativeRenderTargets.make(device: device, size: capacity, offscreen: windowTarget == nil, hdr: hdr)
         targets = replacement
     }
+}
+
+private func rendererPreparationStep<T>(_ context: ResourcePreparationContext?, _ label: String,
+    _ operation: () throws -> T) throws -> T {
+    if let context { return try context.step(label, operation) }
+    return try operation()
 }

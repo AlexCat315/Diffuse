@@ -123,7 +123,17 @@ public final class GameApplication: @unchecked Sendable {
         engine.queueRenderSettings(RenderSettings { $0.postProcessing.fxaa = true; $0.shadows.enabled = true; $0.viewport.offscreen = true })
     }
 
+    @MainActor
+    public func bootstrapPrepared(onProgress: @escaping @Sendable (ResourcePreparationProgress) -> Void = { _ in }) async throws {
+        let settings = RenderSettings { $0.postProcessing.fxaa = true; $0.shadows.enabled = true; $0.viewport.offscreen = true }
+        let renderer = try await engine.prepareRenderer(enableViewportSurface: true, initialSettings: settings, onProgress: onProgress)
+        try Task.checkCancellation()
+        engine.start(renderSurface: nil, enableViewportSurface: true, renderConsumer: renderer)
+        engine.queueRenderSettings(settings)
+    }
+
     public func tick(deltaTime: Double) {
+        guard engine.isStarted else { return }
         scriptCatalogReloadElapsed += max(0, deltaTime)
         if scriptCatalogReloadElapsed >= 1 {
             scriptCatalogReloadElapsed = 0

@@ -75,11 +75,11 @@ public enum EditorIssueTarget: Codable, Sendable, Equatable, Hashable {
 }
 
 public enum EditorOperationKind: String, Codable, Sendable {
-    case importing, exporting
+    case importing, exporting, preparingRenderer
 }
 
 public enum EditorOperationStatus: String, Codable, Sendable {
-    case running, succeeded, failed
+    case running, succeeded, failed, cancelled
 }
 
 public struct EditorOperation: Identifiable, Sendable, Equatable {

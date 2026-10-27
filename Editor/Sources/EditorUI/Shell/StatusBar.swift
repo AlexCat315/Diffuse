@@ -40,7 +40,7 @@ struct EditorStatusBar: View {
         Row(alignment: .center, spacing: 10) {
             // Being connected is the normal state and needs no mark; only
             // losing the connection is worth a signal.
-            if !store.connected {
+            if !store.connected && !store.operations.contains(where: { $0.kind == .preparingRenderer && $0.status == .running }) {
                 Box { EmptyView() }
                     .frame(width: 6, height: 6)
                     .background(.warning)
@@ -133,7 +133,21 @@ struct EditorStatusBar: View {
                         .frame(width: 54)
                     Text("\(operation.completed)/\(operation.total)").font(.caption).foregroundColor(.onSurfaceMuted)
                 }
+                if operation.kind == .preparingRenderer {
+                    Button(L("Cancel")) { app.cancelRendererPreparation() }
+                        .buttonStyle(.plain).font(.caption)
+                        .debugName("editor-cancel-shader-preparation")
+                }
             }.debugName("editor-status-activity")
+        } else if let operation = store.operations.last(where: {
+            $0.kind == .preparingRenderer && ($0.status == .failed || $0.status == .cancelled)
+        }) {
+            Row(alignment: .center, spacing: 6) {
+                Text(L(operation.message)).font(.caption).foregroundColor(.onSurfaceVariant)
+                Button(L("Retry")) { app.retryRendererPreparation() }
+                    .buttonStyle(.plain).font(.caption)
+                    .debugName("editor-retry-shader-preparation")
+            }
         } else if building > 0 {
             Row(alignment: .center, spacing: 6) {
                 Spinner(size: 10)

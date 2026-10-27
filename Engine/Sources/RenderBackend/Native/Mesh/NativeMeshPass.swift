@@ -119,13 +119,35 @@ final class NativeMeshPass {
     }
     private func pipeline(key: NativeMeshBatchKey, kind: NativeMeshPassKind, hdr: Bool, stylized: Bool) throws -> GraphicsPipeline {
         let variant = NativeMeshPipelineKey(kind: kind,stylized: stylized,hdr: hdr, mirrored: key.mirrored, doubleSided: key.doubleSided, blend: key.mode == .blend)
+        return try pipeline(variant)
+    }
+    func prewarm(settings: RenderSettings) throws {
+        for mirrored in [false, true] {
+            for doubleSided in [false, true] {
+                for blend in [false, true] {
+                    _ = try pipeline(NativeMeshPipelineKey(kind: .color, stylized: settings.stylization.enabled,
+                        hdr: settings.shading.pbr, mirrored: mirrored, doubleSided: doubleSided, blend: blend))
+                    if !blend, settings.shading.depthPrepass {
+                        _ = try pipeline(NativeMeshPipelineKey(kind: .depth, stylized: false,
+                            hdr: settings.shading.pbr, mirrored: mirrored, doubleSided: doubleSided, blend: false))
+                    }
+                    if !blend, settings.stylization.enabled {
+                        _ = try pipeline(NativeMeshPipelineKey(kind: .outline, stylized: false,
+                            hdr: settings.shading.pbr, mirrored: mirrored, doubleSided: doubleSided, blend: false))
+                    }
+                }
+            }
+        }
+    }
+    private func pipeline(_ variant: NativeMeshPipelineKey) throws -> GraphicsPipeline {
+        let kind = variant.kind, hdr = variant.hdr, stylized = variant.stylized
         if let existing = pipelines[variant] { return existing }
         let pipeline = try device.makeGraphicsPipeline(GraphicsPipelineDescriptor(layout: pipelineLayout,
             vertex: shaders[kind == .outline ? .outlineVertex : .vertex],
             fragment: shaders[kind == .outline ? .outlineFragment : kind == .depth ? .depth : stylized ? .stylized : .color],
             colorAttachments: kind == .depth ? [] : [ColorAttachmentDescriptor(format: hdr ? .rgba16Float : .bgra8Unorm, blend: variant.blend ? .alphaBlend : .opaque)],
-            rasterization: RasterizationState(cullMode: kind == .outline ? .front : key.doubleSided ? .none : .back,
-                frontWinding: key.mirrored ? .clockwise : .counterClockwise),
+            rasterization: RasterizationState(cullMode: kind == .outline ? .front : variant.doubleSided ? .none : .back,
+                frontWinding: variant.mirrored ? .clockwise : .counterClockwise),
             depthStencil: DepthStencilState(depthCompare: kind == .depth ? .less : .lessOrEqual, depthWriteEnabled: !variant.blend && kind != .outline),
             vertexLayout: NativeMeshVertexLayout.descriptor, label: "native-mesh-\(kind)"))
         pipelines[variant] = pipeline; return pipeline

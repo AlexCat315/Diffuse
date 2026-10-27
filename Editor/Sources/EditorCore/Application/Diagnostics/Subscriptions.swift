@@ -6,6 +6,7 @@ final class EditorSubscriptions {
     var events: PlatformEventBridge.SubscriptionToken?
     var settings: EditorStore.SubscriptionToken?
     let console = EditorLogCapture()
+    let rendererPreparation = EditorRendererPreparation()
 }
 
 /// The writer only queues values. The editor's tick applies them to observable state.

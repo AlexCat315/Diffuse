@@ -18,14 +18,8 @@ enum NativeShaderLibrary {
         return result
     }
     static func artifact(name: String, api: GraphicsAPI, stage: ShaderStage) throws -> ShaderArtifact {
-        let target = target(for: api)
-        guard let url = RenderBackendResourceBundle.bundle.url(forResource: "\(name).\(stage.rawValue)", withExtension: "json",
-            subdirectory: "Shaders/Native/\(target)") else {
-            throw RHIError.unsupportedFeature("missing \(target) \(name) artifact; rebuild native renderer shaders")
-        }
-        let artifact = try JSONDecoder().decode(ShaderArtifact.self, from: Data(contentsOf: url))
-        guard artifact.stage == stage else { throw RHIError.layoutMismatch("artifact stage mismatch: \(name)") }
-        return artifact
+        try ShaderArtifact.load(from: RenderBackendResourceBundle.bundle, name: name, stage: stage,
+            api: api, target: target(for: api))
     }
     private static func target(for api: GraphicsAPI) -> String {
         switch api {
