@@ -2,9 +2,11 @@
 
 ## Unreleased
 
+- 同步 Cove SDK 0.2.5：提供 `@TrackStateReads` 字段读取推导和 Metal GPU 时间戳；UI MSAA 经固定场景评估后继续保留默认 4x，解析 1x 可按窗口启用。
+
 - Engine 原生依赖构建使用 Diffuse 自带的 CMake 平台与产物清单辅助文件，不再假设已安装的 Cove SDK 包含原生源码构建工具。
 
-- 编辑器改名为 Diffuse，Cove SDK、模块、CLI、工作区配置、发布包与插件宿主名称同步迁移；固定依赖 Cove SDK 0.2.4。
+- 编辑器改名为 Diffuse，Cove SDK、模块、CLI、工作区配置、发布包与插件宿主名称同步迁移；固定依赖 Cove SDK 0.2.5。
 
 - SDK 安装器按固定版本获取，不再依赖 Latest 中的安装脚本；显式本地 SDK 覆盖支持联调，并统一使用物理路径，避免目录改名后的编译缓存冲突。
 - 固定分辨率游戏预览生成有效区域内的 GPU mip 金字塔，UI 按显示像素选择 LOD，避免缩小时采入容量 padding；旧快照继续拥有各级纹理。
