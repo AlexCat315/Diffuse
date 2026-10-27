@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Windows 包边界检查优先调用已安装 SDK 的 `cove.exe`，源码仓库才回退到 `cove.cmd`，修复安装后找不到命令的问题。
+
 - 同步 Cove SDK 0.2.5：提供 `@TrackStateReads` 字段读取推导和 Metal GPU 时间戳；UI MSAA 经固定场景评估后继续保留默认 4x，解析 1x 可按窗口启用。
 
 - Engine 原生依赖构建使用 Diffuse 自带的 CMake 平台与产物清单辅助文件，不再假设已安装的 Cove SDK 包含原生源码构建工具。

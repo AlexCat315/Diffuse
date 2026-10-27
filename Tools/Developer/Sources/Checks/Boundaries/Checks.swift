@@ -39,7 +39,8 @@ struct BoundaryChecks {
   mutating func perform() throws {
     defer { try? Fs.remove(application) }
     #if os(Windows)
-    let command = sdkRoot.appendingPathComponent("cove.cmd")
+    let binary = sdkRoot.appendingPathComponent("cove.exe")
+    let command = FileManager.default.fileExists(atPath: binary.path) ? binary : sdkRoot.appendingPathComponent("cove.cmd")
     #else
     let command = sdkRoot.appendingPathComponent("cove")
     #endif
