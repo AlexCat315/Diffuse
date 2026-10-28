@@ -7,7 +7,7 @@ import SIMDCompat
 /// Transient selection state belongs to the editor; authored control vertices
 /// and topology continue to live in the native asset and unified edit history.
 public final class EditorMeshEditing {
-    private weak var app: EditorApplication?
+    weak var app: EditorApplication?
     public private(set) var entityID: UInt64?
     public private(set) var mode: EditorMeshSelectionMode = .object
     public private(set) var selection: Set<Int> = []
@@ -20,10 +20,15 @@ public final class EditorMeshEditing {
     private var vertexCount = 0
     private var cachedPicker: (mesh: PolygonMesh,world: simd_float4x4,picker: EditorMeshPicker)?
     private var transformVertices: Set<Int>?
+    var insetFaces: Set<Int>?
+    public internal(set) var insetDistance: Float = 0.1
+    public internal(set) var isInsetPreviewValid = false
 
     init(app: EditorApplication) { self.app = app }
     public var isEditing: Bool { entityID != nil && mode != .object }
     public var isTransforming: Bool { transformVertices != nil }
+    public var isInsetting: Bool { insetFaces != nil }
+    public var hasInteractiveEdit: Bool { isTransforming || isInsetting }
 
     public var canEnter: Bool {
         guard let app, app.store.playbackState == .stopped, let id = app.store.selectedEntityID,
@@ -36,7 +41,7 @@ public final class EditorMeshEditing {
         if next == .object { leave(); return true }
         guard canEnter, let app, let id = app.store.selectedEntityID else { return false }
         if entityID == id, mode == next { return true }
-        _ = cancelTransform()
+        _ = cancelInteractiveEdit()
         if entityID != id || !isEditing {
             guard app.geometryAuthoring.edit(entityID: id,{ document in
                 if case .polygon = document.source { return }
@@ -52,7 +57,7 @@ public final class EditorMeshEditing {
     public func synchronize() {
         guard isEditing else { return }
         guard canEnter, let app, app.store.selectedEntityID == entityID, let mesh = controlMesh() else { leave(); return }
-        if vertexCount != mesh.positions.count || topology != mesh.faces.map(\.vertices) {
+        if !isInsetting, vertexCount != mesh.positions.count || topology != mesh.faces.map(\.vertices) {
             _ = cancelTransform()
             selection = []
             rememberTopology(mesh)
@@ -60,7 +65,7 @@ public final class EditorMeshEditing {
     }
 
     public func leave() {
-        _ = cancelTransform()
+        _ = cancelInteractiveEdit()
         pointer.clear()
         entityID = nil; mode = .object; selection = []; topology = []; vertexCount = 0; cachedPicker = nil
         refresh()
@@ -77,7 +82,7 @@ public final class EditorMeshEditing {
     @discardableResult
     public func applyModifiers() -> Bool {
         synchronize()
-        guard !isTransforming, let app, let id = entityID,
+        guard !hasInteractiveEdit, let app, let id = entityID,
               let document = try? app.geometryAuthoring.document(for: id), let last = document.modifiers.last else { return false }
         let success = app.geometryAuthoring.applyModifier(last.id,on: id)
         if success { synchronize(); refresh() }
@@ -122,7 +127,7 @@ public final class EditorMeshEditing {
 
     private func editComponents(_ update: (inout PolygonMesh, EditorMeshSelectionMode, Set<Int>) throws -> Set<Int>) -> Bool {
         synchronize()
-        guard !isTransforming, isEditing, !selection.isEmpty, let app, let id = entityID else { return false }
+        guard !hasInteractiveEdit, isEditing, !selection.isEmpty, let app, let id = entityID else { return false }
         let previous = selection, previousMode = mode
         var next: Set<Int> = []
         let success = app.geometryAuthoring.edit(entityID: id) { document in
@@ -136,7 +141,7 @@ public final class EditorMeshEditing {
 
     public func select(_ indices: Set<Int>, extending: Bool = false, toggling: Bool = false) {
         synchronize()
-        guard isEditing, let picker = picker() else { return }
+        guard isEditing, !hasInteractiveEdit, let picker = picker() else { return }
         let count = mode == .vertex ? picker.positions.count : (mode == .edge ? picker.edges.count : picker.mesh.faces.count)
         let valid = indices.filter { (0..<count).contains($0) }
         if toggling { selection.formSymmetricDifference(valid) }
@@ -152,6 +157,7 @@ public final class EditorMeshEditing {
     }
 
     public func invertSelection() {
+        guard !hasInteractiveEdit else { return }
         let previous = selection
         selectAll()
         selection.subtract(previous)
@@ -194,7 +200,7 @@ public final class EditorMeshEditing {
 
     public func moveSelectionCenter(to position: SIMD3<Float>) -> Bool {
         synchronize()
-        guard let app, let id = entityID, let center = selectionCenter else { return false }
+        guard !hasInteractiveEdit, let app, let id = entityID, let center = selectionCenter else { return false }
         let vertices = selectedVertices
         return app.geometryAuthoring.edit(entityID: id) { doc in
             guard case var .polygon(mesh) = doc.source else { return }
@@ -205,7 +211,7 @@ public final class EditorMeshEditing {
 
     public func extrudeRegion() -> Bool {
         synchronize()
-        guard let app, let id = entityID, mode == .face, !selection.isEmpty, let mesh = controlMesh() else { return false }
+        guard !hasInteractiveEdit, let app, let id = entityID, mode == .face, !selection.isEmpty, let mesh = controlMesh() else { return false }
         var normal = SIMD3<Float>.zero
         for index in selection.sorted() where mesh.faces.indices.contains(index) {
             let vertices = mesh.faces[index].vertices, origin = mesh.positions[vertices[0]]
@@ -238,7 +244,7 @@ public final class EditorMeshEditing {
 
     public func beginTransform() -> Bool {
         synchronize()
-        guard let app, let id = entityID, isEditing, !selectedVertices.isEmpty,
+        guard !hasInteractiveEdit, let app, let id = entityID, isEditing, !selectedVertices.isEmpty,
               app.geometryAuthoring.beginInteractiveEdit(entityID: id) else { return false }
         transformVertices = selectedVertices
         return true
@@ -272,8 +278,8 @@ public final class EditorMeshEditing {
         return true
     }
 
-    private func rememberTopology(_ mesh: PolygonMesh) { topology = mesh.faces.map(\.vertices); vertexCount = mesh.positions.count }
-    private func refresh() { app?.store.geometryChanged(); app?.requestDisplayRefresh() }
+    func rememberTopology(_ mesh: PolygonMesh) { topology = mesh.faces.map(\.vertices); vertexCount = mesh.positions.count }
+    func refresh() { app?.store.geometryChanged(); app?.requestDisplayRefresh() }
 }
 
 public enum EditorMeshExtrusionDirection: String, CaseIterable, Sendable { case normal, x, y, z }

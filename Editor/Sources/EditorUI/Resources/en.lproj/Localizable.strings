@@ -1182,3 +1182,8 @@
 "Dissolve Edges" = "Dissolve Edges";
 
 "Delete Selected Components" = "Delete Selected Components";
+"Inset Individual Faces" = "Inset Individual Faces";
+"Inset Width" = "Inset Width";
+"Inset width collapses the face" = "Inset width collapses the face";
+"Confirm Inset" = "Confirm Inset";
+"Cancel Inset" = "Cancel Inset";

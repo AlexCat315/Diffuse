@@ -27,26 +27,7 @@ extension PolygonMesh {
             }
         }
         if first.uvs == nil { return nil }
-        try validateDissolveUVs(vertices,values: values)
+        _ = try PolygonUVProjection(positions: vertices.map { positions[$0] },uvs: vertices.map { values[$0]! })
         return values
-    }
-
-    private func validateDissolveUVs(_ vertices: [Int],values: [Int: SIMD2<Float>]) throws {
-        let a = vertices[0], origin = positions[a]
-        let b = vertices.max { simd_length_squared(positions[$0]-origin) < simd_length_squared(positions[$1]-origin) }!
-        let e1 = positions[b]-origin
-        let c = vertices.max { simd_length_squared(simd_cross(e1,positions[$0]-origin)) < simd_length_squared(simd_cross(e1,positions[$1]-origin)) }!
-        let e2 = positions[c]-origin
-        let d11 = simd_dot(e1,e1), d12 = simd_dot(e1,e2), d22 = simd_dot(e2,e2), determinant = d11*d22-d12*d12
-        guard determinant.isFinite, determinant > max(1e-24,d11*d22*1e-8) else { throw GeometryError.invalidMesh("degenerate dissolve UV frame") }
-        let uv = values[a]!, du = values[b]!-uv, dv = values[c]!-uv
-        let tolerance = max(1e-5,values.values.reduce(Float(0)) { max($0,simd_length($1-uv)) }*1e-5)
-        for vertex in vertices {
-            let point = positions[vertex]-origin, u = simd_dot(point,e1), v = simd_dot(point,e2)
-            let expected = uv+du*((u*d22-v*d12)/determinant)+dv*((v*d11-u*d12)/determinant)
-            guard simd_distance(expected,values[vertex]!) <= tolerance else {
-                throw GeometryError.invalidMesh("dissolve would change UV interpolation")
-            }
-        }
     }
 }

@@ -264,6 +264,13 @@ extension EditorGeometryAuthoring {
         guard let state = interactive else { return false }
         interactive = nil
         AssetRegistry.shared.unregisterTransientMesh(at: state.asset.meshIndex)
+        if let app, let url = try? checkedURL(state.asset),
+           (try? GeometryDocument.load(from: url)) != state.original {
+            cache.removeValue(forKey: url.path)
+            _ = try? EditorAssetCatalog.loadProject(at: app.projectDirectory)
+            app.scene.refreshAssetGeometry()
+            app.workstation.documents.reloadUnmodified()
+        }
         refresh()
         return true
     }

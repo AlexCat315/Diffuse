@@ -1286,3 +1286,8 @@
 "Dissolve Edges" = "溶解边";
 
 "Delete Selected Components" = "删除选中元素";
+"Inset Individual Faces" = "逐面内插";
+"Inset Width" = "内插宽度";
+"Inset width collapses the face" = "宽度过大或无效";
+"Confirm Inset" = "确认内插";
+"Cancel Inset" = "取消内插";

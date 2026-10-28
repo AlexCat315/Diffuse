@@ -9,7 +9,7 @@ import SIMDCompat
 enum MeshViewportInteraction {
     static func snapshot(app: EditorApplication, mode: EditorGizmoMode, space: EditorGizmoSpace) {
         let model = app.meshEditing
-        guard let id = model.entityID, let center = model.selectionCenter,
+        guard !model.isInsetting, let id = model.entityID, let center = model.selectionCenter,
               let world = app.scene.entityWorldMatrix(id), let frame = EditorViewportDropTarget.frame,
               simd_determinant(world).isFinite, abs(simd_determinant(world)) > 1e-10,
               let gizmoMode = gizmoMode(mode) else { EditorGizmoController.shared.updateSnapshot(nil); return }
@@ -37,8 +37,9 @@ enum MeshViewportInteraction {
         let pointer = model.pointer
         switch event {
         case .windowFocusLost:
-            _ = model.cancelTransform(); pointer.clear(); return false
+            _ = model.cancelInteractiveEdit(); pointer.clear(); return false
         case let .mouseButtonDown(button) where button.button == .left && !button.modifiers.hasAlt:
+            if model.isInsetting { return true }
             guard let frame = EditorViewportDropTarget.frame, frame.contains(x: button.x,y: button.y) else { return false }
             _ = model.cancelTransform()
             app.scene.endInteractiveEditHistoryGroup()
@@ -85,13 +86,20 @@ enum MeshViewportInteraction {
             return true
         case let .keyDown(key) where EditorViewportKeyRoutingPolicy.handlesLocally(key):
             if key.scancode == 41 {
-                if !model.cancelTransform() { model.select([]) }
+                if !model.cancelInteractiveEdit() { model.select([]) }
                 pointer.clear(); PointerCaptureHolder.current?.release(); return true
+            }
+            if model.isInsetting {
+                if key.scancode == 40, !key.isRepeat { _ = model.commitInset() }
+                return true
             }
             if model.isTransforming { return true }
             switch key.scancode {
             case 4: if key.modifiers.hasAlt { model.select([]) } else { model.selectAll() }; return true
             case 8 where key.modifiers.hasShift && model.mode == .face: _ = model.extrudeRegion(); return true
+            case 12 where model.mode == .face:
+                if !key.isRepeat { _ = model.beginInset() }
+                return true
             case 29 where key.modifiers.hasAlt: model.setXray(!model.xray); return true
             case 42,76:
                 if key.isRepeat { return true }

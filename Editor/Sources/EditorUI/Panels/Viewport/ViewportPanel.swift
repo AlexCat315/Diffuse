@@ -63,10 +63,13 @@ struct ViewportPanel: View {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 6) {
                     MeshEditControls(app: app)
-                    ViewportToolMenu(store: app.store,mode: gizmoMode,
-                                     isEnabled: playbackState == .stopped)
-                    ViewportTransformMenu(store: app.store,isEnabled: playbackState == .stopped)
-                    if app.meshEditing.isEditing { MeshOperationsMenu(app: app) }
+                    if app.meshEditing.isInsetting { MeshInsetControls(model: app.meshEditing) }
+                    else {
+                        ViewportToolMenu(store: app.store,mode: gizmoMode,
+                                         isEnabled: playbackState == .stopped)
+                        ViewportTransformMenu(store: app.store,isEnabled: playbackState == .stopped)
+                        if app.meshEditing.isEditing { MeshOperationsMenu(app: app) }
+                    }
                     Spacer(minLength: 0)
                     ViewportViewMenu(camera: ViewportCameraOptions(scene: scene,
                                        isEnabled: EditorSceneAuthoringPolicy.canEditScene(during: playbackState),

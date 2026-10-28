@@ -45,9 +45,11 @@ struct MeshOperationsMenu: View {
     }
 
     private func entries(_ model: EditorMeshEditing) -> [MenuEntry] {
-        let faces = model.mode == .face && !model.selection.isEmpty && !model.isTransforming
-        let components = !model.selection.isEmpty && !model.isTransforming
+        let faces = model.mode == .face && !model.selection.isEmpty && !model.hasInteractiveEdit
+        let components = !model.selection.isEmpty && !model.hasInteractiveEdit
         return [
+            .item(MenuItem(id: "mesh-inset",title: L("Inset Individual Faces"),shortcut: "I",isEnabled: faces,
+                           content: .init(icon: UIIcons.Shape.square),action: { _ = model.beginInset() })),
             .item(MenuItem(id: "mesh-subdivide",title: L("Subdivide Faces"),isEnabled: faces,action: { _ = model.subdivideSelection() })),
             .item(MenuItem(id: "mesh-triangulate",title: L("Triangulate Faces"),isEnabled: faces,action: { _ = model.triangulateSelection() })),
             .item(MenuItem(id: "mesh-extrude",title: L("Extrude Region"),shortcut: "Shift E",isEnabled: faces,action: { _ = model.extrudeRegion() })),
@@ -56,7 +58,7 @@ struct MeshOperationsMenu: View {
             .item(MenuItem(id: "mesh-delete",title: L("Delete Selected Components"),shortcut: "Delete",isEnabled: components,role: .destructive,
                            content: .init(icon: UIIcons.Action.trash),action: { _ = model.deleteSelection() })),
             .separator(id: "mesh-topology-apply"),
-            .item(MenuItem(id: "mesh-apply-modifiers",title: L("Apply Modifiers to Mesh"),isEnabled: model.hasModifiers && !model.isTransforming,
+            .item(MenuItem(id: "mesh-apply-modifiers",title: L("Apply Modifiers to Mesh"),isEnabled: model.hasModifiers && !model.hasInteractiveEdit,
                            action: { _ = model.applyModifiers() })),
             .separator(id: "mesh-visibility"),
             .item(MenuItem(id: "mesh-xray",title: L("X-Ray"),shortcut: "Alt Z",isSelected: model.xray,action: { model.setXray(!model.xray) })),
