@@ -41,6 +41,7 @@ enum RebuildCommand {
   ]
 
   static let fixedShaders: [(String, String, [(String, String)])] = [
+    ("editor_geometry", "editor_geometry.slang", [("vertex", "overlayVertex"), ("fragment", "overlayFragment")]),
     ("editor_grid", "editor_grid.slang", [("vertex", "gridVertex"), ("fragment", "gridFragment")]),
     ("opaque_mesh", "opaque_mesh.slang", [("vertex", "meshVertex"), ("fragment", "meshFragment")]),
     (

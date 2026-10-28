@@ -19,6 +19,8 @@ public enum RenderPassKind: String, Sendable, CaseIterable {
     case viewportResolve
     /// Dynamic HUD overlay, recorded after scene post-processing.
     case inGameUI
+    /// Editor geometry composites after post-processing, outside opaque history.
+    case editorGeometry
 
     /// Passes whose output is a pure function of the opaque scene inputs
     /// (geometry, lights, camera, settings) — i.e. everything before the

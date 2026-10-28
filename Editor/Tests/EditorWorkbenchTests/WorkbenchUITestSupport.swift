@@ -34,7 +34,7 @@ enum WorkbenchUITestSupport {
         let atlas = FontAtlas(width: 512, height: 512)
         atlas.loadFont(path: try #require(fontPath), size: 12)
         let shaper = TextShaper()
-        if let face = atlas.freetypeFace { shaper.setFont(ftFace: face, size: 12) }
+        if let face = atlas.fontFace { shaper.setFace(face, size: 12) }
         let previousText = TextEnvironmentHolder.current
         let previousRegistry = InteractionRegistryHolder.current
         let previousFocus = FocusChainHolder.current

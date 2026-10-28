@@ -20,7 +20,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
     private let lighting: NativeLightingResources
     private let shadows: NativeShadowPass
     private let hdrPasses: NativeHDRPasses
-    private let grid: NativeEditorGridPass
+    private let editor: NativeEditorPasses
     private let post: NativePostPasses
     private let particles: NativeParticlePass
     let particleSimulation: NativeParticleSimulation
@@ -53,7 +53,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
         lighting = try rendererPreparationStep(preparation, "Lighting") { try NativeLightingResources(device: device) }
         shadows = try rendererPreparationStep(preparation, "Shadows") { try NativeShadowPass(device: device) }
         hdrPasses = try rendererPreparationStep(preparation, "HDR") { try NativeHDRPasses(device: device) }
-        grid = try rendererPreparationStep(preparation, "Grid") { try NativeEditorGridPass(device: device) }
+        editor = try rendererPreparationStep(preparation, "Grid") { try NativeEditorPasses(device: device) }
         post = try rendererPreparationStep(preparation, "Post-processing") {
             let pass = try NativePostPasses(device: device)
             if preparation != nil { try pass.prewarm(settings: initialSettings) }
@@ -185,7 +185,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             case .editorGrid:
                 if hdr { try hdrPasses.encodeGrid(packet: packet,hdr: current,depth: targets.depth.texture,into: commands) }
                 else {
-                    try grid.encode(packet: packet,color: RenderColorTarget(texture: current,loadAction: .load),
+                    try editor.grid.encode(packet: packet,color: RenderColorTarget(texture: current,loadAction: .load),
                         depth: RenderDepthTarget(texture: targets.depth.texture,loadAction: .load),into: commands)
                 }
             case .taa:
@@ -229,7 +229,7 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
                 guard let particleFrame else { continue }
                 particles.encode(particleFrame,size: packet.drawableSize,color: current,depth: targets.depth.texture,into: commands)
                 draws = particleFrame.draws.count
-            case .viewportResolve, .inGameUI: continue
+            case .viewportResolve, .inGameUI, .editorGeometry: continue
             case .outline:
                 let outlines = opaqueDraws.filter { $0.outlinePipeline != nil }
                 meshPass.encode(draws: outlines,size: packet.drawableSize,color: RenderColorTarget(texture: current,loadAction: .load),
@@ -244,6 +244,14 @@ public final class NativeRenderer: RenderPacketConsumer, @unchecked Sendable {
             }
             passTimes[kind] = DispatchTime.now().uptimeNanoseconds - before
             passDraws[kind] = draws; active.append(kind)
+        }
+        if !packet.scene.geometryOverlays.isEmpty {
+            let before = DispatchTime.now().uptimeNanoseconds
+            let draws = try editor.geometry.encode(packet: packet,color: color,depth: targets.depth.texture,into: commands)
+            if draws > 0 {
+                active.append(.editorGeometry); passDraws[.editorGeometry] = draws
+                passTimes[.editorGeometry] = DispatchTime.now().uptimeNanoseconds-before
+            }
         }
         let uiStart = DispatchTime.now().uptimeNanoseconds
         let ui = try uiProvider?.recordInGameUI(packet: packet, target: NativeInGameUITarget(device: device, commands: commands,

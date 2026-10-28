@@ -1075,7 +1075,7 @@ struct ViewportPanel: View {
                                         selectedIDs: Set<UInt64>) {
         guard !selectedIDs.isEmpty else { return }
         for bounds in scene.viewportWorldBounds() where selectedIDs.contains(bounds.entityID) {
-            if GeometryViewportOverlay.drawSelection(app: app,entityID: bounds.entityID,list: list,frame: frame) { continue }
+            if app.geometryAuthoring.viewportPicker(for: bounds.entityID) != nil { continue }
             drawAABBOverlay(list: list,
                             frame: frame,
                             min: bounds.min,

@@ -357,6 +357,7 @@ public final class EditorApplication: @unchecked Sendable {
 
         let drawableSize = effectiveViewportDrawableSize()
         let jointPalettes = scene.currentJointPaletteMap()
+        let geometryOverlays = makeGeometryOverlays(drawableSize: drawableSize)
         let wantsContinuousFrames = EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: state.viewport.realtimeEnabled,
             playbackState: state.timing.playbackState,
@@ -369,7 +370,8 @@ public final class EditorApplication: @unchecked Sendable {
                 camera: scene.currentRenderCamera(),
                 drawableSize: drawableSize,
                 settingsGeneration: renderSettingsGeneration,
-                jointPalettes: jointPalettes
+                jointPalettes: jointPalettes,
+                geometryOverlays: geometryOverlays
             ),
             forceContinuous: wantsContinuousFrames,
             hasViewportInput: !inputEvents.isEmpty,
@@ -379,12 +381,14 @@ public final class EditorApplication: @unchecked Sendable {
         )
         let shouldSubmitEngineTick = shouldAdvanceSceneSimulation || renderViewport
         if shouldSubmitEngineTick {
+            var renderScene = scene.currentRenderScene()
+            renderScene.geometryOverlays = geometryOverlays
             engine.tick(
                 deltaTime: shouldAdvanceSceneSimulation ? simulationDelta : 0,
                 inputEvents: inputEvents,
                 drawableSize: drawableSize,
                 shouldRender: state.shouldRender && renderViewport,
-                renderSceneOverride: scene.currentRenderScene(),
+                renderSceneOverride: renderScene,
                 sceneSnapshotOverride: scene.currentSceneSnapshot(),
                 jointPaletteOverride: jointPalettes,
                 inGameCanvasOverride: state.viewport.mode == .game && state.viewport.gamePreviewHUDEnabled

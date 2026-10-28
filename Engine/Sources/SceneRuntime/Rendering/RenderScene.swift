@@ -973,6 +973,7 @@ public struct RenderCamera: Sendable, Equatable {
 /// The complete data contract handed to RenderBackend for one frame: camera,
 /// draw instances, lights, material overrides, and the scene environment.
 public struct RenderScene: Sendable {
+    public var geometryOverlays: [RenderGeometryOverlay] = []
     public var camera: RenderCamera
     public var instances: [RenderInstance]
     public var lights: [RenderLight]

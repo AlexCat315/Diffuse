@@ -29,6 +29,8 @@ The SDK has no dependency on Studio tooling.
 | `maintainability [--report]` | CI | Reject new oversized Swift declarations |
 | `boundaries` | CI | Validate package/product/app boundaries |
 | `shader compile\|rebuild\|bootstrap-slang` | CI / build | Compile Slang artifacts and stage `slangc` |
+
+`shader compile` accepts `--dxc-path DIRECTORY` for a separately installed DXC runtime when generating DXIL. Other targets keep their existing compiler settings.
 | `vulkan bootstrap` | CI / build | Build pinned Vulkan headers/loader |
 | `media [--platform N] [--check]` | CI | Build pinned LGPL FFmpeg |
 | `plugins stage\|prepare\|verify` | CI | Stage Bun, build TypeScript packages and verify SDK contracts |

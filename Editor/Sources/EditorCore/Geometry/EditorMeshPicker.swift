@@ -50,6 +50,11 @@ public struct EditorMeshPicker {
         tolerance = positions.isEmpty ? 0.00001 : max(0.00001,simd_length(hi-lo)*0.0001)
     }
 
+    /// Uses the same ear-clipped topology as rendering, including concave faces.
+    public func forEachTriangle(_ visit: (Int,SIMD3<UInt32>) -> Void) {
+        for i in faceForTriangle.indices { visit(faceForTriangle[i],SIMD3(triangles[i*3],triangles[i*3+1],triangles[i*3+2])) }
+    }
+
     public func isVisible(_ point: SIMD3<Float>, projection: EditorViewportProjection, xray: Bool) -> Bool {
         guard let screen = projection.project(point), projection.frame.contains(x: screen.x,y: screen.y) else { return false }
         if xray { return true }

@@ -18,17 +18,20 @@ public struct EditorViewportRenderGate {
         public var drawableSize: RenderDrawableSize
         public var settingsGeneration: UInt64
         public var jointPalettes: JointPaletteMap
+        public var geometryOverlays: [RenderGeometryOverlay]
 
         public init(sceneRevision: UInt64,
                     camera: RenderCamera,
                     drawableSize: RenderDrawableSize,
                     settingsGeneration: UInt64,
-                    jointPalettes: JointPaletteMap) {
+                    jointPalettes: JointPaletteMap,
+                    geometryOverlays: [RenderGeometryOverlay] = []) {
             self.sceneRevision = sceneRevision
             self.camera = camera
             self.drawableSize = drawableSize
             self.settingsGeneration = settingsGeneration
             self.jointPalettes = jointPalettes
+            self.geometryOverlays = geometryOverlays
         }
     }
 

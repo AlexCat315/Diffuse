@@ -13,6 +13,7 @@ struct CompileRequest {
   var threadgroupConstants: [Int?]?
   var defines: [(String, String)]?
   var spirvProfile: String = "spirv_1_5"
+  var dxcPath: String? = nil
 }
 
 private let specializationTypes = ["uint32", "int32", "float32", "bool"]
@@ -47,6 +48,7 @@ func compileShader(_ request: CompileRequest) throws -> JSONValue {
     arguments += ["-fvk-use-entrypoint-name", "-profile", request.spirvProfile]
   }
   if request.target == "dxil" { arguments += ["-profile", "sm_6_6"] }
+  if request.target == "dxil",let path = request.dxcPath { arguments += ["-dxc-path",path] }
   if !request.lineDirectives { arguments += ["-line-directive-mode", "none"] }
   for (name, value) in request.defines ?? [] { arguments.append("-D\(name)=\(value)") }
   try runTool(arguments)
@@ -236,6 +238,7 @@ enum CompileCommand {
       name: "--spirv-profile", arity: 1, choices: ["spirv_1_3", "spirv_1_5", "spirv_1_6"]),
     ArgumentDefinition(name: "--no-line-directives", arity: 0),
     ArgumentDefinition(name: "--slangc", arity: 1),
+    ArgumentDefinition(name: "--dxc-path", arity: 1),
   ]
 
   static func run(_ arguments: [String]) throws {
@@ -262,7 +265,7 @@ enum CompileCommand {
       lineDirectives: !parsed.isPresent("--no-line-directives"),
       threadgroupConstants: threadgroupConstants,
       defines: nil,
-      spirvProfile: parsed.value("--spirv-profile") ?? "spirv_1_5")
+      spirvProfile: parsed.value("--spirv-profile") ?? "spirv_1_5",dxcPath: parsed.value("--dxc-path"))
     do {
       _ = try compileShader(request)
     } catch {

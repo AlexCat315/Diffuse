@@ -23,12 +23,12 @@ struct ShaderCatalogTests {
 
     @Test("bundled native shader inventory has code and reflected entry points")
     func catalogResolvesPrograms() throws {
-        let render = ["editor_grid", "opaque_mesh", "shadow_mesh", "skybox", "tonemap",
+        let render = ["editor_grid", "editor_geometry", "opaque_mesh", "shadow_mesh", "skybox", "tonemap",
             "stylized_character", "outline", "particles", "ssao", "ssr", "taa", "bloom", "fxaa", "ink_paper_post"]
         let compute = ["particle_cull_compact", "particle_simulate", "particle_spawn_append",
             "particle_state_clear", "particle_state_compact", "particle_metadata_reset", "particle_state_finalize",
             "particle_sort_prepare", "particle_sort_bitonic", "particle_sim_to_instance"]
-        for api in [GraphicsAPI.metal, .vulkan] {
+        for api in [GraphicsAPI.metal, .vulkan, .dx12] {
             for name in render {
                 for stage in [ShaderStage.vertex, .fragment] {
                     let shader = try NativeShaderLibrary.artifact(name: name, api: api, stage: stage)
