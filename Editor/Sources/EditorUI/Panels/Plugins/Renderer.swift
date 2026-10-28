@@ -54,7 +54,7 @@ struct PluginNodeRenderer: @unchecked Sendable {
                 AnyView(ProgressView(value: Double(percent) / 100).frame(minWidth: 0))
             } else {
                 AnyView(Spinner(size: 12))
-            }.framePercent(width: button.align == .center ? nil : 100)
+            }
         case let .button(button): buttonView(button)
         case let .textField(field): textFieldView(field)
         case let .toggle(toggle): toggleView(toggle)

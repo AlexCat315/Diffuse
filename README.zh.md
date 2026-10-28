@@ -98,3 +98,5 @@ Diffuse 以 [Apache License 2.0](LICENSE) 开源。第三方依赖各自遵循�
 
 
 Editor 的文本/代码和视频工作流共用现有 Agent 工具入口。视频时间线支持裁剪、排序、帧预览、播放和 MP4 导出；FFmpeg 负责解码/重采样/导出，SDL 负责设备输出。详见 [工作站边界](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/architecture/workstation.md)、[媒体系统](Engine/Media/README.md)和 [CoveUI 组件标准](https://github.com/AlexCat315/GuavaWebsite/blob/main/docs/components/standard.md)。
+
+引擎支持保留控制多边形、贝塞尔曲线和非破坏性修改器栈的原生 `.dmesh` 资产，可直接导入资源浏览器。API、格式与限制见 [几何创作基础](Engine/Documentation/GeometryAuthoring.md)，可导入资产见 [建模示例](examples/GeometryAuthoring/README.md)。

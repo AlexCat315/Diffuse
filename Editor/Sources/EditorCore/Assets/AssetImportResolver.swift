@@ -14,7 +14,7 @@ import Foundation
 ///   * `.glb`  → self-contained (no dependencies)
 public enum AssetImportResolver {
     /// Geometry formats the asset browser can import.
-    public static let supportedModelExtensions: Set<String> = ["gltf", "glb", "obj"]
+    public static let supportedModelExtensions: Set<String> = ["gltf", "glb", "obj", "dmesh"]
     public static let supportedTextureExtensions: Set<String> = ["png", "jpg", "jpeg", "webp", "tga", "bmp", "gif", "svg"]
     public static let supportedExtensions = supportedModelExtensions.union(supportedTextureExtensions)
 

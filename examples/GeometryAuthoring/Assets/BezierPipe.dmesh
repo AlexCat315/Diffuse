@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "Bezier Pipe",
+  "source": {
+    "tube": {
+      "spline": {
+        "closed": false,
+        "points": [
+          { "position": [-2, 0, 0], "handleIn": [-3, 0, 0], "handleOut": [-1, 0, 0] },
+          { "position": [0, 1, 0], "handleIn": [-1, 1, 0], "handleOut": [1, 1, 0] },
+          { "position": [2, 0, 0], "handleIn": [1, 0, 0], "handleOut": [3, 0, 0] }
+        ]
+      },
+      "radius": 0.15,
+      "radialSegments": 12,
+      "samplesPerSegment": 24,
+      "capped": true
+    }
+  },
+  "shading": "smooth",
+  "materials": [
+    { "name": "Green", "baseColor": [0.15, 0.65, 0.35, 1], "metallic": 0, "roughness": 0.45 }
+  ]
+}

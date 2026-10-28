@@ -1082,6 +1082,7 @@ private extension ImportableAssetKind {
         case .gltf: return "glTF"
         case .glb:  return "GLB"
         case .obj:  return "OBJ"
+        case .dmesh: return "DMESH"
         case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
             return "TEX"
         }

@@ -18,6 +18,7 @@ public enum ImportableAssetKind: String, Codable, Sendable, Equatable {
     case gltf
     case glb
     case obj
+    case dmesh
     case png
     case jpg
     case jpeg
@@ -33,7 +34,7 @@ public enum ImportableAssetKind: String, Codable, Sendable, Equatable {
 
     public var isMesh: Bool {
         switch self {
-        case .gltf, .glb, .obj:
+        case .gltf, .glb, .obj, .dmesh:
             return true
         case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
             return false
@@ -44,7 +45,7 @@ public enum ImportableAssetKind: String, Codable, Sendable, Equatable {
         switch self {
         case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
             return true
-        case .gltf, .glb, .obj:
+        case .gltf, .glb, .obj, .dmesh:
             return false
         }
     }
@@ -180,7 +181,7 @@ public final class AssetRegistry: @unchecked Sendable {
             let meshIndex: Int
             if let existing = currentPathIndex[relativePath] {
                 meshIndex = existing
-                if let existingMesh = existingMeshes[existing] {
+                if let existingMesh = existingMeshes[existing], kind != .dmesh {
                     loadedMeshes[meshIndex] = existingMesh
                     loadedEntries.append(AssetRegistryEntry(
                         id: relativePath,
@@ -212,9 +213,12 @@ public final class AssetRegistry: @unchecked Sendable {
                 continue
             }
             var mesh = imported.mesh
-            mesh.normalizeToUnitBounds(targetSize: 2.0)
+            // Native authoring assets use scene units; array spacing and shell
+            // thickness must survive loading and export without rescaling.
+            if kind != .dmesh { mesh.normalizeToUnitBounds(targetSize: 2.0) }
 
             let normalizedSlices: [MeshTopologySlice]? = {
+                if kind == .dmesh { return imported.topologySlices }
                 guard let slices = imported.topologySlices else { return nil }
                 let src = mesh.localBounds
                 let minV = src.min
@@ -368,6 +372,8 @@ public final class AssetRegistry: @unchecked Sendable {
                 results.append((url, .glb))
             case "obj":
                 results.append((url, .obj))
+            case "dmesh":
+                results.append((url, .dmesh))
             case "png":
                 results.append((url, .png))
             case "jpg":
@@ -399,6 +405,9 @@ public final class AssetRegistry: @unchecked Sendable {
             return (loaded.mesh, loaded.topologies)
         case .obj:
             return (try OBJLoader.load(path: url.path), nil)
+        case .dmesh:
+            let evaluated = try GeometryDocument.load(from: url).evaluate()
+            return (evaluated.mesh, [evaluated.topologySlice])
         case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
             preconditionFailure("Texture assets are not mesh-importable")
         }

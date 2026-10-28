@@ -6,6 +6,14 @@ import Testing
 @Suite("AssetImportResolver", .serialized)
 struct AssetImportResolverTests {
 
+    @Test("native geometry is a self-contained model import")
+    func nativeGeometry() {
+        let source = URL(fileURLWithPath: "/assets/rounded.DMESH")
+        #expect(AssetImportResolver.isSupported(source))
+        #expect(AssetImportResolver.supportedModelExtensions.contains("dmesh"))
+        #expect(AssetImportResolver.resolve(source).map(\.relativePath) == ["rounded.DMESH"])
+    }
+
     private func makeTempDir() -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("cove-import-\(UUID().uuidString)", isDirectory: true)

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "name": "Rounded Array",
+  "source": { "box": { "size": [1.5, 1.5, 1.5] } },
+  "modifiers": [
+    { "enabled": true, "operation": { "subdivision": { "levels": 2 } } },
+    { "enabled": true, "operation": { "array": { "count": 4, "offset": [2, 0, 0] } } }
+  ],
+  "shading": "smooth",
+  "materials": [
+    { "name": "Blue", "baseColor": [0.12, 0.45, 0.8, 1], "metallic": 0.25, "roughness": 0.3 }
+  ]
+}

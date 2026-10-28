@@ -68,7 +68,7 @@ struct DocumentKind {
         add("Video", "video", "mp4", "mov", "mkv", "webm", "avi")
         add("Audio", "audio", "wav", "mp3", "ogg", "flac", "aac", "m4a")
         add("Font", "font", "ttf", "otf", "woff", "woff2")
-        add("3D Model", "3d", "gltf", "glb", "fbx", "obj", "usd", "usda", "usdz", "blend")
+        add("3D Model", "3d", "gltf", "glb", "fbx", "obj", "dmesh", "usd", "usda", "usdz", "blend")
         add("PDF", "pdf", "pdf")
         add("Archive", "zip", "zip", "tar", "gz", "7z", "rar", "xz")
         add("Binary", "binary", "bin", "dat", "o", "a", "dylib", "so", "wasm")

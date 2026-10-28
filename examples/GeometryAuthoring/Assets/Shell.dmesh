@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "name": "Panel Shell",
+  "source": { "grid": { "size": [3, 3], "segments": [4, 4] } },
+  "modifiers": [
+    { "enabled": true, "operation": { "subdivision": { "levels": 1 } } },
+    { "enabled": true, "operation": { "solidify": { "thickness": 0.2 } } }
+  ],
+  "shading": "flat",
+  "materials": [
+    { "name": "Copper", "baseColor": [0.65, 0.25, 0.1, 1], "metallic": 0.8, "roughness": 0.35 }
+  ]
+}
