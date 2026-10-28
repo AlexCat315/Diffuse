@@ -35,6 +35,7 @@ extension EditorSceneAdapter {
             }
         }
 
+        sections += additionalInspectorSections?(entity.rawValue) ?? []
         return sections
     }
 }

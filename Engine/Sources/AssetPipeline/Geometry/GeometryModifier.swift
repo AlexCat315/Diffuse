@@ -36,11 +36,24 @@ public enum GeometryModifier: Codable, Equatable, Sendable {
 }
 
 public struct GeometryModifierEntry: Codable, Equatable, Sendable {
+    public var id: String
     public var enabled: Bool
     public var operation: GeometryModifier
 
-    public init(_ operation: GeometryModifier, enabled: Bool = true) {
-        self.operation = operation; self.enabled = enabled
+    public init(_ operation: GeometryModifier, enabled: Bool = true, id: String = UUID().uuidString) {
+        self.id = id; self.operation = operation; self.enabled = enabled
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, enabled, operation }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        // Older native assets did not store identity; derive it from the stack
+        // position until the next save persists an explicit identifier.
+        id = try values.decodeIfPresent(String.self, forKey: .id)
+            ?? "legacy-\(decoder.codingPath.last?.intValue ?? 0)"
+        enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        operation = try values.decode(GeometryModifier.self, forKey: .operation)
     }
 }
 

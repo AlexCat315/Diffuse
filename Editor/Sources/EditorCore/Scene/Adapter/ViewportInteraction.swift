@@ -107,12 +107,21 @@ extension EditorSceneAdapter {
     }
 
     private func pickRenderedEntity(ray: ViewportRay) -> UInt64? {
+        renderedSurfaceHit(ray: ray,ignoring: nil)?.entity.rawValue
+    }
+
+    public func meshSurfaceDistance(origin: SIMD3<Float>, direction: SIMD3<Float>, ignoringEntity: UInt64? = nil) -> Float? {
+        renderedSurfaceHit(ray: ViewportRay(origin: origin,direction: direction),ignoring: ignoringEntity)?.distance
+    }
+
+    private func renderedSurfaceHit(ray: ViewportRay, ignoring: UInt64?) -> (entity: EntityID,distance: Float)? {
         guard let extracted = scene.extractedRenderScene else { return nil }
         let palettes = currentJointPaletteMap()
         let deformables = Dictionary(extracted.scene.deformableMeshes.map { ($0.entity, $0) }, uniquingKeysWith: { first, _ in first })
         var nearest: Float = 10_000
         var selected: EntityID?
         for (index, entity) in extracted.instanceEntities.enumerated() {
+            if entity.rawValue == ignoring { continue }
             let instance = extracted.scene.instances[index]
             let surface: MeshPickingSurface?
             let transform: simd_float4x4
@@ -143,7 +152,7 @@ extension EditorSceneAdapter {
                 nearest = distance; selected = entity
             }
         }
-        return selected?.rawValue
+        return selected.map { ($0,nearest) }
     }
 
     /// 返回与屏幕矩形相交的实体集合。用于视口框选。

@@ -1243,3 +1243,16 @@
 "Open in Workbench" = "在工作台中打开";
 "Switch Workbench and Agent" = "切换工作台与智能体";
 "Show alongside" = "在旁边显示";
+
+/* Geometry authoring */
+"Add Geometry" = "添加几何";
+"Mesh Cube" = "网格立方体";
+"Mesh Plane" = "网格平面";
+"Bezier Curve" = "贝塞尔曲线";
+
+/* Mesh editing */
+"Edit Mesh" = "编辑网格";
+"X-Ray" = "透视选择";
+"Vertex" = "顶点";
+"Edge" = "边";
+"Face" = "面";

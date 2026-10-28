@@ -140,6 +140,10 @@ enum EditorCommandDispatcher {
                 app.logConsole("Could not duplicate selection", severity: .error)
             }
         case .deleteSelection:
+            if app.meshEditing.isEditing {
+                app.logConsole("Switch to object mode to delete the object",severity: .info)
+                return
+            }
             guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.timing.playbackState) else {
                 blockedByPlayback("Stop simulation before deleting entities", app: app)
                 return
@@ -159,10 +163,13 @@ enum EditorCommandDispatcher {
                 app.logConsole("Could not delete selection", severity: .error)
             }
         case .selectAll:
+            if app.meshEditing.isEditing { app.meshEditing.selectAll(); return }
             store.dispatch(.setSelectedEntities(Set(HierarchyPanelModel.allEntityIDs(in: app.scene.roots))))
         case .clearSelection:
+            if app.meshEditing.isEditing { app.meshEditing.select([]); return }
             store.dispatch(.setSelectedEntity(nil))
         case .invertSelection:
+            if app.meshEditing.isEditing { app.meshEditing.invertSelection(); return }
             let selected = store.state.selection.selectedEntityIDs
             let all = Set(HierarchyPanelModel.allEntityIDs(in: app.scene.roots))
             store.dispatch(.setSelectedEntities(all.subtracting(selected)))
@@ -170,6 +177,9 @@ enum EditorCommandDispatcher {
             let descendants = HierarchyPanelModel.descendantIDs(of: store.state.selection.selectedEntityIDs,
                                                                 in: app.scene.roots, includesSelection: true)
             if !descendants.isEmpty { store.dispatch(.setSelectedEntities(descendants)) }
+        case let .createGeometry(preset):
+            guard EditorSceneAuthoringPolicy.canEditScene(during: store.playbackState) else { return }
+            _ = app.geometryAuthoring.create(preset)
         case let .spawnEntity(template):
             guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.timing.playbackState) else {
                 blockedByPlayback("Stop simulation before adding entities", app: app)

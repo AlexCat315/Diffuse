@@ -35,6 +35,11 @@ extension EditorSceneAdapter {
     public var canUndoEdit: Bool { editHistory.canUndo }
     public var canRedoEdit: Bool { editHistory.canRedo }
 
+    func recordAssetEdit(undo: @escaping () -> Bool, redo: @escaping () -> Bool) {
+        endInteractiveEditHistoryGroup()
+        editHistory.recordAssetEdit(undo: undo, redo: redo)
+    }
+
     @discardableResult
     public func undoEdit() -> Bool {
         guard let previous = editHistory.undo(replacing: scene) else { return false }

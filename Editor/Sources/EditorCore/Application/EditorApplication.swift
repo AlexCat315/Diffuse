@@ -45,6 +45,8 @@ public final class EditorApplication: @unchecked Sendable {
     public let dynamicScriptManager: DynamicScriptManager
     /// Canonical editor-facing state for script documents, diagnostics, and builds.
     public let workstation: EditorWorkstation
+    public private(set) lazy var geometryAuthoring = EditorGeometryAuthoring(app: self)
+    public private(set) lazy var meshEditing = EditorMeshEditing(app: self)
 
     let observationBus: ObservationBus
     let intentCoordinator: IntentRuntimeCoordinator
@@ -264,6 +266,10 @@ public final class EditorApplication: @unchecked Sendable {
                 target: self.store.selectedEntityID.map { .entity(id: $0) },
                 nextStep: "Stop playback, check the entity lock and property value, then retry.")
         }
+        scene.additionalInspectorSections = { [weak self] id in
+            guard let self else { return [] }
+            return geometryAuthoring.inspectorSections(for: id)+meshEditing.inspectorSections(for: id)
+        }
         store.dispatch(.setSceneRevision(scene.revision))
         store.dispatch(.markSceneSaved(scene.revision))
         if let selection = initialSelectedEntityID {
@@ -411,6 +417,8 @@ public final class EditorApplication: @unchecked Sendable {
     public func shutdown() {
         subscriptions.console.stop()
         guard !isShuttingDown else { return }
+        if meshEditing.isEditing { meshEditing.leave() }
+        _ = geometryAuthoring.cancelInteractiveEdit()
         isShuttingDown = true
         cancelRendererPreparation()
         diagnosticSession.close()

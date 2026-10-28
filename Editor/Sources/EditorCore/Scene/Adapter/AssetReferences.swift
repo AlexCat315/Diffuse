@@ -2,6 +2,12 @@ import Foundation
 import SceneRuntime
 
 extension EditorSceneAdapter {
+    public func referencedAsset(for rawID: UInt64) -> EditorAsset? {
+        guard let entity = entity(from: rawID),
+              let reference = scene.component(AssetReferenceComponent.self, for: entity) else { return nil }
+        return EditorAssetCatalog.asset(for: reference.assetID)
+    }
+
     public func assetReferencedEntityIDs(_ assetID: String) -> [UInt64] {
         var ids: Set<UInt64> = []
         for entity in scene.entities(with: AssetReferenceComponent.self) {

@@ -29,6 +29,7 @@ extension EditorApplication {
 
     @discardableResult
     public func saveSceneManifest() -> URL? {
+        if meshEditing.isTransforming, !meshEditing.finishTransform() { return nil }
         do {
             let coveDirectory = sceneManifestURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: coveDirectory,

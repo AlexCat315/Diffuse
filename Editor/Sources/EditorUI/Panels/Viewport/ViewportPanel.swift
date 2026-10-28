@@ -19,6 +19,8 @@ struct ViewportPanel: View {
             let _ = store.viewportSurfaceRevision
             let _ = store.sceneRevision
             let _ = store.viewportCameraRevision
+            let _ = store.uiRefreshRevision
+            let _: Void = app.meshEditing.synchronize()
             let surface = app.currentViewportSurfaceState()
             let selectedEntityID = store.selectedEntityID
             let selectedEntityIDs = store.selectedEntityIDs
@@ -59,6 +61,7 @@ struct ViewportPanel: View {
             // left to the scene.
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 6) {
+                    MeshEditControls(app: app)
                     ViewportToolControls(snapStore: app.store,
                                          gizmoMode: gizmoMode,
                                          gizmoSpace: gizmoSpace,
@@ -108,6 +111,12 @@ struct ViewportPanel: View {
                 .frame(height: 40)
                 .debugName("viewport-header")
                 ViewportHost(surface: surface,
+                             onFocusChanged: { focused in
+                                 if !focused {
+                                     _ = app.meshEditing.cancelTransform()
+                                     app.meshEditing.pointer.clear()
+                                 }
+                             },
                              onInputEvent: { event in
                                  handleViewportInput(event)
                              },
@@ -155,6 +164,7 @@ struct ViewportPanel: View {
                     }
                     .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
                 }
+                .debugName("scene-viewport-host")
                 .flex()
                 .background(.surfaceSunken)
             }
@@ -162,6 +172,7 @@ struct ViewportPanel: View {
     }
 
     private func handleViewportInput(_ event: InputEvent) {
+        if MeshViewportInteraction.handle(event,app: app) { return }
         let viewport = EditorViewportInputController.shared
         switch event {
         case let .mouseButtonDown(button) where button.button == .left:
@@ -510,6 +521,10 @@ struct ViewportPanel: View {
                                      gizmoSpace: EditorGizmoSpace,
                                      isSceneEditable: Bool,
                                      isSelectionEditable: Bool) {
+        if app.meshEditing.isEditing {
+            MeshViewportInteraction.snapshot(app: app,mode: gizmoMode,space: gizmoSpace)
+            return
+        }
         guard let mode = controllerMode(for: gizmoMode),
               isSceneEditable,
               isSelectionEditable,
@@ -614,9 +629,10 @@ struct ViewportPanel: View {
                                   physicsDebugScope: EditorPhysicsDebugOverlayScope,
                                   selectedID: UInt64?,
                                   selectedIDs: Set<UInt64>) {
+        MeshViewportOverlay.draw(app: app,list: list,frame: frame)
         if shadingMode == .wireframe {
             drawWireframeOverlay(list: list, frame: frame, selectedID: selectedID)
-        } else {
+        } else if !app.meshEditing.isEditing {
             drawSelectionHighlight(list: list, frame: frame, selectedIDs: selectedIDs)
         }
         if !physicsDebugOptions.isEmpty,

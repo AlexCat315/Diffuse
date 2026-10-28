@@ -290,6 +290,10 @@ private struct Builder {
         }
         return menu("world", "World", [
             .submenu(menu("add-entity", "Add Entity", templates)),
+            .submenu(menu("add-geometry", "Add Geometry", EditorGeometryPreset.allCases.map { preset in
+                entry("world.geometry." + preset.rawValue,preset.displayName,"\(preset.displayName) mesh curve geometry modeling 建模 几何 曲线",
+                      command: .createGeometry(preset),enabled: canAuthorScene)
+            })),
             .separator,
             entry("world.frame", "Frame Selected", "frame focus 聚焦", command: .frameSelection,
                   enabled: context.hasSelection),

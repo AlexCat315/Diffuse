@@ -124,12 +124,14 @@ public struct PolygonMesh: Codable, Equatable, Sendable {
     }
 }
 
-struct PolygonEdge: Hashable, Comparable {
-    let a: Int
-    let b: Int
-    init(_ a: Int, _ b: Int) { self.a = min(a, b); self.b = max(a, b) }
-    static func < (lhs: Self, rhs: Self) -> Bool { (lhs.a, lhs.b) < (rhs.a, rhs.b) }
+public struct PolygonMeshEdge: Hashable, Comparable, Sendable {
+    public let a: Int
+    public let b: Int
+    public init(_ a: Int, _ b: Int) { self.a = min(a, b); self.b = max(a, b) }
+    public static func < (lhs: Self, rhs: Self) -> Bool { (lhs.a, lhs.b) < (rhs.a, rhs.b) }
 }
+
+typealias PolygonEdge = PolygonMeshEdge
 
 struct PolygonEdgeUse {
     var face: Int

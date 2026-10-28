@@ -39,6 +39,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
     public var onRevisionChanged: ((UInt64) -> Void)?
     public var onTransactionError: ((String) -> Void)?
+    public var additionalInspectorSections: ((UInt64) -> [EditorInspectorSection])?
 
     public func setAuthoringEnabled(_ isEnabled: Bool) {
         isAuthoringEnabled = isEnabled

@@ -4,6 +4,23 @@ import Testing
 
 @Suite("Native geometry assets")
 struct GeometryAssetTests {
+    @Test("legacy modifier identities are deterministic and become persistent on save")
+    func modifierIdentity() throws {
+        let json = #"{"version":1,"name":"Legacy","source":{"box":{"size":[1,1,1]}},"modifiers":[{"operation":{"subdivision":{"levels":1}}},{"enabled":true,"operation":{"array":{"count":2,"offset":[2,0,0]}}}]}"#
+        let data = Data(json.utf8)
+        let first = try JSONDecoder().decode(GeometryDocument.self,from: data)
+        let second = try JSONDecoder().decode(GeometryDocument.self,from: data)
+        #expect(first == second)
+        #expect(Set(first.modifiers.map(\.id)).count == 2)
+        #expect(first.modifiers[0].enabled)
+        var reordered = first; reordered.modifiers.reverse()
+        let restored = try JSONDecoder().decode(GeometryDocument.self,from: JSONEncoder().encode(reordered))
+        #expect(restored == reordered)
+        _ = try restored.evaluate()
+        reordered.modifiers[0].id = reordered.modifiers[1].id
+        #expect(throws: GeometryError.self) { try reordered.evaluate() }
+    }
+
     @Test("checked-in geometry examples load through the production registry")
     func examples() throws {
         let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()

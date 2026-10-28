@@ -25,6 +25,7 @@ extension EditorApplication {
     public var canRedo: Bool { scene.canRedoEdit }
 
     public func undo() {
+        if meshEditing.cancelTransform() { return }
         guard store.state.timing.playbackState == .stopped else {
             reportSceneAuthoringUnavailable("Stop simulation before undoing scene edits.")
             return
@@ -36,6 +37,7 @@ extension EditorApplication {
     }
 
     public func redo() {
+        if meshEditing.cancelTransform() { return }
         guard store.state.timing.playbackState == .stopped else {
             reportSceneAuthoringUnavailable("Stop simulation before redoing scene edits.")
             return

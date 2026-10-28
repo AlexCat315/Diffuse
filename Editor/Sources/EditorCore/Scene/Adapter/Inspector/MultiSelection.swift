@@ -15,6 +15,7 @@ extension EditorSceneAdapter {
         if ids.count == 1 { return inspectorSections(for: ids[0]) }
         let schemas = ids.map { inspectorSections(for: $0) }
         return schemas[0].compactMap { section in
+            guard section.supportsMultiSelection else { return nil }
             guard !["physics-settings", "particle-scalability"].contains(section.id) else { return nil }
             let matches = schemas.compactMap { $0.first { $0.id == section.id } }
             guard matches.count == ids.count else { return nil }

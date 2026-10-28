@@ -161,6 +161,14 @@ extension EditorSceneAdapter {
         )
     }
 
+    /// Derived collision geometry follows an edited asset in every history
+    /// snapshot, so undoing a transform cannot resurrect an obsolete collider.
+    func refreshAssetGeometry() {
+        rebuildMeshColliderResources(in: &scene)
+        editHistory.remapScenes { [self] runtime in rebuildMeshColliderResources(in: &runtime) }
+        notifyRevisionChanged(recordHistory: false)
+    }
+
     private func rebuildMeshColliderResources(in runtime: inout SceneRuntime) {
         var boundsResource = runtime.resource(MeshColliderBoundsResource.self) ?? MeshColliderBoundsResource()
         var geometryResource = runtime.resource(MeshColliderGeometryResource.self) ?? MeshColliderGeometryResource()

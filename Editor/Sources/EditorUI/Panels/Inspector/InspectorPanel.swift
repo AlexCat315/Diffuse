@@ -150,10 +150,15 @@ struct InspectorPanel: View {
     }
 
     private static func sectionPriority(_ id: String) -> Int {
-        switch id {
+        if id == "mesh-edit-selection" { return -1 }
+        if id.hasPrefix("geometry-modifier-") { return 4 }
+        if id == "geometry-modifiers" { return 5 }
+        if id.hasPrefix("geometry-material-") { return 6 }
+        return switch id {
         case "transform": 0
         case "render-mesh": 1
         case "render-material": 2
+        case "geometry-source": 3
         case "scripts": 3
         case "general": 90
         case "hierarchy": 91
@@ -437,6 +442,7 @@ struct InspectorPanel: View {
             let isAdvanced = field.presentation == .advanced
             let fieldID = "\(sectionID)/\(field.id)"
             let value = propertyValue(field, identity: "\(identity)/\(fieldID)", isEditable: isEditable)
+                .debugName("inspector-field-\(fieldID)")
             let expansion = Binding<Bool>(
                 get: {
                     let query = searchText.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)

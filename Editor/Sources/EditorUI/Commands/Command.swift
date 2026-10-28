@@ -37,6 +37,7 @@ enum EditorCommand {
     case invertSelection
     case selectDescendants
     case spawnEntity(EditorEntityTemplate)
+    case createGeometry(EditorGeometryPreset)
     case frameSelection
     case toggleSelectionVisibility
     case toggleSelectionLock

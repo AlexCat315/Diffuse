@@ -8,6 +8,46 @@ import SIMDCompat
 import XCTest
 
 final class NativeGeometryTests: XCTestCase {
+    func testInteractivePreviewAndCancellationChangeAndRestorePixels() throws {
+        #if os(macOS)
+        let api = GraphicsAPI.metal
+        #elseif os(Windows)
+        let api = GraphicsAPI.dx12
+        #else
+        let api = GraphicsAPI.vulkan
+        #endif
+        let assets = AssetRegistry()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("native-preview-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root,withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let document = GeometryDocument(name: "original",source: .box(size: SIMD3(repeating: 2)))
+        let original = try document.evaluate()
+        try document.save(to: root.appendingPathComponent("cube.dmesh"))
+        let slot = try XCTUnwrap(assets.loadProject(at: root.path).first?.meshIndex)
+        let device = try RendererTestDevice.make(DeviceConfig(preferredBackends: [api],enableValidation: true))
+        let renderer = try NativeRenderer(device: device,assets: assets)
+        defer { try? device.waitUntilIdle() }
+        var packet = MeshProbeScene.packet(size: .init(width: 128,height: 128))
+        packet.scene.camera = RenderCamera(eye: SIMD3(0,0,6),target: .zero,near: 0.1,far: 100)
+        packet.scene.instances = [RenderInstance(meshIndex: slot,transform: matrix_identity_float4x4)]
+        try renderer.renderChecked(packet: packet)
+        let before = try GridImage.readback(device: device,texture: XCTUnwrap(renderer.colorTexture),size: packet.drawableSize)
+        var mesh = original.controlMesh
+        var delta = matrix_identity_float4x4; delta.columns.3.x = 0.8
+        try mesh.transform(vertices: Set(mesh.positions.indices),by: delta)
+        let preview = try mesh.bake(name: "preview")
+        assets.registerTransientMesh(preview.mesh,at: slot,assetID: "preview",topologySlices: [preview.topologySlice])
+        packet.frameIndex = 1
+        try renderer.renderChecked(packet: packet)
+        let moved = try GridImage.readback(device: device,texture: XCTUnwrap(renderer.colorTexture),size: packet.drawableSize)
+        XCTAssertGreaterThan(try GridImage.difference(before,moved).pixelsOverThree,100)
+        assets.unregisterTransientMesh(at: slot)
+        packet.frameIndex = 2
+        try renderer.renderChecked(packet: packet)
+        let cancelled = try GridImage.readback(device: device,texture: XCTUnwrap(renderer.colorTexture),size: packet.drawableSize)
+        XCTAssertEqual(before,cancelled)
+    }
+
     func testNativeGeometryLoadsRendersAndReplacesResidentMesh() throws {
         #if os(macOS)
         let api = GraphicsAPI.metal

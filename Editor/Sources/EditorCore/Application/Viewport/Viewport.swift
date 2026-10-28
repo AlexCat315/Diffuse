@@ -285,11 +285,15 @@ extension EditorApplication {
         case .windowFocusGained:
             store.dispatch(.setWindowFocused(true))
         case .windowFocusLost:
+            _ = meshEditing.cancelTransform()
+            meshEditing.pointer.clear()
             store.dispatch(.setWindowFocused(false))
             scene.endInteractiveEditHistoryGroup()
             EditorGizmoController.shared.clearDrag()
             EditorViewportInputController.shared.reset()
         case .windowMinimized:
+            _ = meshEditing.cancelTransform()
+            meshEditing.pointer.clear()
             store.dispatch(.setWindowMinimized(true))
             scene.endInteractiveEditHistoryGroup()
             EditorGizmoController.shared.clearDrag()
@@ -298,6 +302,8 @@ extension EditorApplication {
             store.dispatch(.setWindowMinimized(false))
             store.dispatch(.setWindowOccluded(false))
         case .windowOccluded:
+            _ = meshEditing.cancelTransform()
+            meshEditing.pointer.clear()
             store.dispatch(.setWindowOccluded(true))
             scene.endInteractiveEditHistoryGroup()
             EditorGizmoController.shared.clearDrag()

@@ -7,6 +7,7 @@ public struct EditorInspectorSection {
     public var fields: [EditorInspectorField]
     public var groups: [EditorInspectorFieldGroup]
     public var componentTypeID: String? = nil
+    public var supportsMultiSelection = true
 
     public init(id: String, title: String, fields: [EditorInspectorField], groups: [EditorInspectorFieldGroup] = []) {
         self.id = id

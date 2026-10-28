@@ -4,10 +4,14 @@ import SceneRuntime
 /// Owns snapshot history and grouping; the adapter owns scene replacement and
 /// revision notifications. A history entry is created only for a changed revision.
 final class EditorSceneEditHistory {
+    private enum Entry {
+        case scene(SceneRuntime)
+        case asset(undo: () -> Bool, redo: () -> Bool)
+    }
     private let limit: Int
     private var currentScene: SceneRuntime?
-    private var undoScenes: [SceneRuntime] = []
-    private var redoScenes: [SceneRuntime] = []
+    private var undoScenes: [Entry] = []
+    private var redoScenes: [Entry] = []
     private var groupDepth = 0
     private var groupStartScene: SceneRuntime?
     private var isInteractiveGroupActive = false
@@ -25,8 +29,12 @@ final class EditorSceneEditHistory {
     /// transform must not bring back a resource path that no longer exists.
     func remapScenes(_ update: (inout SceneRuntime) -> Void) {
         if currentScene != nil { update(&currentScene!) }
-        for index in undoScenes.indices { update(&undoScenes[index]) }
-        for index in redoScenes.indices { update(&redoScenes[index]) }
+        for index in undoScenes.indices {
+            if case var .scene(scene) = undoScenes[index] { update(&scene); undoScenes[index] = .scene(scene) }
+        }
+        for index in redoScenes.indices {
+            if case var .scene(scene) = redoScenes[index] { update(&scene); redoScenes[index] = .scene(scene) }
+        }
         if groupStartScene != nil { update(&groupStartScene!) }
     }
 
@@ -98,17 +106,43 @@ final class EditorSceneEditHistory {
     }
 
     func undo(replacing scene: SceneRuntime) -> SceneRuntime? {
-        guard let previous = undoScenes.popLast() else { return nil }
-        redoScenes.append(scene)
-        currentScene = previous
-        return previous
+        guard let entry = undoScenes.last else { return nil }
+        switch entry {
+        case let .scene(previous):
+            undoScenes.removeLast()
+            redoScenes.append(.scene(scene))
+            currentScene = previous
+            return previous
+        case let .asset(undo, _):
+            guard undo() else { return nil }
+            undoScenes.removeLast()
+            redoScenes.append(entry)
+            return currentScene ?? scene
+        }
     }
 
     func redo(replacing scene: SceneRuntime) -> SceneRuntime? {
-        guard let next = redoScenes.popLast() else { return nil }
-        undoScenes.append(scene)
-        currentScene = next
-        return next
+        guard let entry = redoScenes.last else { return nil }
+        switch entry {
+        case let .scene(next):
+            redoScenes.removeLast()
+            undoScenes.append(.scene(scene))
+            currentScene = next
+            return next
+        case let .asset(_, redo):
+            guard redo() else { return nil }
+            redoScenes.removeLast()
+            undoScenes.append(entry)
+            return currentScene ?? scene
+        }
+    }
+
+    /// File-backed authoring edits share chronological ordering with scene edits.
+    /// A failed restore keeps the entry available instead of consuming history.
+    func recordAssetEdit(undo: @escaping () -> Bool, redo: @escaping () -> Bool) {
+        undoScenes.append(.asset(undo: undo, redo: redo))
+        trimHistory()
+        redoScenes.removeAll(keepingCapacity: true)
     }
 
     func reset(to scene: SceneRuntime) {
@@ -123,10 +157,14 @@ final class EditorSceneEditHistory {
 
     private func record(_ previous: SceneRuntime, replacingWith scene: SceneRuntime) {
         guard previous.snapshot.revision != scene.snapshot.revision else { return }
-        undoScenes.append(previous)
+        undoScenes.append(.scene(previous))
+        trimHistory()
+        redoScenes.removeAll(keepingCapacity: true)
+    }
+
+    private func trimHistory() {
         if undoScenes.count > limit {
             undoScenes.removeFirst(undoScenes.count - limit)
         }
-        redoScenes.removeAll(keepingCapacity: true)
     }
 }

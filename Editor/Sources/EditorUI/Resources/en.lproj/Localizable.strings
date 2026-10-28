@@ -1139,3 +1139,16 @@
 "Contribution" = "Contribution";
 "Agent" = "Agent";
 "Instructions, tools and context the assistant uses." = "Instructions, tools and context the assistant uses.";
+
+/* Geometry authoring */
+"Add Geometry" = "Add Geometry";
+"Mesh Cube" = "Mesh Cube";
+"Mesh Plane" = "Mesh Plane";
+"Bezier Curve" = "Bezier Curve";
+
+/* Mesh editing */
+"Edit Mesh" = "Edit Mesh";
+"X-Ray" = "X-Ray";
+"Vertex" = "Vertex";
+"Edge" = "Edge";
+"Face" = "Face";

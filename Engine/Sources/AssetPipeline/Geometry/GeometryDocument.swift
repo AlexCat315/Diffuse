@@ -76,6 +76,8 @@ public struct GeometryDocument: Codable, Equatable, Sendable {
     public func evaluate(limits: GeometryLimits = .init()) throws -> GeometryEvaluation {
         guard version == Self.currentVersion else { throw GeometryError.unsupportedVersion(version) }
         guard modifiers.count <= 256, materials.count <= 256 else { throw GeometryError.budgetExceeded }
+        guard Set(modifiers.map(\.id)).count == modifiers.count,
+              modifiers.allSatisfy({ !$0.id.isEmpty }) else { throw GeometryError.invalidParameter("modifier identity") }
         let bakedMaterials = try materials.map { try $0.bake() }
         var mesh = try source.evaluate(limits: limits)
         for entry in modifiers where entry.enabled { mesh = try entry.operation.apply(to: mesh, limits: limits) }

@@ -8,7 +8,7 @@ enum EditorWorkspaceCommandPolicy {
         let features = content.profile.features
         switch command {
         case .showSceneSettings, .newScene, .openScene, .saveScene, .duplicateSelection, .deleteSelection,
-             .selectAll, .clearSelection, .invertSelection, .selectDescendants, .spawnEntity, .frameSelection,
+             .selectAll, .clearSelection, .invertSelection, .selectDescendants, .spawnEntity, .createGeometry, .frameSelection,
              .toggleSelectionVisibility, .toggleSelectionLock:
             return features.contains(.scene)
         case .saveDocument, .revertDocument, .closeDocument: return features.contains(.documents)

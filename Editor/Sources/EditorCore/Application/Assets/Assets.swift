@@ -220,6 +220,8 @@ extension EditorApplication {
     public func reloadAssets() -> Int? {
         do {
             let assets = try EditorAssetCatalog.loadProject(at: projectDirectory)
+            scene.refreshAssetGeometry()
+            renderGate = EditorViewportRenderGate()
             reloadProjectScripts(force: true)
             store.dispatch(.forceUIRefresh)
             logConsole("Reloaded assets", detail: "\(assets.count) importable files")

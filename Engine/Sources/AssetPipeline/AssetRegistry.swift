@@ -330,13 +330,22 @@ public final class AssetRegistry: @unchecked Sendable {
     /// Registers a mesh asset directly at the given index.
     /// Intended for unit tests that need a pre-built MeshAsset without loading from disk.
     public func registerForTesting(_ mesh: MeshAsset, at meshIndex: Int) {
+        registerTransientMesh(mesh,at: meshIndex,assetID: "test:\(meshIndex)",kind: .gltf)
+    }
+
+    /// Publishes an evaluated preview without replacing the file-backed asset.
+    /// Removing the overlay restores the current project catalog at that slot.
+    public func registerTransientMesh(_ mesh: MeshAsset, at meshIndex: Int, assetID: String,
+                                      kind: ImportableAssetKind = .dmesh,
+                                      topologySlices: [MeshTopologySlice]? = nil) {
         lock.lock()
         meshCatalogRevision &+= 1
         explicitlyRegisteredMeshes[meshIndex] = RegisteredMeshAsset(
             meshIndex: meshIndex,
-            assetID: "test:\(meshIndex)",
-            kind: .gltf,
-            mesh: mesh
+            assetID: assetID,
+            kind: kind,
+            mesh: mesh,
+            topologySlices: topologySlices
         )
         lock.unlock()
     }
@@ -344,6 +353,10 @@ public final class AssetRegistry: @unchecked Sendable {
     /// Removes one explicit mesh without disturbing the active project's
     /// catalog or any other transient registration.
     public func unregisterTestingMesh(at meshIndex: Int) {
+        unregisterTransientMesh(at: meshIndex)
+    }
+
+    public func unregisterTransientMesh(at meshIndex: Int) {
         lock.lock()
         meshCatalogRevision &+= 1
         explicitlyRegisteredMeshes.removeValue(forKey: meshIndex)

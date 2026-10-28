@@ -6,6 +6,17 @@ import Testing
 
 @Suite("EditorCommandCatalog")
 struct CommandCatalogTests {
+    @Test("native geometry creation follows scene and playback policy")
+    func nativeGeometryPolicy() {
+        let identifiers = ["world.geometry.box","world.geometry.plane","world.geometry.curve"]
+        for id in identifiers {
+            #expect(make().entries.first { $0.id == id }?.isEnabled == true)
+            #expect(make(.playing).entries.first { $0.id == id }?.isEnabled == false)
+            #expect(make(.paused).entries.first { $0.id == id }?.isEnabled == false)
+            #expect(!make(content: .files).entries.contains { $0.id == id })
+        }
+    }
+
     @Test("View lists each content with its chord, and Window holds only panels")
     func menuOrganization() throws {
         for content in EditorContent.allCases {
@@ -61,7 +72,7 @@ struct CommandCatalogTests {
         let catalog = full()
         let ids = Set(catalog.entries.map(\.id))
         for id in ["select.all", "select.none", "select.invert", "select.descendants", "world.frame", "world.visibility",
-                   "world.lock", "world.add.cube", "world.add.camera"] {
+                   "world.lock", "world.add.cube", "world.add.camera", "world.geometry.box", "world.geometry.plane", "world.geometry.curve"] {
             #expect(ids.contains(id), "missing \(id)")
         }
         // Text fields own ⌘A; Select All must not claim it from the native menu.
@@ -319,6 +330,7 @@ struct CommandCatalogTests {
     }
 
     private func full() -> EditorCommandCatalog {
-        .make(EditorCommandContext(content: .scene, canUndo: true, canRedo: true, hasSelection: true))
+        .make(EditorCommandContext(content: .scene, canUndo: true, canRedo: true, hasSelection: true,
+                                  agentPanelID: "intent-input"))
     }
 }

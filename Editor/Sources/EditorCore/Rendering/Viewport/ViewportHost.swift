@@ -86,7 +86,10 @@ package struct ViewportHost<Overlay: View>: _PrimitiveView {
 
         if let registry = InteractionRegistryHolder.current {
             registry.setPointer(node, route: .viewport) { event, pointerPhase, eventPhase in
-                guard eventPhase == .target else { return .ignored }
+                // Passive overlay content can be the hit target. Let its
+                // unhandled input bubble to the viewport; interactive chrome
+                // consumes its own events before they reach this ancestor.
+                guard eventPhase != .capture else { return .ignored }
                 if pointerPhase == .down {
                     guard snap.imageFrame(in: node).contains(x: event.x, y: event.y) else {
                         if FocusChainHolder.current?.focused === node { FocusChainHolder.current?.clear() }
@@ -106,14 +109,14 @@ package struct ViewportHost<Overlay: View>: _PrimitiveView {
                 return .handled
             }
             registry.setMotion(node, route: .viewport) { event, phase in
-                guard phase == .target else { return .ignored }
+                guard phase != .capture else { return .ignored }
                 guard PointerCaptureHolder.current?.target === node
                     || snap.imageFrame(in: node).contains(x: event.x, y: event.y) else { return .ignored }
                 snap.onInputEvent?(.mouseMotion(event))
                 return .handled
             }
             registry.setWheel(node, route: .viewport) { event, phase in
-                guard phase == .target else { return .ignored }
+                guard phase != .capture else { return .ignored }
                 if !event.input.isContinuation, let x = event.mouseX, let y = event.mouseY,
                    !snap.imageFrame(in: node).contains(x: x, y: y) { return .ignored }
                 snap.onInputEvent?(.mouseWheel(event))
