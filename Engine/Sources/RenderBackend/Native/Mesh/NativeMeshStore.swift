@@ -10,6 +10,7 @@ final class NativeMeshStore {
     let sampler: Sampler
     private(set) var fallbacks: [Texture] = []
     private var builtins: [Int: NativeMesh] = [:]
+    private var builtinAssets: [Int: MeshAsset] = [:]
     private var imported: [Int: NativeMesh] = [:]
     private(set) var revision: UInt64?
     private let registry: AssetRegistry
@@ -31,6 +32,9 @@ final class NativeMeshStore {
                 fixture.normalizeToUnitBounds(targetSize: 2)
             }
             builtins[1] = try NativeMesh.make(device: device, asset: fixture, sourceDirectory: nil)
+            builtinAssets = [0: cube,1: fixture]
+            publishMetadata(cube, at: 0)
+            publishMetadata(fixture, at: 1)
         } catch {
             builtins.values.forEach { $0.destroy(device: device) }
             fallbacks.forEach { device.destroy($0) }; device.destroy(sampler)
@@ -53,8 +57,27 @@ final class NativeMeshStore {
                     asset: entry.mesh, sourceDirectory: entry.sourceDirectory)
             }
         } catch { replacements.values.forEach { $0.destroy(device: device) }; throw error }
+        let removed = Set(imported.keys).subtracting(replacements.keys)
         imported.values.forEach { $0.destroy(device: device) }
         imported = replacements; revision = catalog.revision
+        for index in removed {
+            MeshBoundsRegistry.shared.remove(meshIndex: index)
+            MeshPickingRegistry.shared.remove(meshIndex: index)
+            MeshWireframeRegistry.shared.remove(meshIndex: index)
+            if let asset = builtinAssets[index] { publishMetadata(asset,at: index) }
+        }
+        for entry in catalog.meshes {
+            publishMetadata(entry.mesh, at: entry.meshIndex)
+            if let polygon = entry.polygonMesh {
+                MeshWireframeRegistry.shared.register(meshIndex: entry.meshIndex, polygonMesh: polygon)
+            }
+        }
+    }
+
+    private func publishMetadata(_ mesh: MeshAsset, at index: Int) {
+        MeshBoundsRegistry.shared.register(meshIndex: index, min: mesh.localBounds.min, max: mesh.localBounds.max)
+        MeshPickingRegistry.shared.register(meshIndex: index, mesh: mesh)
+        MeshWireframeRegistry.shared.register(meshIndex: index, mesh: mesh)
     }
     static func texture(device: Device, image: DecodedTextureAsset) throws -> Texture {
         let texture = try device.makeTexture(TextureDescriptor(width: image.width, height: image.height,

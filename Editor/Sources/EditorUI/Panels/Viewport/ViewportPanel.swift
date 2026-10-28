@@ -20,6 +20,7 @@ struct ViewportPanel: View {
             let _ = store.sceneRevision
             let _ = store.viewportCameraRevision
             let _ = store.uiRefreshRevision
+            let _ = store.geometryRevision
             let _: Void = app.meshEditing.synchronize()
             let surface = app.currentViewportSurfaceState()
             let selectedEntityID = store.selectedEntityID
@@ -62,18 +63,12 @@ struct ViewportPanel: View {
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 6) {
                     MeshEditControls(app: app)
-                    ViewportToolControls(snapStore: app.store,
-                                         gizmoMode: gizmoMode,
-                                         gizmoSpace: gizmoSpace,
-                                         playbackState: playbackState,
-                                         onSelectGizmoMode: { mode in
-                                             if gizmoMode != mode { store.dispatch(.setGizmoMode(mode)) }
-                                         },
-                                         onSelectGizmoSpace: { space in
-                                             if gizmoSpace != space { store.dispatch(.setGizmoSpace(space)) }
-                                         })
+                    ViewportToolMenu(store: app.store,mode: gizmoMode,
+                                     isEnabled: playbackState == .stopped)
+                    ViewportTransformMenu(store: app.store,isEnabled: playbackState == .stopped)
+                    if app.meshEditing.isEditing { MeshOperationsMenu(app: app) }
                     Spacer(minLength: 0)
-                    ViewportCameraMenu(scene: scene,
+                    ViewportViewMenu(camera: ViewportCameraOptions(scene: scene,
                                        isEnabled: EditorSceneAuthoringPolicy.canEditScene(during: playbackState),
                                        canFrameSelection: entity != nil,
                                        onSelectProjection: { scene.setViewportProjection($0) },
@@ -85,9 +80,8 @@ struct ViewportPanel: View {
                                                    : selectedEntityIDs,
                                                viewportAspectRatio: viewportAspectRatio(for: surface)
                                            )
-                                       })
-                    ViewportDisplayMenu(
-                        state: ViewportDisplayState(
+                                       }),
+                        display: ViewportDisplayOptions(state: ViewportDisplayState(
                             shading: shadingMode,
                             grid: gridEnabled,
                             shadows: shadowsEnabled,
@@ -105,7 +99,7 @@ struct ViewportPanel: View {
                             },
                             toggleRealtime: { app.setViewportRealtimeEnabled(!realtimeEnabled) },
                             setPhysicsOptions: { store.dispatch(.setPhysicsDebugOverlayOptions($0)) },
-                            setPhysicsScope: { store.dispatch(.setPhysicsDebugOverlayScope($0)) }))
+                            setPhysicsScope: { store.dispatch(.setPhysicsDebugOverlayScope($0)) })))
                 }
                 .padding(horizontal: 6)
                 .frame(height: 40)
@@ -155,6 +149,12 @@ struct ViewportPanel: View {
                         .frame(width: 64)
                         .absolutePosition(top: 10, right: 10)
     
+                        if app.meshEditing.isEditing {
+                            MeshTopologyStatus(app: app)
+                                .absolutePosition(left: 10,bottom: 10)
+                                .allowsHitTesting(false)
+                        }
+
                         // Selection, scale and run state already show in the title bar,
                         // status bar and toolbar; only a lock warns from inside the scene.
                         if selectionContainsLockedEntity {
@@ -906,6 +906,7 @@ struct ViewportPanel: View {
                                       selectedID: UInt64?) {
         let selected = selectedID
         for line in scene.viewportWireframeLines() {
+            if app.meshEditing.isEditing && line.entityID == app.meshEditing.entityID { continue }
             let color: Color = line.entityID == selected
                 ? Color(r: 1.0, g: 0.86, b: 0.46, a: 0.95)
                 : Color(r: 0.86, g: 0.9, b: 0.95, a: 0.62)
@@ -1071,6 +1072,7 @@ struct ViewportPanel: View {
                                         selectedIDs: Set<UInt64>) {
         guard !selectedIDs.isEmpty else { return }
         for bounds in scene.viewportWorldBounds() where selectedIDs.contains(bounds.entityID) {
+            if GeometryViewportOverlay.drawSelection(app: app,entityID: bounds.entityID,list: list,frame: frame) { continue }
             drawAABBOverlay(list: list,
                             frame: frame,
                             min: bounds.min,
@@ -1543,72 +1545,6 @@ private struct ViewCubeControl: _PrimitiveView {
 
     private static func absoluteOrigin(of node: Node) -> CGPoint {
         node.absoluteOrigin
-    }
-}
-
-/// The left of the viewport header: what the pointer does. The tool switcher,
-/// the transform space and snapping; how the scene is seen lives in the
-/// camera and display menus on the right.
-private struct ViewportToolControls: View {
-    let snapStore: EditorStore
-    let gizmoMode: EditorGizmoMode
-    let gizmoSpace: EditorGizmoSpace
-    let playbackState: PlaybackState
-    let onSelectGizmoMode: (EditorGizmoMode) -> Void
-    let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
-
-    var body: some View {
-        Row(alignment: .center, spacing: 8) {
-            Row(alignment: .center, spacing: 2) {
-                tool(.none, icon: .cursor, title: L("Pick"), key: "Q")
-                tool(.boxSelect, icon: .boxSelect, title: L("Box Select"), key: "B")
-                tool(.translate, icon: .translate, title: L("Move"), key: "W")
-                tool(.rotate, icon: .rotate, title: L("Rotate"), key: "E")
-                tool(.scale, icon: .scale, title: L("Scale"), key: "R")
-            }
-            .padding(2)
-            .background(.surfaceSunken)
-            .cornerRadius(8)
-            .debugName("viewport-tools")
-
-            Button(icon: .resource(gizmoSpace == .local ? UIIcons.Editor.box : UIIcons.Shape.globe),
-                   size: 14,
-                   isEnabled: isAuthoringEnabled,
-                   tooltip: gizmoSpace == .local ? L("Local") : L("World")) {
-                onSelectGizmoSpace(gizmoSpace == .local ? .world : .local)
-            }
-            .buttonStyle(ViewportIconButtonStyle())
-            .debugName("viewport-space")
-            ViewportSnapSelector(store: snapStore, isEnabled: isAuthoringEnabled)
-        }
-    }
-
-    private func tool(_ mode: EditorGizmoMode, icon: ViewportToolbarIcon, title: String, key: String) -> some View {
-        Button(icon: .resource(icon.resource),
-               size: 14,
-               isEnabled: isAuthoringEnabled,
-               isSelected: gizmoMode == mode,
-               tooltip: "\(title) · \(key)") {
-            onSelectGizmoMode(mode)
-        }
-        .buttonStyle(ViewportSegmentStyle())
-        .accessibility { $0.label = title; $0.state.isSelected = gizmoMode == mode }
-    }
-
-    private var isAuthoringEnabled: Bool {
-        EditorSceneAuthoringPolicy.canEditScene(during: playbackState)
-    }
-}
-
-private enum ViewportToolbarIcon: String {
-    case cursor = "cursor-arrow-rays"
-    case boxSelect = "squares-2x2"
-    case translate = "direction-arrows"
-    case rotate = "toolbar-arrow-path"
-    case scale = "arrows-pointing-out"
-
-    var resource: BundleImageResource {
-        .svg(named: rawValue, in: EditorAppResourceBundle.bundle, subdirectory: "ToolbarIcons")
     }
 }
 

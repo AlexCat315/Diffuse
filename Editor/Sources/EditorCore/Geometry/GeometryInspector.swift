@@ -14,9 +14,13 @@ extension EditorGeometryAuthoring {
                     doc.shading = shading
                 }), options: [option("flat","Flat"),option("smooth","Smooth")])), at: 0)
             source.insert(field("geometry-file", "Asset", .readOnly(document.name)), at: 0)
-            source.append(action("geometry-convert", "Topology", "Convert Source to Mesh") { [weak self] in
-                _ = self?.edit(entityID: entityID) { $0.source = .polygon(mesh: try $0.source.evaluate()) }
-            })
+            switch document.source {
+            case .polygon: break
+            default:
+                source.append(action("geometry-convert", "Topology", "Convert Source to Mesh") { [weak self] in
+                    _ = self?.edit(entityID: entityID) { $0.source = .polygon(mesh: try $0.source.evaluate()) }
+                })
+            }
             var sections = [section("geometry-source", "Geometry", source)]
             for (index, entry) in document.modifiers.enumerated() {
                 let id = entry.id

@@ -5,7 +5,7 @@ import CoveUIRuntime
 import SceneRuntime
 import SIMDCompat
 
-struct ViewportSnapSelector: View {
+struct ViewportTransformMenu: View {
     let store: EditorStore
     let isEnabled: Bool
     @State private var isPresented = false
@@ -15,16 +15,23 @@ struct ViewportSnapSelector: View {
             let translate = observed.translateSnapEnabled
             let rotate = observed.rotateSnapEnabled
             let scale = observed.scaleSnapEnabled
+            let space = observed.gizmoSpace
             let _ = observed.translateSnapStep
             let _ = observed.rotateSnapStepDegrees
             let _ = observed.scaleSnapStep
             Popover(isPresented: $isPresented, isEnabled: isEnabled, width: 280, surface: .content, overflow: .flip,
                     onKey: viewportPopoverDismissOnEscape($isPresented)) {
-                ViewportMenuTrigger(icon: UIIcons.Shape.pin, isActive: translate || rotate || scale)
-                    .tooltip(L("Snapping"))
-                    .accessibility { $0.label = L("Snapping") }
+                ViewportMenuTrigger(icon: UIIcons.Action.sliders, isActive: translate || rotate || scale)
+                    .tooltip(L("Transform Settings") + " · " + L(space == .local ? "Local" : "World"))
+                    .accessibility { $0.label = L("Transform Settings"); $0.value = L(space == .local ? "Local" : "World") }
             } content: {
                 Column(alignment: .leading, spacing: 8) {
+                    Row(spacing: 4) {
+                        Button(L("Local"),isSelected: space == .local) { observed.dispatch(.setGizmoSpace(.local)) }
+                            .buttonStyle(.toggle).flex().debugName("viewport-space-local")
+                        Button(L("World"),isSelected: space == .world) { observed.dispatch(.setGizmoSpace(.world)) }
+                            .buttonStyle(.toggle).flex().debugName("viewport-space-world")
+                    }
                     Text(L("Snap Steps")).font(.caption).foregroundColor(.onSurfaceMuted)
                     snapRow(id: "translate", label: L("Move"), enabled: translate,
                             value: Binding(get: { observed.translateSnapStep },
@@ -42,9 +49,9 @@ struct ViewportSnapSelector: View {
                             maximum: 10, suffix: L("Scale Increment"),
                             onToggle: { observed.dispatch(.setScaleSnapEnabled(!scale)) })
                 }
-                .padding(10)
+                .padding(10).background(.surfaceFloating).cornerRadius(10).border(.divider,width: 1)
             }
-            .debugName("viewport-snap-selector")
+            .debugName("viewport-transform-menu")
         }
     }
 

@@ -26,7 +26,12 @@ enum MeshViewportInteraction {
         let model = app.meshEditing
         model.synchronize()
         if case let .keyDown(key) = event, EditorViewportKeyRoutingPolicy.handlesLocally(key), key.scancode == 43 {
+            if key.isRepeat { return true }
             return model.setMode(model.isEditing ? .object : .vertex)
+        }
+        if case let .keyDown(key) = event, EditorViewportKeyRoutingPolicy.handlesLocally(key), (30...32).contains(key.scancode), model.canEnter {
+            if key.isRepeat { return true }
+            return model.setMode(key.scancode == 30 ? .vertex : key.scancode == 31 ? .edge : .face)
         }
         guard model.isEditing else { return false }
         let pointer = model.pointer
@@ -60,11 +65,11 @@ enum MeshViewportInteraction {
             } else if app.store.gizmoMode == .boxSelect, let start = pointer.start,
                       simd_length_squared(SIMD2(motion.x,motion.y)-start) > 36 {
                 pointer.marquee = UIRect(x: min(start.x,motion.x),y: min(start.y,motion.y),width: abs(start.x-motion.x),height: abs(start.y-motion.y))
-                app.store.dispatch(.forceUIRefresh)
+                app.store.geometryChanged()
             }
             return true
         case let .mouseButtonUp(button) where button.button == .left && pointer.start != nil:
-            defer { pointer.clear(); EditorGizmoController.shared.clearDrag(); app.store.dispatch(.forceUIRefresh) }
+            defer { pointer.clear(); EditorGizmoController.shared.clearDrag(); app.store.geometryChanged() }
             if model.isTransforming { _ = model.finishTransform(); return true }
             guard let frame = EditorViewportDropTarget.frame,
                   let projection = EditorViewportProjection(camera: app.scene.currentRenderCamera(),frame: frame),
@@ -85,11 +90,8 @@ enum MeshViewportInteraction {
             }
             if model.isTransforming { return true }
             switch key.scancode {
-            case 30: _ = model.setMode(.vertex); return true
-            case 31: _ = model.setMode(.edge); return true
-            case 32: _ = model.setMode(.face); return true
             case 4: if key.modifiers.hasAlt { model.select([]) } else { model.selectAll() }; return true
-            case 8 where model.mode == .face: _ = model.extrudeRegion(); return true
+            case 8 where key.modifiers.hasShift && model.mode == .face: _ = model.extrudeRegion(); return true
             case 29 where key.modifiers.hasAlt: model.setXray(!model.xray); return true
             // Entity deletion is never a fallback for component selection.
             case 42,76:
@@ -103,30 +105,5 @@ enum MeshViewportInteraction {
 
     private static func gizmoMode(_ mode: EditorGizmoMode) -> EditorGizmoController.Mode? {
         switch mode { case .translate: .translate; case .rotate: .rotate; case .scale: .scale; default: nil }
-    }
-}
-
-struct MeshEditControls: View {
-    let app: EditorApplication
-    var body: some View {
-        let model = app.meshEditing
-        Row(alignment: .center,spacing: 3) {
-            Button(L("Edit Mesh"),isEnabled: model.canEnter,isSelected: model.isEditing) {
-                _ = model.setMode(model.isEditing ? .object : .vertex)
-            }.buttonStyle(.ghost).debugName("mesh-edit-toggle")
-            if model.isEditing {
-                modeButton(.vertex)
-                modeButton(.edge)
-                modeButton(.face)
-                Button(L("X-Ray"),isSelected: model.xray) { model.setXray(!model.xray) }
-                    .buttonStyle(.ghost).debugName("mesh-xray")
-            }
-        }
-    }
-
-    private func modeButton(_ mode: EditorMeshSelectionMode) -> some View {
-        Button(mode == .vertex ? "V" : (mode == .edge ? "E" : "F"),isSelected: app.meshEditing.mode == mode,
-               tooltip: L(mode.title)) { _ = app.meshEditing.setMode(mode) }
-            .buttonStyle(ViewportSegmentStyle()).debugName("mesh-mode-\(mode.rawValue)")
     }
 }

@@ -48,6 +48,13 @@ public final class MeshWireframeRegistry: @unchecked Sendable {
         lock.unlock()
     }
 
+    public func register(meshIndex: Int, polygonMesh: PolygonMesh) {
+        let edges = polygonMesh.edges.map { MeshWireframeEdge(a: polygonMesh.positions[$0.a], b: polygonMesh.positions[$0.b]) }
+        lock.lock()
+        storage[meshIndex] = edges
+        lock.unlock()
+    }
+
     /// 注册单个拓扑来源（可带 index remap）。
     public func register(meshIndex: Int, topology: MeshWireframeTopology) {
         let edges = Self.extractWireframeEdges(from: topology)
@@ -85,6 +92,12 @@ public final class MeshWireframeRegistry: @unchecked Sendable {
     public func clearAll() {
         lock.lock()
         storage.removeAll(keepingCapacity: true)
+        lock.unlock()
+    }
+
+    public func remove(meshIndex: Int) {
+        lock.lock()
+        storage.removeValue(forKey: meshIndex)
         lock.unlock()
     }
 

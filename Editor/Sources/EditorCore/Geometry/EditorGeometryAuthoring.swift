@@ -35,6 +35,7 @@ public final class EditorGeometryAuthoring {
     }
     private var cache: [String: Cached] = [:]
     private var interactive: GeometryInteractiveEdit?
+    private var viewportPickers: [UInt64: (mesh: PolygonMesh, world: simd_float4x4, picker: EditorMeshPicker)] = [:]
 
     init(app: EditorApplication) { self.app = app }
 
@@ -81,6 +82,21 @@ public final class EditorGeometryAuthoring {
         let document = try GeometryDocument.load(from: url)
         cache[url.path] = Cached(size: values.fileSize, modified: values.contentModificationDate, document: document)
         return document
+    }
+
+    /// The catalog retains the exact evaluated polygons consumed by rendering.
+    public func viewportPicker(for entityID: UInt64) -> EditorMeshPicker? {
+        guard let app, let asset = app.scene.referencedAsset(for: entityID),
+              let mesh = AssetRegistry.shared.polygonMesh(for: asset.meshIndex),
+              let world = app.scene.entityWorldMatrix(entityID) else { return nil }
+        if let cached = viewportPickers[entityID], cached.mesh == mesh, cached.world == world { return cached.picker }
+        let scene = app.scene
+        guard let picker = try? EditorMeshPicker(mesh: mesh, worldMatrix: world, occluderDistance: { [weak scene] origin, direction in
+            scene?.meshSurfaceDistance(origin: origin, direction: direction, ignoringEntity: entityID)
+        }) else { return nil }
+        if viewportPickers.count > 128 { viewportPickers.removeAll() }
+        viewportPickers[entityID] = (mesh, world, picker)
+        return picker
     }
 
     /// Invalid edits, locked objects, playback, and unsaved text drafts cannot
@@ -177,13 +193,13 @@ public final class EditorGeometryAuthoring {
 
     private func refresh() {
         app?.renderGate = EditorViewportRenderGate()
-        app?.store.dispatch(.forceUIRefresh)
+        app?.store.geometryChanged()
         app?.requestDisplayRefresh()
     }
 
     private func report(_ error: any Error) {
         app?.logConsole("Geometry edit failed", severity: .error, detail: String(describing: error))
-        app?.store.dispatch(.forceUIRefresh)
+        app?.store.geometryChanged()
     }
 }
 
@@ -220,7 +236,7 @@ extension EditorGeometryAuthoring {
             state.preview = document
             interactive = state
             AssetRegistry.shared.registerTransientMesh(evaluated.mesh,at: state.asset.meshIndex,
-                assetID: state.asset.id,topologySlices: [evaluated.topologySlice])
+                assetID: state.asset.id,topologySlices: [evaluated.topologySlice],polygonMesh: evaluated.controlMesh)
             refresh()
             return true
         } catch { return false }

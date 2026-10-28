@@ -31,10 +31,10 @@ struct ViewportNavigationControlsTests {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: LayerRoot {
                 Column(alignment: .leading, spacing: 10) {
-                    ViewportCameraMenu(scene: scene, isEnabled: true, canFrameSelection: false,
+                    ViewportViewMenu(camera: ViewportCameraOptions(scene: scene, isEnabled: true, canFrameSelection: false,
                                        onSelectProjection: { selectedProjection = $0 },
-                                       onSelectAxis: { selectedAxis = $0 }, onFrameSelection: {})
-                    ViewportSnapSelector(store: store, isEnabled: true)
+                                       onSelectAxis: { selectedAxis = $0 }, onFrameSelection: {}),display: .testDefaults)
+                    ViewportTransformMenu(store: store, isEnabled: true)
                 }
             }.theme(EditorVisualTheme.make(dark: true)))
             let dispatcher = EventDispatcher(tree: graph.tree, interactions: registry,
@@ -58,19 +58,23 @@ struct ViewportNavigationControlsTests {
                 })
             }
             settle()
-            try WorkbenchUITestSupport.activate("viewport-camera-menu", in: graph.tree.root, registry: registry)
+            try WorkbenchUITestSupport.activate("viewport-view-menu", in: graph.tree.root, registry: registry)
             settle()
-            click(try menuItem("viewport-orthographic"))
+            try WorkbenchUITestSupport.activate("viewport-orthographic", in: graph.tree.root, registry: registry)
+            settle()
             #expect(selectedProjection == .orthographic && portals.entries.isEmpty)
-            try WorkbenchUITestSupport.activate("viewport-camera-menu", in: graph.tree.root, registry: registry)
+            try WorkbenchUITestSupport.activate("viewport-view-menu", in: graph.tree.root, registry: registry)
             settle()
             // Axis views live in a submenu of the camera menu.
             click(try menuItem("viewport-axis-views"))
             click(try menuItem("viewport-view-bottom"))
             #expect(selectedAxis == SIMD3<Float>(0, 1, 0) && portals.entries.isEmpty)
 
-            try WorkbenchUITestSupport.activate("viewport-snap-selector", in: graph.tree.root, registry: registry)
+            try WorkbenchUITestSupport.activate("viewport-transform-menu", in: graph.tree.root, registry: registry)
             settle()
+            try WorkbenchUITestSupport.activate("viewport-space-world",in: graph.tree.root,registry: registry)
+            settle()
+            #expect(store.gizmoSpace == .world)
             try WorkbenchUITestSupport.activate("viewport-snap-translate-toggle", in: graph.tree.root, registry: registry)
             settle()
             #expect(store.state.snapping.translateSnapEnabled)

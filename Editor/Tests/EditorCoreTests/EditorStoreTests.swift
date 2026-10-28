@@ -129,7 +129,7 @@ struct EditorStoreTests {
         let state = try JSONDecoder().decode(EditorState.self, from: data)
 
         #expect(state.assistant.capabilitySettings == .default)
-        #expect(state.viewport.physicsDebugOverlayOptions == .all)
+        #expect(state.viewport.physicsDebugOverlayOptions.isEmpty)
         #expect(state.viewport.physicsDebugOverlayScope == .selected)
     }
 

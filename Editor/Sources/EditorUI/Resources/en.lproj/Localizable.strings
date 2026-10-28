@@ -1152,3 +1152,29 @@
 "Vertex" = "Vertex";
 "Edge" = "Edge";
 "Face" = "Face";
+
+"Editing Mode" = "Editing Mode";
+
+"Control Mesh" = "Control Mesh";
+
+"Modifier Result" = "Modifier Result";
+
+"Mesh Tools" = "Mesh Tools";
+
+"Subdivide Faces" = "Subdivide Faces";
+
+"Triangulate Faces" = "Triangulate Faces";
+
+"Apply Modifiers to Mesh" = "Apply Modifiers to Mesh";
+
+"Modifier Wireframe" = "Modifier Wireframe";
+
+"Transform Settings" = "Transform Settings";
+
+"Navigation" = "Navigation";
+
+"Overlays" = "Overlays";
+
+"Tool" = "Tool";
+
+"Object" = "Object";

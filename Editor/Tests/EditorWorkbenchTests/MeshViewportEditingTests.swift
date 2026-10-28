@@ -21,10 +21,15 @@ struct MeshViewportEditingTests {
             #expect(app.meshEditing.setMode(.face))
             let graph = ViewGraph(tree: NodeTree(),recomposer: Recomposer())
             if actualPanel {
-                graph.install(root: ViewportPanel(app: app,scene: app.scene).theme(EditorVisualTheme.make(dark: false)))
+                graph.install(root: StoreScope(app.store) { store in
+                    EditorPresentationBoundary(presentation: store.presentation) {
+                        ViewportPanel(app: app,scene: app.scene).frame(width: 800,height: 600)
+                    }
+                })
             } else {
                 graph.install(root: StoreScope(app.store) { store in
                     let _ = store.uiRefreshRevision
+                    let _ = store.geometryRevision
                     ViewportHost(surface: ViewportSurfaceState(),onInputEvent: { event in
                         _ = MeshViewportInteraction.handle(event,app: app)
                     },onScreenFrameChange: { EditorViewportDropTarget.frame = $0 })
@@ -35,12 +40,30 @@ struct MeshViewportEditingTests {
             NodeRenderer().render(root: try #require(graph.tree.root),into: DrawList())
             let dispatcher = EventDispatcher(tree: graph.tree,interactions: registry,capture: capture,focusChain: focus)
             let frame = try #require(EditorViewportDropTarget.frame)
+            #expect(frame.width == 800 && frame.height >= 500)
             let click = MouseButtonEvent(button: .left,x: frame.x+frame.width/2,y: frame.y+frame.height/2,clicks: 1)
+            let presentation = app.store.uiRefreshRevision
             dispatcher.dispatch(.mouseButtonDown(click)); dispatcher.dispatch(.mouseButtonUp(click))
             #expect(app.meshEditing.selection == [1])
+            #expect(app.store.uiRefreshRevision == presentation)
             let viewport = try #require(focus.focused)
             graph.recomposer.commitAll(); graph.computeLayout(width: 800,height: 600)
             #expect(focus.focused === viewport)
+            if actualPanel {
+                let gizmo = try #require(EditorGizmoController.shared.snapshot)
+                let projection = try #require(EditorViewportProjection(camera: gizmo.camera,frame: frame))
+                let start = try #require(projection.project(gizmo.entityWorldPosition+SIMD3(gizmo.axisLength,0,0)))
+                dispatcher.dispatch(.mouseButtonDown(.init(button: .left,x: start.x,y: start.y,clicks: 1)))
+                #expect(app.meshEditing.isTransforming && capture.target === viewport)
+                dispatcher.dispatch(.mouseMotion(.init(x: start.x+20,y: start.y,deltaX: 20,deltaY: 0)))
+                graph.recomposer.commitAll(); graph.computeLayout(width: 800,height: 600)
+                #expect(app.meshEditing.isTransforming && capture.target === viewport)
+                #expect(focus.focused === viewport)
+                dispatcher.dispatch(.mouseButtonUp(.init(button: .left,x: start.x+20,y: start.y,clicks: 1)))
+                graph.recomposer.commitAll(); graph.computeLayout(width: 800,height: 600)
+                #expect(!app.meshEditing.isTransforming && capture.target == nil)
+                #expect(app.store.uiRefreshRevision == presentation)
+            }
             dispatcher.dispatch(.keyDown(.init(scancode: 43,keycode: 0,modifiers: [],isRepeat: false)))
             #expect(!app.meshEditing.isEditing)
         }
@@ -69,12 +92,13 @@ struct MeshViewportEditingTests {
         app.undo(); #expect(app.meshEditing.controlMesh() == original)
     } }
 
-    @Test("toolbar, surface selection and region extrusion operate on the saved control mesh")
+    @Test("surface selection and inspector region extrusion operate on the saved control mesh")
     func selectionAndExtrusion() throws { try WorkbenchUITestSupport.withEnvironment { registry,_ in
         try withApp { app,id,frame in
             let graph = ViewGraph(tree: NodeTree(),recomposer: Recomposer())
             graph.install(root: StoreScope(app.store) { store in
                 let _ = store.uiRefreshRevision
+                let _ = store.geometryRevision
                 let _: Void = app.meshEditing.synchronize()
                 Column {
                     MeshEditControls(app: app)
@@ -82,10 +106,10 @@ struct MeshViewportEditingTests {
                 }
             }.theme(EditorVisualTheme.make(dark: false)))
             graph.computeLayout(width: 360,height: 800)
-            try WorkbenchUITestSupport.activate("mesh-edit-toggle",in: graph.tree.root,registry: registry)
+            #expect(app.meshEditing.setMode(.vertex))
             graph.recomposer.commitAll()
             #expect(app.meshEditing.isEditing)
-            try WorkbenchUITestSupport.activate("mesh-mode-face",in: graph.tree.root,registry: registry)
+            #expect(app.meshEditing.setMode(.face))
             graph.recomposer.commitAll()
             let projection = try #require(EditorViewportProjection(camera: app.scene.currentRenderCamera(),frame: frame))
             let point = try #require(projection.project(.zero))
@@ -153,6 +177,9 @@ struct MeshViewportEditingTests {
         #expect(MeshViewportInteraction.handle(.mouseMotion(.init(x: frame.x+frame.width-10,y: frame.y+frame.height-10,deltaX: 100,deltaY: 100)),app: app))
         #expect(MeshViewportInteraction.handle(.mouseButtonUp(.init(button: .left,x: frame.x+frame.width-10,y: frame.y+frame.height-10,clicks: 1)),app: app))
         #expect(app.meshEditing.selection.count == 8)
+        #expect(MeshViewportInteraction.handle(.keyDown(.init(scancode: 30,keycode: 0,modifiers: [],isRepeat: false)),app: app))
+        #expect(MeshViewportInteraction.handle(.keyDown(.init(scancode: 43,keycode: 0,modifiers: [],isRepeat: true)),app: app))
+        #expect(app.meshEditing.selection.count == 8 && app.meshEditing.isEditing)
         #expect(MeshViewportInteraction.handle(.keyDown(.init(scancode: 76,keycode: 0,modifiers: [],isRepeat: false)),app: app))
         #expect(app.scene.entitySummary(id: id) != nil)
         #expect(MeshViewportInteraction.handle(.keyDown(.init(scancode: 43,keycode: 0,modifiers: [],isRepeat: false)),app: app))

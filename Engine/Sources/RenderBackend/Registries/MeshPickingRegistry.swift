@@ -96,6 +96,13 @@ public final class MeshPickingRegistry: @unchecked Sendable {
         lock.lock(); surfaces[meshIndex] = surface; assets[meshIndex] = mesh; lock.unlock()
     }
 
+    public func remove(meshIndex: Int) {
+        lock.lock()
+        surfaces.removeValue(forKey: meshIndex)
+        assets.removeValue(forKey: meshIndex)
+        lock.unlock()
+    }
+
     public func surface(for meshIndex: Int, jointMatrices: [simd_float4x4] = []) -> MeshPickingSurface? {
         lock.lock(); let cached = surfaces[meshIndex]; let cachedAsset = assets[meshIndex]; lock.unlock()
         if cached == nil {

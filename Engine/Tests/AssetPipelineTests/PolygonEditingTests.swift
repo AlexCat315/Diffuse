@@ -5,6 +5,56 @@ import Testing
 
 @Suite("Polygon editing")
 struct PolygonEditingTests {
+    @Test("face subdivision preserves shape, shared edges and independent corner UV seams")
+    func subdivideFaces() throws {
+        var mesh = try GeometryPrimitives.box()
+        let source = mesh
+        let selected = try mesh.subdivide(faces: [1])
+        #expect(selected.count == 4)
+        #expect(mesh.faces.count == 9 && mesh.positions.count == 13)
+        #expect(Array(mesh.positions.prefix(8)) == source.positions)
+        #expect(mesh.faces.filter { $0.vertices.count == 5 }.count == 4)
+        #expect(selected.allSatisfy { mesh.faces[$0].vertices.count == 4 && mesh.faces[$0].uvs?.count == 4 })
+        // Every inserted midpoint participates in both neighboring surfaces.
+        var uses: [PolygonMeshEdge: Int] = [:]
+        for face in mesh.faces {
+            for i in face.vertices.indices { uses[.init(face.vertices[i],face.vertices[(i+1)%face.vertices.count]),default: 0] += 1 }
+        }
+        #expect(uses.values.allSatisfy { $0 == 2 })
+        _ = try mesh.bake(name: "subdivided")
+        var full = source
+        try full.subdivide(faces: Set(full.faces.indices))
+        #expect(full.positions.count == 26 && full.faces.count == 24)
+        #expect(full.positions.allSatisfy { max(abs($0.x),max(abs($0.y),abs($0.z))) == 0.5 })
+        let before = full
+        #expect(throws: GeometryError.self) { try full.subdivide(faces: [-1]) }
+        #expect(throws: GeometryError.budgetExceeded) { try full.subdivide(faces: [0],limits: .init(maxVertices: 26)) }
+        #expect(full == before)
+        var concave = PolygonMesh(positions: [SIMD3(0,0,0),SIMD3(3,0,0),SIMD3(3,3,0),SIMD3(2,3,0),
+            SIMD3(2,1,0),SIMD3(1,1,0),SIMD3(1,3,0),SIMD3(0,3,0)],faces: [.init(Array(0..<8))])
+        let concaveSource = concave
+        #expect(throws: GeometryError.self) { try concave.subdivide(faces: [0]) }
+        #expect(concave == concaveSource)
+        let triangles = try concave.triangulateFaces([0])
+        try concave.subdivide(faces: triangles)
+        _ = try concave.bake(name: "concave subdivided after triangulation")
+    }
+
+    @Test("explicit triangulation preserves the rendered surface and corner attributes")
+    func triangulateFaces() throws {
+        var mesh = try GeometryPrimitives.box()
+        let source = mesh
+        let before = try mesh.bake(name: "before")
+        let selected = try mesh.triangulateFaces([0,1])
+        #expect(mesh.faces.count == 8 && selected.count == 4)
+        #expect(mesh.positions == source.positions)
+        #expect(selected.allSatisfy { mesh.faces[$0].vertices.count == 3 && mesh.faces[$0].uvs?.count == 3 })
+        #expect(try mesh.bake(name: "after").mesh.triangleCount == before.mesh.triangleCount)
+        let triangulated = mesh
+        #expect(throws: GeometryError.budgetExceeded) { try mesh.triangulateFaces([2],limits: .init(maxFaceCorners: 1)) }
+        #expect(mesh == triangulated)
+    }
+
     @Test("adjacent faces extrude as a region without an internal wall")
     func adjacentRegion() throws {
         let source = try GeometryPrimitives.grid(size: SIMD2(2,1),segments: SIMD2(2,1))

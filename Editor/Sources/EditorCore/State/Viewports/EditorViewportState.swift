@@ -12,7 +12,7 @@ public struct EditorViewportState: Codable, Sendable {
     public var renderScalePercent: Int = 100
     public var interactionDownscaleEnabled: Bool = false
     public var realtimeEnabled: Bool = false
-    public var physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions = .all
+    public var physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions = []
     public var physicsDebugOverlayScope: EditorPhysicsDebugOverlayScope = .selected
     public var mode: EditorViewportMode = .scene
     public var gamePreviewResolution: EditorGamePreviewResolution = .fit

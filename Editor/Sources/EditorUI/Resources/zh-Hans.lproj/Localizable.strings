@@ -1256,3 +1256,29 @@
 "Vertex" = "顶点";
 "Edge" = "边";
 "Face" = "面";
+
+"Editing Mode" = "编辑模式";
+
+"Control Mesh" = "控制网格";
+
+"Modifier Result" = "修改器结果";
+
+"Mesh Tools" = "网格工具";
+
+"Subdivide Faces" = "细分面";
+
+"Triangulate Faces" = "三角化面";
+
+"Apply Modifiers to Mesh" = "将结果转为网格";
+
+"Modifier Wireframe" = "修改器结果线框";
+
+"Transform Settings" = "变换设置";
+
+"Navigation" = "导航";
+
+"Overlays" = "辅助显示";
+
+"Tool" = "工具";
+
+"Object" = "物体";

@@ -36,6 +36,7 @@ struct InspectorPanel: View {
         StoreScope(store) { store in
             let _ = store.sceneRevision
             let _ = store.uiRefreshRevision
+            let _ = store.geometryRevision
             let _ = scripts?.wrappedValue
             let selectedEntityID = store.selectedEntityID
             let selectedEntityIDs = store.selectedEntityIDs.isEmpty

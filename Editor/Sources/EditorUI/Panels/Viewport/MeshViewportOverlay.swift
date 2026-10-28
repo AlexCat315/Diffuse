@@ -10,6 +10,9 @@ enum MeshViewportOverlay {
         let model = app.meshEditing
         guard model.isEditing, let picker = model.picker(),
               let projection = EditorViewportProjection(camera: app.scene.currentRenderCamera(),frame: frame) else { return }
+        if model.showsEvaluatedWireframe, model.hasModifiers, let id = model.entityID {
+            GeometryViewportOverlay.drawEvaluated(app: app,entityID: id,list: list,frame: frame)
+        }
         let active = Color(r: 1,g: 0.58,b: 0.12,a: 1)
         let inactive = Color(r: 0.65,g: 0.72,b: 0.8,a: 0.85)
         let selectedVertices = model.selectedVertices

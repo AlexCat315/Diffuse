@@ -36,7 +36,7 @@ final class NativeGeometryTests: XCTestCase {
         var delta = matrix_identity_float4x4; delta.columns.3.x = 0.8
         try mesh.transform(vertices: Set(mesh.positions.indices),by: delta)
         let preview = try mesh.bake(name: "preview")
-        assets.registerTransientMesh(preview.mesh,at: slot,assetID: "preview",topologySlices: [preview.topologySlice])
+        assets.registerTransientMesh(preview.mesh,at: slot,assetID: "preview",topologySlices: [preview.topologySlice],polygonMesh: preview.controlMesh)
         packet.frameIndex = 1
         try renderer.renderChecked(packet: packet)
         let moved = try GridImage.readback(device: device,texture: XCTUnwrap(renderer.colorTexture),size: packet.drawableSize)
@@ -79,6 +79,9 @@ final class NativeGeometryTests: XCTestCase {
         try renderer.renderChecked(packet: packet)
         let rounded = try GridImage.readback(device: device, texture: XCTUnwrap(renderer.colorTexture), size: packet.drawableSize)
         XCTAssertEqual(renderer.lastFrameStats.submittedMeshTriangleCount, 192)
+        XCTAssertEqual(MeshWireframeRegistry.shared.edges(for: entry.meshIndex)?.count, 192)
+        XCTAssertEqual(assets.polygonMesh(for: entry.meshIndex)?.faces.count, 96)
+        XCTAssertNotNil(MeshBoundsRegistry.shared.bounds(for: entry.meshIndex))
         XCTAssertGreaterThan(try GridImage.difference(empty,rounded).pixelsOverThree, 100)
         document.modifiers = []
         try document.save(to: url)
@@ -87,6 +90,14 @@ final class NativeGeometryTests: XCTestCase {
         try renderer.renderChecked(packet: packet)
         let box = try GridImage.readback(device: device, texture: XCTUnwrap(renderer.colorTexture), size: packet.drawableSize)
         XCTAssertEqual(renderer.lastFrameStats.submittedMeshTriangleCount, 12)
+        XCTAssertEqual(MeshWireframeRegistry.shared.edges(for: entry.meshIndex)?.count, 12)
         XCTAssertGreaterThan(try GridImage.difference(rounded,box).pixelsOverThree, 100)
+        try FileManager.default.removeItem(at: url)
+        _ = try assets.loadProject(at: root.path)
+        packet.frameIndex = 3; packet.scene.instances = []
+        try renderer.renderChecked(packet: packet)
+        XCTAssertNil(MeshWireframeRegistry.shared.edges(for: entry.meshIndex))
+        XCTAssertNil(MeshBoundsRegistry.shared.bounds(for: entry.meshIndex))
+        XCTAssertNotNil(MeshWireframeRegistry.shared.edges(for: 0))
     }
 }

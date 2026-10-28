@@ -5,20 +5,13 @@ import CoveUIRuntime
 import SceneRuntime
 import SIMDCompat
 
-// The viewport header has two menus, named by what they hold now ("透视",
-// "光照"), the way mature viewports group camera and display options instead
-// of exposing one control per setting.
-
-/// Camera: projection, axis views, framing, reset and stepwise navigation, all
-/// as menu items so the keyboard and assistive technology reach every one.
-struct ViewportCameraMenu: View {
+struct ViewportCameraOptions {
     let scene: EditorSceneAdapter
     let isEnabled: Bool
     let canFrameSelection: Bool
     let onSelectProjection: (RenderCamera.Projection) -> Void
     let onSelectAxis: (SIMD3<Float>) -> Void
     let onFrameSelection: () -> Void
-    @State private var isPresented = false
 
     private static let views: [(String, SIMD3<Float>)] = [
         ("Front", SIMD3<Float>(0, 0, -1)), ("Back", SIMD3<Float>(0, 0, 1)),
@@ -26,19 +19,7 @@ struct ViewportCameraMenu: View {
         ("Top", SIMD3<Float>(0, -1, 0)), ("Bottom", SIMD3<Float>(0, 1, 0)),
     ]
 
-    var body: some View {
-        let camera = scene.currentRenderCamera()
-        Popover(isPresented: $isPresented, isEnabled: isEnabled, width: 240, surface: .content, overflow: .flip,
-                onKey: viewportPopoverDismissOnEscape($isPresented)) {
-            ViewportMenuTrigger(label: label(camera), isActive: camera.projection == .orthographic)
-                .accessibility { $0.label = L("Projection"); $0.value = label(camera) }
-        } content: {
-            Menu(entries(camera), width: 240, maxVisibleRows: 12, onItemActivated: { isPresented = false })
-        }
-        .debugName("viewport-camera-menu")
-    }
-
-    private func label(_ camera: RenderCamera) -> String {
+    func label(_ camera: RenderCamera) -> String {
         guard camera.projection == .orthographic else { return L("Perspective") }
         if let view = Self.views.first(where: { matches($0.1, camera) }) { return L(view.0) }
         return L("Orthographic")
@@ -48,25 +29,19 @@ struct ViewportCameraMenu: View {
         simd_distance(simd_normalize(camera.target - camera.eye), axis) < 0.001
     }
 
-    private func entries(_ camera: RenderCamera) -> [MenuEntry] {
+    func entries(_ camera: RenderCamera) -> [MenuEntry] {
         let axisViews: [MenuEntry] = Self.views.map { name, axis in
             .item(MenuItem(id: "viewport-view-\(name.lowercased())", title: L(name),
                            isSelected: camera.projection == .orthographic && matches(axis, camera),
                            action: { onSelectAxis(axis) }))
         }
         return [
-            .item(MenuItem(id: "viewport-perspective", title: L("Perspective"),
-                           isSelected: camera.projection == .perspective,
-                           action: { onSelectProjection(.perspective) })),
-            .item(MenuItem(id: "viewport-orthographic", title: L("Orthographic"),
-                           isSelected: camera.projection == .orthographic,
-                           action: { onSelectProjection(.orthographic) })),
-            .submenu(MenuSubmenu(id: "viewport-axis-views", title: L("Axis Views"), entries: axisViews)),
-            .separator(id: "viewport-camera-frame"),
+            .submenu(MenuSubmenu(id: "viewport-axis-views", title: L("Axis Views"), entries: axisViews,configure: { $0.isEnabled = isEnabled })),
             .item(MenuItem(id: "viewport-frame-selected", title: L("Frame Selected"), shortcut: "F",
-                           isEnabled: canFrameSelection, action: onFrameSelection)),
-            .item(MenuItem(id: "viewport-reset-view", title: L("Reset View"), action: { scene.resetViewportView() })),
-            .submenu(MenuSubmenu(id: "viewport-step-navigation", title: L("Step Navigation"), entries: stepEntries)),
+                           isEnabled: canFrameSelection && isEnabled, action: onFrameSelection)),
+            .submenu(MenuSubmenu(id: "viewport-step-navigation", title: L("Navigation"), entries:
+                [.item(MenuItem(id: "viewport-reset-view", title: L("Reset View"), action: { scene.resetViewportView() })),
+                 .separator(id: "viewport-navigation-separator")] + stepEntries,configure: { $0.isEnabled = isEnabled })),
         ]
     }
 
@@ -112,36 +87,21 @@ struct ViewportDisplayActions {
     var setPhysicsScope: (EditorPhysicsDebugOverlayScope) -> Void
 }
 
-/// Display: shading, overlays, render scale and physics debug layers.
-struct ViewportDisplayMenu: View {
+struct ViewportDisplayOptions {
     let state: ViewportDisplayState
     let actions: ViewportDisplayActions
-    @State private var isPresented = false
 
     private static let renderScales = [50, 75, 100, 150, 200]
 
-    var body: some View {
-        Popover(isPresented: $isPresented, width: 240, surface: .content, overflow: .flip,
-                onKey: viewportPopoverDismissOnEscape($isPresented)) {
-            ViewportMenuTrigger(label: Self.label(for: state.shading), isActive: state.shading != .lit)
-                .accessibility { $0.label = L("Shading"); $0.value = Self.label(for: state.shading) }
-        } content: {
-            Menu(entries, width: 240, maxVisibleRows: 14, onItemActivated: { isPresented = false })
-        }
-        .debugName("viewport-display-menu")
-    }
-
-    private var entries: [MenuEntry] {
+    var entries: [MenuEntry] {
         let debugViews: [MenuEntry] = [EditorViewportShadingMode.baseColor, .normal, .roughness, .metallic].map(shadingItem)
         var entries: [MenuEntry] = [
-            .label(id: "display-shading", title: L("Shading")),
-            shadingItem(.lit), shadingItem(.unlit), shadingItem(.wireframe),
             .submenu(MenuSubmenu(id: "display-debug-views", title: L("Debug Views"), entries: debugViews)),
-            .separator(id: "display-overlays"),
-            .item(MenuItem(id: "display-grid", title: L("Reference Grid"), isSelected: state.grid,
+            .submenu(MenuSubmenu(id: "display-overlays", title: L("Overlays"), entries: [
+                .item(MenuItem(id: "display-grid", title: L("Reference Grid"), isSelected: state.grid,
                            action: actions.toggleGrid)),
-            .item(MenuItem(id: "display-shadows", title: L("Shadows"), isSelected: state.shadows,
-                           action: actions.toggleShadows)),
+                .item(MenuItem(id: "display-shadows", title: L("Shadows"), isSelected: state.shadows,
+                           action: actions.toggleShadows))])),
             .submenu(MenuSubmenu(id: "display-render-scale",
                                  title: L("Render Scale") + " · \(state.renderScalePercent)%",
                                  entries: renderScaleEntries)),
@@ -212,5 +172,52 @@ struct ViewportDisplayMenu: View {
         case .metallic: return L("Metallic")
         case .wireframe: return L("Wireframe")
         }
+    }
+}
+
+/// Frequent choices stay one click away; navigation and diagnostics share the
+/// same view popover rather than competing for permanent toolbar positions.
+struct ViewportViewMenu: View {
+    let camera: ViewportCameraOptions
+    let display: ViewportDisplayOptions
+    @State private var isPresented = false
+
+    var body: some View {
+        let current = camera.scene.currentRenderCamera()
+        Popover(isPresented: $isPresented, width: 264, placement: .bottomTrailing, surface: .content, overflow: .flip,
+                onKey: viewportPopoverDismissOnEscape($isPresented)) {
+            ViewportMenuTrigger(label: L("View"))
+                .tooltip(camera.label(current) + " · " + ViewportDisplayOptions.label(for: display.state.shading))
+                .accessibility { $0.label = L("View"); $0.value = camera.label(current) + " · " + ViewportDisplayOptions.label(for: display.state.shading) }
+        } content: {
+            Box(direction: .column,alignItems: .stretch,spacing: 6) {
+                Row(spacing: 3) {
+                    projection(.perspective,title: "Perspective",current: current)
+                    projection(.orthographic,title: "Orthographic",current: current)
+                }.padding(3).background(.surfaceSunken).cornerRadius(7)
+                Row(spacing: 3) {
+                    shading(.lit)
+                    shading(.unlit)
+                    shading(.wireframe)
+                }.padding(3).background(.surfaceSunken).cornerRadius(7)
+                Menu(camera.entries(current) + [.separator(id: "viewport-view-display")] + display.entries,
+                     width: 248,maxVisibleRows: 9,onItemActivated: { isPresented = false })
+            }.padding(8).background(.surfaceFloating).cornerRadius(10).border(.divider,width: 1)
+        }
+        .debugName("viewport-view-menu")
+    }
+
+    private func projection(_ value: RenderCamera.Projection,title: String,current: RenderCamera) -> some View {
+        Button(L(title),isEnabled: camera.isEnabled,isSelected: current.projection == value) {
+            camera.onSelectProjection(value)
+            isPresented = false
+        }.buttonStyle(.toggle).flex().debugName(value == .perspective ? "viewport-perspective" : "viewport-orthographic")
+    }
+
+    private func shading(_ mode: EditorViewportShadingMode) -> some View {
+        Button(ViewportDisplayOptions.label(for: mode),isSelected: display.state.shading == mode) {
+            display.actions.selectShading(mode)
+            isPresented = false
+        }.buttonStyle(.toggle).flex().debugName("viewmode-\(mode.rawValue)")
     }
 }

@@ -259,3 +259,7 @@
 "Extrude Region" = "区域挤出";
 "Direction" = "方向";
 "Normal" = "法线";
+
+"Select All" = "全选";
+
+"Deselect" = "取消选择";

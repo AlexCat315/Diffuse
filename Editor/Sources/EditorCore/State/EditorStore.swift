@@ -58,6 +58,7 @@ public final class EditorStore: @unchecked Sendable {
         case themeMode
         case language
         case uiRefreshRevision
+        case geometryRevision
         case vsyncMode
         case activeAssetDrag
         case inspectorCollapsedSectionIDs
@@ -76,6 +77,14 @@ public final class EditorStore: @unchecked Sendable {
     }
 
     private var scriptCaretLabels: [String: String] = [:]
+    private var geometryRevisionValue: UInt64 = 0
+
+    /// Invalidate authored geometry and transient component selection without
+    /// changing the presentation identity or discarding focus/pointer capture.
+    public func geometryChanged() {
+        geometryRevisionValue &+= 1
+        invalidate([.geometryRevision])
+    }
     public func scriptCaretLabel(for documentID: String) -> String {
         read(.scriptCaretLabel, scriptCaretLabels[documentID] ?? "Ln 1, Col 1")
     }
@@ -398,6 +407,7 @@ extension EditorStore {
     /// Bumped only by `forceUIRefresh`; the presentation boundary keys its
     /// view tree on it, so reading it rebuilds everything below the boundary.
     public var uiRefreshRevision: UInt64 { read(.uiRefreshRevision, storage.uiRefreshRevision) }
+    public var geometryRevision: UInt64 { read(.geometryRevision, geometryRevisionValue) }
     public var vsyncMode: EditorVSyncMode { read(.vsyncMode, storage.vsyncMode) }
     public var activeAssetDrag: EditorAssetDragPayload? { read(.activeAssetDrag, storage.navigation.activeAssetDrag) }
     public var inspectorCollapsedSectionIDs: Set<String> {

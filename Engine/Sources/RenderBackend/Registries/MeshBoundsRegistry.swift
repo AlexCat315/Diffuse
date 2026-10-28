@@ -44,4 +44,10 @@ public final class MeshBoundsRegistry: @unchecked Sendable {
         storage.removeAll(keepingCapacity: true)
         lock.unlock()
     }
+
+    public func remove(meshIndex: Int) {
+        lock.lock()
+        storage.removeValue(forKey: meshIndex)
+        lock.unlock()
+    }
 }

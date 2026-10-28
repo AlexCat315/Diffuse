@@ -51,6 +51,8 @@ struct GeometryAssetTests {
         #expect(mesh.localBounds.min == SIMD3(-1,-1,-1))
         #expect(mesh.localBounds.max == SIMD3(9,1,1))
         let snapshot = try #require(registry.meshCatalog(since: nil))
+        #expect(snapshot.meshes.first?.polygonMesh?.faces.count == 18)
+        #expect(registry.polygonMesh(for: first.meshIndex)?.edges.count == 36)
         let slice = try #require(snapshot.meshes.first?.topologySlices?.first)
         #expect(slice.positions.count == 24)
         let remap = try #require(slice.indexRemap)

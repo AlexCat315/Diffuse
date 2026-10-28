@@ -34,8 +34,8 @@ struct NavigationAndServerStatusTests {
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root: LayerRoot {
                 Column(alignment: .leading, spacing: 20) {
-                    ViewportCameraMenu(scene: app.scene, isEnabled: true, canFrameSelection: false,
-                                       onSelectProjection: { _ in }, onSelectAxis: { _ in }, onFrameSelection: {})
+                    ViewportViewMenu(camera: ViewportCameraOptions(scene: app.scene, isEnabled: true, canFrameSelection: false,
+                                       onSelectProjection: { _ in }, onSelectAxis: { _ in }, onFrameSelection: {}),display: .testDefaults)
                     LanguageServerStatus(app: app, snapshot: app.workstation.scripts.snapshot, onCommand: {
                         if case .openSettings = $0 { settingsOpened = true }
                     })
@@ -64,16 +64,17 @@ struct NavigationAndServerStatusTests {
                 settle()
             }
             // Stepwise navigation lives in the camera menu's submenu.
-            try activate("viewport-camera-menu")
+            try activate("viewport-view-menu")
             choose("viewport-step-navigation")
             choose("viewport-orbit-right")
             #expect(app.scene.currentRenderCamera() != originalCamera)
             let orbited = app.scene.currentRenderCamera()
-            try activate("viewport-camera-menu")
+            try activate("viewport-view-menu")
             choose("viewport-step-navigation")
             choose("viewport-pan-left")
             #expect(app.scene.currentRenderCamera().target != orbited.target)
-            try activate("viewport-camera-menu")
+            try activate("viewport-view-menu")
+            choose("viewport-step-navigation")
             choose("viewport-reset-view")
             #expect(app.scene.currentRenderCamera() == originalCamera)
             let afterNavigation = app.scene.manifest()

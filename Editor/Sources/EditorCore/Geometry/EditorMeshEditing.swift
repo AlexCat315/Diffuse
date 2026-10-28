@@ -12,6 +12,7 @@ public final class EditorMeshEditing {
     public private(set) var mode: EditorMeshSelectionMode = .object
     public private(set) var selection: Set<Int> = []
     public private(set) var xray = false
+    public private(set) var showsEvaluatedWireframe = true
     public var extrusionDistance: Float = 0.25
     public var extrusionDirection: EditorMeshExtrusionDirection = .normal
     public let pointer = EditorMeshPointerSession()
@@ -34,6 +35,7 @@ public final class EditorMeshEditing {
     public func setMode(_ next: EditorMeshSelectionMode) -> Bool {
         if next == .object { leave(); return true }
         guard canEnter, let app, let id = app.store.selectedEntityID else { return false }
+        if entityID == id, mode == next { return true }
         _ = cancelTransform()
         if entityID != id || !isEditing {
             guard app.geometryAuthoring.edit(entityID: id,{ document in
@@ -65,6 +67,42 @@ public final class EditorMeshEditing {
     }
 
     public func setXray(_ enabled: Bool) { xray = enabled; refresh() }
+    public func setEvaluatedWireframe(_ enabled: Bool) { showsEvaluatedWireframe = enabled; refresh() }
+
+    public var hasModifiers: Bool {
+        guard let id = entityID, let document = try? app?.geometryAuthoring.document(for: id) else { return false }
+        return document.modifiers.contains(where: \.enabled)
+    }
+
+    @discardableResult
+    public func applyModifiers() -> Bool {
+        synchronize()
+        guard !isTransforming, let app, let id = entityID,
+              let document = try? app.geometryAuthoring.document(for: id), let last = document.modifiers.last else { return false }
+        let success = app.geometryAuthoring.applyModifier(last.id,on: id)
+        if success { synchronize(); refresh() }
+        return success
+    }
+
+    @discardableResult
+    public func subdivideSelection() -> Bool { editFaces { try $0.subdivide(faces: $1) } }
+
+    @discardableResult
+    public func triangulateSelection() -> Bool { editFaces { try $0.triangulateFaces($1) } }
+
+    private func editFaces(_ update: (inout PolygonMesh, Set<Int>) throws -> Set<Int>) -> Bool {
+        synchronize()
+        guard !isTransforming, mode == .face, !selection.isEmpty, let app, let id = entityID else { return false }
+        let previous = selection
+        var next: Set<Int> = []
+        let success = app.geometryAuthoring.edit(entityID: id) { document in
+            guard case var .polygon(mesh) = document.source else { return }
+            next = try update(&mesh,previous)
+            document.source = .polygon(mesh: mesh)
+        }
+        if success, let mesh = controlMesh() { rememberTopology(mesh); selection = next; refresh() }
+        return success
+    }
 
     public func select(_ indices: Set<Int>, extending: Bool = false, toggling: Bool = false) {
         synchronize()
@@ -205,7 +243,7 @@ public final class EditorMeshEditing {
     }
 
     private func rememberTopology(_ mesh: PolygonMesh) { topology = mesh.faces.map(\.vertices); vertexCount = mesh.positions.count }
-    private func refresh() { app?.store.dispatch(.forceUIRefresh); app?.requestDisplayRefresh() }
+    private func refresh() { app?.store.geometryChanged(); app?.requestDisplayRefresh() }
 }
 
 public enum EditorMeshExtrusionDirection: String, CaseIterable, Sendable { case normal, x, y, z }

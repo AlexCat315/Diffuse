@@ -81,19 +81,23 @@ public struct RegisteredMeshAsset: Sendable {
     public let sourceDirectory: String?
     public let mesh: MeshAsset
     public let topologySlices: [MeshTopologySlice]?
+    /// Evaluated polygon boundaries, before GPU triangulation.
+    public let polygonMesh: PolygonMesh?
 
     public init(meshIndex: Int,
                 assetID: String,
                 kind: ImportableAssetKind,
                 sourceDirectory: String? = nil,
                 mesh: MeshAsset,
-                topologySlices: [MeshTopologySlice]? = nil) {
+                topologySlices: [MeshTopologySlice]? = nil,
+                polygonMesh: PolygonMesh? = nil) {
         self.meshIndex = meshIndex
         self.assetID = assetID
         self.kind = kind
         self.sourceDirectory = sourceDirectory
         self.mesh = mesh
         self.topologySlices = topologySlices
+        self.polygonMesh = polygonMesh
     }
 }
 
@@ -203,7 +207,7 @@ public final class AssetRegistry: @unchecked Sendable {
                 usedMeshIndices.insert(meshIndex)
             }
 
-            let imported: (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?)
+            let imported: (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?, polygonMesh: PolygonMesh?)
             do {
                 imported = try importMesh(at: candidate.url, kind: kind)
             } catch {
@@ -249,7 +253,8 @@ public final class AssetRegistry: @unchecked Sendable {
                 kind: kind,
                 sourceDirectory: assetURL.deletingLastPathComponent().path,
                 mesh: mesh,
-                topologySlices: normalizedSlices
+                topologySlices: normalizedSlices,
+                polygonMesh: imported.polygonMesh
             )
         }
 
@@ -315,6 +320,12 @@ public final class AssetRegistry: @unchecked Sendable {
         return value
     }
 
+    public func polygonMesh(for meshIndex: Int) -> PolygonMesh? {
+        lock.lock()
+        defer { lock.unlock() }
+        return (explicitlyRegisteredMeshes[meshIndex] ?? meshes[meshIndex])?.polygonMesh
+    }
+
     public func reset() {
         lock.lock()
         meshCatalogRevision &+= 1
@@ -337,7 +348,8 @@ public final class AssetRegistry: @unchecked Sendable {
     /// Removing the overlay restores the current project catalog at that slot.
     public func registerTransientMesh(_ mesh: MeshAsset, at meshIndex: Int, assetID: String,
                                       kind: ImportableAssetKind = .dmesh,
-                                      topologySlices: [MeshTopologySlice]? = nil) {
+                                      topologySlices: [MeshTopologySlice]? = nil,
+                                      polygonMesh: PolygonMesh? = nil) {
         lock.lock()
         meshCatalogRevision &+= 1
         explicitlyRegisteredMeshes[meshIndex] = RegisteredMeshAsset(
@@ -345,7 +357,8 @@ public final class AssetRegistry: @unchecked Sendable {
             assetID: assetID,
             kind: kind,
             mesh: mesh,
-            topologySlices: topologySlices
+            topologySlices: topologySlices,
+            polygonMesh: polygonMesh
         )
         lock.unlock()
     }
@@ -411,16 +424,16 @@ public final class AssetRegistry: @unchecked Sendable {
     }
 
     private func importMesh(at url: URL,
-                            kind: ImportableAssetKind) throws -> (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?) {
+                            kind: ImportableAssetKind) throws -> (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?, polygonMesh: PolygonMesh?) {
         switch kind {
         case .gltf, .glb:
             let loaded = try GLTFImporter.loadWithTopology(path: url.path)
-            return (loaded.mesh, loaded.topologies)
+            return (loaded.mesh, loaded.topologies, nil)
         case .obj:
-            return (try OBJLoader.load(path: url.path), nil)
+            return (try OBJLoader.load(path: url.path), nil, nil)
         case .dmesh:
             let evaluated = try GeometryDocument.load(from: url).evaluate()
-            return (evaluated.mesh, [evaluated.topologySlice])
+            return (evaluated.mesh, [evaluated.topologySlice], evaluated.controlMesh)
         case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
             preconditionFailure("Texture assets are not mesh-importable")
         }
