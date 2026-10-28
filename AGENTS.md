@@ -8,4 +8,6 @@ Please use the `cove cli` command to run the program; do not use the `swift` com
 
 Please refer to this for UI design agent/skills/
 
+Plain-text buttons are not permitted.
+
 A changelog must be written for every new version release.
