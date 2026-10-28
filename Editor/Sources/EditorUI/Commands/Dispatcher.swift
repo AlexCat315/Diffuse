@@ -141,7 +141,7 @@ enum EditorCommandDispatcher {
             }
         case .deleteSelection:
             if app.meshEditing.isEditing {
-                app.logConsole("Switch to object mode to delete the object",severity: .info)
+                _ = app.meshEditing.deleteSelection()
                 return
             }
             guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.timing.playbackState) else {

@@ -90,14 +90,44 @@ public final class EditorMeshEditing {
     @discardableResult
     public func triangulateSelection() -> Bool { editFaces { try $0.triangulateFaces($1) } }
 
+    @discardableResult
+    public func deleteSelection() -> Bool {
+        editComponents { mesh, mode, selected in
+            switch mode {
+            case .vertex: try mesh.delete(vertices: selected)
+            case .edge:
+                let edges = mesh.edges
+                try mesh.delete(edges: Set(selected.map { edges[$0] }))
+            case .face: try mesh.delete(faces: selected)
+            case .object: return []
+            }
+            return []
+        }
+    }
+
+    @discardableResult
+    public func dissolveSelection() -> Bool {
+        guard mode == .edge else { return false }
+        return editComponents { mesh, _, selected in
+            let edges = mesh.edges
+            _ = try mesh.dissolve(edges: Set(selected.map { edges[$0] }))
+            return []
+        }
+    }
+
     private func editFaces(_ update: (inout PolygonMesh, Set<Int>) throws -> Set<Int>) -> Bool {
+        guard mode == .face else { return false }
+        return editComponents { mesh, _, selected in try update(&mesh,selected) }
+    }
+
+    private func editComponents(_ update: (inout PolygonMesh, EditorMeshSelectionMode, Set<Int>) throws -> Set<Int>) -> Bool {
         synchronize()
-        guard !isTransforming, mode == .face, !selection.isEmpty, let app, let id = entityID else { return false }
-        let previous = selection
+        guard !isTransforming, isEditing, !selection.isEmpty, let app, let id = entityID else { return false }
+        let previous = selection, previousMode = mode
         var next: Set<Int> = []
         let success = app.geometryAuthoring.edit(entityID: id) { document in
             guard case var .polygon(mesh) = document.source else { return }
-            next = try update(&mesh,previous)
+            next = try update(&mesh,previousMode,previous)
             document.source = .polygon(mesh: mesh)
         }
         if success, let mesh = controlMesh() { rememberTopology(mesh); selection = next; refresh() }

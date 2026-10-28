@@ -105,29 +105,33 @@ struct NativeMesh {
     let textures: [Int: Texture]
 
     static func make(device: Device, asset: MeshAsset, sourceDirectory: String?) throws -> NativeMesh {
-        guard asset.vertexCount > 0, asset.vertices.count.isMultiple(of: MeshAsset.vertexFloatCount),
-              !asset.indices.isEmpty, asset.indices.count.isMultiple(of: 3),
+        let empty = asset.vertices.isEmpty && asset.indices.isEmpty && asset.submeshes.isEmpty
+        guard (empty || asset.vertexCount > 0 && !asset.indices.isEmpty), asset.vertices.count.isMultiple(of: MeshAsset.vertexFloatCount),
+              asset.indices.count.isMultiple(of: 3),
               asset.vertices.allSatisfy(\.isFinite), asset.indices.allSatisfy({ Int($0) < asset.vertexCount }) else {
             throw RHIError.invalidArgument("invalid mesh geometry: \(asset.name)")
         }
         guard asset.materials.allSatisfy({ material in
             (0..<4).allSatisfy { material.baseColorFactor[$0].isFinite } && material.alphaCutoff.isFinite
         }) else { throw RHIError.invalidArgument("non-finite imported material: \(asset.name)") }
-        let parts = asset.submeshes.isEmpty
+        let parts = !empty && asset.submeshes.isEmpty
             ? [MeshSubmesh(indexStart: 0, indexCount: asset.indexCount, materialIndex: 0)] : asset.submeshes
         guard parts.allSatisfy({ Int($0.indexStart) <= asset.indices.count
             && Int($0.indexCount) <= asset.indices.count - Int($0.indexStart)
             && $0.indexCount.isMultiple(of: 3) && asset.materials.indices.contains($0.materialIndex) }) else {
             throw RHIError.invalidArgument("invalid submesh range/material: \(asset.name)")
         }
-        let vertices = try device.makeBuffer(BufferDescriptor(size: asset.vertexBufferSize, usage: [.vertex, .transferDestination]))
+        let vertexSize = max(16,asset.vertexBufferSize), indexSize = max(16,asset.indexBufferSize)
+        let vertices = try device.makeBuffer(BufferDescriptor(size: vertexSize, usage: [.vertex, .transferDestination]))
         var indices: Buffer?
         var textures: [Int: Texture] = [:]
         do {
-            let indexBuffer = try device.makeBuffer(BufferDescriptor(size: asset.indexBufferSize, usage: [.index, .transferDestination]))
+            let indexBuffer = try device.makeBuffer(BufferDescriptor(size: indexSize, usage: [.index, .transferDestination]))
             indices = indexBuffer
-            try device.uploadBufferData(vertices, data: asset.vertices.withUnsafeBytes { Data($0) })
-            try device.uploadBufferData(indexBuffer, data: asset.indices.withUnsafeBytes { Data($0) })
+            if !empty {
+                try device.uploadBufferData(vertices, data: asset.vertices.withUnsafeBytes { Data($0) })
+                try device.uploadBufferData(indexBuffer, data: asset.indices.withUnsafeBytes { Data($0) })
+            }
             for (index, texture) in asset.textures.enumerated() {
                 let decoded: DecodedTextureAsset
                 do { decoded = try MeshTextureResolver.decode(texture, sourceDirectory: sourceDirectory).texture }
@@ -135,7 +139,7 @@ struct NativeMesh {
                 textures[index] = try NativeMeshStore.texture(device: device, image: decoded)
             }
             return NativeMesh(geometry: NativeMeshGeometry(vertices: vertices, indices: indexBuffer,
-                vertexCapacity: asset.vertexBufferSize, indexCapacity: asset.indexBufferSize,
+                vertexCapacity: vertexSize, indexCapacity: indexSize,
                 submeshes: parts, bounds: asset.localBounds), materials: asset.materials, textures: textures)
         } catch {
             device.destroy(vertices); if let indices { device.destroy(indices) }

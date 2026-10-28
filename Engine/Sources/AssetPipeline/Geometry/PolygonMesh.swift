@@ -59,7 +59,7 @@ public struct PolygonMesh: Codable, Equatable, Sendable {
 
     public func validate(limits: GeometryLimits = .init()) throws {
         try limits.check(vertices: positions.count, corners: 0)
-        guard !positions.isEmpty, !faces.isEmpty else { throw GeometryError.invalidMesh("empty mesh") }
+        guard !faces.isEmpty || positions.isEmpty else { throw GeometryError.invalidMesh("orphan vertices without a surface") }
         guard positions.allSatisfy(geometryFinite) else { throw GeometryError.invalidMesh("non-finite position") }
         var corners = 0
         for face in faces {

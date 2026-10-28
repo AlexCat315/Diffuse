@@ -47,7 +47,7 @@ public struct EditorMeshPicker {
         surface = MeshPickingSurface(positions: positions,indices: triangles)
         let lo = positions.reduce(SIMD3<Float>(repeating: .infinity)) { simd_min($0,$1) }
         let hi = positions.reduce(SIMD3<Float>(repeating: -.infinity)) { simd_max($0,$1) }
-        tolerance = max(0.00001,simd_length(hi-lo)*0.0001)
+        tolerance = positions.isEmpty ? 0.00001 : max(0.00001,simd_length(hi-lo)*0.0001)
     }
 
     public func isVisible(_ point: SIMD3<Float>, projection: EditorViewportProjection, xray: Bool) -> Bool {

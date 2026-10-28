@@ -93,9 +93,10 @@ enum MeshViewportInteraction {
             case 4: if key.modifiers.hasAlt { model.select([]) } else { model.selectAll() }; return true
             case 8 where key.modifiers.hasShift && model.mode == .face: _ = model.extrudeRegion(); return true
             case 29 where key.modifiers.hasAlt: model.setXray(!model.xray); return true
-            // Entity deletion is never a fallback for component selection.
             case 42,76:
-                app.logConsole("Switch to object mode to delete the object",severity: .info)
+                if key.isRepeat { return true }
+                if key.modifiers.hasAlt { _ = model.dissolveSelection() }
+                else { _ = model.deleteSelection() }
                 return true
             default: return false
             }

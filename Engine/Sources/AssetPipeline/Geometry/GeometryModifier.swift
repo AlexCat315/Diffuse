@@ -62,6 +62,7 @@ private extension PolygonMesh {
 
     func repeated(count: Int, offset: SIMD3<Float>, limits: GeometryLimits) throws -> PolygonMesh {
         guard count > 0, geometryFinite(offset) else { throw GeometryError.invalidParameter("array count/offset") }
+        if positions.isEmpty { return self }
         guard count <= limits.maxVertices / positions.count,
               count <= limits.maxFaceCorners / cornerCount else { throw GeometryError.budgetExceeded }
         var points: [SIMD3<Float>] = [], polygons: [PolygonFace] = []

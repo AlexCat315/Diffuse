@@ -130,8 +130,8 @@ public final class NatselPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             guard world.bodyIsValid(id) else { throw failure(.bodyCreationFailed, "Could not create Natsel body") }
             do {
                 let shapes = try createShapes(descriptor, body: id)
-                bodies[entity] = BodyRecord(id: id, descriptor: descriptor, shapes: shapes)
-                for (child, shape) in shapes.enumerated() { owners[shape] = ShapeOwner(entity: entity, child: UInt32(child)) }
+                bodies[entity] = BodyRecord(id: id, descriptor: descriptor, shapes: shapes.map { $0.id })
+                for shape in shapes { owners[shape.id] = ShapeOwner(entity: entity, child: shape.child) }
             } catch { world.destroyBody(id); throw error }
         }
         guard var record = bodies[entity] else { return }

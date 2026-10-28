@@ -208,10 +208,8 @@ extension EditorSceneAdapter {
             for resourceID in resourceIDs {
                 boundsResource.boundsByResourceID[resourceID] = bounds
                 changedBounds = true
-                if mesh.triangleCount > 0 {
-                    geometryResource.geometryByResourceID[resourceID] = geometry
-                    changedGeometry = true
-                }
+                geometryResource.geometryByResourceID[resourceID] = geometry
+                changedGeometry = true
             }
         }
 

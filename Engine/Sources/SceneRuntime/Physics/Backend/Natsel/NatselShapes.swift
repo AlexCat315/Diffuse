@@ -2,12 +2,12 @@ import SIMDCompat
 internal import Natsel
 
 extension NatselPhysicsBackend {
-    func createShapes(_ descriptor: PhysicsBodyDescriptor, body: Natsel.BodyID) throws -> [Natsel.ShapeID] {
+    func createShapes(_ descriptor: PhysicsBodyDescriptor, body: Natsel.BodyID) throws -> [(child: UInt32,id: Natsel.ShapeID)] {
         guard let collider = descriptor.collider else { return [] }
         guard !collider.shapes.isEmpty else { throw failure(.invalidShape, "A collider needs at least one shape") }
         let bodyScale = scale(descriptor.worldTransform.matrix)
-        var result: [Natsel.ShapeID] = []
-        for instance in collider.shapes {
+        var result: [(child: UInt32,id: Natsel.ShapeID)] = []
+        for (child,instance) in collider.shapes.enumerated() {
             let q = simd_quatf(vector: simd_normalize(instance.localRotation))
             func point(_ value: SIMD3<Float>) -> Natsel.Vec3 {
                 nv(bodyScale * (instance.localPosition + q.act(instance.localScale * (value + instance.shape.center))))
@@ -46,12 +46,14 @@ extension NatselPhysicsBackend {
                 guard let hull = Natsel.createHull(vertices, maxVertexCount: 128) else { throw failure(.invalidShape, "Invalid cylinder collider") }
                 id = world.createHullShape(body, def, hull)
             case .convex:
+                if let geometry = descriptor.meshGeometry, geometry.positions.isEmpty && geometry.triangleIndices.isEmpty { continue }
                 guard let geometry = descriptor.meshGeometry,
                     let hull = Natsel.createHull(geometry.positions.map(point), maxVertexCount: 128) else {
                     throw failure(.invalidShape, "Convex collider requires valid geometry")
                 }
                 id = world.createHullShape(body, def, hull)
             case .mesh, .heightField:
+                if let geometry = descriptor.meshGeometry, geometry.positions.isEmpty && geometry.triangleIndices.isEmpty { continue }
                 guard let geometry = descriptor.meshGeometry,
                     let mesh = Natsel.TriangleMesh(vertices: geometry.positions.map(point),
                         indices: geometry.triangleIndices.map { Int32(clamping: $0) }) else {
@@ -61,7 +63,7 @@ extension NatselPhysicsBackend {
                 id = world.createMeshShape(body, def, mesh)
             }
             guard !id.isNull else { throw failure(.invalidShape, "Could not create Natsel collider") }
-            result.append(id)
+            result.append((UInt32(child),id))
         }
         return result
     }

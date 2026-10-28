@@ -1282,3 +1282,7 @@
 "Tool" = "工具";
 
 "Object" = "物体";
+
+"Dissolve Edges" = "溶解边";
+
+"Delete Selected Components" = "删除选中元素";

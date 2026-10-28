@@ -39,17 +39,22 @@ struct MeshOperationsMenu: View {
             ViewportMenuTrigger(icon: UIIcons.Action.moreHorizontal)
                 .tooltip(L("Mesh Tools")).accessibility { $0.label = L("Mesh Tools") }
         } content: {
-            Menu(entries(model),width: 248,onItemActivated: { isPresented = false })
+            Menu(entries(model),width: 248,maxVisibleRows: 10,onItemActivated: { isPresented = false })
         }
         .debugName("mesh-tools-menu")
     }
 
     private func entries(_ model: EditorMeshEditing) -> [MenuEntry] {
         let faces = model.mode == .face && !model.selection.isEmpty && !model.isTransforming
+        let components = !model.selection.isEmpty && !model.isTransforming
         return [
             .item(MenuItem(id: "mesh-subdivide",title: L("Subdivide Faces"),isEnabled: faces,action: { _ = model.subdivideSelection() })),
             .item(MenuItem(id: "mesh-triangulate",title: L("Triangulate Faces"),isEnabled: faces,action: { _ = model.triangulateSelection() })),
             .item(MenuItem(id: "mesh-extrude",title: L("Extrude Region"),shortcut: "Shift E",isEnabled: faces,action: { _ = model.extrudeRegion() })),
+            .item(MenuItem(id: "mesh-dissolve",title: L("Dissolve Edges"),shortcut: "Alt Delete",isEnabled: components && model.mode == .edge,
+                           content: .init(icon: UIIcons.Action.unlink),action: { _ = model.dissolveSelection() })),
+            .item(MenuItem(id: "mesh-delete",title: L("Delete Selected Components"),shortcut: "Delete",isEnabled: components,role: .destructive,
+                           content: .init(icon: UIIcons.Action.trash),action: { _ = model.deleteSelection() })),
             .separator(id: "mesh-topology-apply"),
             .item(MenuItem(id: "mesh-apply-modifiers",title: L("Apply Modifiers to Mesh"),isEnabled: model.hasModifiers && !model.isTransforming,
                            action: { _ = model.applyModifiers() })),
