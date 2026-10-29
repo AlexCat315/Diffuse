@@ -58,8 +58,8 @@ struct BoundaryChecks {
       !launcher.byName.contains("CoveUIWorkspace"),
       "CoveUI must not depend on the CoveUIWorkspace launcher target")
 
-    let portable = try loader.manifest(at: sdkRoot.appendingPathComponent("Portable"))
-    for (name, package) in [("CoveUI", ui), ("CoveUI/Portable", portable)] {
+    let portable = try loader.manifest(at: sdkRoot.appendingPathComponent("DevTools/Inspection"))
+    for (name, package) in [("CoveUI", ui), ("CoveUI/DevTools/Inspection", portable)] {
       for dependency in package.localDependencies
       where dependency.path.lowercased().contains("examples") {
         throw ToolError.message(
@@ -73,21 +73,21 @@ struct BoundaryChecks {
       "Agent skills may use CoveFileSystem, but must not depend on UI or Engine domains")
     try require(
       !portable.localDependencies.contains(path("Engine")),
-      "CoveUI/Portable must not depend on Engine")
+      "CoveUI/DevTools/Inspection must not depend on Engine")
     try require(
       !ui.localDependencies.contains(path("Editor")),
       "CoveUI must not depend on Editor")
     try require(
-      ui.productNames.contains("CoveUIAgent"),
-      "CoveUI must keep vending the CoveUIAgent product")
+      try loader.manifest(at: sdkRoot.appendingPathComponent("DevTools")).productNames.contains("CoveUIAgent"),
+      "DevTools must vend the CoveUIAgent product")
 
     try checkSDKIndependence(ui)
     try checkEngineIndependence()
 
     let capability = try loader.manifest(at: path("Engine")).target(named: "CapabilityRuntime")
     try require(
-      capability.products == ["CoveUIAgentCore"],
-      "CapabilityRuntime must depend on exactly the CoveUIAgentCore product")
+      capability.products == ["CoveUIInspection"],
+      "CapabilityRuntime must depend on exactly the CoveUIInspection product")
 
     let workspace = try loader.manifest(at: path("."))
     try require(
@@ -207,7 +207,7 @@ struct BoundaryChecks {
         + developer.localDependencies.map(\.path).sorted().joined(separator: ", "))
     try require(
       tools.localDependencies == [
-        sdkRoot.appendingPathComponent("Hosts/Android/Contract"), sdkRoot.appendingPathComponent("Portable"), sdkRoot.appendingPathComponent("Logging"),
+        sdkRoot.appendingPathComponent("Hosts/Android/Contract"), sdkRoot.appendingPathComponent("DevTools/Protocol"), sdkRoot.appendingPathComponent("Logging"),
         sdkRoot.appendingPathComponent("Tools/Support"),
         sdkRoot.appendingPathComponent("System"),
       ],

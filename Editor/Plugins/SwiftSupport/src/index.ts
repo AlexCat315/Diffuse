@@ -17,10 +17,16 @@ function tests(text: string, known: string[]) {
     return candidates.length === 1 ? candidates[0] : candidates.length ? undefined : name;
   };
   for (const line of lines(text)) {
+    const issue = /✘ Test (?:"([^"]+)"|(\S+)) recorded an issue at .*?:\d+:\d+:\s*(.*)$/.exec(line);
+    if (issue) {
+      const id = identify(issue[1] ?? issue[2]);
+      if (id && !values.get(id)?.message) values.set(id, { id, status: "failed", message: issue[3] });
+      continue;
+    }
     const xc = /Test Case '(?:-\[([^ ]+) ([^\]]+)\]|([^']+))' (passed|failed|skipped)/.exec(line);
     const st = /[✔✘➜] Test (?:"([^"]+)"|(\S+)) (passed|failed|skipped)/.exec(line);
     const name = xc ? xc[1] ? `${xc[1]}/${xc[2]}` : xc[3].replace(/\.([^.]+)$/, "/$1") : st?.[1] ?? st?.[2];
-    if (name) { const id = identify(name); if (id) values.set(id, { id, status: xc?.[4] ?? st?.[3], message: null }); }
+    if (name) { const id = identify(name); if (id) values.set(id, { id, status: xc?.[4] ?? st?.[3], message: values.get(id)?.message ?? null }); }
   }
   return [...values.values()];
 }

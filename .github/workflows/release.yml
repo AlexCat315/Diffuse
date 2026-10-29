@@ -8,7 +8,7 @@ on:
       tag:
         description: Release tag to publish assets to
         required: true
-        default: v0.0.9
+        default: v0.1.0
       target:
         description: Commit SHA or branch to use when creating a missing release
         required: false
@@ -68,6 +68,15 @@ jobs:
           tag="${{ steps.release.outputs.tag }}"
           target="${{ steps.pin.outputs.target }}"
 
+          RELEASE_TAG="$tag" node <<'NODE'
+          const fs = require('fs');
+          const version = process.env.RELEASE_TAG.replace(/^v/, '');
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+          const section = changelog.split(/^## /m).find(section => section.startsWith(`[${version}]`));
+          if (!section) throw new Error(`CHANGELOG.md has no release notes for ${version}`);
+          fs.writeFileSync('release-notes.md', section.slice(section.indexOf('\n') + 1).trim() + '\n');
+          NODE
+
           if [ "${{ github.event_name }}" = "release" ]; then
             echo "Release $tag was created by the triggering event; skipping re-creation."
             exit 0
@@ -85,7 +94,7 @@ jobs:
               --target "$target" \
               --title "$tag" \
               --draft \
-              --generate-notes
+              --notes-file release-notes.md
           fi
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,6 +115,7 @@ jobs:
     name: Editor macOS
     needs: prepare-release
     runs-on: xcode-27
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -118,21 +128,21 @@ jobs:
         uses: ./.github/actions/setup-toolchains
 
       - name: Build native dependencies
-        run: ./cove studio native-bootstrap --force
+        uses: ./.github/actions/native-dependencies
 
       - name: Build Editor, Player, and MCP
         shell: bash
         run: |
-          swift build -c release --package-path Editor --product EditorApp
-          swift build -c release --package-path Editor --product CovePlayer
-          swift build -c release --package-path Engine --product DiffusePluginHost
-          swift build -c release --package-path DiffuseMCP
+          ./cove internal build-package Editor --release --product EditorApp --result-file editor-products.json
+          ./cove internal build-package Editor --release --product CovePlayer --result-file player-products.json
+          ./cove internal build-package Engine --release --product DiffusePluginHost --result-file plugin-host-products.json
+          ./cove internal build-package DiffuseMCP --release --result-file mcp-products.json
 
       - name: Test packages before release
         shell: bash
         run: |
-          swift test --package-path Engine
-          swift test --package-path Editor --no-parallel
+          ./cove test Engine --no-parallel
+          ./cove test Editor --no-parallel
 
       - name: Package
         id: package
@@ -141,10 +151,10 @@ jobs:
           set -euo pipefail
 
           arch="$(uname -m)"
-          editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
-          player_bin="$(swift build -c release --package-path Editor --product CovePlayer --show-bin-path)"
-          plugin_host_bin="$(swift build -c release --package-path Engine --product DiffusePluginHost --show-bin-path)"
-          mcp_bin="$(swift build -c release --package-path DiffuseMCP --show-bin-path)"
+          editor_bin="$(node -p 'JSON.parse(require("fs").readFileSync("editor-products.json")).products')"
+          player_bin="$(node -p 'JSON.parse(require("fs").readFileSync("player-products.json")).products')"
+          plugin_host_bin="$(node -p 'JSON.parse(require("fs").readFileSync("plugin-host-products.json")).products')"
+          mcp_bin="$(node -p 'JSON.parse(require("fs").readFileSync("mcp-products.json")).products')"
 
           dist_root="$PWD/dist"
           package_dir="$dist_root/Diffuse-macos-$arch"
@@ -179,7 +189,7 @@ jobs:
             <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
             <key>CFBundleName</key><string>Diffuse</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>0.0.1</string>
+            <key>CFBundleShortVersionString</key><string>0.1.0</string>
             <key>CFBundleVersion</key><string>1</string>
             <key>LSMinimumSystemVersion</key><string>26.0</string>
             <key>NSHighResolutionCapable</key><true/>
@@ -219,6 +229,7 @@ jobs:
     name: Editor Windows
     needs: prepare-release
     runs-on: windows-2025-vs2026
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -237,26 +248,25 @@ jobs:
           cmake --version
 
       - name: Build native dependencies
-        shell: pwsh
-        run: ./cove studio native-bootstrap --force
+        uses: ./.github/actions/native-dependencies
 
       - name: Build Editor, Player, and MCP
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $true
-          swift build -c release --package-path Editor --product EditorApp
-          swift build -c release --package-path Editor --product CovePlayer
-          swift build -c release --package-path Engine --product DiffusePluginHost
-          swift build -c release --package-path DiffuseMCP
+          ./cove internal build-package Editor --release --product EditorApp --result-file editor-products.json
+          ./cove internal build-package Editor --release --product CovePlayer --result-file player-products.json
+          ./cove internal build-package Engine --release --product DiffusePluginHost --result-file plugin-host-products.json
+          ./cove internal build-package DiffuseMCP --release --result-file mcp-products.json
 
       - name: Test packages before release
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $true
-          swift test --package-path Engine
-          swift test --package-path Editor --no-parallel
+          ./cove test Engine --no-parallel
+          ./cove test Editor --no-parallel
 
       - name: Package
         id: package
@@ -265,10 +275,10 @@ jobs:
           $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $true
 
-          $editorBin = (swift build -c release --package-path Editor --product EditorApp --show-bin-path).Trim()
-          $playerBin = (swift build -c release --package-path Editor --product CovePlayer --show-bin-path).Trim()
-          $pluginHostBin = (swift build -c release --package-path Engine --product DiffusePluginHost --show-bin-path).Trim()
-          $mcpBin = (swift build -c release --package-path DiffuseMCP --show-bin-path).Trim()
+          $editorBin = (Get-Content editor-products.json -Raw | ConvertFrom-Json).products
+          $playerBin = (Get-Content player-products.json -Raw | ConvertFrom-Json).products
+          $pluginHostBin = (Get-Content plugin-host-products.json -Raw | ConvertFrom-Json).products
+          $mcpBin = (Get-Content mcp-products.json -Raw | ConvertFrom-Json).products
 
           $distRoot = Join-Path $PWD "dist"
           $packageDir = Join-Path $distRoot "Diffuse-windows-x86_64"
@@ -353,6 +363,7 @@ jobs:
     name: Editor Linux
     needs: prepare-release
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -405,22 +416,21 @@ jobs:
           cmake --version
 
       - name: Build native dependencies
-        shell: bash
-        run: ./cove studio native-bootstrap --force
+        uses: ./.github/actions/native-dependencies
 
       - name: Build Editor, Player, and MCP
         shell: bash
         run: |
-          swift build -c release --package-path Editor --product EditorApp
-          swift build -c release --package-path Editor --product CovePlayer
-          swift build -c release --package-path Engine --product DiffusePluginHost
-          swift build -c release --package-path DiffuseMCP
+          ./cove internal build-package Editor --release --product EditorApp --result-file editor-products.json
+          ./cove internal build-package Editor --release --product CovePlayer --result-file player-products.json
+          ./cove internal build-package Engine --release --product DiffusePluginHost --result-file plugin-host-products.json
+          ./cove internal build-package DiffuseMCP --release --result-file mcp-products.json
 
       - name: Test packages before release
         shell: bash
         run: |
-          swift test --package-path Engine
-          swift test --package-path Editor --no-parallel
+          ./cove test Engine --no-parallel
+          ./cove test Editor --no-parallel
 
       - name: Package
         id: package
@@ -428,10 +438,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
-          player_bin="$(swift build -c release --package-path Editor --product CovePlayer --show-bin-path)"
-          plugin_host_bin="$(swift build -c release --package-path Engine --product DiffusePluginHost --show-bin-path)"
-          mcp_bin="$(swift build -c release --package-path DiffuseMCP --show-bin-path)"
+          editor_bin="$(node -p 'JSON.parse(require("fs").readFileSync("editor-products.json")).products')"
+          player_bin="$(node -p 'JSON.parse(require("fs").readFileSync("player-products.json")).products')"
+          plugin_host_bin="$(node -p 'JSON.parse(require("fs").readFileSync("plugin-host-products.json")).products')"
+          mcp_bin="$(node -p 'JSON.parse(require("fs").readFileSync("mcp-products.json")).products')"
 
           dist_root="$PWD/dist"
           package_dir="$dist_root/Diffuse-linux-x86_64"

@@ -393,7 +393,7 @@ async function generate(config, messages, signal, delta, instructions = "", back
 
 // Editor/Plugins/AI/src/authoring.ts
 import { mkdir as mkdir2, lstat, writeFile as writeFile2, readFile as readFile2 } from "fs/promises";
-import { join as join2 } from "path";
+import { isAbsolute, join as join2, relative, sep } from "path";
 var tool = (name, description, properties, required) => ({
   type: "function",
   function: { name, description, parameters: { type: "object", properties, required, additionalProperties: false } }
@@ -417,7 +417,10 @@ async function authoring(name, input, context, signal) {
   const development = join2(context.storageDirectory, "development");
   const packages = join2(context.storageDirectory, "packages");
   if (name === "diffuse_plugin_review") {
-    if (typeof input.package !== "string" || !input.package.startsWith(packages + "/") || !input.package.endsWith(".coveplugin") || input.package.includes(".."))
+    if (typeof input.package !== "string")
+      throw new Error("Invalid built package");
+    const path = relative(packages, input.package);
+    if (!path || isAbsolute(path) || path.split(sep).includes("..") || !path.endsWith(".coveplugin"))
       throw new Error("Invalid built package");
     return hostJob(context, "diffuse:editor/host", { operation: "review", package: input.package }, signal);
   }

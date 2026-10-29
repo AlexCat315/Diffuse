@@ -72,7 +72,7 @@ function batch(request, stdout, args, values, after = result(null)) {
 }
 function handle(request, stdout) {
   const { op, output, next } = request;
-  if (output && !output.complete)
+  if (output?.complete === false)
     return whole(next);
   switch (op) {
     case "status":

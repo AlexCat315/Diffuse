@@ -1,5 +1,5 @@
 import { mkdir, lstat, writeFile, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { hostJob, type InvocationContext } from "@diffuse/plugin-sdk";
 import type { ModelTool } from "./models.ts";
 const tool = (name: string, description: string, properties: any, required: string[]): ModelTool => ({ type: "function",
@@ -19,7 +19,9 @@ export async function authoring(name: string, input: any, context: InvocationCon
   const development = join(context.storageDirectory, "development");
   const packages = join(context.storageDirectory, "packages");
   if (name === "diffuse_plugin_review") {
-    if (typeof input.package !== "string" || !input.package.startsWith(packages + "/") || !input.package.endsWith(".coveplugin") || input.package.includes("..")) throw new Error("Invalid built package");
+    if (typeof input.package !== "string") throw new Error("Invalid built package");
+    const path = relative(packages, input.package);
+    if (!path || isAbsolute(path) || path.split(sep).includes("..") || !path.endsWith(".coveplugin")) throw new Error("Invalid built package");
     return hostJob(context, "diffuse:editor/host", { operation: "review", package: input.package }, signal);
   }
   if (typeof input.id !== "string" || !/^[a-z][a-z0-9.-]{2,63}$/.test(input.id)) throw new Error("Invalid plugin id");

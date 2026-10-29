@@ -2,69 +2,91 @@
 import CoveUI
 import CoveUIRuntime
 
-/// Frozen pre-plugin behavior used to verify the resource migration.
+/// Frozen 0.1.0 palette and layout used to verify bundled theme decoding.
 enum OriginalDefaultTheme {
     static func make(dark: Bool) -> Theme {
         var theme = dark ? Theme.defaultDark : Theme.defaultLight
         basePalette(&theme, dark: dark)
-        interactionPalette(&theme, dark: dark)
         metrics(&theme)
         decorations(&theme, dark: dark)
         inputs(&theme, dark: dark)
+        if dark {
+            theme.inputs.background = Color(red: 0x0E, green: 0x10, blue: 0x15)
+            theme.inputs.backgroundDisabled = Color(red: 0x19, green: 0x1C, blue: 0x23)
+            theme.inputs.borderColor = Color(r: 1, g: 1, b: 1, a: 0.08)
+            theme.inputs.borderHover = Color(r: 1, g: 1, b: 1, a: 0.14)
+            theme.inputs.borderFocused = Color(red: 0x7A, green: 0x8C, blue: 0xFA)
+            theme.inputs.borderDisabled = Color(r: 1, g: 1, b: 1, a: 0.08)
+            theme.inputs.dividerColor = Color(r: 1, g: 1, b: 1, a: 0.07)
+            theme.inputs.addonBackground = Color(red: 0x19, green: 0x1C, blue: 0x23)
+            theme.textEmphasis.placeholder = Color(red: 0x7F, green: 0x87, blue: 0x97)
+            theme.textEmphasis.disabled = Color(red: 0x4A, green: 0x50, blue: 0x5E)
+            theme.extensions[EditorThemeTokens.self].assistant = Color(red: 0xE9, green: 0xA9, blue: 0x4F)
+            theme.elevation.low = SurfaceShadow(color: Color(r: 0, g: 0, b: 0, a: 0.35), offsetX: 0, offsetY: 1, blur: 2)
+        } else {
+            theme.inputs.background = Color(red: 0xFF, green: 0xFF, blue: 0xFF)
+            theme.inputs.backgroundDisabled = Color(red: 0xF7, green: 0xF8, blue: 0xFB)
+            theme.inputs.borderColor = Color(red: 0xD8, green: 0xDC, blue: 0xE6)
+            theme.inputs.borderHover = Color(red: 0xC3, green: 0xC9, blue: 0xD8)
+            theme.inputs.borderFocused = Color(red: 0x4C, green: 0x5B, blue: 0xD4)
+            theme.inputs.borderDisabled = Color(red: 0xDD, green: 0xE1, blue: 0xEA, alpha: 0xAA)
+            theme.inputs.dividerColor = Color(red: 0xDD, green: 0xE1, blue: 0xEA, alpha: 0xAA)
+            theme.inputs.addonBackground = Color(red: 0xF7, green: 0xF8, blue: 0xFB)
+            theme.extensions[EditorThemeTokens.self].assistant = Color(red: 0x9F, green: 0x5F, blue: 0x16)
+        }
         return theme
     }
 
     private static func basePalette(_ theme: inout Theme, dark: Bool) {
         if dark {
-            // Three layers, never separated by rules: the canvas, rounded panes
-            // (surface) on it, and cards (surfaceRaised) inside panes. Charcoal,
-            // not black: each layer is one clear step lighter, so the window
-            // never reads as one dark mass.
-            theme.colors.background = Color(red: 0x14, green: 0x17, blue: 0x16)
-            theme.colors.surface = Color(red: 0x1D, green: 0x21, blue: 0x20)
-            theme.colors.surfaceVariant = OriginalCodePalette.selectedTab
-            theme.colors.surfaceSunken = Color(red: 0x17, green: 0x1B, blue: 0x1A)
-            // Cards inside a pane: one step above the pane, never outlined.
-            theme.colors.surfaceRaised = Color(red: 0x27, green: 0x2C, blue: 0x2A)
-            theme.colors.onSurface = OriginalCodePalette.foreground
-            theme.colors.onSurfaceVariant = Color(red: 0xB6, green: 0xBE, blue: 0xBA)
-            theme.colors.onSurfaceMuted = OriginalCodePalette.muted
-            theme.colors.border = Color.white.multipliedAlpha(0.08)
-            theme.colors.divider = Color.white.multipliedAlpha(0.08)
-            theme.colors.accent = OriginalCodePalette.accent
-            theme.colors.accentMuted = OriginalCodePalette.accent.multipliedAlpha(0.12)
-            theme.colors.selection = OriginalCodePalette.accent.multipliedAlpha(0.16)
+            theme.colors.background = Color(red: 0x12, green: 0x14, blue: 0x1A)
+            theme.colors.surface = Color(red: 0x19, green: 0x1C, blue: 0x23)
+            theme.colors.surfaceVariant = Color(red: 0x2A, green: 0x2F, blue: 0x3A)
+            theme.colors.surfaceSunken = Color(red: 0x0E, green: 0x10, blue: 0x15)
+            theme.colors.surfaceRaised = Color(red: 0x22, green: 0x26, blue: 0x2F)
+            theme.colors.onSurface = Color(red: 0xE8, green: 0xEA, blue: 0xF0)
+            theme.colors.onSurfaceVariant = Color(red: 0xAE, green: 0xB5, blue: 0xC4)
+            theme.colors.onSurfaceMuted = Color(red: 0x7F, green: 0x87, blue: 0x97)
+            theme.colors.border = Color(r: 1, g: 1, b: 1, a: 0.08)
+            theme.colors.divider = Color(r: 1, g: 1, b: 1, a: 0.07)
+            theme.colors.accent = Color(red: 0x7A, green: 0x8C, blue: 0xFA)
+            theme.colors.accentMuted = Color(r: 0.4784313725490196, g: 0.5490196078431373, b: 0.9803921568627451, a: 0.14)
+            theme.colors.selection = Color(r: 0.4784313725490196, g: 0.5490196078431373, b: 0.9803921568627451, a: 0.18)
+            theme.colors.surfaceFloating = Color(red: 0x26, green: 0x2B, blue: 0x35, alpha: 0xF5)
+            theme.colors.surfaceOverlay = Color(red: 0x22, green: 0x26, blue: 0x2F)
+            theme.colors.onBackground = Color(red: 0xE8, green: 0xEA, blue: 0xF0)
+            theme.colors.borderStrong = Color(r: 1, g: 1, b: 1, a: 0.12)
+            theme.colors.accentHover = Color(red: 0x8D, green: 0x9B, blue: 0xFF)
+            theme.colors.accentPressed = Color(red: 0x66, green: 0x75, blue: 0xE0)
+            theme.colors.onAccent = Color(red: 0x0B, green: 0x10, blue: 0x20)
+            theme.colors.focusRing = Color(red: 0x7A, green: 0x8C, blue: 0xFA)
+            theme.colors.stateLayerSelected = Color(red: 0x2A, green: 0x2F, blue: 0x3A)
+            theme.colors.stateLayerHover = Color(r: 1, g: 1, b: 1, a: 0.055)
+            theme.colors.stateLayerPressed = Color(r: 1, g: 1, b: 1, a: 0.085)
+            theme.colors.success = Color(red: 0x4E, green: 0xC9, blue: 0xA0)
         } else {
-            theme.colors.background = Color(red: 0xE3, green: 0xE8, blue: 0xE5)
-            theme.colors.surface = Color(red: 0xFB, green: 0xFC, blue: 0xFB)
-            theme.colors.surfaceVariant = Color(red: 0xE9, green: 0xED, blue: 0xEA)
-            theme.colors.surfaceSunken = .white
-            theme.colors.surfaceRaised = Color(red: 0xF1, green: 0xF4, blue: 0xF2)
-            theme.colors.onSurface = Color(red: 0x25, green: 0x30, blue: 0x2B)
-            theme.colors.onSurfaceVariant = Color(red: 0x57, green: 0x65, blue: 0x5E)
-            theme.colors.onSurfaceMuted = Color(red: 0x6B, green: 0x7A, blue: 0x71)
-            theme.colors.border = Color(red: 0xD2, green: 0xDB, blue: 0xD5)
-            theme.colors.divider = Color(red: 0xD5, green: 0xDD, blue: 0xD8, alpha: 0xAA)
-            theme.colors.accent = Color(red: 0x27, green: 0x7B, blue: 0x50)
-            theme.colors.accentMuted = Color(red: 0x27, green: 0x7B, blue: 0x50, alpha: 0x16)
-            theme.colors.selection = Color(red: 0x27, green: 0x7B, blue: 0x50, alpha: 0x24)
-        }
-    }
-
-    private static func interactionPalette(_ theme: inout Theme, dark: Bool) {
-        theme.colors.surfaceFloating = dark ? Color(red: 0x2E, green: 0x34, blue: 0x31, alpha: 245) : .white
-        theme.colors.surfaceOverlay = theme.colors.surfaceRaised
-        theme.colors.onBackground = theme.colors.onSurface
-        theme.colors.borderStrong = dark ? Color.white.multipliedAlpha(0.10) : theme.colors.border
-        theme.colors.accentHover = dark ? Color(red: 0x69, green: 0xB9, blue: 0x8B) : Color(red: 0x20, green: 0x6A, blue: 0x44)
-        theme.colors.accentPressed = dark ? Color(red: 0x4C, green: 0x97, blue: 0x70) : Color(red: 0x1A, green: 0x59, blue: 0x39)
-        theme.colors.onAccent = dark ? Color(red: 0x10, green: 0x24, blue: 0x18) : .white
-        theme.colors.focusRing = theme.colors.accent
-        theme.colors.stateLayerSelected = theme.colors.surfaceVariant
-        if dark {
-            theme.colors.stateLayerHover = Color.white.multipliedAlpha(0.055)
-            theme.colors.stateLayerPressed = Color.white.multipliedAlpha(0.085)
-            theme.colors.success = OriginalCodePalette.accent
+            theme.colors.background = Color(red: 0xE9, green: 0xEB, blue: 0xF1)
+            theme.colors.surface = Color(red: 0xFF, green: 0xFF, blue: 0xFF)
+            theme.colors.surfaceVariant = Color(red: 0xEE, green: 0xF0, blue: 0xF5)
+            theme.colors.surfaceSunken = Color(red: 0xFF, green: 0xFF, blue: 0xFF)
+            theme.colors.surfaceRaised = Color(red: 0xF5, green: 0xF6, blue: 0xFA)
+            theme.colors.onSurface = Color(red: 0x1D, green: 0x22, blue: 0x30)
+            theme.colors.onSurfaceVariant = Color(red: 0x4E, green: 0x56, blue: 0x66)
+            theme.colors.onSurfaceMuted = Color(red: 0x6B, green: 0x74, blue: 0x88)
+            theme.colors.border = Color(red: 0xD8, green: 0xDC, blue: 0xE6)
+            theme.colors.divider = Color(red: 0xDD, green: 0xE1, blue: 0xEA, alpha: 0xAA)
+            theme.colors.accent = Color(red: 0x4C, green: 0x5B, blue: 0xD4)
+            theme.colors.accentMuted = Color(red: 0x4C, green: 0x5B, blue: 0xD4, alpha: 0x16)
+            theme.colors.selection = Color(red: 0x4C, green: 0x5B, blue: 0xD4, alpha: 0x24)
+            theme.colors.surfaceFloating = Color(red: 0xFF, green: 0xFF, blue: 0xFF)
+            theme.colors.surfaceOverlay = Color(red: 0xF5, green: 0xF6, blue: 0xFA)
+            theme.colors.onBackground = Color(red: 0x1D, green: 0x22, blue: 0x30)
+            theme.colors.borderStrong = Color(red: 0xD8, green: 0xDC, blue: 0xE6)
+            theme.colors.accentHover = Color(red: 0x3F, green: 0x4C, blue: 0xC0)
+            theme.colors.accentPressed = Color(red: 0x34, green: 0x40, blue: 0xA8)
+            theme.colors.onAccent = Color(red: 0xFF, green: 0xFF, blue: 0xFF)
+            theme.colors.focusRing = Color(red: 0x4C, green: 0x5B, blue: 0xD4)
+            theme.colors.stateLayerSelected = Color(red: 0xEE, green: 0xF0, blue: 0xF5)
         }
     }
 

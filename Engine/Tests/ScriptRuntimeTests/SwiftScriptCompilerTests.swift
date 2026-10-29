@@ -37,6 +37,22 @@ struct SwiftScriptCompilerTests {
         #expect(maps.contains { $0.hasSuffix("Debug-linux-x86_64/CNativeBridge.build/module.modulemap") })
     }
 
+    @Test("discovers hand-written bridges in a split SDK source package")
+    func discoversSplitSDKBridges() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let products = root.appendingPathComponent(".build/debug")
+        let include = root.appendingPathComponent("Imaging/Sources/CGenerated/include")
+        let bridge = root.appendingPathComponent("Imaging/Sources/CImageDecodeBridge/include/module.modulemap")
+        try FileManager.default.createDirectory(at: products, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: include, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: bridge.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let generated = products.appendingPathComponent("CGenerated.modulemap")
+        try "module CGenerated { umbrella \"\(include.path)\" export * }".write(to: generated, atomically: true, encoding: .utf8)
+        try "module CImageDecodeBridge { export * }".write(to: bridge, atomically: true, encoding: .utf8)
+        #expect(SwiftScriptCompiler.discoverClangModuleMapPaths(in: products) == [generated.path, bridge.path].sorted())
+    }
+
     @Test("resolves compiler executables through PATH")
     func resolvesCompilerFromPATH() throws {
         let compilerURL = try SwiftScriptCompiler.resolveExecutableURL(for: "swiftc")
@@ -131,7 +147,8 @@ struct SwiftScriptCompilerTests {
             ?? engineRoot.appendingPathComponent("../CoveUI").standardizedFileURL
         let bridgeRoots = [
             engineRoot.appendingPathComponent("Sources/Bridge", isDirectory: true),
-            sdkRoot.appendingPathComponent("Runtime/Sources/Bridge", isDirectory: true),
+            sdkRoot.appendingPathComponent("Imaging/Sources", isDirectory: true),
+            sdkRoot.appendingPathComponent("Graphics/Sources", isDirectory: true),
         ]
         for bridgeRoot in bridgeRoots {
             guard let enumerator = fileManager.enumerator(

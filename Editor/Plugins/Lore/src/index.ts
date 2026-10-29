@@ -29,7 +29,7 @@ function batch(request: StepRequest, stdout: string, args: string[], values: str
 }
 function handle(request: StepRequest, stdout: string): Step {
   const { op, output, next } = request;
-  if (output && !output.complete) return whole(next);
+  if (output?.complete === false) return whole(next);
   switch (op) {
     case "status": return !output ? lore(["--json", "status", "--scan"], "parse") : output.exit ? complete(request, stdout) : result(parseStatus(stdout));
     case "history": return !output ? lore(["history", String(request.limit ?? 50), "--oneline"], "parse") : result(output.exit ? [] : stdout.split("\n").flatMap(line => {

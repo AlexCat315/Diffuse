@@ -50,13 +50,10 @@ jobs:
         include:
           - name: macOS
             runs-on: xcode-27
-            build-system: swiftbuild
           - name: Linux
             runs-on: ubuntu-latest
-            build-system: native
           - name: Windows
             runs-on: windows-2025-vs2026
-            build-system: native
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -83,11 +80,6 @@ jobs:
 
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
-
-      - name: Test shared system contracts
-        timeout-minutes: 5
-        shell: bash
-        run: ./cove test CoveUI/System --no-parallel --timeout 120
 
       - name: Prepare cached native dependencies
         uses: ./.github/actions/native-dependencies

@@ -48,13 +48,10 @@ jobs:
         include:
           - name: macOS
             runs-on: xcode-27
-            build-system: swiftbuild
           - name: Linux
             runs-on: ubuntu-latest
-            build-system: native
           - name: Windows
             runs-on: windows-2025-vs2026
-            build-system: native
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -149,15 +146,16 @@ jobs:
       - name: Run M7 destruction performance gates
         if: runner.os == 'macOS'
         shell: bash
-        working-directory: Engine
         run: |
+          ./cove internal build-package Engine --release --product PhysicsRuntimeBenchmarks --result-file "$RUNNER_TEMP/physics-products.json"
+          benchmark="$(node -p 'JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/physics-products.json")).products')/PhysicsRuntimeBenchmarks"
           COVE_PHYSICS_SCENARIO=destruction-fragments \
           COVE_PHYSICS_BODIES=4096 \
           COVE_PHYSICS_WARMUP_FRAMES=30 \
           COVE_PHYSICS_SAMPLE_FRAMES=120 \
-          swift run -c release PhysicsRuntimeBenchmarks
+          "$benchmark"
           COVE_PHYSICS_SCENARIO=destruction-islands \
           COVE_PHYSICS_BODIES=4096 \
           COVE_PHYSICS_WARMUP_FRAMES=30 \
           COVE_PHYSICS_SAMPLE_FRAMES=120 \
-          swift run -c release PhysicsRuntimeBenchmarks
+          "$benchmark"

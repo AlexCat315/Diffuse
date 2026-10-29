@@ -2,17 +2,6 @@ name: GPU rendering regression
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'Engine/**'
-      - 'Editor/**'
-      - 'Tools/Developer/**'
-      - '.github/workflows/ci-gpu.yml'
-      - '.github/actions/setup-toolchains/**'
-      - 'cmake/**'
-  schedule:
-    - cron: '17 19 * * *'
 
 permissions:
   contents: read
@@ -23,9 +12,6 @@ concurrency:
 
 jobs:
   render:
-    # Enable scheduled/push runs after connecting a Metal-capable runner.
-    # Manual dispatch can be used to verify the runner before enabling them.
-    if: vars.COVE_GPU_CI_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, macOS, ARM64, cove-gpu]
     timeout-minutes: 60
     steps:
@@ -39,7 +25,7 @@ jobs:
       - name: Verify build tools and hardware
         run: |
           mkdir -p "$RUNNER_TEMP/cove-gpu-regression"
-          swift --version
+          ./cove doctor --mac
           cmake --version
           system_profiler SPDisplaysDataType > "$RUNNER_TEMP/cove-gpu-regression/device.log"
           cat "$RUNNER_TEMP/cove-gpu-regression/device.log"
@@ -54,10 +40,10 @@ jobs:
         run: |
           ./cove studio shader bootstrap-slang --destination "$RUNNER_TEMP/cove-slang"
           export SLANGC="$RUNNER_TEMP/cove-slang/bin/slangc"
-          swift test --package-path Tools/Developer --filter ShaderToolchainTests
-          swift test --package-path Tools/Developer --filter RegressionReportTests
+          ./cove test Tools/Developer --filter ShaderToolchainTests
+          ./cove test Tools/Developer --filter RegressionReportTests
           ./cove studio shader rebuild --check
-          SLANGC="$SLANGC" swift test --package-path Engine --filter NativeRHITests
+          SLANGC="$SLANGC" ./cove test Engine --filter NativeRHITests
 
       - name: Run actual GPU regressions
         env:

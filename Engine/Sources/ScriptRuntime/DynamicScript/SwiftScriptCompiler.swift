@@ -385,6 +385,23 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         }
         let declaration = try? NSRegularExpression(pattern: #"(?:^|\n)\s*(?:framework\s+)?module\s+(\w+)\s*\{"#)
         let umbrella = try? NSRegularExpression(pattern: #"\bumbrella\s+(?:header\s+)?"([^"]+)""#)
+        // Hand-written maps are not copied into SwiftPM products. Find sibling
+        // source targets from generated umbrella paths, regardless of SDK package.
+        for path in maps.sorted() {
+            guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            for match in umbrella?.matches(in: contents, range: NSRange(contents.startIndex..., in: contents)) ?? [] {
+                guard let range = Range(match.range(at: 1), in: contents) else { continue }
+                let url = URL(fileURLWithPath: String(contents[range]), relativeTo: URL(fileURLWithPath: path).deletingLastPathComponent()).standardizedFileURL
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { continue }
+                let include = isDirectory.boolValue ? url : url.deletingLastPathComponent()
+                let sources = include.deletingLastPathComponent().deletingLastPathComponent()
+                for target in (try? FileManager.default.contentsOfDirectory(at: sources, includingPropertiesForKeys: nil)) ?? [] {
+                    let sibling = target.appendingPathComponent("include/module.modulemap")
+                    if FileManager.default.fileExists(atPath: sibling.path) { maps.insert(sibling.path) }
+                }
+            }
+        }
         var byModule: [String: String] = [:]
         // Prefer the canonical generated map over per-target intermediates;
         // package names must not change which duplicate declaration wins.

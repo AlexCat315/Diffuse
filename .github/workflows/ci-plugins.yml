@@ -1,4 +1,4 @@
-name: Plugin runtimes
+name: TypeScript plugins
 on:
   push:
     branches: [main]
@@ -12,14 +12,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  native:
+  verify:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {runner: xcode-27, platform: macos-arm64}
-          - {runner: ubuntu-latest, platform: linux-x86_64}
-          - {runner: windows-2025-vs2026, platform: windows-x86_64}
+        runner: [xcode-27, ubuntu-latest, windows-2025-vs2026]
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7.0.1
@@ -30,20 +27,9 @@ jobs:
       - uses: SwiftyLab/setup-swift@v1.14.1
         if: runner.os != 'macOS'
         with: {swift-version: '6.4.1'}
-      - name: Install CMake and Ninja
-        uses: lukka/get-cmake@latest
-        with:
-          cmakeVersion: '4.4.4'
-          ninjaVersion: '1.13.2'
       - name: Prepare the pinned Bun runtime and TypeScript plugins
         shell: bash
         run: ./cove studio plugins prepare
       - name: Verify public SDK and conversation concurrency
         shell: bash
         run: ./cove studio plugins verify
-      - name: Build desktop editor and native broker
-        shell: bash
-        run: ./cove build Editor
-      - name: Verify native contract, lifecycle and broker
-        shell: bash
-        run: ./cove test Engine --filter Plugin

@@ -6,19 +6,18 @@ import Testing
 @Suite("Workbench contributions", .serialized)
 @MainActor
 struct WorkbenchContributionsTests {
-    @Test func viewPanelNeedsNoRuntimeAndFollowsItsPackage() async throws {
-        let root = try package(id: "fixture.chat", panels: #"[{"id": "fixture-chat", "title": "Chat", "view": "agent"}]"#)
+    @Test func entryPointPanelFollowsItsPackage() async throws {
+        let root = try package(id: "fixture.chat", panels: #"[{"id": "fixture-chat", "title": "Chat", "entryPoint": "view"}]"#)
         let project = try directory()
         defer { try? FileManager.default.removeItem(at: root); try? FileManager.default.removeItem(at: project) }
-        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false,
-                                        trustedPluginHostExecutableURL: nil)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false)
         defer { app.shutdown() }
         var changes = 0
         app.setWorkbenchChangeHandler { changes += 1 }
 
         _ = try await app.enablePlugin(at: root, authorization: try authorize(root, in: app))
         #expect(app.pluginSession.hosts.pluginIDs.isEmpty)
-        #expect(app.workbenchCatalog.panel(view: .agent)?.id == "fixture-chat")
+        #expect(app.workbenchCatalog.panel(id: "fixture-chat")?.content == .model)
         #expect(app.workbenchCatalog.panel(id: "fixture-chat")?.slot == "trailing")
         #expect(app.agentPanelID == nil)
         #expect(changes == 1)
@@ -32,13 +31,12 @@ struct WorkbenchContributionsTests {
 
     @Test func panelsCannotTakeHostIdentifiersUnknownViewsOrAnotherPackagesPanel() async throws {
         let project = try directory()
-        let first = try package(id: "fixture.first", panels: #"[{"id": "shared", "title": "Shared", "view": "agent"}]"#)
-        let second = try package(id: "fixture.second", panels: #"[{"id": "shared", "title": "Shared", "view": "agent"}]"#)
-        let builtIn = try package(id: "fixture.console", panels: #"[{"id": "console", "title": "Console", "view": "agent"}]"#)
+        let first = try package(id: "fixture.first", panels: #"[{"id": "shared", "title": "Shared", "entryPoint": "view"}]"#)
+        let second = try package(id: "fixture.second", panels: #"[{"id": "shared", "title": "Shared", "entryPoint": "view"}]"#)
+        let builtIn = try package(id: "fixture.console", panels: #"[{"id": "console", "title": "Console", "entryPoint": "view"}]"#)
         let unknown = try package(id: "fixture.browser", panels: #"[{"id": "browser", "title": "Browser", "view": "browser"}]"#)
         defer { for url in [project, first, second, builtIn, unknown] { try? FileManager.default.removeItem(at: url) } }
-        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false,
-                                        trustedPluginHostExecutableURL: nil)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false)
         defer { app.shutdown() }
 
         _ = try await app.enablePlugin(at: first, authorization: try authorize(first, in: app))
@@ -158,8 +156,7 @@ struct WorkbenchContributionsTests {
         let project = try directory()
         defer { try? FileManager.default.removeItem(at: project) }
         try Data("todo".utf8).write(to: project.appendingPathComponent("todo.md"))
-        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false,
-                                        trustedPluginHostExecutableURL: nil)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: false)
         defer { app.shutdown() }
         var notes: [String] = []
         var panels: [String] = []
@@ -206,6 +203,15 @@ struct WorkbenchContributionsTests {
          "access":"read","imports":[],"composable_host_capabilities":[],
          "contributes":{"cove.ui.panel/v1":\(panels)}}
         """.utf8).write(to: root.appendingPathComponent("plugin.json"))
+        if panels.contains("entryPoint") {
+            var manifest = try JSONDecoder().decode(CovePluginManifest.self, from: Data(contentsOf: root.appendingPathComponent("plugin.json")))
+            manifest.runtime = .init()
+            try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent("plugin.json"))
+            try Data(#"{"version":1,"entries":[{"name":"view","input":{"record":{"view":"string","state":"string","event":"string","context":"string"}}}]}"#.utf8)
+                .write(to: root.appendingPathComponent("capabilities.json"))
+            try Data("export default {capabilities:{view:{input:{record:{view:'string',state:'string',event:'string',context:'string'}},run:()=>({ui:{type:'text',text:'Fixture'}})}}}".utf8)
+                .write(to: root.appendingPathComponent("plugin.js"))
+        }
         return root
     }
 
