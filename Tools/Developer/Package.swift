@@ -126,6 +126,7 @@ let package = Package(
     .testTarget(name: "BoundaryTests", dependencies: ["Boundaries"]),
     .testTarget(name: "IOSSimulatorTests", dependencies: ["IOSSimulator"]),
     .testTarget(name: "ShaderToolchainTests", dependencies: ["ShaderToolchain"]),
+    .testTarget(name: "MediaStagingTests", dependencies: ["MediaStaging", .product(name: "ToolSupport", package: "Support")]),
     .testTarget(name: "PluginStagingTests", dependencies: ["PluginStaging"]),
     .testTarget(name: "RegressionReportTests", dependencies: ["RegressionReport"]),
   ] + hostTests

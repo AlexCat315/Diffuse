@@ -86,7 +86,7 @@ enum StageOperation {
     else {
       throw ToolError.message("Invalid FFmpeg source URL for \(MediaStaging.version)")
     }
-    try Download.file(from: remote, to: archive, sha256: MediaStaging.sourceSHA256)
+    try SourceDownload.fetch(from: remote, to: archive, sha256: MediaStaging.sourceSHA256, environment: environment)
 
     let source = cache.appendingPathComponent("ffmpeg-\(MediaStaging.version)")
     // A partial or interrupted extraction can leave `source` present but
