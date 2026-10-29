@@ -62,4 +62,51 @@ final class SourceDownloadTests: XCTestCase {
       XCTFail("An insecure URL must not reach the downloader")
     })
   }
+  func testUnavailableOrCorruptMirrorFallsBackWithoutPublishingItsData() throws {
+    for corrupt in [false, true] {
+      let root = try temporaryDirectory(), destination = root.appendingPathComponent("source.tar.xz")
+      let expected = root.appendingPathComponent("expected")
+      let previous = Data("previous archive".utf8)
+      try previous.write(to: destination)
+      try Data("pinned source".utf8).write(to: expected)
+      let mirrors = [URL(string: "https://unreachable.invalid/fixture")!, remote]
+      var attempted: [String] = []
+      var stagingPaths: [String] = []
+      try SourceDownload.fetch(from: mirrors, to: destination, sha256: SHA256.hex(file: expected),
+                               environment: ProcessInfo.processInfo.environment) { command, _ in
+        attempted.append(try XCTUnwrap(command.last))
+        XCTAssertEqual(try Data(contentsOf: destination), previous)
+        let output = try XCTUnwrap(command.firstIndex(of: "--output"))
+        let staging = URL(fileURLWithPath: command[output + 1])
+        stagingPaths.append(staging.path)
+        if attempted.count == 1 {
+          try Data("corrupt or interrupted source".utf8).write(to: staging)
+          if !corrupt { throw URLError(.timedOut) }
+        } else {
+          XCTAssertFalse(FileManager.default.fileExists(atPath: stagingPaths[0]))
+          try FileManager.default.copyItem(at: expected, to: staging)
+        }
+      }
+      XCTAssertEqual(attempted, mirrors.map(\.absoluteString))
+      XCTAssertEqual(try Data(contentsOf: destination), try Data(contentsOf: expected))
+      XCTAssertTrue(stagingPaths.allSatisfy { !FileManager.default.fileExists(atPath: $0) })
+    }
+  }
+
+  func testInsecureFallbackIsRejectedBeforeAnyTransfer() throws {
+    let destination = try temporaryDirectory().appendingPathComponent("source.tar.xz")
+    XCTAssertThrowsError(try SourceDownload.fetch(from: [remote, URL(string: "http://invalid/source")!],
+      to: destination, sha256: "", environment: [:]) { _, _ in
+      XCTFail("Every mirror must be validated before downloading")
+    })
+  }
+
+  func testRealPinnedSourceDownload() throws {
+    try XCTSkipUnless(ProcessInfo.processInfo.environment["COVE_TEST_FFMPEG_SOURCE"] == "1")
+    let destination = try temporaryDirectory().appendingPathComponent("ffmpeg.tar.xz")
+    try SourceDownload.fetch(from: MediaStaging.sourceURLs, to: destination,
+                             sha256: MediaStaging.sourceSHA256, environment: ProcessInfo.processInfo.environment)
+    try Download.verify(file: destination, sha256: MediaStaging.sourceSHA256)
+  }
+
 }

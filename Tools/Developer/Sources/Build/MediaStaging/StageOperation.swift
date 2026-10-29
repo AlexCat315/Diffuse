@@ -81,12 +81,8 @@ enum StageOperation {
     let cache = Repository.path("Engine/Media/build/cache")
     try Fs.directory(cache)
     let archive = cache.appendingPathComponent("ffmpeg-\(MediaStaging.version).tar.xz")
-    guard
-      let remote = URL(string: "https://ffmpeg.org/releases/ffmpeg-\(MediaStaging.version).tar.xz")
-    else {
-      throw ToolError.message("Invalid FFmpeg source URL for \(MediaStaging.version)")
-    }
-    try SourceDownload.fetch(from: remote, to: archive, sha256: MediaStaging.sourceSHA256, environment: environment)
+    try SourceDownload.fetch(from: MediaStaging.sourceURLs, to: archive,
+                             sha256: MediaStaging.sourceSHA256, environment: environment)
 
     let source = cache.appendingPathComponent("ffmpeg-\(MediaStaging.version)")
     // A partial or interrupted extraction can leave `source` present but

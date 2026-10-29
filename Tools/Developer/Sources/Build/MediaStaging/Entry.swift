@@ -14,6 +14,13 @@ package enum MediaStaging {
   /// SHA-256 of `ffmpeg-8.1.3.tar.xz`, pinned in the former Python tool.
   static let sourceSHA256 = "7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3"
 
+  /// Mirrors carry the same upstream release bytes; every response must match sourceSHA256.
+  static var sourceURLs: [URL] {
+    ["https://distfiles.macports.org/ffmpeg/",
+     "https://mse.uk.distfiles.macports.org/ffmpeg/",
+     "https://ffmpeg.org/releases/"].map { URL(string: $0 + "ffmpeg-\(version).tar.xz")! }
+  }
+
   /// Libraries linked into the combined `libFFmpeg.a` in this order.
   static let libraries = ["avformat", "avcodec", "avfilter", "swresample", "swscale", "avutil"]
 

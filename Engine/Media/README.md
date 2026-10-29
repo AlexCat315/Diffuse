@@ -28,3 +28,5 @@ let frame = try await video.frame(at: 1.25)    // RGBA 与时间戳
 `MediaComposition` 只保存项目相对源路径、裁剪范围与输出视频规格。播放位置、解码器、纹理、任务和设备都不进入 JSON。桌面 `MediaExporter` 支持顺序裁剪拼接、尺寸/帧率归一化、缺失音轨补静音，输出 MPEG-4 + AAC MP4。输出通过临时文件完成后移动，不覆盖已有文件。此阶段尚无多轨转场、硬件解码、代理媒体或移动端导出。
 
 发布工作站必须一起交付 `ffmpeg`、许可证、provenance 与构建说明。源码 URL 与固定哈希在 `Tools/Developer` 的 `MediaStaging`；完整官方源码、许可证及各原始静态 archive 保留在构建缓存/产物中，可使用同一脚本重新构建或重新链接。FFmpeg 的 LGPL 条款独立于第一方 Apache-2.0 代码，见 [官方许可证说明](https://ffmpeg.org/legal.html)。
+
+源码下载优先使用 MacPorts distfiles 镜像，并回退至其他镜像和上游站点。所有来源必须匹配同一官方发行包的固定 SHA-256，版本、构建选项和许可证不因镜像而改变。
