@@ -278,7 +278,7 @@ func invokeTool(_ name: String, input: Data) throws -> AgentToolResult {
                            isError: response["ok"] as? Bool != true)
 }
 
-let mcp = MCPServer(name: "diffuse", version: "0.0.9", skills: try UIDiagnosticTools.skills(),
+let mcp = MCPServer(name: "diffuse", version: "0.1.0", skills: try UIDiagnosticTools.skills(),
     tools: { try await toolDescriptors() }, execute: { try await invokeTool($0, input: $1) })
 
 // MARK: - Main loop

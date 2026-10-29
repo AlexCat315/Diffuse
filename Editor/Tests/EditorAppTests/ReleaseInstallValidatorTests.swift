@@ -8,7 +8,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         "DiffuseEditor_EditorCore",
         "DiffuseRuntime_RenderBackend",
         "CoveUI_CoveUI",
-        "CoveUI_CoveUICompose",
+        "CoveUICompose_CoveUICompose",
         "CoveUI_CoveUIWorkspace",
     ]
 
@@ -47,7 +47,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.removeItem(at: root.appendingPathComponent(playerName))
         try FileManager.default.removeItem(
-            at: root.appendingPathComponent("CoveUI_CoveUICompose.bundle")
+            at: root.appendingPathComponent("CoveUICompose_CoveUICompose.bundle")
         )
 
         XCTAssertThrowsError(try EditorInstallValidator.validateEditorLayout(
@@ -58,7 +58,7 @@ final class ReleaseInstallValidatorTests: XCTestCase {
                 return XCTFail("unexpected error: \(error)")
             }
             XCTAssertTrue(missing.contains(playerName))
-            XCTAssertTrue(missing.contains("CoveUI_CoveUICompose.{bundle,resources}"))
+            XCTAssertTrue(missing.contains("CoveUICompose_CoveUICompose.{bundle,resources}"))
         }
     }
 

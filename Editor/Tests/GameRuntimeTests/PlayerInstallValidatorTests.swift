@@ -7,7 +7,7 @@ final class PlayerInstallValidatorTests: XCTestCase {
         "DiffuseEditor_EditorCore",
         "DiffuseRuntime_RenderBackend",
         "CoveUI_CoveUI",
-        "CoveUI_CoveUICompose",
+        "CoveUICompose_CoveUICompose",
         "CoveUI_CoveUIWorkspace",
     ]
 
@@ -15,10 +15,10 @@ final class PlayerInstallValidatorTests: XCTestCase {
         let root = try makePortableLayout()
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.removeItem(
-            at: root.appendingPathComponent("CoveUI_CoveUICompose.bundle")
+            at: root.appendingPathComponent("CoveUICompose_CoveUICompose.bundle")
         )
         try createResourceBundle(
-            named: "CoveUI_CoveUICompose",
+            named: "CoveUICompose_CoveUICompose",
             in: root,
             suffix: "resources"
         )

@@ -22,7 +22,7 @@ enum EditorInstallValidator {
         "DiffuseEditor_EditorCore",
         "DiffuseRuntime_RenderBackend",
         "CoveUI_CoveUI",
-        "CoveUI_CoveUICompose",
+        "CoveUICompose_CoveUICompose",
         "CoveUI_CoveUIWorkspace",
     ]
 

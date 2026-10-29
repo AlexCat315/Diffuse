@@ -1,5 +1,5 @@
 // swift-tools-version: 6.4
-// diffuse-mcp 0.0.9
+// diffuse-mcp 0.1.0
 import PackageDescription
 
 let package = Package(
