@@ -86,7 +86,7 @@ struct ThemeMotion: Decodable, Sendable {
         case "standard": theme.motion.standardEasing = .standard
         case "emphasized": theme.motion.standardEasing = .emphasized
         case "decelerate": theme.motion.standardEasing = .decelerate
-        case "accelerate": theme.motion.standardEasing = .accelerate
+        case "accelerate": theme.motion.standardEasing = .cubicBezier(0.4,0,1,1)
         default: throw ThemeResourceError.invalidTheme
         }
     }

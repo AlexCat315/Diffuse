@@ -101,6 +101,12 @@ let package = Package(
         .package(path: "../Engine/Media"),
         .package(path: "Documents"),
         .package(name: "CoveUI", path: sdkRoot),
+        .package(path: "\(sdkRoot)/Compose"),
+        .package(path: "\(sdkRoot)/DevTools"),
+        .package(path: "\(sdkRoot)/Graphics"),
+        .package(path: "\(sdkRoot)/Logging"),
+        .package(path: "\(sdkRoot)/Runtime"),
+        .package(path: "\(sdkRoot)/System"),
     ],
     targets: [
         // MARK: - Editor Domain
@@ -108,7 +114,7 @@ let package = Package(
         // 窗口/NativeRHI 装配交给 EditorApp 那一层依赖的 CoveUI。
         .target(
             name: "EditorCore",
-            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI"),
+            dependencies: [.product(name: "CoveFileSystem", package: "System"), .product(name: "CoveLogging", package: "Logging"),
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "AIRuntime", package: "Engine"),
                 .product(name: "ContextMemory", package: "Engine"),
@@ -124,16 +130,16 @@ let package = Package(
                 .product(name: "ObservationBus", package: "Engine"),
                 .product(name: "PerceptionRuntime", package: "Engine"),
                 .product(name: "PluginRuntime", package: "Engine"),
-                .product(name: "CoveProcess", package: "CoveUI"),
+                .product(name: "CoveProcess", package: "System"),
                 .product(name: "LanguageServerRuntime", package: "Engine"),
                 .product(name: "SemanticPipeline", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "NativeRHI", package: "CoveUI"),
+                .product(name: "CoveUIGraphics", package: "Graphics"),
                 .product(name: "SceneRuntime", package: "Engine"),
                 .product(name: "ScriptRuntime", package: "Engine"),
-                .product(name: "CoveUIRuntime", package: "CoveUI"),
-                .product(name: "CoveUICompose", package: "CoveUI"),
-                .product(name: "CoveUIAgent", package: "CoveUI"),
+                .product(name: "CoveUIRuntime", package: "Runtime"),
+                .product(name: "CoveUICompose", package: "Compose"),
+                .product(name: "CoveUIAgent", package: "DevTools"),
             ],
             resources: [
                 .process("Resources/ProjectTemplates"),
@@ -149,7 +155,7 @@ let package = Package(
         // MARK: - Editor Entry Point
         .target(
             name: "EditorUI",
-            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI"),
+            dependencies: [.product(name: "CoveFileSystem", package: "System"), .product(name: "CoveLogging", package: "Logging"),
                 "EditorCore",
                 .product(name: "PluginRuntime", package: "Engine"),
                 .product(name: "AudioRuntime", package: "Engine"),
@@ -158,12 +164,12 @@ let package = Package(
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "CoveUI", package: "CoveUI"),
-                .product(name: "CoveUICompose", package: "CoveUI"),
+                .product(name: "CoveUICompose", package: "Compose"),
                 .product(name: "CoveUIWorkspace", package: "CoveUI"),
                 .product(name: "CoveUITerminal", package: "CoveUI"),
-                .product(name: "CoveUIRuntime", package: "CoveUI"),
+                .product(name: "CoveUIRuntime", package: "Runtime"),
                 .product(name: "EngineKernel", package: "Engine"),
-                .product(name: "NativeRHI", package: "CoveUI"),
+                .product(name: "CoveUIGraphics", package: "Graphics"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),
                 .product(name: "CardBattleRuntime", package: "Engine"),
@@ -182,54 +188,54 @@ let package = Package(
         // EngineCore（引擎宿主），但不依赖任何编辑器 UI 模块。
         .target(
             name: "GameRuntime",
-            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI"),
+            dependencies: [.product(name: "CoveFileSystem", package: "System"), .product(name: "CoveLogging", package: "Logging"),
                 "EditorCore",
                 .product(name: "ScriptRuntime", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "NativeRHI", package: "CoveUI"),
+                .product(name: "CoveUIGraphics", package: "Graphics"),
             ]
         ),
 
-        .executableTarget(name: "CoveProjectExport", dependencies: [.product(name: "CoveLogging", package: "CoveUI"), "EditorCore"]),
+        .executableTarget(name: "CoveProjectExport", dependencies: [.product(name: "CoveLogging", package: "Logging"), "EditorCore"]),
 
         // MARK: - Standalone Game Player
         .executableTarget(
             name: "CovePlayer",
-            dependencies: [.product(name: "CoveLogging", package: "CoveUI"),
+            dependencies: [.product(name: "CoveLogging", package: "Logging"),
                 "GameRuntime", "EditorCore",
                 .product(name: "CoveUI", package: "CoveUI"),
-                .product(name: "CoveUICompose", package: "CoveUI"),
-                .product(name: "CoveUIRuntime", package: "CoveUI"),
+                .product(name: "CoveUICompose", package: "Compose"),
+                .product(name: "CoveUIRuntime", package: "Runtime"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "NativeRHI", package: "CoveUI"),
+                .product(name: "CoveUIGraphics", package: "Graphics"),
             ],
             linkerSettings: coveScriptExportLinkerSettings
         ),
 
         .executableTarget(name: "LanguageServerFixture", dependencies: [
-            .product(name: "CoveProcess", package: "CoveUI"),
-            .product(name: "CoveFileSystem", package: "CoveUI"),
+            .product(name: "CoveProcess", package: "System"),
+            .product(name: "CoveFileSystem", package: "System"),
         ], path: "Tests/Fixtures/LanguageServer"),
         .testTarget(
             name: "EditorCoreTests",
 
             dependencies: [
                 .product(name: "NativeRendererValidation", package: "Engine"),
-                .product(name: "NativeRHI", package: "CoveUI"),
+                .product(name: "CoveUIGraphics", package: "Graphics"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "CoveUI", package: "CoveUI"),
-                .product(name: "CoveLogging", package: "CoveUI"),
+                .product(name: "CoveLogging", package: "Logging"),
                 "EditorCore",
                 .product(name: "AIRuntime", package: "Engine"),
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "CapabilityRuntime", package: "Engine"),
                 .product(name: "PluginRuntime", package: "Engine"),
-                .product(name: "CoveUICompose", package: "CoveUI"),
-                .product(name: "CoveUIRuntime", package: "CoveUI"),
+                .product(name: "CoveUICompose", package: "Compose"),
+                .product(name: "CoveUIRuntime", package: "Runtime"),
             ]
         ),
 
@@ -257,8 +263,8 @@ let package = Package(
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),
                 .product(name: "CoveUI", package: "CoveUI"),
-                .product(name: "CoveUICompose", package: "CoveUI"),
-                .product(name: "CoveUIRuntime", package: "CoveUI"),
+                .product(name: "CoveUICompose", package: "Compose"),
+                .product(name: "CoveUIRuntime", package: "Runtime"),
                 .product(name: "CoveUIWorkspace", package: "CoveUI"),
             ],
             linkerSettings: coveTestDlopenLinkerSettings
@@ -269,7 +275,7 @@ let package = Package(
             dependencies: [
                 "GameRuntime",
                 .product(name: "EngineCore", package: "Engine"),
-                .product(name: "NativeRHI", package: "CoveUI"),
+                .product(name: "CoveUIGraphics", package: "Graphics"),
                 .product(name: "RenderBackend", package: "Engine"),
             ],
             linkerSettings: coveTestDlopenLinkerSettings

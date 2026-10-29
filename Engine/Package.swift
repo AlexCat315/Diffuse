@@ -97,6 +97,13 @@ let package = Package(
     ],
     dependencies: [
         .package(name: "CoveUI", path: sdkRoot),
+        .package(path: "\(sdkRoot)/DevTools/Inspection"),
+        .package(path: "\(sdkRoot)/Graphics"),
+        .package(path: "\(sdkRoot)/Imaging"),
+        .package(path: "\(sdkRoot)/Logging"),
+        .package(path: "\(sdkRoot)/PlatformCore"),
+        .package(path: "\(sdkRoot)/Shell"),
+        .package(path: "\(sdkRoot)/System"),
         .package(path: "Media"),
         .package(url: "https://github.com/AlexCat315/Natsel.git", branch: "main"),
     ],
@@ -106,7 +113,7 @@ let package = Package(
 
         .target(
             name: "CEngineBridge",
-            dependencies: [.product(name: "CCoveLog", package: "CoveUI")],
+            dependencies: [.product(name: "CCoveLog", package: "Logging")],
             path: "Sources/Bridge/CEngineBridge",
             publicHeadersPath: "include"
         ),
@@ -128,7 +135,7 @@ let package = Package(
         .target(name: "SIMDCompat"),
 
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
-        .target(name: "EngineKernel", dependencies: [.product(name: "CovePlatformCore", package: "CoveUI")]),
+        .target(name: "EngineKernel", dependencies: [.product(name: "CovePlatformCore", package: "PlatformCore")]),
         .target(name: "EngineMath", dependencies: ["SIMDCompat"]),
 
         // MARK: - Rendering
@@ -148,11 +155,11 @@ let package = Package(
         .target(
             name: "AssetPipeline",
             dependencies: [
-                .product(name: "CoveFileSystem", package: "CoveUI"),
+                .product(name: "CoveFileSystem", package: "System"),
                 "SIMDCompat",
                 "SceneRuntime",
-                .product(name: "ImageDecodeBridge", package: "CoveUI"),
-                .product(name: "CoveLogging", package: "CoveUI"),
+                .product(name: "CoveUIImaging", package: "Imaging"),
+                .product(name: "CoveLogging", package: "Logging"),
             ],
             linkerSettings: nativeLinkOrderSettings
         ),
@@ -178,18 +185,18 @@ let package = Package(
         .target(
             name: "AudioRuntime",
             dependencies: [
-                .product(name: "CoveLogging", package: "CoveUI"),
+                .product(name: "CoveLogging", package: "Logging"),
                 "SIMDCompat",
                 "SceneRuntime",
                 // FFmpeg decodes media; SDL3 owns device output.
                 .product(name: "MediaRuntime", package: "Media"),
-                .product(name: "CSDL3", package: "CoveUI"),
+                .product(name: "CoveUIShell", package: "Shell"),
             ]
         ),
         .target(
             name: "AIRuntime",
             dependencies: [
-                .product(name: "CoveUIAgentCore", package: "CoveUI"),
+                .product(name: "CoveUIInspection", package: "Inspection"),
                 "SIMDCompat",
                 "SceneRuntime",
                 "ScriptRuntime",
@@ -202,14 +209,14 @@ let package = Package(
         ),
         .target(
             name: "CapabilityRuntime",
-            dependencies: [.product(name: "CoveUIAgentCore", package: "CoveUI")]
+            dependencies: [.product(name: "CoveUIInspection", package: "Inspection")]
         ),
         .target(
             name: "PluginRuntime",
-            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "CapabilityRuntime", .product(name: "CoveProcess", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI")],
+            dependencies: [.product(name: "CoveFileSystem", package: "System"), "CapabilityRuntime", .product(name: "CoveProcess", package: "System"), .product(name: "CoveLogging", package: "Logging")],
             resources: [.copy("Resources")]
         ),
-        .target(name: "LanguageServerRuntime", dependencies: [.product(name: "CoveProcess", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI")]),
+        .target(name: "LanguageServerRuntime", dependencies: [.product(name: "CoveProcess", package: "System"), .product(name: "CoveLogging", package: "Logging")]),
         .target(
             name: "IntentRuntime",
             dependencies: [
@@ -224,11 +231,11 @@ let package = Package(
         ),
         .target(
             name: "ContextMemory",
-            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "IntentRuntime"]
+            dependencies: [.product(name: "CoveFileSystem", package: "System"), "IntentRuntime"]
         ),
         .target(
             name: "PerceptionRuntime",
-            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"),
+            dependencies: [.product(name: "CoveFileSystem", package: "System"),
                 "IntentRuntime",
             ],
             linkerSettings: [
@@ -238,14 +245,14 @@ let package = Package(
         ),
         .target(
             name: "ScriptRuntime",
-            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"),
+            dependencies: [.product(name: "CoveFileSystem", package: "System"),
                 "SIMDCompat",
                 "EngineKernel",
                 "AssetPipeline",
                 "SceneRuntime",
             ]
         ),
-        .target(name: "SemanticPipeline", dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), "IntentRuntime", "PerceptionRuntime"],
+        .target(name: "SemanticPipeline", dependencies: [.product(name: "CoveFileSystem", package: "System"), "IntentRuntime", "PerceptionRuntime"],
                 linkerSettings: [
                     .linkedFramework("Vision", .when(platforms: [.macOS])),
                     .linkedFramework("CoreImage", .when(platforms: [.macOS])),
@@ -256,10 +263,10 @@ let package = Package(
                 "SIMDCompat",
                 "EngineKernel",
                 "EngineMath",
-                .product(name: "NativeRHI", package: "CoveUI"),
+                .product(name: "CoveUIGraphics", package: "Graphics"),
                 "AssetPipeline",
                 "SceneRuntime",
-                .product(name: "CoveLogging", package: "CoveUI"),
+                .product(name: "CoveLogging", package: "Logging"),
             ],
             resources: [
                 .copy("Resources/FinalBaseMesh.obj"),
@@ -280,12 +287,12 @@ let package = Package(
         // MARK: - Engine Host (orchestrates all services)
         .target(
             name: "EngineCore",
-            dependencies: [.product(name: "CoveLogging", package: "CoveUI"),
+            dependencies: [.product(name: "CoveLogging", package: "Logging"),
                 "CTreeSitter",
                 "CTreeSitterSwift",
                 "CEngineBridge",
                 "EngineKernel",
-                .product(name: "NativeRHI", package: "CoveUI"),
+                .product(name: "CoveUIGraphics", package: "Graphics"),
                 "RenderBackend",
                 "SceneRuntime",
                 "AssetPipeline",
@@ -295,7 +302,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "SceneRuntimeBenchmarks",
-            dependencies: [.product(name: "CoveLogging", package: "CoveUI"),
+            dependencies: [.product(name: "CoveLogging", package: "Logging"),
                 "SIMDCompat",
                 "SceneRuntime",
             ],
@@ -303,7 +310,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "PhysicsRuntimeBenchmarks",
-            dependencies: [.product(name: "CoveLogging", package: "CoveUI"),
+            dependencies: [.product(name: "CoveLogging", package: "Logging"),
                 "SIMDCompat",
                 "SceneRuntime",
             ],
@@ -314,12 +321,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "RenderBackendBenchmarks",
-            dependencies: [.product(name: "CoveLogging", package: "CoveUI"), "NativeRendererValidation"],
+            dependencies: [.product(name: "CoveLogging", package: "Logging"), "NativeRendererValidation"],
             path: "Benchmarks/RenderBackendBenchmarks"
         ),
         .executableTarget(
             name: "StylizedCharacterPreviewDemo",
-            dependencies: [.product(name: "CoveLogging", package: "CoveUI"),
+            dependencies: [.product(name: "CoveLogging", package: "Logging"),
                 "SIMDCompat",
                 "RenderBackend",
                 "SceneRuntime",
@@ -328,7 +335,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "DiffusePluginHost",
-            dependencies: [.product(name: "CoveFileSystem", package: "CoveUI"), .product(name: "CoveLogging", package: "CoveUI"),
+            dependencies: [.product(name: "CoveFileSystem", package: "System"), .product(name: "CoveLogging", package: "Logging"),
                 "CapabilityRuntime",
                 "IntentRuntime",
                 "PluginRuntime",
@@ -338,14 +345,14 @@ let package = Package(
             name: "EngineCoreTests",
             dependencies: [
                 "NativeRendererValidation",
-                .product(name: "NativeRHI", package: "CoveUI"),
+                .product(name: "CoveUIGraphics", package: "Graphics"),
                 "SIMDCompat",
                 "EngineCore",
                 "EngineKernel",
                 "EngineMath",
                 "RenderBackend",
                 "SceneRuntime",
-                .product(name: "ImageDecodeBridge", package: "CoveUI"),
+                .product(name: "CoveUIImaging", package: "Imaging"),
             ]
         ),
         .testTarget(
@@ -378,7 +385,7 @@ let package = Package(
                 "ScriptRuntime",
                 "SceneRuntime",
                 "AssetPipeline",
-                .product(name: "ImageDecodeBridge", package: "CoveUI"),
+                .product(name: "CoveUIImaging", package: "Imaging"),
             ],
             // The test loads compiled Swift scripts with dlopen; the host
             // executable must export the runtime symbols they reference.
@@ -395,7 +402,7 @@ let package = Package(
                 // AssetPipeline imports the CImageDecodeBridge Clang module; test
                 // targets that import AssetPipeline must see it too (the macOS
                 // toolchain requires the Clang module transitively).
-                .product(name: "ImageDecodeBridge", package: "CoveUI"),
+                .product(name: "CoveUIImaging", package: "Imaging"),
             ]
         ),
         .testTarget(
@@ -427,10 +434,10 @@ let package = Package(
         .testTarget(
             name: "PluginRuntimeTests",
             dependencies: [
-                .product(name: "CoveLogging", package: "CoveUI"),
+                .product(name: "CoveLogging", package: "Logging"),
                 "CapabilityRuntime",
                 "PluginRuntime",
-                .product(name: "CoveProcess", package: "CoveUI"),
+                .product(name: "CoveProcess", package: "System"),
             ]
         ),
         .testTarget(
@@ -439,7 +446,7 @@ let package = Package(
                 "SIMDCompat",
                 "IntentRuntime",
                 "AssetPipeline",
-                .product(name: "ImageDecodeBridge", package: "CoveUI"),
+                .product(name: "CoveUIImaging", package: "Imaging"),
                 "CapabilityRuntime",
                 "ObservationBus",
                 "SceneRuntime",
@@ -454,7 +461,7 @@ let package = Package(
                 "SemanticPipeline",
                 // Transitively imports AssetPipeline → the CImageDecodeBridge
                 // Clang module must be a direct test-target dep on macOS.
-                .product(name: "ImageDecodeBridge", package: "CoveUI"),
+                .product(name: "CoveUIImaging", package: "Imaging"),
             ]
         ),
         .testTarget(
@@ -462,7 +469,7 @@ let package = Package(
             dependencies: [
                 "IntentRuntime",
                 "PerceptionRuntime",
-                .product(name: "ImageDecodeBridge", package: "CoveUI"),
+                .product(name: "CoveUIImaging", package: "Imaging"),
             ]
         ),
         .testTarget(
@@ -476,7 +483,7 @@ let package = Package(
                 "PluginRuntime",
                 "ScriptRuntime",
                 "SIMDCompat",
-                .product(name: "ImageDecodeBridge", package: "CoveUI"),
+                .product(name: "CoveUIImaging", package: "Imaging"),
             ]
         ),
         .testTarget(
@@ -484,7 +491,7 @@ let package = Package(
             dependencies: [
                 "ContextMemory",
                 "IntentRuntime",
-                .product(name: "ImageDecodeBridge", package: "CoveUI"),
+                .product(name: "CoveUIImaging", package: "Imaging"),
             ]
         ),
         .testTarget(
@@ -507,11 +514,11 @@ let package = Package(
             ]
         ),
         .executableTarget(name: "NativeRHIPassProbe",
-            dependencies: [.product(name: "CoveLogging", package: "CoveUI"), "NativeRendererValidation"]),
+            dependencies: [.product(name: "CoveLogging", package: "Logging"), "NativeRendererValidation"]),
         .target(name: "NativeRendererValidation",
-            dependencies: ["RenderBackend", .product(name: "NativeRHI", package: "CoveUI"), "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
+            dependencies: ["RenderBackend", .product(name: "CoveUIGraphics", package: "Graphics"), "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
         .testTarget(name: "NativeRendererTests",
-            dependencies: ["NativeRendererValidation", "RenderBackend", .product(name: "NativeRHI", package: "CoveUI"), "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
+            dependencies: ["NativeRendererValidation", "RenderBackend", .product(name: "CoveUIGraphics", package: "Graphics"), "SceneRuntime", "EngineKernel", "SIMDCompat", "AssetPipeline"]),
 
     ],
     cxxLanguageStandard: .cxx17

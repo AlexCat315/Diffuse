@@ -4,7 +4,7 @@ import SIMDCompat
 
 extension EditorMeshEditing {
     public func inspectorSections(for id: UInt64) -> [EditorInspectorSection] {
-        guard isEditing, !isInsetting, entityID == id else { return [] }
+        guard isEditing, !hasTopologyPreview, entityID == id else { return [] }
         var fields = [EditorInspectorField(id: "mesh-selection-count",label: L("Selected"),
             value: .readOnly("\(selection.count) \(L(mode.title))"))]
         if let center = selectionCenter {

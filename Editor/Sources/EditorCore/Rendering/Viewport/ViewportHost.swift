@@ -28,6 +28,7 @@ package struct ViewportHost<Overlay: View>: _PrimitiveView {
     package let surface: ViewportSurfaceState
     package let automaticallyFocus: Bool
     package let contentAspectRatio: Float?
+    package let keyConsumption: ((KeyEvent) -> Bool)?
     package let onFocusChanged: ((Bool) -> Void)?
     package let onInputEvent: ((InputEvent) -> Void)?
     package let onDrawableSizeChange: ((RenderDrawableSize) -> Void)?
@@ -36,6 +37,7 @@ package struct ViewportHost<Overlay: View>: _PrimitiveView {
     package let overlay: Overlay
 
     package init(surface: ViewportSurfaceState,
+                keyConsumption: ((KeyEvent) -> Bool)? = nil,
                 automaticallyFocus: Bool = false,
                 contentAspectRatio: Float? = nil,
                 onFocusChanged: ((Bool) -> Void)? = nil,
@@ -45,6 +47,7 @@ package struct ViewportHost<Overlay: View>: _PrimitiveView {
                 onDrawOverlay: ((DrawList, ViewportScreenFrame) -> Void)? = nil,
                 @ViewBuilder overlay: () -> Overlay) {
         self.surface = surface
+        self.keyConsumption = keyConsumption
         self.automaticallyFocus = automaticallyFocus
         self.contentAspectRatio = contentAspectRatio
         self.onFocusChanged = onFocusChanged
@@ -124,11 +127,11 @@ package struct ViewportHost<Overlay: View>: _PrimitiveView {
             }
             registry.setKey(node, route: .viewport) { event, _ in
                 snap.onInputEvent?(.keyDown(event))
-                return Self.consumesKey(event) ? .handled : .ignored
+                return Self.consumesKey(event) || snap.keyConsumption?(event) == true ? .handled : .ignored
             }
             registry.setKeyUp(node, route: .viewport) { event, _ in
                 snap.onInputEvent?(.keyUp(event))
-                return Self.consumesKey(event) ? .handled : .ignored
+                return Self.consumesKey(event) || snap.keyConsumption?(event) == true ? .handled : .ignored
             }
             registry.setText(node, route: .viewport) { text, _ in
                 snap.onInputEvent?(.textInput(text))
@@ -251,12 +254,14 @@ package enum ViewportPresentationGeometry {
 
 package extension ViewportHost where Overlay == EmptyView {
     init(surface: ViewportSurfaceState,
+         keyConsumption: ((KeyEvent) -> Bool)? = nil,
          automaticallyFocus: Bool = false,
          onInputEvent: ((InputEvent) -> Void)? = nil,
          onDrawableSizeChange: ((RenderDrawableSize) -> Void)? = nil,
          onScreenFrameChange: ((ViewportScreenFrame) -> Void)? = nil,
          onDrawOverlay: ((DrawList, ViewportScreenFrame) -> Void)? = nil) {
         self.init(surface: surface,
+                  keyConsumption: keyConsumption,
                   automaticallyFocus: automaticallyFocus,
                   onInputEvent: onInputEvent,
                   onDrawableSizeChange: onDrawableSizeChange,

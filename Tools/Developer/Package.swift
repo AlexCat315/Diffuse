@@ -45,7 +45,7 @@ let sdkRoot = resolvedSDK.resolvingSymlinksInPath().path
 
 let decoderHeaders = URL(fileURLWithPath: sdkRoot,
   relativeTo: URL(fileURLWithPath: #filePath).deletingLastPathComponent())
-  .appendingPathComponent("Runtime/Sources/Bridge/CImageDecodeBridge").standardizedFileURL.path
+  .appendingPathComponent("Imaging/Sources/CImageDecodeBridge").standardizedFileURL.path
 
 let infrastructure: [Target] = [
   .target(name: "CImageDecoder", path: "Sources/Infrastructure/CImageDecoder",

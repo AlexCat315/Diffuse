@@ -7,9 +7,13 @@ import RenderBackend
 import SIMDCompat
 
 enum MeshViewportInteraction {
+    static func isLoopCutShortcut(_ key: KeyEvent,app: EditorApplication) -> Bool {
+        app.meshEditing.isEditing && app.meshEditing.mode == .edge && key.scancode == 21
+            && key.modifiers.hasCtrl && !key.modifiers.hasGui && !key.modifiers.hasAlt && !key.modifiers.hasShift
+    }
     static func snapshot(app: EditorApplication, mode: EditorGizmoMode, space: EditorGizmoSpace) {
         let model = app.meshEditing
-        guard !model.isInsetting, let id = model.entityID, let center = model.selectionCenter,
+        guard !model.hasTopologyPreview, let id = model.entityID, let center = model.selectionCenter,
               let world = app.scene.entityWorldMatrix(id), let frame = EditorViewportDropTarget.frame,
               simd_determinant(world).isFinite, abs(simd_determinant(world)) > 1e-10,
               let gizmoMode = gizmoMode(mode) else { EditorGizmoController.shared.updateSnapshot(nil); return }
@@ -25,6 +29,10 @@ enum MeshViewportInteraction {
     static func handle(_ event: InputEvent, app: EditorApplication) -> Bool {
         let model = app.meshEditing
         model.synchronize()
+        if case let .keyDown(key) = event,isLoopCutShortcut(key,app: app) {
+            if !key.isRepeat { _ = model.beginLoopCut() }
+            return true
+        }
         if case let .keyDown(key) = event, EditorViewportKeyRoutingPolicy.handlesLocally(key), key.scancode == 43 {
             if key.isRepeat { return true }
             return model.setMode(model.isEditing ? .object : .vertex)
@@ -39,7 +47,7 @@ enum MeshViewportInteraction {
         case .windowFocusLost:
             _ = model.cancelInteractiveEdit(); pointer.clear(); return false
         case let .mouseButtonDown(button) where button.button == .left && !button.modifiers.hasAlt:
-            if model.isInsetting { return true }
+            if model.hasTopologyPreview { return true }
             guard let frame = EditorViewportDropTarget.frame, frame.contains(x: button.x,y: button.y) else { return false }
             _ = model.cancelTransform()
             app.scene.endInteractiveEditHistoryGroup()
@@ -89,8 +97,8 @@ enum MeshViewportInteraction {
                 if !model.cancelInteractiveEdit() { model.select([]) }
                 pointer.clear(); PointerCaptureHolder.current?.release(); return true
             }
-            if model.isInsetting {
-                if key.scancode == 40, !key.isRepeat { _ = model.commitInset() }
+            if model.hasTopologyPreview {
+                if key.scancode == 40, !key.isRepeat { _ = model.commitInteractiveEdit() }
                 return true
             }
             if model.isTransforming { return true }

@@ -64,6 +64,7 @@ struct ViewportPanel: View {
                 Row(alignment: .center, spacing: 6) {
                     MeshEditControls(app: app)
                     if app.meshEditing.isInsetting { MeshInsetControls(model: app.meshEditing) }
+                    else if app.meshEditing.isLoopCutting { MeshLoopCutControls(model: app.meshEditing) }
                     else {
                         ViewportToolMenu(store: app.store,mode: gizmoMode,
                                          isEnabled: playbackState == .stopped)
@@ -108,6 +109,7 @@ struct ViewportPanel: View {
                 .frame(height: 40)
                 .debugName("viewport-header")
                 ViewportHost(surface: surface,
+                             keyConsumption: { MeshViewportInteraction.isLoopCutShortcut($0,app: app) },
                              onFocusChanged: { focused in
                                  if !focused {
                                      _ = app.meshEditing.cancelTransform()
@@ -1155,10 +1157,9 @@ func viewportPopoverDismissOnEscape(_ isPresented: Binding<Bool>)
 }
 
 enum EditorViewportKeyRoutingPolicy {
-    /// Cmd on macOS and Ctrl on every platform are application-shortcut
-    /// modifiers. ViewportHost returns `.ignored` for those events so the
-    /// global ShortcutHost receives them; the editor viewport must likewise
-    /// avoid local side effects before that fallback runs.
+    /// Application chords fall through to ShortcutHost by default. Explicit
+    /// viewport commands such as edge-mode Ctrl+R use the host's consumption
+    /// hook; the remaining local tools avoid side effects on those chords.
     static func handlesLocally(_ key: KeyEvent) -> Bool {
         !key.modifiers.hasGui && !key.modifiers.hasCtrl
     }

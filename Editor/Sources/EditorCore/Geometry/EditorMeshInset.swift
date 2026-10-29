@@ -51,8 +51,14 @@ extension EditorMeshEditing {
     }
 
     @discardableResult
-    public func cancelInteractiveEdit() -> Bool { isInsetting ? cancelInset() : cancelTransform() }
+    public func cancelInteractiveEdit() -> Bool {
+        if isLoopCutting { return cancelLoopCut() }
+        return isInsetting ? cancelInset() : cancelTransform()
+    }
 
     @discardableResult
-    public func commitInteractiveEdit() -> Bool { isInsetting ? commitInset() : finishTransform() }
+    public func commitInteractiveEdit() -> Bool {
+        if isLoopCutting { return commitLoopCut() }
+        return isInsetting ? commitInset() : finishTransform()
+    }
 }

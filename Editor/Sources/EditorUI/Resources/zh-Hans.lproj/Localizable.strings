@@ -1291,3 +1291,8 @@
 "Inset width collapses the face" = "宽度过大或无效";
 "Confirm Inset" = "确认内插";
 "Cancel Inset" = "取消内插";
+"Loop Cut and Slide" = "环切与滑移";
+"Number of Cuts" = "切线数量";
+"Loop Slide" = "环线滑移";
+"Confirm Loop Cut" = "确认环切";
+"Cancel Loop Cut" = "取消环切";

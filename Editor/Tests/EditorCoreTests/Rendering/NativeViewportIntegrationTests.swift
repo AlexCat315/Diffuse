@@ -1,4 +1,5 @@
 @testable import EditorCore
+@testable import CoveUIGraphics
 #if os(macOS)
 import Foundation
 import XCTest

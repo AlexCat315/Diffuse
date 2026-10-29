@@ -10,7 +10,7 @@ public final class EditorMeshEditing {
     weak var app: EditorApplication?
     public private(set) var entityID: UInt64?
     public private(set) var mode: EditorMeshSelectionMode = .object
-    public private(set) var selection: Set<Int> = []
+    public internal(set) var selection: Set<Int> = []
     public private(set) var xray = false
     public private(set) var showsEvaluatedWireframe = true
     public var extrusionDistance: Float = 0.25
@@ -21,6 +21,7 @@ public final class EditorMeshEditing {
     private var cachedPicker: (mesh: PolygonMesh,world: simd_float4x4,picker: EditorMeshPicker)?
     private var transformVertices: Set<Int>?
     var insetFaces: Set<Int>?
+    var loopCut = EditorLoopCutState()
     public internal(set) var insetDistance: Float = 0.1
     public internal(set) var isInsetPreviewValid = false
 
@@ -28,7 +29,8 @@ public final class EditorMeshEditing {
     public var isEditing: Bool { entityID != nil && mode != .object }
     public var isTransforming: Bool { transformVertices != nil }
     public var isInsetting: Bool { insetFaces != nil }
-    public var hasInteractiveEdit: Bool { isTransforming || isInsetting }
+    public var hasTopologyPreview: Bool { isInsetting || isLoopCutting }
+    public var hasInteractiveEdit: Bool { isTransforming || hasTopologyPreview }
 
     public var canEnter: Bool {
         guard let app, app.store.playbackState == .stopped, let id = app.store.selectedEntityID,
@@ -57,7 +59,7 @@ public final class EditorMeshEditing {
     public func synchronize() {
         guard isEditing else { return }
         guard canEnter, let app, app.store.selectedEntityID == entityID, let mesh = controlMesh() else { leave(); return }
-        if !isInsetting, vertexCount != mesh.positions.count || topology != mesh.faces.map(\.vertices) {
+        if !hasTopologyPreview && (vertexCount != mesh.positions.count || topology != mesh.faces.map(\.vertices)) {
             _ = cancelTransform()
             selection = []
             rememberTopology(mesh)

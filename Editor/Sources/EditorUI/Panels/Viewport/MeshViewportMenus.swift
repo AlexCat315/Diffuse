@@ -48,6 +48,9 @@ struct MeshOperationsMenu: View {
         let faces = model.mode == .face && !model.selection.isEmpty && !model.hasInteractiveEdit
         let components = !model.selection.isEmpty && !model.hasInteractiveEdit
         return [
+            .item(MenuItem(id: "mesh-loop-cut",title: L("Loop Cut and Slide"),shortcut: "Ctrl R",
+                           isEnabled: model.mode == .edge && model.selection.count == 1 && !model.hasInteractiveEdit,
+                           content: .init(icon: UIIcons.Action.sliders),action: { _ = model.beginLoopCut() })),
             .item(MenuItem(id: "mesh-inset",title: L("Inset Individual Faces"),shortcut: "I",isEnabled: faces,
                            content: .init(icon: UIIcons.Shape.square),action: { _ = model.beginInset() })),
             .item(MenuItem(id: "mesh-subdivide",title: L("Subdivide Faces"),isEnabled: faces,action: { _ = model.subdivideSelection() })),
