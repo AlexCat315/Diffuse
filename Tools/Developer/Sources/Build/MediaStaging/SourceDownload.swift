@@ -22,7 +22,7 @@ enum SourceDownload {
     defer { try? Fs.remove(staging) }
     Terminal.info("Downloading \(remote.absoluteString)")
     try transfer([
-      curl.path, "--fail", "--show-error", "--location",
+      curl.path, "--fail", "--show-error", "--location", "--ipv4",
       "--proto", "=https", "--proto-redir", "=https",
       "--connect-timeout", "20", "--max-time", "180",
       "--retry", "4", "--retry-all-errors", "--retry-delay", "2", "--retry-max-time", "600",
