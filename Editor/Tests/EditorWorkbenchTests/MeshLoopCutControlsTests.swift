@@ -79,7 +79,7 @@ struct MeshLoopCutControlsTests {
         #expect(model.selection.count == 12 && app.store.uiRefreshRevision == presentation)
         for name in ["mesh-mode-menu","mesh-loop-cut-controls","mesh-loop-cut-confirm","mesh-loop-cut-cancel","viewport-view-menu"] {
             let node = try WorkbenchUITestSupport.named(name,in: graph.tree.root)
-            #expect(node.absoluteFrame.minX >= 0 && node.absoluteFrame.maxX <= CGFloat(width))
+            #expect(node.absoluteFrame.minX >= 0 && node.absoluteFrame.maxX <= CGFloat(width), "\(name): \(node.absoluteFrame) in \(width)")
         }
         let url = URL(fileURLWithPath: try #require(app.scene.referencedAsset(for: id)?.absolutePath))
         #expect(try GeometryDocument.load(from: url).source.evaluate().faces.count == 6)

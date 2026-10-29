@@ -11,7 +11,7 @@ struct MeshEditControls: View {
         let model = app.meshEditing
         Popover(isPresented: $isPresented,width: 200,surface: .content,overflow: .flip,
                 onKey: viewportPopoverDismissOnEscape($isPresented)) {
-            ViewportMenuTrigger(label: L(model.mode.title),isActive: model.isEditing)
+            ViewportMenuTrigger(label: L(model.mode.title),isActive: model.isEditing, isCompact: model.hasInteractiveEdit)
                 .accessibility { $0.label = L("Editing Mode"); $0.value = L(model.mode.title) }
         } content: {
             Menu(EditorMeshSelectionMode.allCases.map { mode in

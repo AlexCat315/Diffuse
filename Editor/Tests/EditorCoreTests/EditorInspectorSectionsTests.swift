@@ -1294,6 +1294,18 @@ struct EditorInspectorSectionsTests {
         _ = adapter.addComponent("particleEmitter", to: id)
         let entity = EntityID(rawValue: id)!
 
+        verifyParticleScalarGroup1(adapter, id: id, entity: entity)
+        verifyParticleScalarGroup2(adapter, id: id, entity: entity)
+        verifyParticleScalarGroup3(adapter, id: id, entity: entity)
+        verifyParticleScalarGroup4(adapter, id: id, entity: entity)
+        verifyParticleScalarGroup5(adapter, id: id, entity: entity)
+        verifyParticleScalarGroup6(adapter, id: id, entity: entity)
+        verifyParticleScalarGroup7(adapter, id: id, entity: entity)
+        verifyParticleScalarGroup8(adapter, id: id, entity: entity)
+    }
+
+    @inline(never)
+    private func verifyParticleScalarGroup1(_ adapter: EditorSceneAdapter, id: UInt64, entity: EntityID) {
         if case let .constrainedNumber(rate, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-rate") {
             rate.wrappedValue = 42
@@ -1360,7 +1372,10 @@ struct EditorInspectorSectionsTests {
             burstInterval.wrappedValue = 0.25
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.burstInterval == 0.25)
         } else { Issue.record("missing burst interval field") }
+    }
 
+    @inline(never)
+    private func verifyParticleScalarGroup2(_ adapter: EditorSceneAdapter, id: UInt64, entity: EntityID) {
         if case let .constrainedNumber(distanceRate, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-distance-rate") {
             distanceRate.wrappedValue = 12
@@ -1426,7 +1441,10 @@ struct EditorInspectorSectionsTests {
             subEndSize.wrappedValue = 0.05
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.subEmitters.legacyEndSize == 0.05)
         } else { Issue.record("missing sub-emitter end size field") }
+    }
 
+    @inline(never)
+    private func verifyParticleScalarGroup3(_ adapter: EditorSceneAdapter, id: UInt64, entity: EntityID) {
         if case let .particleSubEmitters(subEmitters) =
             field(adapter, id, section: "particle-emitter", field: "particle-sub-emitters") {
             #expect(subEmitters.wrappedValue.isEmpty)
@@ -1491,7 +1509,10 @@ struct EditorInspectorSectionsTests {
             sheetColumns.wrappedValue = 4
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.columns == 4)
         } else { Issue.record("missing texture sheet columns field") }
+    }
 
+    @inline(never)
+    private func verifyParticleScalarGroup4(_ adapter: EditorSceneAdapter, id: UInt64, entity: EntityID) {
         if case let .constrainedNumber(sheetRows, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-rows") {
             sheetRows.wrappedValue = 2
@@ -1556,7 +1577,10 @@ struct EditorInspectorSectionsTests {
             emitting.wrappedValue = false
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.emission.isEmitting == false)
         } else { Issue.record("missing emitting field") }
+    }
 
+    @inline(never)
+    private func verifyParticleScalarGroup5(_ adapter: EditorSceneAdapter, id: UInt64, entity: EntityID) {
         if case let .stringOptions(shape, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-shape") {
             shape.wrappedValue = ParticleEmissionShape.cone.inspectorOptionID
@@ -1623,7 +1647,10 @@ struct EditorInspectorSectionsTests {
             forceMode.wrappedValue = ParticleForceMode.vortex.inspectorOptionID
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.forces.forceMode == .vortex)
         } else { Issue.record("missing force mode field") }
+    }
 
+    @inline(never)
+    private func verifyParticleScalarGroup6(_ adapter: EditorSceneAdapter, id: UInt64, entity: EntityID) {
         if case let .constrainedNumber(forceRadius, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-force-radius") {
             forceRadius.wrappedValue = 12
@@ -1686,7 +1713,10 @@ struct EditorInspectorSectionsTests {
                 ParticleCurveKeyframe(time: 1, value: 1),
             ]))
         } else { Issue.record("missing size curve field") }
+    }
 
+    @inline(never)
+    private func verifyParticleScalarGroup7(_ adapter: EditorSceneAdapter, id: UInt64, entity: EntityID) {
         if case let .constrainedNumber(sizeRandomness, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-size-randomness") {
             sizeRandomness.wrappedValue = 0.3
@@ -1752,7 +1782,10 @@ struct EditorInspectorSectionsTests {
             maxStretch.wrappedValue = 6
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.renderer.velocityStretchMax == 6)
         } else { Issue.record("missing max stretch field") }
+    }
 
+    @inline(never)
+    private func verifyParticleScalarGroup8(_ adapter: EditorSceneAdapter, id: UInt64, entity: EntityID) {
         if case let .constrainedNumber(maxRenderDistance, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-max-render-distance") {
             maxRenderDistance.wrappedValue = 120
@@ -1813,6 +1846,7 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.textureAssetID == nil)
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.settings.textureSheet.texturePath == nil)
         } else { Issue.record("missing particle texture asset field") }
+
     }
 
     @Test("particle gravity vector and color bindings write back")

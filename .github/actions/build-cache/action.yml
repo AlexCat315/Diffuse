@@ -19,6 +19,7 @@ runs:
           CoveUI/System/.build
           Editor/.build
           Engine/.build
+          DiffuseMCP/.build
         key: studio-swift-v2-${{ github.workflow }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Editor/cove.json', '**/Package.swift', '**/Package.resolved', '.github/actions/setup-toolchains/action.yml') }}-${{ github.sha }}
         restore-keys: |
           studio-swift-v2-${{ github.workflow }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Editor/cove.json', '**/Package.swift', '**/Package.resolved', '.github/actions/setup-toolchains/action.yml') }}-

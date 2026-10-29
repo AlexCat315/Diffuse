@@ -68,7 +68,12 @@ let coveExportedSymbols: [String] = [
 
 /// Expose host Swift symbols to gameplay libraries on macOS/Linux and the
 /// existing C ABI surface on Windows.
-let coveScriptExportLinkerSettings: [LinkerSetting] = [
+// Win32 uses the image's reserve for threads created with the default stack
+// size. Debug UI composition needs more than the linker default of 1 MiB.
+let coveDesktopStackLinkerSettings: [LinkerSetting] = [
+    .unsafeFlags(["-Xlinker", "/STACK:8388608"], .when(platforms: [.windows])),
+]
+let coveScriptExportLinkerSettings: [LinkerSetting] = coveDesktopStackLinkerSettings + [
     .unsafeFlags(["-Xlinker", "-export_dynamic"], .when(platforms: [.macOS])),
     .unsafeFlags(["-Xlinker", "--export-dynamic"], .when(platforms: [.linux])),
     .unsafeFlags(
@@ -80,7 +85,7 @@ let coveScriptExportLinkerSettings: [LinkerSetting] = [
 /// Test bundles that dlopen compiled scripts must export the host runtime
 /// symbols those libraries reference. Linux needs this because the native
 /// build system does not add `--export-dynamic` on its own.
-let coveTestDlopenLinkerSettings: [LinkerSetting] = [
+let coveTestDlopenLinkerSettings: [LinkerSetting] = coveDesktopStackLinkerSettings + [
     .unsafeFlags(["-Xlinker", "--export-dynamic"], .when(platforms: [.linux])),
 ]
 

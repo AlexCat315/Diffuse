@@ -61,7 +61,7 @@ struct ViewportPanel: View {
             // Controls live in a header row of the pane; the render below is
             // left to the scene.
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                Row(alignment: .center, spacing: 6) {
+                Row(alignment: .center, spacing: app.meshEditing.hasInteractiveEdit ? 4 : 6) {
                     MeshEditControls(app: app)
                     if app.meshEditing.isInsetting { MeshInsetControls(model: app.meshEditing) }
                     else if app.meshEditing.isLoopCutting { MeshLoopCutControls(model: app.meshEditing) }

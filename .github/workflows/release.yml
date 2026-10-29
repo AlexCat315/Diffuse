@@ -115,7 +115,7 @@ jobs:
     name: Editor macOS
     needs: prepare-release
     runs-on: xcode-27
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -123,6 +123,9 @@ jobs:
           submodules: recursive
       - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
+
+      - uses: ./.github/actions/build-cache
+        id: build-cache
 
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
@@ -137,6 +140,18 @@ jobs:
           ./cove internal build-package Editor --release --product CovePlayer --result-file player-products.json
           ./cove internal build-package Engine --release --product DiffusePluginHost --result-file plugin-host-products.json
           ./cove internal build-package DiffuseMCP --release --result-file mcp-products.json
+
+      - uses: actions/cache/save@v5
+        if: steps.build-cache.outputs.hit != 'true'
+        with:
+          key: ${{ steps.build-cache.outputs.key }}
+          path: |
+            Tools/Developer/.build
+            CoveUI/Tools/Cove/.build
+            CoveUI/System/.build
+            Editor/.build
+            Engine/.build
+            DiffuseMCP/.build
 
       - name: Test packages before release
         shell: bash
@@ -229,7 +244,7 @@ jobs:
     name: Editor Windows
     needs: prepare-release
     runs-on: windows-2025-vs2026
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -237,6 +252,9 @@ jobs:
           submodules: recursive
       - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
+
+      - uses: ./.github/actions/build-cache
+        id: build-cache
 
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
@@ -259,6 +277,18 @@ jobs:
           ./cove internal build-package Editor --release --product CovePlayer --result-file player-products.json
           ./cove internal build-package Engine --release --product DiffusePluginHost --result-file plugin-host-products.json
           ./cove internal build-package DiffuseMCP --release --result-file mcp-products.json
+
+      - uses: actions/cache/save@v5
+        if: steps.build-cache.outputs.hit != 'true'
+        with:
+          key: ${{ steps.build-cache.outputs.key }}
+          path: |
+            Tools/Developer/.build
+            CoveUI/Tools/Cove/.build
+            CoveUI/System/.build
+            Editor/.build
+            Engine/.build
+            DiffuseMCP/.build
 
       - name: Test packages before release
         shell: pwsh
@@ -363,7 +393,7 @@ jobs:
     name: Editor Linux
     needs: prepare-release
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -371,6 +401,9 @@ jobs:
           submodules: recursive
       - name: Fetch pinned Cove SDK
         uses: ./.github/actions/fetch-sdk
+
+      - uses: ./.github/actions/build-cache
+        id: build-cache
 
       - name: Install system dependencies
         shell: bash
@@ -404,7 +437,8 @@ jobs:
             libxtst-dev \
             mesa-common-dev \
             ninja-build \
-            patchelf
+            patchelf \
+            vulkan-validationlayers
 
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
@@ -425,6 +459,18 @@ jobs:
           ./cove internal build-package Editor --release --product CovePlayer --result-file player-products.json
           ./cove internal build-package Engine --release --product DiffusePluginHost --result-file plugin-host-products.json
           ./cove internal build-package DiffuseMCP --release --result-file mcp-products.json
+
+      - uses: actions/cache/save@v5
+        if: steps.build-cache.outputs.hit != 'true'
+        with:
+          key: ${{ steps.build-cache.outputs.key }}
+          path: |
+            Tools/Developer/.build
+            CoveUI/Tools/Cove/.build
+            CoveUI/System/.build
+            Editor/.build
+            Engine/.build
+            DiffuseMCP/.build
 
       - name: Test packages before release
         shell: bash

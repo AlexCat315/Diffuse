@@ -6,6 +6,7 @@ struct ViewportMenuTrigger: View {
     var icon: BundleImageResource?
     var label: String?
     var isActive = false
+    var isCompact = false
     @State private var isHovered = false
 
     var body: some View {
@@ -16,7 +17,7 @@ struct ViewportMenuTrigger: View {
                 Icon(UIIcons.Navigation.chevronDown,size: 9,color: .onSurfaceMuted)
             }
         }
-        .padding(horizontal: label == nil ? 7 : 10)
+        .padding(horizontal: label == nil ? 7 : isCompact ? 6 : 10)
         .frame(height: 28)
         .background(isActive ? SemanticColorRef.accentMuted : isHovered ? .stateLayerHover : .clear)
         .cornerRadius(7)

@@ -157,3 +157,8 @@ SLANGC="$PWD/Engine/vendor/slang/bin/slangc" ./cove test Tools/Developer
 hosts, exercises a real browser on POSIX hosts, and checks safe help entry
 points. Device, GPU and full editor gates remain in their domain
 workflows and require their normal hardware/toolchains.
+
+GPU captures and the 4,096-body destruction performance budgets run together
+through manual `ci-gpu.yml` dispatch on the dedicated `cove-gpu` host. Shared
+GitHub-hosted runners retain the full functional test suites; their variable
+CPU allocations do not define hardware timing acceptance.

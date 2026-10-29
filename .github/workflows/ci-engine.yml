@@ -142,20 +142,3 @@ jobs:
           path: test-results
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Run M7 destruction performance gates
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          ./cove internal build-package Engine --release --product PhysicsRuntimeBenchmarks --result-file "$RUNNER_TEMP/physics-products.json"
-          benchmark="$(node -p 'JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/physics-products.json")).products')/PhysicsRuntimeBenchmarks"
-          COVE_PHYSICS_SCENARIO=destruction-fragments \
-          COVE_PHYSICS_BODIES=4096 \
-          COVE_PHYSICS_WARMUP_FRAMES=30 \
-          COVE_PHYSICS_SAMPLE_FRAMES=120 \
-          "$benchmark"
-          COVE_PHYSICS_SCENARIO=destruction-islands \
-          COVE_PHYSICS_BODIES=4096 \
-          COVE_PHYSICS_WARMUP_FRAMES=30 \
-          COVE_PHYSICS_SAMPLE_FRAMES=120 \
-          "$benchmark"
