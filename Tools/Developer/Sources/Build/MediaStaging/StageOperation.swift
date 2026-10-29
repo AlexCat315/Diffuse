@@ -81,12 +81,21 @@ enum StageOperation {
     let cache = Repository.path("Engine/Media/build/cache")
     try Fs.directory(cache)
     let archive = cache.appendingPathComponent("ffmpeg-\(MediaStaging.version).tar.xz")
-    guard
-      let remote = URL(string: "https://ffmpeg.org/releases/ffmpeg-\(MediaStaging.version).tar.xz")
-    else {
-      throw ToolError.message("Invalid FFmpeg source URL for \(MediaStaging.version)")
+
+    // Prefer the vendored in-repo source so a blocked or flaky ffmpeg.org can
+    // never stall a release; the upstream release remains the network fallback.
+    var mirrors: [URL] = []
+    let vendored = Repository.path("Engine/Media/ffmpeg/ffmpeg-\(MediaStaging.version).tar.xz")
+    if FileManager.default.fileExists(atPath: vendored.path) {
+      mirrors.append(URL(fileURLWithPath: vendored.path))
     }
-    try SourceDownload.fetch(from: remote, to: archive, sha256: MediaStaging.sourceSHA256, environment: environment)
+    if let remote = URL(string: "https://ffmpeg.org/releases/ffmpeg-\(MediaStaging.version).tar.xz") {
+      mirrors.append(remote)
+    }
+    guard !mirrors.isEmpty else {
+      throw ToolError.message("No FFmpeg source mirrors available for \(MediaStaging.version)")
+    }
+    try SourceDownload.fetch(from: mirrors, to: archive, sha256: MediaStaging.sourceSHA256, environment: environment)
 
     let source = cache.appendingPathComponent("ffmpeg-\(MediaStaging.version)")
     // A partial or interrupted extraction can leave `source` present but

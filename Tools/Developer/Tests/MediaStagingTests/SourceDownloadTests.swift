@@ -16,7 +16,7 @@ final class SourceDownloadTests: XCTestCase {
   func testVerifiedCacheNeedsNoDownloaderOrNetwork() throws {
     let destination = try temporaryDirectory().appendingPathComponent("source.tar.xz")
     try Data("verified source".utf8).write(to: destination)
-    try SourceDownload.fetch(from: remote, to: destination, sha256: SHA256.hex(file: destination),
+    try SourceDownload.fetch(from: [remote], to: destination, sha256: SHA256.hex(file: destination),
                              environment: ["PATH": ""]) { _, _ in
       XCTFail("A verified cache must not perform a transfer")
     }
@@ -26,7 +26,7 @@ final class SourceDownloadTests: XCTestCase {
     let root = try temporaryDirectory(), destination = root.appendingPathComponent("source.tar.xz")
     let expected = root.appendingPathComponent("expected")
     try Data("pinned source".utf8).write(to: expected)
-    try SourceDownload.fetch(from: remote, to: destination, sha256: SHA256.hex(file: expected),
+    try SourceDownload.fetch(from: [remote], to: destination, sha256: SHA256.hex(file: expected),
                              environment: ProcessInfo.processInfo.environment) { command, _ in
       XCTAssertTrue(command.contains("--retry-all-errors"))
       let timeout = try XCTUnwrap(command.firstIndex(of: "--max-time"))
@@ -39,12 +39,46 @@ final class SourceDownloadTests: XCTestCase {
     XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: root.path).contains { $0.hasPrefix(".ffmpeg-download-") })
   }
 
+  func testVendoredFileMirrorIsUsedWithoutNetwork() throws {
+    let root = try temporaryDirectory()
+    let destination = root.appendingPathComponent("source.tar.xz")
+    let vendored = root.appendingPathComponent("vendored.tar.xz")
+    try Data("pinned source".utf8).write(to: vendored)
+    try SourceDownload.fetch(
+      from: [URL(fileURLWithPath: vendored.path), remote], to: destination,
+      sha256: SHA256.hex(file: vendored),
+      environment: ProcessInfo.processInfo.environment) { _, _ in
+        XCTFail("A vendored file:// mirror must satisfy the download without network")
+      }
+    XCTAssertEqual(try Data(contentsOf: destination), try Data(contentsOf: vendored))
+    XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: root.path).contains { $0.hasPrefix(".ffmpeg-download-") })
+  }
+
+  func testFallsBackToNextMirrorWhenFirstFailsVerification() throws {
+    let root = try temporaryDirectory()
+    let destination = root.appendingPathComponent("source.tar.xz")
+    let vendored = root.appendingPathComponent("vendored.tar.xz")
+    try Data("pinned source".utf8).write(to: vendored)
+    var networkTried = false
+    try SourceDownload.fetch(
+      from: [remote, URL(fileURLWithPath: vendored.path)], to: destination,
+      sha256: SHA256.hex(file: vendored),
+      environment: ProcessInfo.processInfo.environment) { command, _ in
+        networkTried = true
+        let output = try XCTUnwrap(command.firstIndex(of: "--output"))
+        // The first mirror serves content that does NOT match the pinned SHA-256.
+        try Data("wrong content".utf8).write(to: URL(fileURLWithPath: command[output + 1]))
+      }
+    XCTAssertTrue(networkTried, "The failing first mirror must be attempted")
+    XCTAssertEqual(try Data(contentsOf: destination), try Data(contentsOf: vendored))
+  }
+
   func testInterruptedAndCorruptTransfersPreserveExistingArchiveAndRemoveStagingFiles() throws {
     for interrupted in [false, true] {
       let root = try temporaryDirectory(), destination = root.appendingPathComponent("source.tar.xz")
       let original = Data("previous archive".utf8)
       try original.write(to: destination)
-      XCTAssertThrowsError(try SourceDownload.fetch(from: remote, to: destination, sha256: String(repeating: "0", count: 64),
+      XCTAssertThrowsError(try SourceDownload.fetch(from: [remote], to: destination, sha256: String(repeating: "0", count: 64),
                                                     environment: ProcessInfo.processInfo.environment) { command, _ in
         let output = try XCTUnwrap(command.firstIndex(of: "--output"))
         try Data("partial or corrupt data".utf8).write(to: URL(fileURLWithPath: command[output + 1]))
@@ -57,7 +91,7 @@ final class SourceDownloadTests: XCTestCase {
 
   func testNonHTTPSURLIsRejectedBeforeTransfer() throws {
     let destination = try temporaryDirectory().appendingPathComponent("source.tar.xz")
-    XCTAssertThrowsError(try SourceDownload.fetch(from: URL(string: "http://ffmpeg.org/source")!, to: destination,
+    XCTAssertThrowsError(try SourceDownload.fetch(from: [URL(string: "http://ffmpeg.org/source")!], to: destination,
                                                   sha256: "", environment: [:]) { _, _ in
       XCTFail("An insecure URL must not reach the downloader")
     })
