@@ -64,6 +64,7 @@ final class EditorAssistantSurface: _ObservableObject {
         return availableViews().contains(requested) ? requested : .make
     }
 
+    private weak var host: (any AssistantHosting)?
     private let publisher = _ObservablePublisher<EditorAssistantSurface>()
 
     nonisolated(unsafe) private static var byApplication: [ObjectIdentifier: EditorAssistantSurface] = [:]
@@ -72,8 +73,9 @@ final class EditorAssistantSurface: _ObservableObject {
     /// session that belongs to no project.
     static func of(_ host: AssistantHosting) -> EditorAssistantSurface {
         let key = ObjectIdentifier(host)
-        if let existing = byApplication[key] { return existing }
+        if let existing = byApplication[key], existing.host === host { return existing }
         let created = EditorAssistantSurface()
+        created.host = host
         created.availableViews = { [weak host] in host?.studioViews ?? [.make] }
         byApplication[key] = created
         return created

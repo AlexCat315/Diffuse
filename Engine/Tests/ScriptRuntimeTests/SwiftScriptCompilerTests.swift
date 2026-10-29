@@ -39,7 +39,7 @@ struct SwiftScriptCompilerTests {
 
     @Test("discovers hand-written bridges in a split SDK source package")
     func discoversSplitSDKBridges() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let products = root.appendingPathComponent(".build/debug")
         let include = root.appendingPathComponent("Imaging/Sources/CGenerated/include")
@@ -50,7 +50,10 @@ struct SwiftScriptCompilerTests {
         let generated = products.appendingPathComponent("CGenerated.modulemap")
         try "module CGenerated { umbrella \"\(include.path)\" export * }".write(to: generated, atomically: true, encoding: .utf8)
         try "module CImageDecodeBridge { export * }".write(to: bridge, atomically: true, encoding: .utf8)
-        #expect(SwiftScriptCompiler.discoverClangModuleMapPaths(in: products) == [generated.path, bridge.path].sorted())
+        let maps = SwiftScriptCompiler.discoverClangModuleMapPaths(in: products)
+        #expect(maps.count == 2)
+        #expect(maps.contains { $0.hasSuffix("/.build/debug/CGenerated.modulemap") })
+        #expect(maps.contains { $0.hasSuffix("/Imaging/Sources/CImageDecodeBridge/include/module.modulemap") })
     }
 
     @Test("resolves compiler executables through PATH")

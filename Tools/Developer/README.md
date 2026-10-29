@@ -47,7 +47,7 @@ The SDK has no dependency on Studio tooling.
 
 Gate legend:
 
-- **CI** — a workflow runs this command on relevant changes (or on a scheduled,
+- **CI** — a workflow runs this command on relevant changes (or by manual dispatch on a
   self-hosted runner). It is a gate; a failure blocks the change.
 - **Manual** — needs a built application, device, simulator, window, or GPU. It
   is a release checklist item, not CI coverage.
@@ -91,7 +91,7 @@ Sources/
   Build/
     NativeBootstrap/         native dependency orchestration
     MediaStaging/            FFmpeg recipes and provenance
-    PluginStaging/           Wasmtime staging and portable probe
+    PluginStaging/           Bun staging and TypeScript SDK validation
     ShaderToolchain/         Slang compilation and artifact contracts
     VulkanBootstrap/         Vulkan SDK staging
     IOSStaging/              isolated iOS native builds
@@ -155,5 +155,5 @@ SLANGC="$PWD/Engine/vendor/slang/bin/slangc" ./cove test Tools/Developer
 
 `ci-developer-tools.yml` builds and tests the standalone package on all three
 hosts, exercises a real browser on POSIX hosts, and checks safe help entry
-points. Device, GPU, Wasm rebuild and full editor gates remain in their domain
+points. Device, GPU and full editor gates remain in their domain
 workflows and require their normal hardware/toolchains.

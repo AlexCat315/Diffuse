@@ -396,9 +396,16 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
                 guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { continue }
                 let include = isDirectory.boolValue ? url : url.deletingLastPathComponent()
                 let sources = include.deletingLastPathComponent().deletingLastPathComponent()
-                for target in (try? FileManager.default.contentsOfDirectory(at: sources, includingPropertiesForKeys: nil)) ?? [] {
-                    let sibling = target.appendingPathComponent("include/module.modulemap")
-                    if FileManager.default.fileExists(atPath: sibling.path) { maps.insert(sibling.path) }
+                var roots = [sources]
+                let sdk = sources.deletingLastPathComponent().deletingLastPathComponent()
+                if FileManager.default.fileExists(atPath: sdk.appendingPathComponent("Tools/Cove/Sources/CoveCLI/SDK.json").path) {
+                    roots += ["Imaging/Sources", "Graphics/Sources"].map { sdk.appendingPathComponent($0) }
+                }
+                for root in roots {
+                    for target in (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [] {
+                        let sibling = target.appendingPathComponent("include/module.modulemap")
+                        if FileManager.default.fileExists(atPath: sibling.path) { maps.insert(sibling.path) }
+                    }
                 }
             }
         }
