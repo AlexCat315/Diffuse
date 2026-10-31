@@ -1,0 +1,50 @@
+{
+  "toolchain": "Swift 6.4.1",
+  "target": "SequenceRuntimeTests",
+  "collected": "2026-10-31, ./cove test Engine --filter SequenceRuntimeTests",
+  "total": 10,
+  "passed": 10,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Test \"binding validator blocks render when bindings are not bound\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"cache strict policy invalidates on revision mismatch\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"clip scheduler maps sequence frame into shot and source time\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"clip scheduler treats zero time warp as a hold\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"document-level FPS remap scales all frame ranges proportionally\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"fps remap supports duration ratio and frame count modes\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"override resolver returns blend weights at shot boundaries\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"shot evaluator honors mute and solo filtering\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"shot evaluator reports active markers and cut progress\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"track Codable omits solo and lock session state\"",
+      "result": "passed"
+    }
+  ]
+}

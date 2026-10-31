@@ -1,0 +1,38 @@
+{
+  "toolchain": "Swift 6.4.1",
+  "target": "ColorPipelineTests",
+  "collected": "2026-10-31, ./cove test",
+  "total": 7,
+  "passed": 7,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Test \"ACESConfig default is studio preset, ACEScg working space, sRGB display\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"ACESConfig pipelines a readable description\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"ACESConfig preset and color space enums are exhaustive\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"OCIOBridge description shows passthrough when unavailable\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"ViewTransform defaults to identity exposure and gamma\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"ViewTransform fallback gamma corrects pixel values\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"ViewTransform identity gamma leaves pixels unchanged\"",
+      "result": "passed"
+    }
+  ]
+}

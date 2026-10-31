@@ -16,7 +16,13 @@ path = "tests/asset_pipeline/main.rs"
 [dependencies]
 diffuse-math.workspace = true
 diffuse-scene.workspace = true
+diffuse-media.workspace = true
 cove-logging.workspace = true
+cove-system.workspace = true
+cove-imaging.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

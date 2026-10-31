@@ -14,8 +14,11 @@ name = "capability_runtime"
 path = "tests/capability_runtime/main.rs"
 
 [dependencies]
-# G6: enable once Cove provides cove-agent
-# cove-agent.workspace = true
+cove-agent.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+unicode-general-category.workspace = true
 
 [lints]
 workspace = true

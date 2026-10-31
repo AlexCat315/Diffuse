@@ -1,3 +1,4 @@
+pub mod emitter;
 pub mod particle_curve;
 pub mod particle_events;
 pub mod particle_gpu_simulation_plan;
@@ -7,4 +8,3 @@ pub mod particle_simulation_event_apply_report;
 pub mod particle_stats;
 pub mod particle_types;
 pub mod runtime;
-pub mod emitter;

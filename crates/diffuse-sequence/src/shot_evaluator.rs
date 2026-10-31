@@ -13,13 +13,13 @@ pub struct EvaluatedShot {
 
 impl EvaluatedShot {
     #[inline]
-    pub fn new(
-        shot_id: String,
-        name: String,
-        shot_frame: i64,
-        status: ShotStatus,
-    ) -> Self {
-        EvaluatedShot { shot_id, name, shot_frame, status }
+    pub fn new(shot_id: String, name: String, shot_frame: i64, status: ShotStatus) -> Self {
+        EvaluatedShot {
+            shot_id,
+            name,
+            shot_frame,
+            status,
+        }
     }
 }
 
@@ -54,7 +54,13 @@ impl EvaluatedSequenceFrame {
         active_markers: Vec<Marker>,
         active_cut: Option<EvaluatedCut>,
     ) -> Self {
-        EvaluatedSequenceFrame { sequence_frame, shot, active_clips, active_markers, active_cut }
+        EvaluatedSequenceFrame {
+            sequence_frame,
+            shot,
+            active_clips,
+            active_markers,
+            active_cut,
+        }
     }
 }
 
@@ -83,7 +89,11 @@ impl ShotEvaluator {
             active_shot
                 .map(|shot| ClipScheduler::active_clips(shot, sequence_frame, options))
                 .unwrap_or_default(),
-            sequence.markers_at(sequence_frame).into_iter().cloned().collect(),
+            sequence
+                .markers_at(sequence_frame)
+                .into_iter()
+                .cloned()
+                .collect(),
             Self::active_cut(sequence, sequence_frame),
         )
     }

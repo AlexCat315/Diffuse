@@ -1,0 +1,34 @@
+{
+  "entities" : [
+    {
+      "components" : {
+        "transform" : {
+          "count" : 3,
+          "position" : [
+            1,
+            2.5,
+            -0
+          ],
+          "visible" : true
+        }
+      },
+      "id" : 1,
+      "name" : "Hero"
+    },
+    {
+      "components" : {
+        "light" : {
+          "count" : 100,
+          "position" : [
+            1e+20,
+            1e-07,
+            0.5
+          ],
+          "visible" : false
+        }
+      },
+      "id" : 2,
+      "name" : "日本語 light"
+    }
+  ]
+}

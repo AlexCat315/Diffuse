@@ -13,5 +13,9 @@ path = "src/lib.rs"
 name = "studio_documents"
 path = "tests/studio_documents/main.rs"
 
+[dependencies]
+cove-system.workspace = true
+thiserror.workspace = true
+
 [lints]
 workspace = true

@@ -1,0 +1,154 @@
+{
+  "toolchain": "Swift 6.4.1",
+  "target": "CapabilityRuntimeTests",
+  "collected": "2026-10-31, ./cove test Engine --filter CapabilityRuntimeTests",
+  "total": 36,
+  "passed": 36,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Test \"CapabilityReleasePhase ordering is disabled < experimental < beta < stable\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"JSON zero and one remain numbers and cannot impersonate booleans\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"a registration disposes exactly once across early disposal and scope unwind\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"argumentPresent fails when named argument is absent\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"argumentPresent passes when named argument is present\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"beta gate allows stable and beta but not experimental\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"concurrent disposal waits for teardown and serializes generations\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"concurrent tracking never loses a registration\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"default registry resolves all IntentTransactionBuilder verbs\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"descriptor exposes derived validation metadata\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"disposeAll unwinds registrations in reverse order\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"entityExists fails when target entity is absent\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"entityExists falls back to selectedEntityID when no target specified\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"entityExists passes when target entity is in the scene\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"entityHasComponent fails when target misses the component type\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"entityHasComponent passes when target has the component type\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"experimental gate allows stable, beta, and experimental\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"gate denial reason is non-nil only for denied capabilities\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"merging overrides verbs from self with other\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"multiple preconditions accumulate all violations\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"probe returns error without throwing\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"registry contains descriptors for set_mesh_visibility and set_animation_player\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"registry fails exposure closed when duplicate ids are present\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"registry resolves aliases to the primary descriptor\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"registry returns nil for unknown verbs\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"sceneEditable fails when scene is locked\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"scope stays usable after unwinding and accepts transferred handles\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"selectionRequired fails with no target and no selection\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"stable gate allows stable and rejects beta and experimental\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"tracking after an unwind belongs to the next generation\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"validator enforces component preconditions\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"validator resolves alias verbs correctly\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"validator succeeds for a fully satisfied spawn intent\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"validator throws phaseDenied for beta verb with stable gate\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"validator throws preconditionViolations when entity missing\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"validator throws unknownVerb for unregistered verbs\"",
+      "result": "passed"
+    }
+  ]
+}

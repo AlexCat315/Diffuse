@@ -1,8 +1,6 @@
 //! `CacheValidator` — decides whether a baked cache may be used for evaluation.
 
-use crate::sequence_document::{
-    SequenceCache, SequenceCacheInvalidationPolicy, SequenceRevision,
-};
+use crate::sequence_document::{SequenceCache, SequenceCacheInvalidationPolicy, SequenceRevision};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CacheValidationResult {
@@ -12,12 +10,19 @@ pub struct CacheValidationResult {
 }
 
 impl CacheValidationResult {
-    pub const VALID: CacheValidationResult =
-        CacheValidationResult { is_valid: true, is_stale: false, reason: None };
+    pub const VALID: CacheValidationResult = CacheValidationResult {
+        is_valid: true,
+        is_stale: false,
+        reason: None,
+    };
 
     #[inline]
     pub fn new(is_valid: bool, is_stale: bool, reason: Option<String>) -> Self {
-        CacheValidationResult { is_valid, is_stale, reason }
+        CacheValidationResult {
+            is_valid,
+            is_stale,
+            reason,
+        }
     }
 }
 

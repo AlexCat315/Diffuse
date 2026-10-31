@@ -106,7 +106,11 @@ impl ClipScheduler {
 
         let active_solo_ids: std::collections::BTreeSet<String> =
             if options.solo_track_ids.is_empty() {
-                shot.tracks.iter().filter(|track| track.solo).map(|track| track.id.clone()).collect()
+                shot.tracks
+                    .iter()
+                    .filter(|track| track.solo)
+                    .map(|track| track.id.clone())
+                    .collect()
             } else {
                 options.solo_track_ids.clone()
             };
@@ -120,7 +124,10 @@ impl ClipScheduler {
                 continue;
             }
 
-            for clip in track.clips.iter().filter(|clip| clip.enabled && clip.shot_range.contains(shot_frame))
+            for clip in track
+                .clips
+                .iter()
+                .filter(|clip| clip.enabled && clip.shot_range.contains(shot_frame))
             {
                 if !Self::clip_is_valid(clip, shot) {
                     continue;

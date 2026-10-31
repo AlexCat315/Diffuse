@@ -9,6 +9,11 @@ description = "Media decoding through FFmpeg"
 [lib]
 path = "src/lib.rs"
 
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
 [build-dependencies]
 cc.workspace = true
 

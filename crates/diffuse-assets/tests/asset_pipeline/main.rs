@@ -1,6 +1,7 @@
 pub mod asset_registry_tests;
 pub mod destructible_asset_baker_tests;
 pub mod geometry_asset_tests;
+pub mod geometry_document_bytes_tests;
 pub mod geometry_tests;
 pub mod gltf_importer_tests;
 pub mod image_asset_decoder_tests;

@@ -11,7 +11,10 @@ pub struct ResolvedOverride {
 impl ResolvedOverride {
     #[inline]
     pub fn new(override_value: ShotOverride, weight: f64) -> Self {
-        ResolvedOverride { override_value, weight }
+        ResolvedOverride {
+            override_value,
+            weight,
+        }
     }
 }
 
@@ -71,10 +74,18 @@ impl OverrideResolver {
             ClipEase::EaseIn => t * t,
             ClipEase::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
             ClipEase::EaseInOut => {
-                if t < 0.5 { 2.0 * t * t } else { 1.0 - 2.0 * (1.0 - t) * (1.0 - t) }
+                if t < 0.5 {
+                    2.0 * t * t
+                } else {
+                    1.0 - 2.0 * (1.0 - t) * (1.0 - t)
+                }
             }
             ClipEase::Step => {
-                if t >= 1.0 { 1.0 } else { 0.0 }
+                if t >= 1.0 {
+                    1.0
+                } else {
+                    0.0
+                }
             }
         }
     }

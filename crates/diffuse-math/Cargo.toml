@@ -13,6 +13,9 @@ path = "src/lib.rs"
 name = "engine_math"
 path = "tests/engine_math/main.rs"
 
+[dependencies]
+serde.workspace = true
+
 [dev-dependencies.serde_json]
 workspace = true
 

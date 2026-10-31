@@ -4,6 +4,7 @@ pub mod capability_contract;
 pub mod capability_descriptor;
 pub mod capability_registry;
 pub mod capability_validator;
+pub mod capsule_schema;
 pub mod contracts;
 pub mod drafts;
 pub mod release;

@@ -1,0 +1,74 @@
+{
+  "toolchain": "Swift 6.4.1",
+  "target": "AudioRuntimeTests",
+  "collected": "2026-10-31, ./cove test",
+  "total": 16,
+  "passed": 16,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Test \"2D sources ignore distance\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"a source that disappears stops its voice\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"changing an audio source clip replaces its live voice\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"changing project search roots reloads same-named clips\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"listener master volume scales scene playback\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"missing clip files never reach the backend\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"play-on-awake retries when a missing clip becomes available\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"playOnAwake triggers exactly one voice and not again next tick\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"project reload and playback operations are serialized across threads\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"removing a finished source re-arms play-on-awake\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"resetPlaybackState stops everything and re-arms play-on-awake\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"spatial sources apply Doppler pitch from rigid body velocity\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"spatial sources attenuate with listener distance\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"spatial sources pan from listener-relative position and update while moving\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"supports aif clips and rejects clip names that escape search roots\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test videoPlaybackRespectsRangeAndCancellation()",
+      "result": "passed"
+    }
+  ]
+}

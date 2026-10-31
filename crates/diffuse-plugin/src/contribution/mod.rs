@@ -1,9 +1,9 @@
+pub mod ai;
 pub mod catalog;
+pub mod languages;
+pub mod processes;
 pub mod registrar;
 pub mod registry;
 pub mod services;
-pub mod ai;
-pub mod languages;
-pub mod processes;
 pub mod themes;
 pub mod workbench;

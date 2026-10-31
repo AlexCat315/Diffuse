@@ -1,4 +1,5 @@
 //! Crate root. See MIGRATION.md §5.
+pub mod codable;
 pub mod engine_kernel;
 pub mod in_game_canvas;
 pub mod input_event;

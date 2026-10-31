@@ -11,6 +11,9 @@ path = "src/lib.rs"
 
 [dependencies]
 cove-logging.workspace = true
+cove-system.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

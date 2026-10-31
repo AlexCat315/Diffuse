@@ -3,4 +3,5 @@ pub mod audio_backend;
 pub mod audio_engine;
 pub mod backends;
 pub mod playback;
-pub mod tests;
+#[cfg(test)]
+mod tests;

@@ -1,0 +1,118 @@
+{
+  "toolchain": "Swift 6.4.1 (swift-6.4.1-RELEASE), arm64-apple-macosx",
+  "target": "EngineMathTests",
+  "collected": "2026-10-31, `./cove test Engine --filter EngineMathTests`",
+  "total": 27,
+  "passed": 27,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Test \"axis rotations transform directions\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"bounds can be built from point sequences\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"bounds can expand uniformly or per axis\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"bounds contain points and clamp to closest point\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"bounds expose center and extents\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"bounds support union and intersection\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"bounds transform by matrices\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"ease at 0 is always 0\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"ease at 1 is always 1\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"easeOut inverts easeIn at t=0.5\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"evaluate clamps input to [0,1]\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"frustum tests spheres and bounds\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"interpolate SIMD3 spans range\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"interpolate scalar spans range\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"linear maps t to itself\" with 5 test cases",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"lookAtRH places the camera at the origin in view space\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"nearlyEqual compares scalars and vectors with tolerance\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"orthographic projection maps its visible rectangle and depth to clip space\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"perspectiveRH_ZO matches renderer projection convention\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"plane computes conservative bounds distances\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"plane computes signed point distances\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"quaternion slerp follows the shortest normalized arc\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"ray intersects bounds with nearest positive distance\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"ray normalizes direction and samples points\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"transform composes translation rotation and scale into a matrix\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"transform exposes point transform and inverse matrix\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"translation and scale transform points\"",
+      "result": "passed"
+    }
+  ]
+}

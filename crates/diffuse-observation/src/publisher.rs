@@ -2,7 +2,6 @@
 //! snapshot resync.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -160,22 +159,25 @@ impl SubscriptionSpec {
     }
 }
 
-/// A random v4 UUID formatted like Swift's `UUID().uuidString` (uppercase).
+/// A random v4 UUID formatted exactly as Swift's `UUID().uuidString`: 36
+/// characters, groups of 8-4-4-4-12. `diffuse-kernel::codable::new_uuid` is the
+/// canonical implementation; keep this one byte-identical to it.
 pub fn new_uuid() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_nanos() as u64)
         .unwrap_or(0);
     let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mixed = nanos ^ (counter.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+    let mixed = nanos ^ counter.wrapping_mul(0x9E37_79B9_7F4A_7C15);
     let time_low = (mixed & 0xFFFF_FFFF) as u32;
     let time_mid = ((mixed >> 32) & 0xFFFF) as u16;
     let time_hi = (((mixed >> 48) & 0x0FFF) as u16) | 0x4000;
     let clock = ((counter & 0x3FFF) as u16) | 0x8000;
-    let node_a = ((mixed >> 16) & 0xFFFF) as u16;
-    let node_b = (mixed >> 8) as u32 & 0x00FF_FFFF;
-    format!("{time_low:08X}-{time_mid:04X}-{time_hi:04X}-{clock:04X}-{node_a:04X}{node_b:06X}")
+    let node: u64 = (mixed >> 8) & 0x0000_FFFF_FFFF_FFFF;
+    format!("{time_low:08X}-{time_mid:04X}-{time_hi:04X}-{clock:04X}-{node:012X}")
 }
 
 /// A subscription's buffered events.
@@ -580,6 +582,25 @@ impl EventDraft {
             provenance,
             payload_ref,
             schema_version: 1,
+        }
+    }
+}
+
+#[cfg(test)]
+mod uuid_shape_tests {
+    use super::new_uuid;
+
+    /// Swift's `UUID().uuidString` is 36 characters, groups 8-4-4-4-12. A previous
+    /// version of this function produced 34 characters because the node was
+    /// formatted as two short fields.
+    #[test]
+    fn uuid_is_thirty_six_characters_with_five_groups() {
+        for _ in 0..256 {
+            let value = new_uuid();
+            assert_eq!(value.len(), 36, "wrong length: {value}");
+            let groups: Vec<usize> = value.split('-').map(str::len).collect();
+            assert_eq!(groups, vec![8, 4, 4, 4, 12], "wrong grouping: {value}");
+            assert_eq!(value, value.to_uppercase());
         }
     }
 }

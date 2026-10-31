@@ -49,6 +49,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
+name = "cove-agent"
+version = "0.3.0-dev"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cove-browser"
 version = "0.3.0-dev"
 dependencies = [
@@ -99,6 +107,7 @@ dependencies = [
 name = "cove-devtools"
 version = "0.3.0-dev"
 dependencies = [
+ "cove-agent",
  "cove-composition",
  "cove-core",
  "cove-devtools-protocol",
@@ -171,6 +180,7 @@ dependencies = [
  "cove-composition",
  "cove-core",
  "cove-graphics",
+ "cove-http",
  "cove-imaging",
  "cove-logging",
  "cove-platform",
@@ -182,6 +192,14 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "cove-http"
+version = "0.3.0-dev"
+dependencies = [
+ "cc",
+ "thiserror",
 ]
 
 [[package]]
@@ -312,6 +330,7 @@ dependencies = [
 name = "cove-ui-compose"
 version = "0.3.0-dev"
 dependencies = [
+ "cc",
  "cove-composition",
  "cove-core",
  "cove-graphics",
@@ -384,9 +403,15 @@ dependencies = [
 name = "diffuse-assets"
 version = "0.1.0"
 dependencies = [
+ "cove-imaging",
  "cove-logging",
+ "cove-system",
  "diffuse-math",
+ "diffuse-media",
  "diffuse-scene",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -402,10 +427,21 @@ dependencies = [
 [[package]]
 name = "diffuse-capability"
 version = "0.1.0"
+dependencies = [
+ "cove-agent",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "unicode-general-category",
+]
 
 [[package]]
 name = "diffuse-card-battle"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "diffuse-cinematic"
@@ -431,6 +467,10 @@ dependencies = [
 [[package]]
 name = "diffuse-documents"
 version = "0.1.0"
+dependencies = [
+ "cove-system",
+ "thiserror",
+]
 
 [[package]]
 name = "diffuse-editor"
@@ -532,6 +572,7 @@ name = "diffuse-exr"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "thiserror",
 ]
 
 [[package]]
@@ -562,6 +603,9 @@ dependencies = [
  "diffuse-scene",
  "diffuse-script",
  "diffuse-sequence",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -569,6 +613,8 @@ name = "diffuse-kernel"
 version = "0.1.0"
 dependencies = [
  "cove-platform",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -576,12 +622,16 @@ name = "diffuse-lsp"
 version = "0.1.0"
 dependencies = [
  "cove-logging",
+ "cove-system",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
 name = "diffuse-math"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "serde_json",
 ]
 
@@ -599,6 +649,9 @@ name = "diffuse-media"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -637,8 +690,17 @@ dependencies = [
 name = "diffuse-plugin"
 version = "0.1.0"
 dependencies = [
+ "cove-http",
  "cove-logging",
+ "cove-system",
  "diffuse-capability",
+ "diffuse-kernel",
+ "libc",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "unicode-general-category",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -686,7 +748,10 @@ dependencies = [
  "diffuse-kernel",
  "diffuse-math",
  "diffuse-script",
+ "natsel",
+ "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -810,6 +875,10 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+
+[[package]]
+name = "natsel"
+version = "0.2.0"
 
 [[package]]
 name = "objc2"
@@ -1263,9 +1332,13 @@ dependencies = [
 name = "xtask"
 version = "0.1.0"
 dependencies = [
- "diffuse-script",
+ "cc",
+ "cove-logging",
+ "cove-system",
+ "libc",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

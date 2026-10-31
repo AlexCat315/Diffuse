@@ -13,5 +13,11 @@ path = "src/lib.rs"
 name = "card_battle_runtime"
 path = "tests/card_battle_runtime/main.rs"
 
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
 [lints]
 workspace = true

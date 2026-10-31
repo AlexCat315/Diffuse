@@ -13,6 +13,9 @@ path = "src/lib.rs"
 name = "exrio"
 path = "tests/exrio/main.rs"
 
+[dependencies]
+thiserror.workspace = true
+
 [build-dependencies]
 cc.workspace = true
 

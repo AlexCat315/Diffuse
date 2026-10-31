@@ -66,18 +66,19 @@ cove-terminal = { path = "../Cove/Terminal" }
 cove-hosts = { path = "../Cove/Hosts" }
 cove-devtools = { path = "../Cove/DevTools" }
 cove-devtools-protocol = { path = "../Cove/DevTools/Protocol" }
-# G6: cove-agent = { path = "../Cove/Agent" } once Cove extracts the UI-free agent layer
-# G4: cove-http = { path = "../Cove/Http" } once Cove adds the UI-free HTTP client
+cove-agent = { path = "../Cove/Agent" }
+cove-http = { path = "../Cove/Http" }
 
 natsel = { path = "../Natsel" }
 
 serde = { version = "1", features = ["derive", "rc"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["raw_value"] }
 thiserror = "2"
 cc = "1"
 libc = "0.2"
 tempfile = "3"
 unicode-segmentation = "1"
+unicode-general-category = "1"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

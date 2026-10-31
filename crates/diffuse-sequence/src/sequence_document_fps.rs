@@ -1,8 +1,6 @@
 //! `SequenceDocument+FPS.swift` — remaps every frame range of a document.
 
-use crate::clip_scheduler::{
-    remap_frame, remap_frame_count, ClipScheduler, SequenceFPSRemapMode,
-};
+use crate::clip_scheduler::{ClipScheduler, SequenceFPSRemapMode, remap_frame, remap_frame_count};
 use crate::sequence_document::{
     Binding, Clip, Cut, FrameRange, Marker, SequenceDocument, Shot, ShotOverride, TimeBase, Track,
 };
@@ -42,10 +40,18 @@ pub fn remap_sequence_document(
 
     let remap_override = |shot_override: &ShotOverride| -> ShotOverride {
         let mut result = shot_override.clone();
-        result.blend_in_frames =
-            remap_frame_count(shot_override.blend_in_frames, source_fps, destination_fps, mode);
-        result.blend_out_frames =
-            remap_frame_count(shot_override.blend_out_frames, source_fps, destination_fps, mode);
+        result.blend_in_frames = remap_frame_count(
+            shot_override.blend_in_frames,
+            source_fps,
+            destination_fps,
+            mode,
+        );
+        result.blend_out_frames = remap_frame_count(
+            shot_override.blend_out_frames,
+            source_fps,
+            destination_fps,
+            mode,
+        );
         result
     };
 

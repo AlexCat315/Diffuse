@@ -1,0 +1,66 @@
+{
+  "toolchain": "Swift 6.4.1",
+  "target": "CinematicRendererTests",
+  "collected": "2026-10-31, ./cove test Engine --filter CinematicRendererTests",
+  "total": 14,
+  "passed": 14,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Test \"AOVRegistry custom AOV registration\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"AOVRegistry includes built-in AOVs: beauty, diffuse, specular, depth, normal, cryptomatte\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"AOVRegistry total channel count sums all specs\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"Halton sampler is deterministic\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"Halton sampler produces values in [0, 1)\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"Path tracer checks cancellation between image rows and does not advance progress\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"Path tracer returns the configured environment and tolerates a degenerate camera\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"PathTracer initial state has zero completed samples\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"PathTracerConfig default values match specification\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"PathTracerState progress tracks completion\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"Ray construction normalizes direction\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"Ray point-at computes correct position on ray\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"SamplingStrategyPreset creates appropriate strategies\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"renderPass projects pixel coordinates instead of reusing one ray\"",
+      "result": "passed"
+    }
+  ]
+}

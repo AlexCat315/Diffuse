@@ -22,7 +22,11 @@ harness = false
 [dependencies]
 diffuse-kernel.workspace = true
 diffuse-math.workspace = true
+natsel.workspace = true
 cove-logging.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 diffuse-script.workspace = true

@@ -1,0 +1,58 @@
+{
+  "toolchain": "Swift 6.4.1 (swift-6.4.1-RELEASE), arm64-apple-macosx",
+  "target": "ObservationBusTests",
+  "collected": "2026-10-31, `./cove test Engine --filter ObservationBusTests`",
+  "total": 12,
+  "passed": 12,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Test \"SubscriberToken cancellation removes the subscription from the bus\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"coalesce buffer keeps the latest scene change for the same entity key\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"events() AsyncStream yields published envelopes\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"fromSnapshot subscriber receives events published after the snapshot cursor\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"publish writes envelopes into subscriptions and cold log replay\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"requestSnapshot throws noSnapshotProvider when no provider is registered\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"sink delivers events to handler on background queue\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"symbolicView compacts inline payload fields to strings\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"symbolicView excludes redact_in_prompt and runtime tick events\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"symbolicView handle payload yields existence marker\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"symbolicView maxCount caps output\"",
+      "result": "passed"
+    },
+    {
+      "name": "Test \"symbolicView promptText renders compact multi-line string\"",
+      "result": "passed"
+    }
+  ]
+}

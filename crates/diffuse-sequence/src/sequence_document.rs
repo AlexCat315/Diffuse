@@ -63,9 +63,12 @@ impl<'de> Deserialize<'de> for SwiftDate {
     }
 }
 
-/// A random v4 UUID formatted uppercase, matching Swift's `UUID().uuidString`.
+/// A random v4 UUID formatted exactly as Swift's `UUID().uuidString`: 36
+/// characters, groups of 8-4-4-4-12. `diffuse-kernel::codable::new_uuid` is the
+/// canonical implementation; keep this one byte-identical to it.
 pub fn new_uuid() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
+
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -77,9 +80,8 @@ pub fn new_uuid() -> String {
     let time_mid = ((mixed >> 32) & 0xFFFF) as u16;
     let time_hi = (((mixed >> 48) & 0x0FFF) as u16) | 0x4000;
     let clock = ((counter & 0x3FFF) as u16) | 0x8000;
-    let node_a = ((mixed >> 16) & 0xFFFF) as u16;
-    let node_b = (mixed >> 8) as u32 & 0x00FF_FFFF;
-    format!("{time_low:08X}-{time_mid:04X}-{time_hi:04X}-{clock:04X}-{node_a:04X}{node_b:06X}")
+    let node: u64 = (mixed >> 8) & 0x0000_FFFF_FFFF_FFFF;
+    format!("{time_low:08X}-{time_mid:04X}-{time_hi:04X}-{clock:04X}-{node:012X}")
 }
 
 // MARK: - Timecode
@@ -95,17 +97,30 @@ pub struct SmpteTimecode {
 impl SmpteTimecode {
     #[inline]
     pub const fn new(hours: i64, minutes: i64, seconds: i64, frames: i64) -> Self {
-        SmpteTimecode { hours, minutes, seconds, frames }
+        SmpteTimecode {
+            hours,
+            minutes,
+            seconds,
+            frames,
+        }
     }
 
     /// Swift defaults: `hours: 1`, everything else 0.
     pub const fn default_timecode() -> Self {
-        SmpteTimecode { hours: 1, minutes: 0, seconds: 0, frames: 0 }
+        SmpteTimecode {
+            hours: 1,
+            minutes: 0,
+            seconds: 0,
+            frames: 0,
+        }
     }
 
     /// Swift's `String(format: "%02d:%02d:%02d:%02d", ...)`.
     pub fn description(&self) -> String {
-        format!("{:02}:{:02}:{:02}:{:02}", self.hours, self.minutes, self.seconds, self.frames)
+        format!(
+            "{:02}:{:02}:{:02}:{:02}",
+            self.hours, self.minutes, self.seconds, self.frames
+        )
     }
 }
 
@@ -127,12 +142,20 @@ impl TimeBase {
     /// Swift clamps `fps` to at least 1.
     #[inline]
     pub fn new(fps: i64, drop_frame: bool, start_timecode: SmpteTimecode) -> Self {
-        TimeBase { fps: fps.max(1), drop_frame, start_timecode }
+        TimeBase {
+            fps: fps.max(1),
+            drop_frame,
+            start_timecode,
+        }
     }
 
     /// Swift defaults: 24 fps, no drop frame, `SMPTETimecode()`.
     pub fn default_time_base() -> Self {
-        TimeBase { fps: 24, drop_frame: false, start_timecode: SmpteTimecode::default_timecode() }
+        TimeBase {
+            fps: 24,
+            drop_frame: false,
+            start_timecode: SmpteTimecode::default_timecode(),
+        }
     }
 
     pub fn with_fps(fps: i64) -> Self {
@@ -372,7 +395,11 @@ impl SceneTargetReference {
         target_id: impl Into<String>,
         sub_path: Option<String>,
     ) -> Self {
-        SceneTargetReference { doc_uri: doc_uri.into(), target_id: target_id.into(), sub_path }
+        SceneTargetReference {
+            doc_uri: doc_uri.into(),
+            target_id: target_id.into(),
+            sub_path,
+        }
     }
 }
 
@@ -534,7 +561,13 @@ impl Marker {
     /// Swift default: `colorToken: ""`.
     #[inline]
     pub fn new(id: String, frame: i64, kind: MarkerKind, label: impl Into<String>) -> Self {
-        Marker { id, frame, kind, label: label.into(), color_token: String::new() }
+        Marker {
+            id,
+            frame,
+            kind,
+            label: label.into(),
+            color_token: String::new(),
+        }
     }
 }
 
@@ -564,7 +597,13 @@ impl Cut {
     /// Swift defaults: duration 0, empty params.
     #[inline]
     pub fn new(id: String, frame: i64, transition: CutTransition) -> Self {
-        Cut { id, frame, transition, duration: 0, params: std::collections::BTreeMap::new() }
+        Cut {
+            id,
+            frame,
+            transition,
+            duration: 0,
+            params: std::collections::BTreeMap::new(),
+        }
     }
 }
 
@@ -773,7 +812,10 @@ impl SequenceResolution {
     }
 
     /// Swift's `hd1080`.
-    pub const HD1080: SequenceResolution = SequenceResolution { width: 1920, height: 1080 };
+    pub const HD1080: SequenceResolution = SequenceResolution {
+        width: 1920,
+        height: 1080,
+    };
 }
 
 impl Default for SequenceResolution {
@@ -795,7 +837,10 @@ impl AspectRatio {
     }
 
     /// Swift's `widescreen`.
-    pub const WIDESCREEN: AspectRatio = AspectRatio { width: 16, height: 9 };
+    pub const WIDESCREEN: AspectRatio = AspectRatio {
+        width: 16,
+        height: 9,
+    };
 }
 
 impl Default for AspectRatio {
@@ -814,12 +859,17 @@ pub struct MotionBlurSettings {
 impl MotionBlurSettings {
     #[inline]
     pub const fn new(shutter_angle_degrees: f32, samples: i64) -> Self {
-        MotionBlurSettings { shutter_angle_degrees, samples }
+        MotionBlurSettings {
+            shutter_angle_degrees,
+            samples,
+        }
     }
 
     /// Swift default: 180° with one sample.
-    pub const DEFAULT: MotionBlurSettings =
-        MotionBlurSettings { shutter_angle_degrees: 180.0, samples: 1 };
+    pub const DEFAULT: MotionBlurSettings = MotionBlurSettings {
+        shutter_angle_degrees: 180.0,
+        samples: 1,
+    };
 }
 
 impl Default for MotionBlurSettings {
@@ -952,13 +1002,21 @@ impl SequenceDocument {
     pub fn shot_containing(&self, sequence_frame: i64) -> Option<&Shot> {
         let mut shots: Vec<&Shot> = self.shots.iter().collect();
         shots.sort_by(|left, right| {
-            left.range.start.cmp(&right.range.start).then_with(|| left.id.cmp(&right.id))
+            left.range
+                .start
+                .cmp(&right.range.start)
+                .then_with(|| left.id.cmp(&right.id))
         });
-        shots.into_iter().find(|shot| shot.range.contains(sequence_frame))
+        shots
+            .into_iter()
+            .find(|shot| shot.range.contains(sequence_frame))
     }
 
     pub fn markers_at(&self, sequence_frame: i64) -> Vec<&Marker> {
-        self.markers.iter().filter(|marker| marker.frame == sequence_frame).collect()
+        self.markers
+            .iter()
+            .filter(|marker| marker.frame == sequence_frame)
+            .collect()
     }
 
     /// `SequenceDocument+FPS.swift`. Does not mutate the receiver.
@@ -969,5 +1027,24 @@ impl SequenceDocument {
         mode: SequenceFPSRemapMode,
     ) -> SequenceDocument {
         remap_sequence_document(self, source_fps, destination_fps, mode)
+    }
+}
+
+#[cfg(test)]
+mod uuid_shape_tests {
+    use super::new_uuid;
+
+    /// Swift's `UUID().uuidString` is 36 characters, groups 8-4-4-4-12. A previous
+    /// version of this function produced 34 characters because the node was
+    /// formatted as two short fields.
+    #[test]
+    fn uuid_is_thirty_six_characters_with_five_groups() {
+        for _ in 0..256 {
+            let value = new_uuid();
+            assert_eq!(value.len(), 36, "wrong length: {value}");
+            let groups: Vec<usize> = value.split('-').map(str::len).collect();
+            assert_eq!(groups, vec![8, 4, 4, 4, 12], "wrong grouping: {value}");
+            assert_eq!(value, value.to_uppercase());
+        }
     }
 }

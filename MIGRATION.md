@@ -128,9 +128,9 @@ release profile：`overflow-checks = true`，与 Swift 溢出即陷入的语义�
 | CoveLogging、CCoveLog | `cove-logging` |
 | CoveUIWorkspace | `cove-ui-addons`（`workspace`） |
 | CoveUITerminal | `cove-terminal` |
-| CoveUIAgentCore、CoveUIAgent（传输）、CoveUIInspection 的工具注册表与 skill | `cove-agent`（G6，待 Cove 抽出；抽出前对应路径是 `cove_devtools::agent`） |
+| CoveUIAgentCore、CoveUIAgent（传输）、CoveUIInspection 的工具注册表与 skill | `cove-agent`（`../Cove/Agent`，G6 已关闭） |
 | CoveUIDevTools、CoveUIInspection 的 UI 处理器 | `cove-devtools`（`inspection`、`server`） |
-| URLSession（HTTP 客户端） | `cove-http`（G4，待 Cove 新建） |
+| URLSession（HTTP 客户端） | `cove-http`（`../Cove/Http`，G4 已关闭） |
 | CoveUIDevToolsProtocol | `cove-devtools-protocol` |
 | CoveAndroidContract、CoveUIAndroid | `cove-hosts`（`cove_hosts::android`） |
 | ToolSupport | Cove 已删除，见 G1 |
@@ -172,14 +172,14 @@ release profile：`overflow-checks = true`，与 Swift 溢出即陷入的语义�
 
 ### D2：HTTPS 用 OpenSSL C 绑定（2026-10-31 定）
 
-URLSession 的调用点（AIRuntime `Session.swift`、PluginRuntime `Network/Transfers.swift`、工具链下载、Tools/Developer 的验证工具）改用 Cove 的通用 HTTP 客户端 `cove-http`。它由 Cove 新建（G4）：Apple 用 Foundation，Windows 用 WinHTTP，**Linux 与 Android 用 OpenSSL**，TLS 部分是 C（AGENTS.md：性能与平台关键路径用 C）。Diffuse 不自带 HTTP 栈；在 G4 落地之前按 G4 里写定的 API 翻译调用点，相关 crate 的编译门禁等待 G4。
+URLSession 的调用点（AIRuntime `Session.swift`、PluginRuntime `Network/Transfers.swift`、工具链下载、Tools/Developer 的验证工具）改用 Cove 的通用 HTTP 客户端 `cove-http`。它由 Cove 新建（G4）：Apple 用 Foundation，Windows 用 WinHTTP，**Linux 与 Android 用 OpenSSL**，TLS 部分是 C（AGENTS.md：性能与平台关键路径用 C）。Diffuse 不自带 HTTP 栈；API 见 `.migration/cove-gaps.md` G4。
 
 ### MCP 与 agent 层（2026-10-31 定）
 
 Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@_exported import CoveUIAgentCore` 重新导出工具 schema，`DiffuseMCP` 就是 Cove 的 `MCPServer` 加一个到编辑器的 TCP 转发，编辑器侧的 MCP 桥接用 Cove 的本地传输。迁移后保持这一边界：
 
 - Cove 把 agent 层抽成独立的、不依赖 UI 栈的 `cove-agent`（G6），并恢复 Swift 版的动态工具列表（`listChanged`）与可跨线程的执行器。
-- Diffuse 里 **不写任何 JSON-RPC、MCP 协议或 JSON Schema 校验代码**：`diffuse-capability` 重新导出 `cove_agent`；`diffuse-mcp` = `McpServer::with_provider` + `serve_stdio` + TCP 转发；`diffuse-editor-core` 的 `MCPIntegration` 用 `cove_agent` 的本地服务；`diffuse-ai` 的工具定义与 provider 格式用 `cove_agent::tool`。
+- Diffuse 里 **不写任何 JSON-RPC、MCP 协议或 JSON Schema 校验代码**：`diffuse-capability` 重新导出 `cove_agent`；`diffuse-mcp` = `McpServer::with_provider` + `serve_stdio` + TCP 转发；`diffuse-editor-core` 的 `MCPIntegration` 用 `cove_agent` 的本地服务；`diffuse-ai` 的工具定义与 provider 格式用 `cove_agent` 根下的 `AgentTool::provider_definition`、`SessionApiFormat`。
 - Diffuse 自己的工具（项目工具、能力检索/提交/调用、插件重载）只定义 `AgentTool` 与执行逻辑。
 
 ## 5. 翻译规范
@@ -290,7 +290,149 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 翻译依赖尚未落地的类型时，引用这里登记的路径与签名；锚点文件必须恰好定义这些名字。
 
-- （阶段 0 后填写：`diffuse-math` 的向量/矩阵/四元数类型名与布局。）
+### `diffuse-math`（已 `tested`）
+
+路径前缀均为 `diffuse_math::`。
+
+- `simd::simd_compat`：`Float2`(8/8)、`Float3`(16/16)、`Float4`(16/16)、`Double2`(16/16)、`Double3`(32/16)、`Double4`(32/16)、`Int2`/`Int3`/`Int4`、`UInt2`/`UInt4`/`UInt8x4`/`UInt16x4`；常量 `ZERO`/`ONE`/`INFINITY`/`NEG_INFINITY`；构造函数 `new` 在**所有**向量类型上都有（含整数向量），另有 `Float3::splat/sum`、`Float4::xyz()`。整数向量不实现 `Debug` 派生而是手写，填充 lane 不出现在 `Debug`/JSON 里。
+- 矩阵与四元数：`Float4x4`(64/16，`columns: [Float4; 4]`、`new/from_columns/new_with_columns/diagonal/from_scalar/from_rows/column/set_column/from_quatf/transpose/inverse`)、`Float3x3`(48/16，`new` 是零矩阵、`from_columns/new_with_columns/diagonal/from_scalar/from_float4x4/from_quatf/column/set_column`)、`Quatf`(16/16，`IDENTITY`、`from_vector/from_real_imag/from_parts/from_angle_axis/from_to/from_float3x3/from_float4x4/act/real/imag`)。
+- 常量：`MATRIX_IDENTITY_FLOAT4X4`、`MATRIX_IDENTITY_FLOAT3X3`。
+- 自由函数（带类型后缀以免 Rust 无重载）：`simd_min`/`simd_max`（Float3）、`simd_min2`/`simd_max2`、`simd_min4`/`simd_max4`、`simd_clamp`、`simd_clamp2`/`simd_clamp4`、`simd_clamp_scalar`、`simd_clamp_double`、`simd_mix3`/`simd_mix2`/`simd_mix4`/`simd_mix_scalar`、`simd_dot`/`simd_dot2`/`simd_dot4`/`simd_dot_f64_*`、`simd_length`/`simd_length2`/`simd_length4`、`length`、`simd_length_squared*`、`simd_distance*`、`distance`、`simd_distance_squared*`、`simd_normalize*`、`simd_cross`、`simd_abs`、`simd_transpose`、`simd_transpose3`、`simd_inverse`、`simd_inverse3`、`simd_determinant`、`simd_determinant3`、`cove_slerp`。
+- `bounds::bounds_3d::Bounds3D`（`EMPTY`、`new/from_points/is_empty/center/extent/half_extent/include/contains/closest_point/union/intersection/intersects/expanded/expanded_scalar/transformed`）。
+- `geometry::ray_3d::Ray3D`（`new/normalized/point_at/distance_to_bounds`）、`geometry::plane_3d::Plane3D`（`new/normalized/from_point/signed_distance/max_signed_distance/min_signed_distance`）、`geometry::frustum_3d::Frustum3D`（`new/from_view_projection/contains_sphere/intersects`）。
+- `camera::camera_matrices::CameraMatrices`（`orthographic_rh_zo/perspective_rh_zo/look_at_rh`）。
+- `transforms::transform_3d::Transform3D`（`new/identity/matrix/inverse_matrix/transform_point`）、`transforms::matrix_transforms::MatrixTransforms`（`translation/scale/rotation`）。
+- `utility::easing::Easing`（31 个变体 + `evaluate/interpolate/interpolate_vector`）、`utility::float_comparisons::FloatComparisons`（`DEFAULT_TOLERANCE`、`nearly_equal_scalar*`、`nearly_equal*`）。
+
+### `diffuse-kernel`（已 `tested`）
+
+- `engine_kernel::{EngineKernelPhase, EngineKernelPhaseContext, EngineKernelFrameReport, EngineKernel}`。
+- `in_game_canvas::{InGameUIColor, InGameCanvasCommand, InGameCanvas}`。
+- `job_system::{JobDispatchReport, JobSystem}`（`parallel_for/parallel_compact_map/parallel_map/chunk_ranges`）。
+- `input_event`、`window_id`：重新导出 `cove_platform` 的输入类型，另有 `WindowID = WindowId`。
+
+### 落盘浮点格式（跨 crate 共用）
+
+`diffuse_kernel::codable`：`format_double(f64) -> Option<String>`、`serialize_double`、`serialize_optional_double`。凡落盘 JSON 含 `Double` 的字段，都要用 `#[serde(serialize_with = "diffuse_kernel::codable::serialize_double")]`，否则 serde_json 会写出与 Swift 不同的文本（见 §10）。已实测对齐的样例见该模块的单元测试。
+
+### `diffuse-observation`（已 `tested`）
+
+- `cold_log::{ColdLog, ObservationBusError}`。
+- `event_envelope::{EventEnvelope, EventPayloadRef, EventPayloadHandle, EventPayloadRecord, EventValue, EventOrigin, EventOriginProcessKind, EventProvenance}`。
+- `event_kind_registry::{EventKindId, EventKindSpec, EventKindRegistry, EventDomain, EventPayloadSchemaId, EventCardinality, EventOrdering, EventRetentionClass, EventCoalesceReducer, EventCoalesceHint}`。
+- `publisher::{ObservationBus, ObservationSubscription, SubscriptionSpec, SubscriptionStartFrom, SubscriptionBufferPolicy, SubscriptionAckMode, SubscriptionDeliveryGuarantee, EventFilter, StreamCursor, SnapshotProvider, EventDraft}`。
+- `subscriber::SubscriberToken`（`sink`/`events_stream`，基于线程与通道）。
+- `event_symbolic_view::{EventSymbolicView, EventSymbolicViewWindow, SymbolicEvent}`。
+
+### `diffuse-sequence`（已 `tested`）
+
+- `sequence_document`：`SequenceDocument`、`Shot`、`Track`、`Clip`、`Binding`、`ShotOverride`、`Cut`、`Marker`、`SequenceCache`、`SequenceRevision`、`SceneTargetReference`、`FrameRange`、`TimeBase`、`SmpteTimecode`、`SequenceValue`、`SequenceResolution`、`AspectRatio`、`MotionBlurSettings`、`ClipPayload`、`ClipEase`、`TrackKind`、`ShotStatus`、`SequenceCacheKind`、`SwiftDate`、`new_uuid`。
+- `clip_scheduler::{ClipScheduler, ScheduledClip, SequenceEvaluationOptions, SequenceFPSRemapMode}`。
+- `shot_evaluator::{ShotEvaluator, EvaluatedSequenceFrame, EvaluatedShot, EvaluatedCut}`、`override_resolver::{OverrideResolver, ResolvedOverride}`、`cache_validator::{CacheValidator, CacheValidationResult}`、`binding_validator::{BindingValidator, RenderValidationResult, BindingError}`。
+
+### `diffuse-capability`（已 `tested`）
+
+- `capability_contract::{CapabilityAccess, CapabilitySource, CapabilitySourceKind, CapabilityContract, CapabilityExposurePolicy, CapabilityExposureSnapshot, PluginCapabilityAuthority, ReleasePhase, new_uuid}`，以及 `CapabilityContract::tool_name()`。
+- `capsule_schema`：Swift 形状的 JSON Schema 构建器（`string/string_pattern/string_enum/number/integer/boolean/array/object/choice/empty_object`）包住 Cove 的 `JsonSchema`。
+- `capability_descriptor::{CapabilityDescriptor, CapabilityPreconditionSpec, PreconditionKind}`。
+- `capability_registry::{CapabilityRegistry, CapabilityRegistryIntegrityError}`、`capability_validator::{CapabilityValidator, CapabilityValidationResult, CapabilityValidationError}`。
+- `drafts::precondition_checker::{PreconditionCheckInput, PreconditionChecker, PreconditionViolation}`、`release::release_phase_gate::{ReleasePhaseGate, CapabilityDraftLimits}`、`release::sha256::{digest, capability_sha256_hex_digest, CapabilityDigest}`、`support::disposal::{Registration, DisposalScope}`、`support::swift_date::SwiftDate`。
+
+### `diffuse-script-api`（已 `tested`，新建）
+
+- `abi`：`HostApi`（函数表）、`Slice`、`Bytes`、`Transform3`(48/16)、`GroundState`、`CharacterStance`、`ABI_VERSION`。
+- `context::ScriptContext`（隐藏 `HostApi` 的安全封装，缺项保持 Swift 的 0/false 回退）。
+- `authoring`：`ScriptBehavior`、`ScriptAuthoring`、`ScriptDefinition`、`ScriptProperty`、`ScriptPropertyOption`、`ScriptPropertyValue`、`ScriptParameters`、`ScriptDefinitionBuilder`、`authoring::json::{JsonValue, JsonObject, parse, parse_object}`。
+- `export`：`diffuse_script_abi_version/create/on_start/on_pre_physics/on_update/on_destroy/destroy`、`CatalogEntry`、`catalog_bytes`、`diffuse_scripts!` 宏。
+
+### `diffuse-lsp`（已 `tested`）
+
+- `byte_stream::{LspMessageFramer, LspDecoder, LspNotification, content_length, MAXIMUM_HEADER_BYTES, MAXIMUM_BODY_BYTES}`。
+- `configuration::{LanguageServerConfiguration, WorkspaceFolder, ConnectHook, file_uri}`。
+- `lsp::transport::{LanguageServerTransport, SharedTransport, Writer}`、`lsp::connection::LspConnection`、`lsp::error::{LspClientError, LspFailure}`、`lsp::client::LspClient`（同步请求 + 每请求超时，读线程替代 Swift 的 actor）。
+
+### `diffuse-media`（已 `tested`）
+
+- `MediaUrl`（Foundation `URL` 的替代，`from_file_path/parse/is_file_url/path/last_path_component/path_extension/appending_path_component/deleting_last_path_component/standardized_file_url/resolving_symlinks_in_path`）——**其他需要 `URL` 的 crate 复用或镜像它，不要另写一套 shim**。
+- `MediaError`、`PCMBuffer`、`VideoFrame`、`MediaAsset`/`MediaAssetVideo`、`FileDecoder`、`GMStreamInfo`、`AudioFile`、`AudioReader`/`VideoReader`、`MediaComposition`/`CompositionClip`/`CompositionVideo`、`MediaExporter`/`ExportPlan`、`FFmpegTools`。
+- 原生桥：`crates/diffuse-media/native/`（`Decoder.c/.h`、`Audio.c`、`Video.c`、`CFFmpegBridge.h`），`build.rs` 从 `DIFFUSE_NATIVE_ROOT`（默认 `vendor/`）链接，缺失时报出尝试过的路径并提示 `cargo xtask native-bootstrap`。
+
+### `diffuse-exr`（已 `tested`）
+
+- `EXRReader`/`LayerInfo`/`EXRReaderError`、`EXRWriter`/`Layer`/`PixelType`/`EXRWriterError`、FFI 类型 `CoveEXRContext`/`CoveEXRLayerDesc`（24 字节、8 对齐，已断言）。
+- 原生桥：`crates/diffuse-exr/native/`（`openexr_bridge.cpp/.h`），C++17，`build.rs` 同上。
+
+### `diffuse-cinematic`（已 `tested`）
+
+- `aov_registry::{AovSpec, AovRegistry}`、`sampling_strategy::{SamplingStrategy, HaltonSampler, BlueNoiseSampler, SamplingStrategyPreset}`、`path_tracer::{PathTracer, PathTracerConfig, PathTracerState, Ray, CameraRay, SceneGeometry, HitResult}`、`simple_test_scene::SimpleTestScene`。
+- 随机源：Swift 的 `Float.random(in:)` 换成文件内 splitmix64（不引入新 crate），采样范围与估计量形状不变。
+
+### `diffuse-scene` Stage 1（破坏系统与提取层）
+
+- `physics::destruction::{Destructible, DestructibleAsset, DestructibleFragmentAsset, DestructibleConnectionAsset, DestructibleAssetResource, DestructionSettingsResource, DestructionCommand, DestructionCommandFrameResource, DestructionCause, DestructionEvent, DestructionFailureReason, DestructionFailureEvent, DestructionRecycleReason, DestructionRecycleEvent, DestructionEventFrameResource, DestructionSourceState, DestructionStateFrameResource, DestructibleFragment, DestructibleRetainedFragment}`
+- `physics::destruction_runtime::{advance_destruction_pre_physics, apply_destruction_contacts}`
+- `physics::physics_frame_state::{PhysicsStepClockResource, PhysicsFrameBodyCounts, PhysicsFrameSynchronization, PhysicsFrameStateResource, PhysicsStateHashFrameResource}`
+- `physics::physics_debug_frame::{PhysicsDebugBody, PhysicsDebugConstraint, PhysicsDebugDestructionConnection, PhysicsDebugFrameResource}`
+- `physics::replay::physics_command_tape::{PhysicsRecordedBodyCommand, PhysicsRecordedCharacterCommand, PhysicsRecordedVehicleCommand, PhysicsCommandFrame, PhysicsCommandTape, PhysicsCommandRecordingResource}`
+- `rendering::render_extraction::{RenderMeshComponent, RenderMaterialComponent, CameraComponent, LightType, LightComponent}`；`scene_bootstrap::{SceneNameComponent, SceneKindComponent, AssetReferenceComponent, SceneBootstrapDefaultsResource, preview_translation_matrix, preview_scale_matrix, preview_translation_scale_matrix}`
+
+**破坏系统的「不要整理」语义（逐条实测）**：
+- `accumulatedDamage` 是**饱和**的：`min(f32::MAX, a + b)`，绝不出 `inf`（64 次累加 `f32::MAX/2` 仍有限）。
+- 命令顺序 = `(entity.rawValue, 原始偏移)`；接触 = `(entity, otherEntity, subShapeID)`。
+- 碎片/连接列表**先排序再按预算截断**（截断稳定）。
+- `sourceState` 在断裂后的提前返回**之前**写回 `runtime.sources`，否则非法碎片化命令会丢掉已断连接 ID。
+- 休眠回收时钟在首次观察时启动，之后才计延迟。
+- **`DestructionCommand.init` 的 `max(0, damage)` 会把 NaN 变成 0**（实测 Swift `max(0 as Float, .nan) == 0`），所以 `is_finite(damage)` 守卫对构造器建出的命令是死代码，只在结构体被直接改写时才有意义——**不要当作死代码删除**。
+- **`LightComponent` 是第五个夹取顺序陷阱**：先 `outer = clamp(1...179)`，再 `inner = clamp(0...outer)`；顺序颠倒会在两者都越界时改变结果。
+
+### `diffuse-scene` 物理层（批次 B 完成部分）
+
+- `physics::backend::physics_backend_kind::{PhysicsBackendKind, Default}`：`Default` = `preferred()` = **`Natsel`**，不是首个枚举变体——Swift 唯一的隐式站点是 `PhysicsSettingsResource.init(backendKind: .preferred)`。**不要「修正」成 `None`。**
+- `physics::backend::physics_backend_capabilities::PhysicsBackendCapabilities`（`u32` option set，6 个标志 + `all()`）。
+- `physics::backend::physics_backend::PhysicsBackend`：`Send + Sync`，11 个必需方法 + 2 个默认实现（`raycast_all`/`sweep_shape_all`，`max_hits: usize`，为 0 时短路）。
+- `physics::backend::null_physics_backend::NullPhysicsBackend`：真实 null 行为，`capabilities() == .all()`。
+- `physics::backend::physics_backend_context::{PhysicsSyncEvent, PhysicsPrepareContext/Result, PhysicsStepContext, PhysicsBodyWriteback, PhysicsStepResult}`。**upsert 载荷用 `Box`**（Swift 的关联值出线存储，`BodyUpsert(Box::new(..))`）；**`PhysicsBodyWriteback` 不 derive `Default`**（伪造 `EntityID(0,0)` 会让写回静默作用于实体 0）。
+- `physics::physics_descriptors::*`、`physics::physics_settings::{PhysicsCapacitySettings, PhysicsSettingsResource}`、`physics::physics_events::*`、`queries::trigger_detection::*`、`queries::physics_query_types::*`、`queries::spatial_queries`（仅 `MeshColliderGeometry`/`MeshColliderBoundsResource`/`MeshColliderGeometryResource` 三个）。
+- `ComponentRegistry` ↔ `RuntimeWorld` 的循环：`RuntimeWorld` 按值持有 registry，schema 闭包以 `&RuntimeWorld` 作参数，不按值拥有。**优先用 `fn` 指针而非 `Box<dyn Fn>`**（Swift 侧是非捕获静态函数）；需要捕获时才用 `Box<dyn Fn + Send + Sync>` 加生命周期参数；**不要用 `Rc<RefCell<_>>` 绕借用检查**。
+
+### `diffuse-plugin`（已 `tested`，53 个测试）
+
+- `uuid::Uuid`——`new()` 生成 v4、大写、**36 字符 8-4-4-4-12**、本地校验；`parse`/`as_str`/`Display`/serde 字符串。刻意不委托给共享格式化器，凭据类 id 必须自身可校验。
+- `base64_data::Data`——Swift `Data` 的 `Codable` 拼写（Foundation base64），所有 RPC 字段都用它；`encode_base64`/`decode_base64`。
+- `contract::plugin_json::{PluginJSON, PluginJSON::Number}`——`PluginJSON` 是 `Eq`（清单要比较与哈希），`Number` 是 **`serde_json::Number` 而非 `f64`**，因为 `f64` 不是 `Eq`。
+- `swift_manifest_json::encode_sorted<T>`——紧凑 `.sortedKeys` + `diffuse_kernel::codable::format_double` 的数字文本；**唯一**复现 Swift 数字拼写的文件，测试断言 `{"large":1e+20,"tiny":1e-07,"whole":100}`。
+- `pattern`——25 个锚定模式改写成显式谓词（`lower_dash`/`lower_dot`/`lower_capability`/…），`glob_matches`，以及 fail-closed 的 `plugin_pattern::compile`（见 §10 的 G-隔离说明）。
+- `PluginError`——crate 内所有 Swift 错误枚举的并集；调用点按变体匹配，对应 Swift 的 `catch PluginManagerError.x`。
+
+**测试捕获的六个真实 bug（§5.4/§5.5 类，值得记录）**：`contributes` 需 `#[serde(transparent)]`（Swift 用 `singleValueContainer` 写成裸对象，否则每个清单都 `InvalidIdentifier`）；`PluginViewResult`/`PluginCommandResult` 必须拒绝顶层数组；`dependent_closure` 应为后序（先撤依赖方再撤提供方）；`enable` 回滚路径里 `MutexGuard` 临时值活进 `Err` 分支导致**真实死锁**；`pluginID`/`capabilityID` 是 Swift 合成键（`camelCase` 会把末尾 `ID` 小写化）；`pattern` 的两处测试期望写错而代码是对的。
+
+### `diffuse-assets`（36/39 `tested`，3 个待续）
+
+- `swift_json::{to_sorted_pretty, to_compact, to_value, SwiftJsonValue, SwiftJsonError}`——**整份文档写出用这个**：Swift `JSONEncoder` 的 `.prettyPrinted + .sortedKeys` 模拟（两空格缩进、`" : "`、空容器 `[\n\n  ]`、`\/` 转义、按 UTF-8 code unit 排序、`Float`/`Double` 各自的科学计数阈值）。单字段的标量文本用 `diffuse_kernel::codable`。
+- `asset_pipeline::{MeshAsset, MeshTopologySlice, MeshMaterial, MeshSubmesh, MeshTexture, MeshNode, MeshSkin, MeshAnimation*, BuiltinMesh, OBJLoader, OBJLoaderError, MeshNormalTools}`；`MeshAsset::append_vertex(9 参)` + `append_default_vertex`。
+- `geometry::polygon_mesh::{PolygonMesh, PolygonFace, PolygonMeshEdge, PolygonEdge, PolygonEdgeUse, GeometryError, GeometryLimits, geometry_finite, geometry_normal, geometry_unit, GEOMETRY_UNIT_FALLBACK}`；`PolygonMesh::extrude_face` / `extrude_faces`（Swift 两个 `extrude` 重载）。
+- `geometry::geometry_document::{GeometryDocument, GeometrySource, GeometryMaterial}`（`evaluate`/`save`/`load`）、`geometry::geometry_modifier::{GeometryModifier, GeometryModifierEntry, GeometryAxis}`、`geometry::geometry_baker::{GeometryEvaluation, GeometryShading}`。
+- `asset_registry::{AssetRegistry, AssetRegistryEntry, RegisteredMeshAsset, ImportableAssetKind, AssetRegistryError}`、`mesh::mesh_asset_catalog::MeshAssetCatalog`、`project_resource_walker::{files, ProjectResourceWalkerError}`、`import::gltf_importer::{GLTFImporter, GLTFImporterError, PrimitiveMeshTopology, LoadedGLTF}`、`import::image_asset_decoder::{ImageAssetDecoder, DecodedTextureAsset, ImageAssetDecoderError}`、`import::mesh_texture_resolver::{MeshTextureResolver, ResolvedMeshTexture, MeshTextureResolverError}`。
+- 未完成：`Mesh/DestructibleAssetBaker.swift`（依赖 scene 锚点）、`AssetPipeline.swift` 里 4 行的 `AssetPipeline` 结构体本身。
+
+### `diffuse-color` / `diffuse-card-battle` / `diffuse-documents`（已 `tested`）
+
+- `diffuse_color::{aces_config, ocio_bridge, view_transform}`，19 个测试。
+- `diffuse_card_battle::{core::*, rules::*, support::*}`，7 个测试。
+- `diffuse_documents::{trash::Trash, workspace::Workspace}`，3 个测试。
+
+### `diffuse-scene`（锚点已开始，完整 crate 待续）
+
+- **「不要整理」的语义（逐条保留，勿合并/简化）**：
+  - `diffuse_scene::physics::vehicles::vehicle::Vehicle` 的 `wheeled()`/`tracked()`/`motorcycle()` 三个预设各自的俯仰/滚转限制与引擎默认值不同（`.pi`/500 N·m、`.pi/3`/1500 N·m、`.pi/3`/150 N·m @ 10k RPM、6 挡、`clutch_strength: 2`），不得合并成「一个合理默认」。
+  - `VehicleWheelConfiguration` 的两步夹取有顺序依赖：先按**未夹取**的上界夹 `suspension_min_length`，再把 `suspension_max_length` 抬到已夹取的下界；顺序颠倒会在两者都越界时改变结果。只保留 `new()` 构造，结构体字面量会绕过 Swift 的夹取。
+  - `VehicleDifferentialConfiguration.limited_slip_ratio` 的下限是 **1.0001**，不是 1.0。
+  - `TrackConfiguration.wheels` 是 `[i64; 3]`，缺位补 `-1`，不是 `Vec`。
+  - `LocalTransform::rotation()` 把每个基列除以 `sx > 1e-6 ? sx : 1`：零长列**被除以 1**而不是被归一化，用 `.normalize()` 会在零缩放时产生 NaN。
+  - `Cloth()` 的 `bend_type` 默认 `.distance`，而 `SoftBodyMesh()` 默认 `.dihedral`：兄弟类型默认值不同。
+
+- `entity_id::{EntityID, RuntimeComponent}`：`EntityID { index: u32, generation: u32 }`，`new/from_raw_value/raw_value`，`Display` 与 Swift 一致；`RuntimeComponent: Clone + PartialEq + Send + Sync + 'static`（`'static` 代替 Swift 的 `ObjectIdentifier(type)` 作为组件身份）。
+- 其余锚点（Scene 根类型、`WorldTransform`、`RigidBody`、`AudioSource`/`AudioListener`、组件注册表、序列化器）由 `diffuse-scene` 锚点批次补齐后追加到本节。
 - （`diffuse-scene` 锚点批次后填写：Scene/World/Entity/Component 根类型。）
 - （`diffuse-editor-core` 锚点批次后填写：Store、编辑器状态、面板注册类型。）
 
@@ -300,9 +442,86 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 | 日期 | 批次 | crate | 文件 | Swift 行 | 结果 |
 |---|---|---|---|---:|---|
+| 2026-10-31 | 阶段 0 | workspace + 34 crate + xtask | 1337 | 208269 | 脚手架生成，`cargo check --workspace --all-targets` 通过；G1 的 `xtask/src/support` 已从 Cove `703fb10c` 恢复 |
+| 2026-10-31 | 批次 1 | diffuse-math | 19 | 1384 | `tested`，27 个测试；SIMD/矩阵/四元数布局断言全绿 |
+| 2026-10-31 | 批次 2 | diffuse-kernel | 5 | 334 | `tested`，clippy 干净 |
+| 2026-10-31 | 批次 3 | diffuse-observation | 8 | 1619 | `tested`，12 个测试 |
+| 2026-10-31 | 批次 4 | diffuse-sequence | 8 | 1485 | `tested`，10 个测试；`Track` 的 `solo`/`lock` 按 Swift `CodingKeys` 不落盘 |
+| 2026-10-31 | 批次 5 | diffuse-capability | 13 | 2405 | `tested`，36 个测试；G6 未落地，经 `cove_devtools::agent` 过渡 |
+| 2026-10-31 | 批次 6 | diffuse-script-api（新建） | 4 | — | `tested`，10 个测试；D1 的 C ABI 与 `diffuse_scripts!` 宏 |
+| 2026-10-31 | 批次 7 | diffuse-lsp | 6 | 550 | `tested`；同步请求 + 超时，读线程替代 actor |
+| 2026-10-31 | 批次 8 | diffuse-media | 7 | 365 | `tested`，6 个测试；CFFmpegBridge 迁入 `native/`，真实 FFmpeg 导出测试通过 |
+| 2026-10-31 | 批次 9 | diffuse-exr | 3 | 283 | `tested`，6 个测试；COpenEXRBridge 迁入 `native/`，真实往返测试通过 |
+| 2026-10-31 | 批次 10 | diffuse-cinematic | 5 | 751 | `tested`，14 个测试；`Float.random` 换成 splitmix64 |
+| 2026-10-31 | 批次 11 | diffuse-color / diffuse-card-battle / diffuse-documents | 19 | 1710 | `tested`，19+7+3 个测试 |
+| 2026-10-31 | 批次 12 | capability 切换 `cove-agent`（G6 关闭） | — | — | `diffuse-capability` 36 个测试仍全过；`cargo check --workspace --all-targets` 通过 |
+| 2026-10-31 | 批次 13 | diffuse-kernel（补 `codable`） | — | — | Swift 兼容浮点文本：`format_double`/`format_float`/`serialize_*`；f32 与 f64 的上界不同，已按 Swift 6.4.1 实测断言 |
+| 2026-10-31 | 批次 14 | diffuse-math（补 SIMD serde） | — | — | SIMD/矩阵/四元数按 Swift 的 lane 数组编码，填充 lane 不落盘；27+3 个测试 |
+| 2026-10-31 | 批次 15 | diffuse-audio | 7 | 1114 | `tested`，15 个测试；`AudioBackend` 全实现，SDL3 设备 API 缺（G7），`AudioScene` 适配待 `SceneRuntime` |
+| 2026-10-31 | 批次 16 | 状态审计 + Swift 基线 | — | — | 按内容审计把 5 个「部分翻译」与 11 个脚手架占位从 `written` 退回 `pending`；采集 `.migration/baseline/formats/` 三份 Swift 真实输出，`diffuse-kernel` 逐字节复现 |
+| 2026-10-31 | 批次 17 | Swift 基线采集（`diffuse-math`） | — | — | `./cove test Engine --filter EngineMathTests` 27/27 通过并归档 `.migration/baseline/swift-tests.json`；与 Rust 端 27 个用例逐名一致，见 `parity.md` |
+| 2026-10-31 | 批次 18 | Swift 基线采集（其余已完成 crate） | — | — | ObservationBus 12、Sequence 10、Capability 36、Cinematic 14、Color 7、Audio 16、CardBattle 18 全部通过并归档；与 Rust 端对照见 `.migration/baseline/parity.md` |
+| 2026-10-31 | 批次 19 | diffuse-audio 收尾 | 7 | 1114 | `tested`，15 个测试，clippy 干净；`neg_cmp_op_on_partial_ord` 用带理由的局部允许保留 NaN 语义 |
+| 2026-10-31 | 批次 20 | diffuse-assets | 36 | 5707 | `tested`，92 个测试（88+4），clippy 干净；`swift_json` 逐字节复现 Swift pretty 布局；按 §5.7 删除 5 处 `#[allow(dead_code)]` 及其真正未使用的字段 |
+| 2026-10-31 | 批次 21 | 脚手架占位清理 + 状态复核 | — | — | 1168 个 1 字节占位文件归零；按内容审计确认 `diffuse-scene` 实为 15 个真实文件（44 个测试），`diffuse-assets` 36/39 |
+| 2026-10-31 | 批次 22 | diffuse-render（GPU 布局与设置） | 3 | — | `render_uniforms`（布局断言：Skybox 112/Ssao 160/Ssr 160/Stylized 64/Post 16，均 16 对齐）、`render_settings`、`native_mesh_vertex_layout`（复用 `cove_graphics::rhi`，不重复定义）；`diffuse-render` 3 个文件 `written`，3 个测试 |
+| 2026-10-31 | 批次 23 | diffuse-scene 批次 A-remainder + B（队友） | 13 | — | `diffuse-scene` 105 个测试；`PhysicsQueryOptions` 去掉 `Copy`（内嵌 `BTreeSet`）；`RuntimeWorld` 零后端依赖已核实 |
+| 2026-10-31 | 批次 24 | diffuse-scene 批次 B（队友） | 11 | — | `diffuse-scene` 154 个测试；`PhysicsBackendKind::default()` = `Natsel`、`PhysicsBodyWriteback` 无 `Default`、upsert 载荷 `Box` 化、`PhysicsBackend: Send + Sync` 均已记录 §8 |
+| 2026-10-31 | 批次 25 | diffuse-scene `ComponentRegistry` + `RuntimeWorld`（队友） | 2 | — | `diffuse-scene` 186 个测试；循环依赖用 `fn` 指针解决；新增私有 `AnyComponent`（`dyn Any` 无法 clone）与 `ComponentTypeKey::Document(u64)`；`diffuse-audio` 随即接上真实 `RuntimeWorld` |
+| 2026-10-31 | 批次 26 | diffuse-audio 接入 `RuntimeWorld` | 1 | — | `impl AudioScene for RuntimeWorld` 完成，3 个集成测试走真实 world（含 25/50 距离衰减到 0.5）；18 个测试，clippy 干净 |
+| 2026-10-31 | 批次 27 | UUID 缺陷修复（跨 6 crate） | — | — | node 用 `{node:012X}`；`diffuse-kernel::codable::new_uuid` 为规范实现，其余 5 处本地副本同步修正并各带形状断言 |
+| 2026-10-31 | 批次 28 | diffuse-plugin 生产代码（队友） | 51 | 5945 | 生产文件全部落地，clippy 干净、无孤儿、无 `dead_code`；测试文件进行中 |
+| 2026-10-31 | 批次 29 | diffuse-scene Stage 1（破坏系统+提取层，队友） | 7 | 2105 | `diffuse-scene` 230 个测试、43 个实现文件；`max(0, NaN) == 0` 实测确认 `is_finite(damage)` 守卫非死代码；`LightComponent` 为第五个夹取顺序陷阱 |
+| 2026-10-31 | 批次 30 | diffuse-plugin 测试（队友） | 9 | 1200 | `tested`，53 个测试全过（44 个套件用例与 Swift 逐一对齐 + 9 个内部单测），clippy 干净；`packaged_broker`、`process_output`、`processes` 三个环境依赖用例在本机真实执行（宿主二进制与 `/usr/bin/{head,printf}` 均存在）；`contributes` 需 `#[serde(transparent)]`、`pluginID`/`capabilityID` 为 Swift 合成键，均由测试捕获 |
+| 2026-10-31 | 批次 31 | diffuse-plugin 完成 + math API 补齐 | — | — | `diffuse-plugin` 53 个测试（44 与 Swift 逐一对应 + 9 内部单测）；补 `Float3x3::new_with_columns`（`Float4x4` 早有而 `Float3x3` 缺，属我的 API 不对称） |
+| 2026-10-31 | 批次 32 | Natsel 上游修复（G8）+ `make_backend()` | 7 | 1244 | Natsel 侧新增 `unsafe impl Send for World`（带 SAFETY 论证，不实现 `Sync`）与 `CharacterVirtual::from_raw_world`，Natsel 测试 530→532；`diffuse-scene` 的 `make_backend()` 两臂真实落地，264 个测试 |
+| 2026-10-31 | 批次 33 | diffuse-scene `scheduling/` 报告与帧上下文 | 2 | 196 | `schedule_report`、`schedule_frame_context` 完成；`RuntimeSystemPhase` 补 `Ord`（声明序=执行序）；272 个测试 |
+| 2026-10-31 | 批次 34 | `scheduling/physics_state_hash` + `physics_query_scene` | 2 | 302 | 确定性哈希（种子/乘数/小端字节序必须逐字节对齐 Swift，改动即作废所有基线）；`PhysicsQueryScene` 缓存 + `resolved_collider_shape` 回退；286 个测试 |
+| 2026-10-31 | 批次 35 | `SceneSerializer` + `Prefab` | 2 | 335 | 场景文档格式 v3；逐字节对齐 Swift `JSONSerialization(.prettyPrinted,.sortedKeys)`（两空格、`" : "`、空容器空行、UTF-8 code unit 排序）；实体交叉引用写成文档索引使 prefab 可迁移；299 个测试 |
+| 2026-10-31 | 批次 36 | `scripting.rs`（`RuntimeScriptDriver` + 阶段上下文） | 1 | 263 | 用 `&mut` 借用对替代 Swift 的两个裸指针（无需 `unsafe`）；补 `VehicleCommandFrameResource`；306 个测试 |
+| 2026-10-31 | 批次 37 | `scheduling/physics_collection` | 1 | 236 | 描述符收集 + 逐帧 sync 事件差分；约束在其任一刚体变化时必须重发（描述符不含刚体变换）；软体双拓扑冲突转发 `Invalid` 而非静默择一；313 个测试 |
+| 2026-10-31 | 批次 38 | `physics_collection` 收尾 + `WorldSchedule` 前置类型 | 2 | 96 | 补 `JointPalette`/`JointPaletteMap`（`JointPalette::identity` 为单元素）、`RenderDeformableMesh`、`PhysicsCommandReplayControlResource`；317 个测试 |
+| 2026-10-31 | 批次 39 | `scheduling/ragdoll_bridge` + `cove_slerp` 测试 | 1 | 156 | 方向双向桥接；`blend_transform_matrices` 在 0/1 端点**原样返回**源矩阵（不混合）；非模拟骨骼转 kinematic 仍推动动态刚体；palette 补 identity 到最大索引；`cove_slerp` 已存在（f64 三角对齐 Swift），补 5 条断言；324 个测试 |
+| 2026-10-31 | 批次 40 | `schedule_debug_frame` + 空间索引类型 | 2 | 188 | 补 `SpatialIndexEntry`/`SpatialIndexResource`（`SpatialQueries.swift` 的真实缺口）；调试帧按实体升序、连接按 `(id, a, b)` 排序，碎片位置取**首次出现**；329 个测试 |
+| 2026-10-31 | 批次 41 | 空间索引构建 | — | 103 | `build_spatial_index_resource`：球/胶囊用「半径 × 最大基向量长度」而非变换 AABB 角点（避免旋转椭球高估）；无几何的 mesh 回退半单位盒；记录 `world.revision()`；发现并记录 `WorldTransform` 需传播的语义；333 个测试 |
+| 2026-10-31 | 批次 42 | `scheduling/schedule_phases` + 渲染骨架类型 | 1 | 574 | 十个阶段函数；`fixedPhysicsStep` 在 `prepare` 失败时拒绝推进；sync 缓存仅在成功后提交；`physicsWriteback` 先传播再刷新缓存；补 `RenderScene`/`RenderCamera`/`RenderInstance`/`ExtractedRenderSceneResource`；334 个测试 |
+| 2026-10-31 | 批次 43 | `world_schedule` + `render_scene_extraction` | 2 | 523 | 十阶段循环；命令帧在 revision bump 后清空（postPhysicsScripts 入队的命令必须活到下一帧）；形变网格实例变换强制 identity（后端已用世界空间顶点）；相机选首个 `is_active`，退化为首个相机；347 个测试 |
+| 2026-10-31 | 批次 44 | **`SceneRuntime` 落地**（关键里程碑） | 2 | 855 | `SceneRuntime` + `SceneRuntimeSnapshot`/`InputFrameResource` + `PhysicsReplayReport`/`PhysicsReplayMismatch`；`tick` 先写 `InputFrameResource` 再跑调度；358 个测试。**`diffuse-intent`/`diffuse-script`/`diffuse-render` 的下游阻塞解除** |
+| 2026-10-31 | 批次 45 | `diffuse-intent` 起步：`Edit` + `IntentIR` | 2 | 267 | `IntentArgumentValue` 的 `stable_id` 蛇形线上拼写经 Swift 实测确认（`{"type":"stable_id","value":42}`）；`WorldRevisionSnapshot` 空值序列化为 `{}`；`diffuse-intent` 补 `serde`/`serde_json`（workspace 依赖，非新增第三方）；11 个测试 |
+| 2026-10-31 | 批次 46 | `diffuse-intent` 事务层：`TransactionIR` + `SceneStateAssertion` | 4 | 772 | `SceneStateAssertion` 38 个变体完整；`SceneMutation`/`TransactionOperation` **不实现 serde**（承载 `LocalTransform`/`ComponentValue` 等运行时类型，与 Swift 非 `Codable` 一致）；`SequenceMutation::ReplaceDocument` 装箱以消除变体尺寸差；27 个测试 |
+| 2026-10-31 | 批次 47 | `diffuse-intent` 确认流程类型 | 1 | 156 | `ConfirmationQuestion`/`Option`/`Batch`/`Answer`/`Resolution` 全部落地；`choose_one`/`approve_destructive` 蛇形原值经 serde 显式重命名；`CapabilityInvocationPlannerError` 缺 `capabilityDenied` 变体（依赖 `CapabilityValidationFailure`，属 planner 文件）；`diffuse-intent` 补 `thiserror`；33 个测试。**Cove 阻塞已解除** |
+| 2026-10-31 | 批次 48 | `WorldEvent` + `component_changes` 投影 | 2 | 167 | `WorldPropertyValue` 手写编码：`vec3`/`vec4` 写 `x/y/z/w` **不写 `value`**，标量只写 `value`（Swift 手写 `encode(to:)` 的不对称）；组件文档投影到语义事件，`rendering`/`collider`/`script` 有专属字段名映射；46 个测试 |
+| 2026-10-31 | 批次 49 | `UndoStack` + `IntentTransactionBuilder` | 2 | 255 | 撤销栈双栈各自独立限容、push 清空 redo、空栈 undo 不保存 current；builder 的 verb 表是完整契约（未知 verb 报错而非猜测），纯空白字符串参数视为缺失，目标解析优先级 `entity_id` > `targetObjectIDs` > 选中项；65 个测试 |
+| 2026-10-31 | 批次 50 | `AmbiguityScorer` | 1 | 300 | 权重是行为不是可调参数：AI 置信度不足按 0.35×shortfall、人类按 0.25×shortfall（非线性，随低于阈值程度缩放）；每个缺失必需参数 +0.20；破坏性 verb +0.15；仅 AI 意图要求 evidence（+0.10）；总分 clamp 到 1.0；78 个测试 |
+| 2026-10-31 | 批次 51 | `CapabilityInputDeclaration` | 1 | 442 | **Swift 的 property wrapper + `Mirror` 反射在 Rust 无对应机制**，故改为显式 `DeclaredField` 列表构建 schema，保留闭世界语义（`additional_properties: false`，未声明字段 → `JsonSchema::any` 使注册 fail-closed）；`SceneEntityRef` 解析期即拒绝非法引用；向量编码为裸数组且元素数严格；89 个测试 |
+| 2026-10-31 | — | 并行：`xtask` 交由 `translate-xtask` 队友 | — | — | `xtask` 无 Diffuse 依赖、14,657 行，适合并行；已交接 `support/` 的 80 个 dead-code 错误须由正式翻译消除而非 `allow` |
+| 2026-10-31 | — | **Cove 侧阻塞（非本项目）** | — | — | `cargo check --workspace` 因 `../Cove` 未提交改动失败：`Compose/rust/primitives/overlays/toast/notification_host.rs:94` 的 `Rc<dyn Fn()>` 不满足 `Send`。我未编辑 Cove；已确认 Diffuse 自身 17 个 crate `--all-targets` exit 0 |
 
 ## 10. 已知问题与需要用户确认的事项
 
-- G4（`cove-http`）与 G6（`cove-agent`）由 Cove 实现；落地前依赖它们的 crate 停在编译门禁前。
+- G6（`cove-agent`）已由 Cove 落地（`../Cove/Agent`），`diffuse-capability` 已切换；G4（`cove-http`，`../Cove/Http`）也已落地，workspace 已声明依赖，HTTP 调用点可以过编译门禁。
 - 感知（PerceptionRuntime）在 Swift 版中只有 Apple Vision 实现，其他平台没有 worker；按 2.3 保留并报告，不伪造实现。
+- **Swift `JSONEncoder` 的键序（实测 Swift 6.4.1，≥3 键 + 独立进程）**：
+  - 带 `.sortedKeys`：**总是按字母序**，跨进程稳定，与 `CodingKeys` 的声明顺序无关。5 次独立进程运行输出完全一致。
+  - 不带 `.sortedKeys`：**每进程随机**。5 次独立运行得到 5 种不同顺序；且**显式 `CodingKeys` 与合成 `CodingKeys` 一样被随机化**——声明 `CodingKeys` 完全不能稳定顺序。
+  - 结论：字节一致**只**对 `.sortedKeys` 写出器有定义；默认格式化的写出器**没有任何稳定字节目标**（既不是声明顺序也不是字母序），不要尝试复现，也不要假设任何顺序。所有落盘格式测试必须显式声明 `.sortedKeys`。
+  - **记录两次误判**（同一个陷阱，两个方向）：先有人用「`maxBodies` 恰好字母序在前」推出「声明顺序」；我随后用 2 键结构验证并「证伪」为「显式 `CodingKeys` 用声明顺序」——2 键只有 2 种排列，单进程内种子稳定，于是两种解释都能自洽。**不要用 <3 键或单进程的样例推断序列化规则。**
+- 无 macOS 之外的平台上无法执行的分支（例如 `diffuse-documents` 的非 macOS 归档路径）按 §2.3 保留完整 `#[cfg]` 实现；只在本机可执行的分支上跑过测试，其余需在对应平台复核。
+- **阶段 0 脚手架的占位入口**：下列文件目前只有可编译的最小 `fn main() {}`，其 Swift 源仍在清单里是 `pending`，翻译时必须整体替换，不能保留空体：`crates/diffuse-editor/src/main.rs`（`Editor/Sources/EditorApp/main.swift`）、`crates/diffuse-player/src/main.rs`（`CovePlayer/main.swift`）、`crates/diffuse-export/src/main.rs`（`CoveProjectExport/main.swift`）、`crates/diffuse-plugin-host/src/main.rs`、`crates/diffuse-mcp/src/main.rs`、`crates/diffuse-render-validation/src/bin/native_rhi_pass_probe.rs`、`crates/diffuse-editor-core/src/bin/language_server_fixture.rs`，以及三个 bench 入口（`diffuse-scene/benches/{scene_runtime,physics_runtime}.rs`、`diffuse-render-validation/benches/render_backend.rs`）。
+- **Swift `JSONEncoder` 的浮点文本格式与 serde_json 不同（已实测 Swift 6.4.1）**：`100.0` 写 `100`、`1e20` 写 `1e+20`、`1e-7` 写 `1e-07`、`-0.0` 写 `-0`；serde_json 分别写 `100.0`、`1e20`、`1e-7`、`-0.0`。因此 `#[derive(Serialize)]` 的浮点**不能**与 Swift Codable 逐字节一致。凡是落盘格式含浮点（场景、组件注册表、序列、插件清单）都必须走 Swift 兼容的格式化器，并在 §5.4 的黄金文件往返测试里逐字节校验。
+  - 科学计数法的上界**按宽度不同**：`Double` 在十进制指数 `>= 16` 转科学计数（`1e15`→`1000000000000000`，`1e16`→`1e+16`）；`Float` 在 `>= 8` 就转（`1e7`→`10000000`，`1e8`→`1e+08`）。两者下界相同：`1e-4`→`0.0001`，`1e-5`→`1e-05`。
+  - 已落地：`diffuse_kernel::codable::{format_double, format_float, serialize_double, serialize_float}`（标量文本）；`diffuse_assets::swift_json::{to_sorted_pretty, to_compact}`（整份文档的 pretty/紧凑写出，含 Swift 的空数组 `[\n\n  ]` 布局、`\/` 转义与按 UTF-8 code unit 排序）。整份文档落盘用后者，单字段走前者。
+- **「部分翻译」的行必须留在 `pending`**：`RuntimeWorld.swift`、`RenderScene.swift`、`Registry.swift`、`Inspection.swift`、`AssetPipeline.swift` 目前只落了「闭包前缀」（前缀里不引用 `RuntimeWorld` 的那部分类型）。按 §5.7，这种文件不能标 `written`；它们保持 `pending` 并在 `Docs/rust-migration-files.json` 的 `notes` 里写明已完成了一半。判断一个文件是否真的完成，用内容审计而不是看行数：脚手架占位的 `fn main() {}`、只有 `mod x;` 声明的入口、以及只含声明的前缀文件都不算完成。
+- **`cargo clippy --workspace --all-targets -- -D warnings` 目前在 `xtask/src/support/` 报 80 个 dead-code 类错误**。这是预期的中间态：`xtask/src/support/` 是 G1 从 Cove `703fb10c:Tools/Support/rust/` 原样恢复的代码，而它的调用方（`xtask` 本身的 133 个文件）还没翻译，所以这些函数暂时没有使用者。批次 `xtask` 完成后这些错误自然消失。**不许**用 `#[allow(dead_code)]` 掩盖（§5.7）——正确处理是翻译 `xtask` 的实现，让这些函数被真正调用。
+- **`RuntimeWorld` 不依赖物理后端**（已用 grep 核实）：`RuntimeWorld.swift` 里没有任何 `Natsel`、`makeBackend` 或 `PhysicsBackend`（trait）引用；`makeBackend()` 只在 `Scheduling/PhysicsCollection.swift`、`Scheduling/WorldSchedule.swift` 和它自己的定义处出现。`RuntimeWorld` 只把 `PhysicsSettingsResource.backend_kind` 当普通字段读，所以 `PhysicsBackendKind` 只需要那 16 行的数据枚举（`none`/`natsel` + `preferred`）。**结论：`RuntimeWorld` 与 `SceneRuntime` 可以先于 1,244 行的 Natsel 适配器落地**，四个下游 crate（audio/intent/render/render-validation）的解锁不必等后端。若某批次为 `make_backend()` 的 `natsel` 分支临时返回 `Null`，那是一次行为改变，必须在本节点名。
+- **§5.3 的布局断言只加在真正跨 GPU 边界的类型上**。`Vec` 承载的数据结构不要加 `size_of`/`align_of` 断言——尺寸对它们没有意义。需要断言的是被逐字节上传的类型：uniform 块、顶点流、粒子 GPU 计划。`diffuse-render::core::frame::render_uniforms` 已按此加断言（实测 Swift：`SkyboxUniforms` = 112 字节、`SsaoUniforms` = 160、`SsrUniforms` = 160、`StylizedCharacterUniforms` = 64、`PostFrameUniforms` = 16，均 16 对齐）。我第一版把 `SkyboxUniforms` 猜成 128 字节，被编译期断言拦下——这正是断言存在的意义：把错误猜测变成编译错误，而不是渲染时的静默错位。
+- **`inventory.py --check` 按字面量 grep `todo!`/`unimplemented!`，因此连注释里提到也会被判违规**。这是刻意保持「笨」的检查器：任何试图区分「散文里提到」与「真的用了」的逻辑都可被绕过。**不要在注释里写 `todo!()`**，解释为什么没写桩时用「未完成的桩体」这类措辞。已有一次真实误报（`physics_backend_kind.rs` 的文档注释）。
+- **中间态的 workspace 红是正常的，但不要当成已完成**：一个批次写到一半时（例如 `components/core/registry.rs` 已定义 `ComponentRegistry`、却引用了尚未存在的 `RuntimeWorld`），`cargo check --workspace` 会红。这不是缺陷，也不允许用临时桩让它变绿。判断标准始终是「最后一次报告的四个门禁是否全部通过」，并且报告的那次运行必须晚于最后一次编辑。
+- **`SceneRuntime` 的顺序修正**：Swift 的 `SceneRuntime` 结构体持有 `RuntimeWorldSchedule` 字段（`schedule` 在 10+ 处被调用），而 `RuntimeWorldSchedule` 又拉入整个 `scheduling/` 树并调用 `make_backend()`。所以实际顺序是 `scheduling/` → `SceneRuntime`，不是反过来。**不要写一个省掉 `schedule` 字段的「薄 `SceneRuntime`」**——那偏离 Swift 的结构形状；需要 `RuntimeWorld` 级查询的下游 crate（如 `diffuse-audio`）直接适配 `RuntimeWorld` 即可，已经这么做并通过 3 个集成测试。
+- **Natsel 适配器（1,244 行，8 个文件）在 `scheduling/` 之前**：`make_backend()` 的 `.natsel` 分支必须有真实实现，不允许静默回退到 `Null`。这 8 个文件只 import `Foundation`/`SIMDCompat`，不依赖 `SceneRuntime`，所以可以提前落地。
+- **`diffuse-plugin` 对插件自带语法模式的校验是 fail-closed 的**：`cove.language/v1` 的 `grammar.rules[].pattern` 与 `outline.rules[].pattern` 由 `crates/diffuse-plugin/src/pattern.rs` 的 `plugin_pattern` 匹配。支持：字面量、`.`、转义字面量、字符类（含区间与取反）、捕获组与 `(?:`、分支、`*`/`+`/`?`/`{n}`/`{n,}`/`{n,m}`（含惰性与占有后缀）、`^`/`$`。**超出该子集的构造在声明期被拒绝**（`NSRegularExpression` 本会接受），失败方向永远是「拒绝插件声明」，绝不会「接受非法插件」；只影响插件自带的语法模式，不影响用户数据或落盘状态。捕获组计数按 ICU 规则：仅对 `(` 且其后不是 `?` 的组递增，每个 `(` 压栈、`)` 出栈，歧义构造直接报错而不是猜测，因此不会少计。
+- **UUID 生成曾有一个 34 字符的缺陷，已在 `diffuse-kernel::codable::new_uuid` 统一修正**。原实现把 node 写成两个字段 `{node_a:04X}{node_b:06X}`，当掩码后的 node 值较小时 `{node_b:06X}` 不足 6 位，导致长度变成 34 而不是 Swift `UUID().uuidString` 的 **36**（8-4-4-4-12），`Uuid::parse` 会正确拒绝。该实现被**复制到了 5 个 crate**（capability/sequence/observation/documents/media），所以缺陷一起扩散。现在 `diffuse-kernel::codable::new_uuid` 是规范实现（`{node:012X}`），每个 crate 都带一条断言长度 36 与分组 `[8,4,4,4,12]` 的测试。**教训：这类「小工具函数」也必须有测试，否则复制时会连同缺陷一起传播。**
+- **G8（Natsel）：已在上游修好**（用户授权修改 Natsel）。`CharacterVirtual<'w>` 原本持有 `&'w mut World`，无法被同样持有 `World` 的对象持久存储；Swift 的 `characters: [EntityID: CharacterRecord]` 正是这种形状。Natsel 侧新增两处纯增量改动（`cargo test` 530 → 532，行为不变）：`unsafe impl Send for World {}`（`src/simulation/world_runtime.rs`，带完整 `// SAFETY:` 论证，且刻意**不**实现 `Sync`），以及 `CharacterVirtual::from_raw_world(world: *mut World, def)` + `world_mut()`（`src/character/character_virtual.rs`，文档写明调用方三项义务）。Diffuse 因此从「两处 `unsafe` 块」降为「一处可审计的 `unsafe` 调用」。
+- **`RuntimeWorld::local_transform` 对活着的实体永不返回 `None`**：缺失的 `LocalTransform` 组件会被读成 `LocalTransform::IDENTITY`（Swift 同名方法的行为），只有实体不存在时才返回 `None`。因此「没有 transform 的实体会被物理收集跳过」是错的——判据只能是「既无 `RigidBody` 也无 `Collider`」。这个语义容易误判，写测试时尤其当心。
+- **`WorldTransform` 只有传播后才反映 `LocalTransform`**：`RuntimeWorld::world_transform` 对活着的实体返回存储的 `WorldTransform`（缺失则为 `IDENTITY`），它**不会**自动从 `LocalTransform` 推导。任何读取世界空间的代码（空间索引、调试帧、物理快照）都必须先 `propagate_transforms`，调度器在 `hierarchyPropagate` 和写回后各做一次，测试也必须显式调用。这个坑会静默给出 identity 变换，不报错。
 - Cove 侧问题见 [.migration/cove-gaps.md](.migration/cove-gaps.md)。
