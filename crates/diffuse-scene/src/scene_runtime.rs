@@ -8,6 +8,11 @@
 //! scripts can read this frame's input, then runs the schedule.
 
 use crate::entity_id::{EntityID, RuntimeComponent};
+use crate::particles::particle_scalability::ParticleScalabilityStateResource;
+use crate::particles::particle_simulation_event_apply_report::ParticleSimulationEventApplyReport;
+use crate::particles::particle_stats::ParticleFrameStatsResource;
+use crate::physics::backend::physics_backend::PhysicsBackend;
+use crate::physics::backend::physics_query_scene::PhysicsQueryCacheStats;
 use crate::physics::character_controller::CharacterStateFrameResource;
 use crate::physics::character_controller::{CharacterCommand, CharacterCommandFrameResource};
 use crate::physics::destruction::{
@@ -19,7 +24,15 @@ use crate::physics::physics_frame_state::{
     PhysicsFrameStateResource, PhysicsStateHashFrameResource, PhysicsStepClockResource,
 };
 use crate::physics::physics_settings::PhysicsSettingsResource;
-use crate::physics::queries::spatial_queries::SpatialIndexResource;
+use crate::physics::queries::physics_query_types::{
+    PhysicsHit, PhysicsOverlapAABBQuery, PhysicsOverlapHit, PhysicsOverlapShapeQuery,
+    PhysicsQueryFilter, PhysicsQueryOptions, PhysicsQueryResultMode, PhysicsRaycastHit,
+    PhysicsRaycastQuery, PhysicsSweepAABBQuery, PhysicsSweepHit, PhysicsSweepShapeQuery,
+};
+use crate::physics::queries::spatial_queries::{
+    SceneOverlapHit, SceneOverlapQuery, SceneRaycastHit, SceneRaycastQuery, SceneSweepHit,
+    SceneSweepQuery, SpatialIndexResource, SpatialQueryScratch, SpatialQueryStats,
+};
 use crate::physics::ragdoll::RagdollStateFrameResource;
 use crate::physics::replay::physics_command_tape::{
     PhysicsCommandFrame, PhysicsCommandRecordingResource, PhysicsCommandTape,
@@ -37,6 +50,7 @@ use crate::runtime_world::{LocalTransform, RuntimeWorld, RuntimeWorldSummary};
 use crate::scheduling::schedule_commands::RuntimeCommandBuffer;
 use crate::scheduling::schedule_report::RuntimeScheduleReport;
 use crate::scheduling::world_schedule::RuntimeWorldSchedule;
+use crate::scripting::RuntimeScriptPhaseContext;
 
 /// A cheap summary of the runtime's state.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -119,6 +133,15 @@ impl SceneRuntime {
         &self.world.component_registry
     }
 
+    /// Replaces the registry, as Swift's `componentRegistry` setter did.
+    #[inline]
+    pub fn set_component_registry(
+        &mut self,
+        registry: crate::components::core::registry::ComponentRegistry,
+    ) {
+        self.world.component_registry = registry;
+    }
+
     pub fn snapshot(&self) -> SceneRuntimeSnapshot {
         SceneRuntimeSnapshot::new(self.world.entity_count(), self.world.revision())
     }
@@ -149,6 +172,20 @@ impl SceneRuntime {
                 )
                 .0
             })
+    }
+
+    /// Swift's `particleFrameStats`: an empty stats resource when none was written.
+    pub fn particle_frame_stats(&self) -> ParticleFrameStatsResource {
+        self.world
+            .resource::<ParticleFrameStatsResource>()
+            .unwrap_or_else(ParticleFrameStatsResource::empty)
+    }
+
+    /// Swift's `particleScalabilityState`: the nominal scale when none was written.
+    pub fn particle_scalability_state(&self) -> ParticleScalabilityStateResource {
+        self.world
+            .resource::<ParticleScalabilityStateResource>()
+            .unwrap_or_default()
     }
 
     pub fn physics_debug_frame(&self) -> PhysicsDebugFrameResource {
@@ -379,6 +416,15 @@ impl SceneRuntime {
             })
     }
 
+    /// Merge a GPU-readback report into the frame stats resource.
+    pub fn apply_particle_simulation_readback_stats(
+        &mut self,
+        report: &ParticleSimulationEventApplyReport,
+    ) {
+        self.world
+            .set_resource(self.particle_frame_stats().merging_gpu_readback(report));
+    }
+
     // MARK: - Frame
 
     /// Advance one frame.
@@ -431,6 +477,95 @@ impl SceneRuntime {
         self.world.has_component::<C>(entity)
     }
 
+    pub fn component_count<C: RuntimeComponent>(&self) -> usize {
+        self.world.component_count::<C>()
+    }
+
+    pub fn entities_with<C: RuntimeComponent>(&self) -> Vec<EntityID> {
+        self.world.entities_with::<C>()
+    }
+
+    pub fn query<C: RuntimeComponent>(
+        &self,
+    ) -> Vec<crate::runtime_world::RuntimeComponentQuery<C>> {
+        self.world.query::<C>()
+    }
+
+    /// Swift's `query(_:using:)`: the same query, run through the job system.
+    pub fn query_with_job_system<C: RuntimeComponent>(
+        &self,
+        job_system: &diffuse_kernel::job_system::JobSystem,
+    ) -> (
+        Vec<crate::runtime_world::RuntimeComponentQuery<C>>,
+        diffuse_kernel::job_system::JobDispatchReport,
+    ) {
+        let entities = self.world.entities_with::<C>();
+        let snapshot = self.world.component_snapshot_matching::<C>(&entities);
+        job_system.parallel_compact_map(&entities, None, |entity| {
+            snapshot.get(entity).cloned().map(|component| {
+                crate::runtime_world::RuntimeComponentQuery::new(*entity, component)
+            })
+        })
+    }
+
+    pub fn query_pair<A: RuntimeComponent, B: RuntimeComponent>(
+        &self,
+    ) -> Vec<crate::runtime_world::RuntimeComponentPairQuery<A, B>> {
+        self.world.query_pair::<A, B>()
+    }
+
+    /// Swift's `query(_:_:using:)`: the pair query, run through the job system.
+    pub fn query_pair_with_job_system<A: RuntimeComponent, B: RuntimeComponent>(
+        &self,
+        job_system: &diffuse_kernel::job_system::JobSystem,
+    ) -> (
+        Vec<crate::runtime_world::RuntimeComponentPairQuery<A, B>>,
+        diffuse_kernel::job_system::JobDispatchReport,
+    ) {
+        let entities = self.world.entities_with::<A>();
+        let snapshot_a = self.world.component_snapshot_matching::<A>(&entities);
+        let snapshot_b = self.world.component_snapshot_matching::<B>(&entities);
+        job_system.parallel_compact_map(&entities, None, |entity| {
+            Some(crate::runtime_world::RuntimeComponentPairQuery::new(
+                *entity,
+                snapshot_a.get(entity)?.clone(),
+                snapshot_b.get(entity)?.clone(),
+            ))
+        })
+    }
+
+    pub fn query_triple<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
+        &self,
+    ) -> Vec<crate::runtime_world::RuntimeComponentTripleQuery<A, B, C>> {
+        self.world.query_triple::<A, B, C>()
+    }
+
+    /// Swift's `query(_:_:_:using:)`: the triple query, run through the job system.
+    pub fn query_triple_with_job_system<
+        A: RuntimeComponent,
+        B: RuntimeComponent,
+        C: RuntimeComponent,
+    >(
+        &self,
+        job_system: &diffuse_kernel::job_system::JobSystem,
+    ) -> (
+        Vec<crate::runtime_world::RuntimeComponentTripleQuery<A, B, C>>,
+        diffuse_kernel::job_system::JobDispatchReport,
+    ) {
+        let entities = self.world.entities_with::<A>();
+        let snapshot_a = self.world.component_snapshot_matching::<A>(&entities);
+        let snapshot_b = self.world.component_snapshot_matching::<B>(&entities);
+        let snapshot_c = self.world.component_snapshot_matching::<C>(&entities);
+        job_system.parallel_compact_map(&entities, None, |entity| {
+            Some(crate::runtime_world::RuntimeComponentTripleQuery::new(
+                *entity,
+                snapshot_a.get(entity)?.clone(),
+                snapshot_b.get(entity)?.clone(),
+                snapshot_c.get(entity)?.clone(),
+            ))
+        })
+    }
+
     pub fn update_component<C: RuntimeComponent>(
         &mut self,
         entity: EntityID,
@@ -439,8 +574,19 @@ impl SceneRuntime {
         self.world.update_component::<C>(entity, body)
     }
 
+    pub fn update_components<C: RuntimeComponent>(
+        &mut self,
+        body: impl FnMut(EntityID, &mut C),
+    ) -> usize {
+        self.world.update_components::<C>(body)
+    }
+
     pub fn remove_component<C: RuntimeComponent>(&mut self, entity: EntityID) -> Option<C> {
         self.world.remove_component::<C>(entity)
+    }
+
+    pub fn set_local_transform(&mut self, transform: LocalTransform, entity: EntityID) -> bool {
+        self.world.set_local_transform(transform, entity)
     }
 
     #[inline]
@@ -448,19 +594,11 @@ impl SceneRuntime {
         self.world.local_transform(entity)
     }
 
-    pub fn set_local_transform(&mut self, transform: LocalTransform, entity: EntityID) -> bool {
-        self.world.set_local_transform(transform, entity)
-    }
-
     pub fn world_transform(
         &self,
         entity: EntityID,
     ) -> Option<crate::runtime_world::WorldTransform> {
         self.world.world_transform(entity)
-    }
-
-    pub fn set_parent(&mut self, parent: Option<EntityID>, child: EntityID) -> bool {
-        self.world.set_parent(parent, child)
     }
 
     #[inline]
@@ -473,12 +611,73 @@ impl SceneRuntime {
         self.world.children(entity)
     }
 
+    pub fn roots(&self) -> Vec<EntityID> {
+        self.world.roots()
+    }
+
+    /// The first entity whose `SceneNameComponent.value` equals `name`.
+    pub fn find_entity_named(&self, name: &str) -> Option<EntityID> {
+        for id in self
+            .world
+            .entities_with::<crate::scene_bootstrap::SceneNameComponent>()
+        {
+            if self
+                .world
+                .component::<crate::scene_bootstrap::SceneNameComponent>(id)
+                .is_some_and(|component| component.value == name)
+            {
+                return Some(id);
+            }
+        }
+        None
+    }
+
+    /// Every entity whose `SceneKindComponent.value` equals `kind`.
+    pub fn entities_kind(&self, kind: &str) -> Vec<EntityID> {
+        self.world
+            .entities_with::<crate::scene_bootstrap::SceneKindComponent>()
+            .into_iter()
+            .filter(|id| {
+                self.world
+                    .component::<crate::scene_bootstrap::SceneKindComponent>(*id)
+                    .is_some_and(|component| component.value == kind)
+            })
+            .collect()
+    }
+
+    pub fn set_parent(&mut self, parent: Option<EntityID>, child: EntityID) -> bool {
+        self.world.set_parent(parent, child)
+    }
+
+    pub fn move_entity(&mut self, entity: EntityID, parent: Option<EntityID>, index: i64) -> bool {
+        self.world.move_entity(entity, parent, index)
+    }
+
+    pub fn hierarchy_needs_propagation(&self) -> bool {
+        self.world.hierarchy_needs_propagation()
+    }
+
+    pub fn propagate_transforms(&mut self) {
+        self.world.propagate_transforms_default();
+    }
+
     pub fn resource<R: Send + Sync + Clone + 'static>(&self) -> Option<R> {
         self.world.resource::<R>()
     }
 
     pub fn set_resource<R: Send + Sync + Clone + 'static>(&mut self, resource: R) {
         self.world.set_resource(resource);
+    }
+
+    pub fn update_resource<R: Send + Sync + Clone + 'static>(
+        &mut self,
+        body: impl FnOnce(&mut R),
+    ) -> bool {
+        self.world.update_resource::<R>(body)
+    }
+
+    pub fn remove_resource<R: Send + Sync + Clone + 'static>(&mut self) -> Option<R> {
+        self.world.remove_resource::<R>()
     }
 
     pub fn physics_settings(&self) -> PhysicsSettingsResource {
@@ -492,18 +691,42 @@ impl SceneRuntime {
         self.schedule.ensure_backend_matches(&self.world);
     }
 
+    pub fn physics_query_cache_stats(&self) -> PhysicsQueryCacheStats {
+        self.schedule.current_physics_query_cache_stats()
+    }
+
     // MARK: - Commands
 
-    pub fn enqueue_destroy_entity(&mut self, entity: EntityID) {
+    pub fn enqueue(&mut self, command: crate::scheduling::schedule_commands::RuntimeCommand) {
+        self.command_buffer.enqueue(command);
+    }
+
+    pub fn create_queued_entity(&mut self) {
+        self.command_buffer.create_entity();
+    }
+
+    pub fn destroy_queued_entity(&mut self, entity: EntityID) {
         self.command_buffer.destroy_entity(entity);
     }
 
-    pub fn enqueue_set_parent(&mut self, parent: Option<EntityID>, child: EntityID) {
+    pub fn set_queued_parent(&mut self, parent: Option<EntityID>, child: EntityID) {
         self.command_buffer.set_parent(parent, child);
     }
 
-    pub fn enqueue_set_local_transform(&mut self, transform: LocalTransform, entity: EntityID) {
+    pub fn set_queued_local_transform(&mut self, transform: LocalTransform, entity: EntityID) {
         self.command_buffer.set_local_transform(transform, entity);
+    }
+
+    pub fn enqueue_destroy_entity(&mut self, entity: EntityID) {
+        self.destroy_queued_entity(entity);
+    }
+
+    pub fn enqueue_set_parent(&mut self, parent: Option<EntityID>, child: EntityID) {
+        self.set_queued_parent(parent, child);
+    }
+
+    pub fn enqueue_set_local_transform(&mut self, transform: LocalTransform, entity: EntityID) {
+        self.set_queued_local_transform(transform, entity);
     }
 
     pub fn submit_character_command(&mut self, command: CharacterCommand, entity: EntityID) {
@@ -541,13 +764,19 @@ impl SceneRuntime {
         entity: EntityID,
         wake: bool,
     ) -> bool {
-        self.world
-            .update_component::<crate::physics::rigid_body::RigidBody>(entity, |body| {
-                body.accumulated_force += force;
-                if wake {
-                    body.is_sleeping = false;
-                }
-            })
+        self.world.apply_force(force, entity, wake)
+    }
+
+    /// Swift's `applyForce(_:at:to:wake:)` overload: the force is applied at a
+    /// world point, so it also contributes torque about the body's centre.
+    pub fn apply_force_at(
+        &mut self,
+        force: diffuse_math::simd::simd_compat::Float3,
+        world_point: diffuse_math::simd::simd_compat::Float3,
+        entity: EntityID,
+        wake: bool,
+    ) -> bool {
+        self.world.apply_force_at(force, world_point, entity, wake)
     }
 
     pub fn apply_torque(
@@ -556,13 +785,7 @@ impl SceneRuntime {
         entity: EntityID,
         wake: bool,
     ) -> bool {
-        self.world
-            .update_component::<crate::physics::rigid_body::RigidBody>(entity, |body| {
-                body.accumulated_torque += torque;
-                if wake {
-                    body.is_sleeping = false;
-                }
-            })
+        self.world.apply_torque(torque, entity, wake)
     }
 
     pub fn apply_linear_impulse(
@@ -571,13 +794,19 @@ impl SceneRuntime {
         entity: EntityID,
         wake: bool,
     ) -> bool {
+        self.world.apply_linear_impulse(impulse, entity, wake)
+    }
+
+    /// Swift's `applyLinearImpulse(_:at:to:wake:)` overload.
+    pub fn apply_linear_impulse_at(
+        &mut self,
+        impulse: diffuse_math::simd::simd_compat::Float3,
+        world_point: diffuse_math::simd::simd_compat::Float3,
+        entity: EntityID,
+        wake: bool,
+    ) -> bool {
         self.world
-            .update_component::<crate::physics::rigid_body::RigidBody>(entity, |body| {
-                body.accumulated_linear_impulse += impulse;
-                if wake {
-                    body.is_sleeping = false;
-                }
-            })
+            .apply_linear_impulse_at(impulse, world_point, entity, wake)
     }
 
     pub fn apply_angular_impulse(
@@ -586,16 +815,386 @@ impl SceneRuntime {
         entity: EntityID,
         wake: bool,
     ) -> bool {
-        self.world
-            .update_component::<crate::physics::rigid_body::RigidBody>(entity, |body| {
-                body.accumulated_angular_impulse += impulse;
-                if wake {
-                    body.is_sleeping = false;
-                }
+        self.world.apply_angular_impulse(impulse, entity, wake)
+    }
+
+    pub fn wake_rigid_body(&mut self, entity: EntityID) -> bool {
+        self.world.wake_rigid_body(entity)
+    }
+
+    pub fn sleep_rigid_body(&mut self, entity: EntityID) -> bool {
+        self.world.sleep_rigid_body(entity)
+    }
+
+    pub fn clear_forces(&mut self, entity: EntityID) -> bool {
+        self.world.clear_forces(entity)
+    }
+
+    // MARK: - Queries
+
+    /// Replaces Swift's `raycast(_ query: SceneRaycastQuery)`: the scene-level
+    /// convenience query, converted from the backend's physics hit.
+    ///
+    /// Takes `&mut self` because the schedule's query cache counts the query and
+    /// may rebuild the mirrored backend (Swift's `PhysicsQueryScene` is a class).
+    pub fn raycast_scene(&mut self, query: SceneRaycastQuery) -> Option<SceneRaycastHit> {
+        let filter = PhysicsQueryFilter {
+            include_triggers: query.include_triggers,
+            ..PhysicsQueryFilter::default()
+        };
+        self.schedule
+            .physics_query_backend(&self.world)
+            .raycast(
+                PhysicsRaycastQuery::with_distance(
+                    query.origin,
+                    query.direction,
+                    query.max_distance,
+                ),
+                filter,
+            )
+            .map(|hit| make_scene_raycast_hit(&hit))
+    }
+
+    /// Swift's `physicsRaycast(_:filter:)`.
+    pub fn physics_raycast(
+        &mut self,
+        query: PhysicsRaycastQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Option<PhysicsRaycastHit> {
+        self.schedule
+            .physics_query_backend(&self.world)
+            .raycast(query, filter)
+    }
+
+    /// Replaces Swift's `raycast(_ query: PhysicsRaycastQuery, options:)`.
+    ///
+    /// All-hit results are stable-sorted by distance, entity ID, then sub-shape ID
+    /// (the backend's `raycastAll` contract), and truncated to `max_hits`.
+    pub fn raycast_all_options(
+        &mut self,
+        query: PhysicsRaycastQuery,
+        options: PhysicsQueryOptions,
+    ) -> Vec<PhysicsHit> {
+        let PhysicsQueryOptions {
+            filter,
+            result_mode,
+            max_hits,
+        } = options;
+        let backend = self.schedule.physics_query_backend(&self.world);
+        let hits: Vec<PhysicsRaycastHit> = match result_mode {
+            PhysicsQueryResultMode::Nearest => backend.raycast(query, filter).into_iter().collect(),
+            PhysicsQueryResultMode::All => backend.raycast_all(query, filter, max_hits),
+        };
+        hits.into_iter()
+            .take(max_hits)
+            .map(|hit| {
+                PhysicsHit::new(
+                    hit.entity,
+                    hit.sub_shape_id,
+                    hit.distance,
+                    if query.max_distance > 0.0 {
+                        hit.distance / query.max_distance
+                    } else {
+                        0.0
+                    },
+                    hit.position,
+                    hit.normal,
+                    hit.bounds,
+                    hit.is_trigger,
+                )
             })
+            .collect()
+    }
+
+    /// Swift's `raycastBatch(_:options:)`: each query runs against the same
+    /// synchronized physics snapshot.
+    pub fn raycast_batch(
+        &mut self,
+        queries: Vec<PhysicsRaycastQuery>,
+        options: PhysicsQueryOptions,
+    ) -> Vec<Vec<PhysicsHit>> {
+        queries
+            .into_iter()
+            .map(|query| self.raycast_all_options(query, options.clone()))
+            .collect()
+    }
+
+    /// Swift's `physicsRaycastWithStats(_:filter:scratch:)`. The scratch handle
+    /// carries no state in the Rust port, so the returned stats are zeroed.
+    pub fn physics_raycast_with_stats(
+        &mut self,
+        query: PhysicsRaycastQuery,
+        filter: PhysicsQueryFilter,
+        _scratch: Option<&SpatialQueryScratch>,
+    ) -> (Option<PhysicsRaycastHit>, SpatialQueryStats) {
+        let hit = self
+            .schedule
+            .physics_query_backend(&self.world)
+            .raycast(query, filter);
+        (hit, SpatialQueryStats::default())
+    }
+
+    /// Replaces Swift's `overlap(_ query: SceneOverlapQuery)`.
+    pub fn overlap_scene(&mut self, query: SceneOverlapQuery) -> Vec<SceneOverlapHit> {
+        let filter = PhysicsQueryFilter {
+            include_triggers: query.include_triggers,
+            ..PhysicsQueryFilter::default()
+        };
+        self.schedule
+            .physics_query_backend(&self.world)
+            .overlap_aabb(PhysicsOverlapAABBQuery::new(query.bounds), filter)
+            .into_iter()
+            .map(|hit| make_scene_overlap_hit(&hit))
+            .collect()
+    }
+
+    /// Replaces Swift's `overlap(_ query: SceneOverlapQuery, scratch:)` overload.
+    pub fn overlap_scene_with_scratch(
+        &mut self,
+        query: SceneOverlapQuery,
+        _scratch: &SpatialQueryScratch,
+    ) -> Vec<SceneOverlapHit> {
+        self.overlap_scene(query)
+    }
+
+    /// Swift's `overlapWithStats(_:scratch:)`.
+    pub fn overlap_scene_with_stats(
+        &mut self,
+        query: SceneOverlapQuery,
+        _scratch: Option<&SpatialQueryScratch>,
+    ) -> (Vec<SceneOverlapHit>, SpatialQueryStats) {
+        (self.overlap_scene(query), SpatialQueryStats::default())
+    }
+
+    /// Swift's `physicsOverlapAABB(_:filter:)`.
+    pub fn physics_overlap_aabb(
+        &mut self,
+        query: PhysicsOverlapAABBQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Vec<PhysicsOverlapHit> {
+        self.schedule
+            .physics_query_backend(&self.world)
+            .overlap_aabb(query, filter)
+    }
+
+    /// Replaces Swift's `physicsOverlapAABB(_:filter:scratch:)` overload.
+    pub fn physics_overlap_aabb_with_scratch(
+        &mut self,
+        query: PhysicsOverlapAABBQuery,
+        filter: PhysicsQueryFilter,
+        _scratch: &SpatialQueryScratch,
+    ) -> Vec<PhysicsOverlapHit> {
+        self.physics_overlap_aabb(query, filter)
+    }
+
+    /// Swift's `physicsOverlapAABBWithStats(_:filter:scratch:)`.
+    pub fn physics_overlap_aabb_with_stats(
+        &mut self,
+        query: PhysicsOverlapAABBQuery,
+        filter: PhysicsQueryFilter,
+        _scratch: Option<&SpatialQueryScratch>,
+    ) -> (Vec<PhysicsOverlapHit>, SpatialQueryStats) {
+        (
+            self.physics_overlap_aabb(query, filter),
+            SpatialQueryStats::default(),
+        )
+    }
+
+    /// Swift's `physicsOverlapShape(_:filter:)`.
+    pub fn physics_overlap_shape(
+        &mut self,
+        query: PhysicsOverlapShapeQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Vec<PhysicsOverlapHit> {
+        self.schedule
+            .physics_query_backend(&self.world)
+            .overlap_shape(query, filter)
+    }
+
+    /// Swift's `overlapShape(_:options:)`. `Nearest` limits the query itself to one
+    /// result; `All` uses `max_hits`. Results are sorted by entity then sub-shape.
+    pub fn overlap_shape(
+        &mut self,
+        query: PhysicsOverlapShapeQuery,
+        options: PhysicsQueryOptions,
+    ) -> Vec<PhysicsHit> {
+        let limit = match options.result_mode {
+            PhysicsQueryResultMode::Nearest => 1,
+            PhysicsQueryResultMode::All => options.max_hits,
+        };
+        let mut limited_query = query;
+        limited_query.max_results = limit;
+        let mut hits = self
+            .schedule
+            .physics_query_backend(&self.world)
+            .overlap_shape(limited_query, options.filter);
+        hits.sort_by(|left, right| {
+            if left.entity.raw_value() != right.entity.raw_value() {
+                return left.entity.raw_value().cmp(&right.entity.raw_value());
+            }
+            left.sub_shape_id.cmp(&right.sub_shape_id)
+        });
+        hits.into_iter()
+            .take(limit)
+            .map(|hit| PhysicsHit {
+                entity: hit.entity,
+                sub_shape_id: hit.sub_shape_id,
+                distance: 0.0,
+                fraction: 0.0,
+                position: diffuse_math::simd::simd_compat::Float3::ZERO,
+                normal: diffuse_math::simd::simd_compat::Float3::ZERO,
+                bounds: hit.bounds,
+                is_trigger: hit.is_trigger,
+            })
+            .collect()
+    }
+
+    /// Swift's `overlapShapeBatch(_:options:)`.
+    pub fn overlap_shape_batch(
+        &mut self,
+        queries: Vec<PhysicsOverlapShapeQuery>,
+        options: PhysicsQueryOptions,
+    ) -> Vec<Vec<PhysicsHit>> {
+        queries
+            .into_iter()
+            .map(|query| self.overlap_shape(query, options.clone()))
+            .collect()
+    }
+
+    /// Swift's `physicsOverlapShapeWithStats(_:filter:scratch:)`.
+    pub fn physics_overlap_shape_with_stats(
+        &mut self,
+        query: PhysicsOverlapShapeQuery,
+        filter: PhysicsQueryFilter,
+        _scratch: Option<&SpatialQueryScratch>,
+    ) -> (Vec<PhysicsOverlapHit>, SpatialQueryStats) {
+        (
+            self.physics_overlap_shape(query, filter),
+            SpatialQueryStats::default(),
+        )
+    }
+
+    /// Replaces Swift's `sweep(_ query: SceneSweepQuery)`.
+    pub fn sweep(&mut self, query: SceneSweepQuery) -> Option<SceneSweepHit> {
+        let filter = PhysicsQueryFilter {
+            include_triggers: query.include_triggers,
+            ..PhysicsQueryFilter::default()
+        };
+        self.schedule
+            .physics_query_backend(&self.world)
+            .sweep_aabb(
+                PhysicsSweepAABBQuery::new(query.bounds, query.translation),
+                filter,
+            )
+            .map(|hit| make_scene_sweep_hit(&hit))
+    }
+
+    /// Swift's `physicsSweepAABB(_:filter:)`.
+    pub fn physics_sweep_aabb(
+        &mut self,
+        query: PhysicsSweepAABBQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Option<PhysicsSweepHit> {
+        self.schedule
+            .physics_query_backend(&self.world)
+            .sweep_aabb(query, filter)
+    }
+
+    /// Swift's `physicsSweepAABBWithStats(_:filter:scratch:)`.
+    pub fn physics_sweep_aabb_with_stats(
+        &mut self,
+        query: PhysicsSweepAABBQuery,
+        filter: PhysicsQueryFilter,
+        _scratch: Option<&SpatialQueryScratch>,
+    ) -> (Option<PhysicsSweepHit>, SpatialQueryStats) {
+        (
+            self.physics_sweep_aabb(query, filter),
+            SpatialQueryStats::default(),
+        )
+    }
+
+    /// Swift's `physicsSweepShape(_:filter:)`.
+    pub fn physics_sweep_shape(
+        &mut self,
+        query: PhysicsSweepShapeQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Option<PhysicsSweepHit> {
+        self.schedule
+            .physics_query_backend(&self.world)
+            .sweep_shape(query, filter)
+    }
+
+    /// Swift's `shapeCast(_:options:)`.
+    pub fn shape_cast(
+        &mut self,
+        query: PhysicsSweepShapeQuery,
+        options: PhysicsQueryOptions,
+    ) -> Vec<PhysicsHit> {
+        let PhysicsQueryOptions {
+            filter,
+            result_mode,
+            max_hits,
+        } = options;
+        let backend = self.schedule.physics_query_backend(&self.world);
+        let hits: Vec<PhysicsSweepHit> = match result_mode {
+            PhysicsQueryResultMode::Nearest => {
+                backend.sweep_shape(query, filter).into_iter().collect()
+            }
+            PhysicsQueryResultMode::All => backend.sweep_shape_all(query, filter, max_hits),
+        };
+        hits.into_iter()
+            .take(max_hits)
+            .map(|hit| {
+                PhysicsHit::new(
+                    hit.entity,
+                    hit.sub_shape_id,
+                    hit.distance,
+                    hit.fraction,
+                    hit.position,
+                    hit.normal,
+                    hit.bounds,
+                    hit.is_trigger,
+                )
+            })
+            .collect()
+    }
+
+    /// Swift's `shapeCastBatch(_:options:)`.
+    pub fn shape_cast_batch(
+        &mut self,
+        queries: Vec<PhysicsSweepShapeQuery>,
+        options: PhysicsQueryOptions,
+    ) -> Vec<Vec<PhysicsHit>> {
+        queries
+            .into_iter()
+            .map(|query| self.shape_cast(query, options.clone()))
+            .collect()
+    }
+
+    /// Swift's `physicsSweepShapeWithStats(_:filter:scratch:)`.
+    pub fn physics_sweep_shape_with_stats(
+        &mut self,
+        query: PhysicsSweepShapeQuery,
+        filter: PhysicsQueryFilter,
+        _scratch: Option<&SpatialQueryScratch>,
+    ) -> (Option<PhysicsSweepHit>, SpatialQueryStats) {
+        (
+            self.physics_sweep_shape(query, filter),
+            SpatialQueryStats::default(),
+        )
     }
 
     // MARK: - Schedule access
+
+    /// Swift's `setPhysicsBackend(_:)`.
+    pub fn set_physics_backend(&mut self, backend: Box<dyn PhysicsBackend>) {
+        self.schedule.set_physics_backend(backend);
+    }
+
+    /// Swift's `clearPhysicsBackendOverride()`.
+    pub fn clear_physics_backend_override(&mut self) {
+        self.schedule.clear_physics_backend_override();
+    }
 
     #[inline]
     pub fn schedule(&self) -> &RuntimeWorldSchedule {
@@ -614,6 +1213,56 @@ impl SceneRuntime {
     pub fn clear_script_driver(&mut self) {
         self.schedule.clear_script_driver();
     }
+
+    /// Swift's `setJobSystem(_:)`: replaces the schedule's worker pool.
+    pub fn set_job_system(&mut self, job_system: diffuse_kernel::job_system::JobSystem) {
+        self.schedule.set_job_system(job_system);
+    }
+
+    /// Runs a script driver against this scene's world for one frame.
+    ///
+    /// Swift also handed the driver a `PhysicsQueryScene` handle; the Rust
+    /// `RuntimeScriptPhaseContext` owns only the world and command buffer, so a
+    /// driver reaches physics through the scene's query methods instead.
+    pub fn run_script_driver(
+        &mut self,
+        driver: &mut dyn crate::scripting::RuntimeScriptDriver,
+        delta_time: f64,
+    ) {
+        let mut context =
+            RuntimeScriptPhaseContext::new(&mut self.world, &mut self.command_buffer, delta_time);
+        driver.run(&mut context);
+    }
+}
+
+/// Swift's `makeSceneRaycastHit(_:)` converter.
+fn make_scene_raycast_hit(hit: &PhysicsRaycastHit) -> SceneRaycastHit {
+    SceneRaycastHit::new(
+        hit.entity,
+        hit.distance,
+        hit.position,
+        hit.normal,
+        hit.bounds,
+        hit.is_trigger,
+    )
+}
+
+/// Swift's `makeSceneOverlapHit(_:)` converter.
+fn make_scene_overlap_hit(hit: &PhysicsOverlapHit) -> SceneOverlapHit {
+    SceneOverlapHit::new(hit.entity, hit.bounds, hit.is_trigger)
+}
+
+/// Swift's `makeSceneSweepHit(_:)` converter.
+fn make_scene_sweep_hit(hit: &PhysicsSweepHit) -> SceneSweepHit {
+    SceneSweepHit::new(
+        hit.entity,
+        hit.fraction,
+        hit.distance,
+        hit.position,
+        hit.normal,
+        hit.bounds,
+        hit.is_trigger,
+    )
 }
 
 #[cfg(test)]

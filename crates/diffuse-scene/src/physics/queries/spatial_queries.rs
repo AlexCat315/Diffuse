@@ -1,10 +1,8 @@
-//! Mesh collider geometry and bounds resources.
+//! Spatial query vocabulary and the world's spatial index.
 //!
-//! `SpatialQueries.swift` is translated in a later batch; this module currently
-//! provides the three types `physics_descriptors` requires
-//! (`MeshColliderGeometry`, `MeshColliderBoundsResource`,
-//! `MeshColliderGeometryResource`). `SpatialAABB` already lives in
-//! [`crate::physics::collider`].
+//! `SpatialAABB` lives in [`crate::physics::collider`] and is re-used here rather
+//! than redefined: the index, the mesh resources and every scene-level query
+//! share that one bounds type.
 
 use std::collections::BTreeMap;
 
@@ -128,6 +126,38 @@ impl MeshColliderGeometryResource {
             return Some(geometry);
         }
         self.default_geometry.as_ref()
+    }
+}
+
+/// Traversal counters a spatial query reports back to its caller.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SpatialQueryStats {
+    pub node_visits: i64,
+    pub leaf_tests: i64,
+    pub narrow_phase_tests: i64,
+}
+
+impl SpatialQueryStats {
+    pub fn new(node_visits: i64, leaf_tests: i64, narrow_phase_tests: i64) -> Self {
+        SpatialQueryStats {
+            node_visits,
+            leaf_tests,
+            narrow_phase_tests,
+        }
+    }
+}
+
+/// A reusable traversal buffer handle.
+///
+/// Swift declared an empty `final class` so callers could thread one scratch
+/// object through many queries; Rust only needs the handle to exist, and the
+/// query wrappers take it by reference so the call site keeps ownership.
+#[derive(Clone, Debug, Default)]
+pub struct SpatialQueryScratch;
+
+impl SpatialQueryScratch {
+    pub fn new() -> Self {
+        SpatialQueryScratch
     }
 }
 
@@ -391,6 +421,174 @@ impl SpatialIndexResource {
             .filter(|entry| entry.layer_mask & layer != 0)
             .filter(|entry| include_triggers || !entry.is_trigger)
             .collect()
+    }
+}
+
+/// A scene-level ray. `max_distance` defaults to the greatest finite magnitude,
+/// as Swift's `.greatestFiniteMagnitude` did.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneRaycastQuery {
+    pub origin: Float3,
+    pub direction: Float3,
+    pub max_distance: f32,
+    pub include_triggers: bool,
+}
+
+impl SceneRaycastQuery {
+    pub fn new(origin: Float3, direction: Float3) -> Self {
+        SceneRaycastQuery {
+            origin,
+            direction,
+            max_distance: f32::MAX,
+            include_triggers: false,
+        }
+    }
+
+    pub fn with_options(
+        origin: Float3,
+        direction: Float3,
+        max_distance: f32,
+        include_triggers: bool,
+    ) -> Self {
+        SceneRaycastQuery {
+            origin,
+            direction,
+            max_distance,
+            include_triggers,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneRaycastHit {
+    pub entity: crate::entity_id::EntityID,
+    pub distance: f32,
+    pub position: Float3,
+    pub normal: Float3,
+    pub bounds: SpatialAABB,
+    pub is_trigger: bool,
+}
+
+impl SceneRaycastHit {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        entity: crate::entity_id::EntityID,
+        distance: f32,
+        position: Float3,
+        normal: Float3,
+        bounds: SpatialAABB,
+        is_trigger: bool,
+    ) -> Self {
+        SceneRaycastHit {
+            entity,
+            distance,
+            position,
+            normal,
+            bounds,
+            is_trigger,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneOverlapQuery {
+    pub bounds: SpatialAABB,
+    pub include_triggers: bool,
+}
+
+impl SceneOverlapQuery {
+    pub fn new(bounds: SpatialAABB) -> Self {
+        SceneOverlapQuery {
+            bounds,
+            include_triggers: false,
+        }
+    }
+
+    pub fn with_include_triggers(bounds: SpatialAABB, include_triggers: bool) -> Self {
+        SceneOverlapQuery {
+            bounds,
+            include_triggers,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneOverlapHit {
+    pub entity: crate::entity_id::EntityID,
+    pub bounds: SpatialAABB,
+    pub is_trigger: bool,
+}
+
+impl SceneOverlapHit {
+    pub fn new(entity: crate::entity_id::EntityID, bounds: SpatialAABB, is_trigger: bool) -> Self {
+        SceneOverlapHit {
+            entity,
+            bounds,
+            is_trigger,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneSweepQuery {
+    pub bounds: SpatialAABB,
+    pub translation: Float3,
+    pub include_triggers: bool,
+}
+
+impl SceneSweepQuery {
+    pub fn new(bounds: SpatialAABB, translation: Float3) -> Self {
+        SceneSweepQuery {
+            bounds,
+            translation,
+            include_triggers: false,
+        }
+    }
+
+    pub fn with_include_triggers(
+        bounds: SpatialAABB,
+        translation: Float3,
+        include_triggers: bool,
+    ) -> Self {
+        SceneSweepQuery {
+            bounds,
+            translation,
+            include_triggers,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneSweepHit {
+    pub entity: crate::entity_id::EntityID,
+    pub fraction: f32,
+    pub distance: f32,
+    pub position: Float3,
+    pub normal: Float3,
+    pub bounds: SpatialAABB,
+    pub is_trigger: bool,
+}
+
+impl SceneSweepHit {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        entity: crate::entity_id::EntityID,
+        fraction: f32,
+        distance: f32,
+        position: Float3,
+        normal: Float3,
+        bounds: SpatialAABB,
+        is_trigger: bool,
+    ) -> Self {
+        SceneSweepHit {
+            entity,
+            fraction,
+            distance,
+            position,
+            normal,
+            bounds,
+            is_trigger,
+        }
     }
 }
 

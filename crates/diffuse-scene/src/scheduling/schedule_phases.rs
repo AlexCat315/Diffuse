@@ -49,10 +49,14 @@ use crate::physics::replay::physics_command_tape::{
 use crate::physics::replay::physics_replay_report::PhysicsCommandReplayControlResource;
 use crate::physics::rigid_body::RigidBody;
 use crate::physics::soft_bodies::soft_body::SoftBodyStateFrameResource;
+use crate::particles::emitter::particle_emitter::ParticleEmitter;
+use crate::particles::particle_scalability::ParticleScalabilityStateResource;
+use crate::particles::particle_stats::{ParticleEmitterFrameStats, ParticleFrameStatsResource};
 use crate::physics::vehicles::vehicle_state::{
     VehicleCommandFrameResource, VehicleStateFrameResource,
 };
 use crate::runtime_world::RuntimeWorld;
+use crate::scheduling::render_particles::particle_advance_options;
 use crate::scheduling::physics_collection::{
     PhysicsSyncCache, build_physics_read_view, collect_physics_bodies, collect_physics_characters,
     collect_physics_constraints, collect_physics_soft_bodies, collect_physics_vehicles,
@@ -1023,6 +1027,46 @@ pub fn run_post_physics_scripts(
     }
 
     write_ragdoll_physics_to_animation(world);
+    advance_particle_emitters(world, delta_time_seconds);
+}
+
+/// Advance every `ParticleEmitter` and publish this frame's stats.
+fn advance_particle_emitters(world: &mut RuntimeWorld, delta_time_seconds: f64) {
+    if !(delta_time_seconds > 0.0) {
+        world.set_derived_resource(ParticleFrameStatsResource::empty());
+        world.set_derived_resource(ParticleScalabilityStateResource::default());
+        return;
+    }
+
+    let particle_options = particle_advance_options(world);
+    let particle_entities = world.entities_with::<ParticleEmitter>();
+    let world_transforms = world.world_transform_snapshot_matching(&particle_entities);
+    let mut particle_stats: Vec<ParticleEmitterFrameStats> =
+        Vec::with_capacity(particle_entities.len());
+    let mut particle_stats_by_entity: BTreeMap<u64, ParticleEmitterFrameStats> = BTreeMap::new();
+
+    world.update_components::<ParticleEmitter>(|entity, emitter| {
+        emitter.advance(
+            delta_time_seconds,
+            world_transforms.get(&entity).map(|transform| transform.matrix),
+            &particle_options,
+        );
+        let stats = emitter.last_frame_stats();
+        particle_stats.push(stats);
+        particle_stats_by_entity.insert(entity.raw_value(), stats);
+    });
+
+    world.set_derived_resource(ParticleFrameStatsResource::new(
+        delta_time_seconds as f32,
+        particle_stats,
+        particle_stats_by_entity,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ));
 }
 
 // MARK: - spatialIndexUpdate

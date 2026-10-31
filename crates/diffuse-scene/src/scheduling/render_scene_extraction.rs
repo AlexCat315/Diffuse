@@ -20,8 +20,11 @@ use crate::rendering::render_extraction::{
     RenderMaterialComponent, RenderMeshComponent,
 };
 use crate::rendering::render_scene::{
-    RenderCamera, RenderCameraProjection, RenderDeformableMesh, RenderInstance, RenderLight,
-    RenderLightType, RenderMaterial, RenderMeshHandle, RenderScene,
+    ParticleRenderSummary, RenderCamera, RenderCameraProjection, RenderDeformableMesh,
+    RenderInstance, RenderLight, RenderLightType, RenderMaterial, RenderMeshHandle, RenderScene,
+};
+use crate::scheduling::render_particles::{
+    collect_particle_simulation_batches, collect_render_particles,
 };
 use crate::runtime_world::{RuntimeWorld, WorldTransform};
 
@@ -42,6 +45,15 @@ pub fn extract_render_scene(
         deformable_meshes.iter().map(|mesh| mesh.entity).collect();
     let instance_collection = collect_render_instances(world, job_system, &deformable_entities);
     let light_collection = collect_render_lights(world, job_system);
+    let particle_collection = collect_render_particles(world, &camera_selection.camera);
+    let particle_simulation_batches =
+        collect_particle_simulation_batches(world, &camera_selection.camera);
+    let particle_summary = ParticleRenderSummary::from_particles_with_batches(
+        &particle_collection.particles,
+        &particle_simulation_batches,
+        Some(particle_collection.source_particle_count),
+        Some(particle_collection.submitted_source_particle_count),
+    );
 
     let instances = instance_collection.instances;
     let lights = light_collection.lights;
@@ -72,6 +84,10 @@ pub fn extract_render_scene(
                     .collect(),
                 environment: crate::rendering::render_scene::RenderEnvironment::fallback(),
                 deformable_meshes,
+                geometry_overlays: Vec::new(),
+                particles: particle_collection.particles,
+                particle_simulation_batches,
+                particle_summary,
             },
             active_camera_entity: camera_selection.entity,
             instance_entities,

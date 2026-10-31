@@ -48,7 +48,7 @@ impl<'de> serde::Deserialize<'de> for ComponentWriteMode {
     }
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ComponentEditError {
     #[error("unknown component type: {0}")]
     UnknownType(String),
