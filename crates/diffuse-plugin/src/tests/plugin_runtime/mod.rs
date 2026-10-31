@@ -1,0 +1,9 @@
+pub mod bun_runtime_tests;
+pub mod diagnostics_tests;
+pub mod network_access_tests;
+pub mod plugin_manager_tests;
+pub mod plugin_requirement_tests;
+pub mod plugin_runtime_tests;
+pub mod process_output_tests;
+pub mod processes;
+pub mod workbench_contribution_tests;

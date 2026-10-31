@@ -1,0 +1,20 @@
+[package]
+name = "diffuse-plugin-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Editor plugin host"
+
+[[bin]]
+name = "diffuse-plugin-host"
+path = "src/main.rs"
+
+[dependencies]
+diffuse-capability.workspace = true
+diffuse-intent.workspace = true
+diffuse-plugin.workspace = true
+cove-logging.workspace = true
+
+[lints]
+workspace = true

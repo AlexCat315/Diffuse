@@ -1,0 +1,14 @@
+pub mod about;
+pub mod activity_rail;
+pub mod appearance;
+pub mod canvas_chrome;
+pub mod content_picker;
+pub mod focus;
+pub mod language_server;
+pub mod notifications;
+pub mod sidebar;
+pub mod status_bar;
+pub mod title_bar;
+pub mod workbench_link;
+pub mod language_services;
+pub mod menu;

@@ -1,0 +1,20 @@
+[package]
+name = "diffuse-math"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "SIMD-compatible math types and transforms"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "engine_math"
+path = "tests/engine_math/main.rs"
+
+[dev-dependencies.serde_json]
+workspace = true
+
+[lints]
+workspace = true

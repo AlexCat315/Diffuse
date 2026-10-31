@@ -1,0 +1,32 @@
+[package]
+name = "diffuse-render-validation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Renderer validation and probes"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "native_rhi_pass_probe"
+path = "src/bin/native_rhi_pass_probe.rs"
+
+[[bench]]
+name = "render_backend"
+path = "benches/render_backend.rs"
+harness = false
+
+[dependencies]
+diffuse-assets.workspace = true
+diffuse-kernel.workspace = true
+diffuse-math.workspace = true
+diffuse-render.workspace = true
+diffuse-scene.workspace = true
+cove-graphics.workspace = true
+cove-logging.workspace = true
+cove-platform.workspace = true
+
+[lints]
+workspace = true

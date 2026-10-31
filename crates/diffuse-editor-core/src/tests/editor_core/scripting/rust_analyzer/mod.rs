@@ -1,0 +1,11 @@
+pub mod analysis_cache_tests;
+pub mod assistance_reply_tests;
+pub mod inheritance_clause_tests;
+pub mod rust_analyzer_executable_locator_tests;
+pub mod rust_analyzer_process_tests;
+pub mod rust_analyzer_transport_tests;
+pub mod script_language_incremental_tests;
+pub mod script_language_position_tests;
+pub mod script_language_reply_tests;
+pub mod script_language_workspace_tests;
+pub mod semantic_editing_tests;

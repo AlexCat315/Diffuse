@@ -1,0 +1,21 @@
+[package]
+name = "diffuse-semantic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Semantic pipeline"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "semantic_pipeline"
+path = "tests/semantic_pipeline/main.rs"
+
+[dependencies]
+diffuse-intent.workspace = true
+diffuse-perception.workspace = true
+
+[lints]
+workspace = true

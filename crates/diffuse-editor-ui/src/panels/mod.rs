@@ -1,0 +1,16 @@
+pub mod details;
+pub mod asset_browser;
+pub mod console;
+pub mod developer_tools;
+pub mod documents;
+pub mod hierarchy;
+pub mod inspector;
+pub mod media;
+pub mod plugins;
+pub mod rendering;
+pub mod script_editor;
+pub mod shared;
+pub mod source_control;
+pub mod tasks;
+pub mod terminal;
+pub mod viewport;

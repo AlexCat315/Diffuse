@@ -1,0 +1,12 @@
+pub mod editor_application;
+pub mod workbench;
+pub mod ai;
+pub mod assets;
+pub mod bridge;
+pub mod diagnostics;
+pub mod editing;
+pub mod persistence;
+pub mod plugins;
+pub mod projects;
+pub mod scripting;
+pub mod viewport;

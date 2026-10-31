@@ -1,0 +1,89 @@
+[workspace]
+members = [
+    "crates/*",
+    "xtask",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "Apache-2.0"
+repository = "https://github.com/AlexCat315/Diffuse"
+
+[workspace.dependencies]
+diffuse-script-api = { path = "crates/diffuse-script-api" }
+diffuse-math = { path = "crates/diffuse-math" }
+diffuse-kernel = { path = "crates/diffuse-kernel" }
+diffuse-observation = { path = "crates/diffuse-observation" }
+diffuse-sequence = { path = "crates/diffuse-sequence" }
+diffuse-color = { path = "crates/diffuse-color" }
+diffuse-card-battle = { path = "crates/diffuse-card-battle" }
+diffuse-capability = { path = "crates/diffuse-capability" }
+diffuse-documents = { path = "crates/diffuse-documents" }
+diffuse-media = { path = "crates/diffuse-media" }
+diffuse-exr = { path = "crates/diffuse-exr" }
+diffuse-scene = { path = "crates/diffuse-scene" }
+diffuse-assets = { path = "crates/diffuse-assets" }
+diffuse-cinematic = { path = "crates/diffuse-cinematic" }
+diffuse-audio = { path = "crates/diffuse-audio" }
+diffuse-plugin = { path = "crates/diffuse-plugin" }
+diffuse-lsp = { path = "crates/diffuse-lsp" }
+diffuse-script = { path = "crates/diffuse-script" }
+diffuse-render = { path = "crates/diffuse-render" }
+diffuse-intent = { path = "crates/diffuse-intent" }
+diffuse-render-validation = { path = "crates/diffuse-render-validation" }
+diffuse-engine = { path = "crates/diffuse-engine" }
+diffuse-context-memory = { path = "crates/diffuse-context-memory" }
+diffuse-perception = { path = "crates/diffuse-perception" }
+diffuse-semantic = { path = "crates/diffuse-semantic" }
+diffuse-ai = { path = "crates/diffuse-ai" }
+diffuse-plugin-host = { path = "crates/diffuse-plugin-host" }
+diffuse-mcp = { path = "crates/diffuse-mcp" }
+diffuse-editor-core = { path = "crates/diffuse-editor-core" }
+diffuse-game-runtime = { path = "crates/diffuse-game-runtime" }
+diffuse-export = { path = "crates/diffuse-export" }
+diffuse-editor-ui = { path = "crates/diffuse-editor-ui" }
+diffuse-editor = { path = "crates/diffuse-editor" }
+diffuse-player = { path = "crates/diffuse-player" }
+diffuse-android = { path = "crates/diffuse-android" }
+
+cove-ui = { path = "../Cove" }
+cove-core = { path = "../Cove/Core" }
+cove-platform = { path = "../Cove/PlatformCore" }
+cove-system = { path = "../Cove/System" }
+cove-logging = { path = "../Cove/Logging" }
+cove-graphics = { path = "../Cove/Graphics" }
+cove-text = { path = "../Cove/Text" }
+cove-imaging = { path = "../Cove/Imaging" }
+cove-shell = { path = "../Cove/Shell" }
+cove-runtime = { path = "../Cove/Runtime" }
+cove-composition = { path = "../Cove/Compose/Composition" }
+cove-ui-compose = { path = "../Cove/Compose" }
+cove-ui-addons = { path = "../Cove/Sources" }
+cove-terminal = { path = "../Cove/Terminal" }
+cove-hosts = { path = "../Cove/Hosts" }
+cove-devtools = { path = "../Cove/DevTools" }
+cove-devtools-protocol = { path = "../Cove/DevTools/Protocol" }
+# G6: cove-agent = { path = "../Cove/Agent" } once Cove extracts the UI-free agent layer
+# G4: cove-http = { path = "../Cove/Http" } once Cove adds the UI-free HTTP client
+
+natsel = { path = "../Natsel" }
+
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+thiserror = "2"
+cc = "1"
+libc = "0.2"
+tempfile = "3"
+unicode-segmentation = "1"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+
+[profile.release]
+overflow-checks = true

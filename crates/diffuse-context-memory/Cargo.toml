@@ -1,0 +1,20 @@
+[package]
+name = "diffuse-context-memory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Context memory"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "context_memory"
+path = "tests/context_memory/main.rs"
+
+[dependencies]
+diffuse-intent.workspace = true
+
+[lints]
+workspace = true

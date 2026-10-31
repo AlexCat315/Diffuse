@@ -1,0 +1,20 @@
+[package]
+name = "diffuse-exr"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenEXR image IO"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "exrio"
+path = "tests/exrio/main.rs"
+
+[build-dependencies]
+cc.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,9 @@
+pub mod editor_geometry_authoring;
+pub mod editor_mesh_editing;
+pub mod editor_mesh_inset;
+pub mod editor_mesh_loop_cut;
+pub mod editor_mesh_picker;
+pub mod editor_mesh_rendering;
+pub mod editor_mesh_surface_overlay;
+pub mod geometry_inspector;
+pub mod mesh_editing_inspector;

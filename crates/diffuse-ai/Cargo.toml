@@ -1,0 +1,28 @@
+[package]
+name = "diffuse-ai"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "AI runtime"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+diffuse-capability.workspace = true
+diffuse-context-memory.workspace = true
+diffuse-intent.workspace = true
+diffuse-math.workspace = true
+diffuse-observation.workspace = true
+diffuse-perception.workspace = true
+diffuse-plugin.workspace = true
+diffuse-scene.workspace = true
+diffuse-script.workspace = true
+# G6: enable once Cove provides cove-agent
+# cove-agent.workspace = true
+# G4: enable once Cove provides cove-http
+# cove-http.workspace = true
+
+[lints]
+workspace = true

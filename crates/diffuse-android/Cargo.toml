@@ -1,0 +1,30 @@
+[package]
+name = "diffuse-android"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Android host for the Diffuse player"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+diffuse-editor-core.workspace = true
+diffuse-game-runtime.workspace = true
+diffuse-kernel.workspace = true
+diffuse-render.workspace = true
+cove-composition.workspace = true
+cove-core.workspace = true
+cove-devtools.workspace = true
+cove-devtools-protocol.workspace = true
+cove-graphics.workspace = true
+cove-hosts.workspace = true
+cove-logging.workspace = true
+cove-runtime.workspace = true
+cove-text.workspace = true
+cove-ui-compose.workspace = true
+
+[lints]
+workspace = true

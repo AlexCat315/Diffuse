@@ -1,0 +1,22 @@
+[package]
+name = "diffuse-observation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Observation bus"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "observation_bus"
+path = "tests/observation_bus/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

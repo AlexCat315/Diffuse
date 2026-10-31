@@ -1,0 +1,17 @@
+pub mod bezier_spline;
+pub mod geometry_baker;
+pub mod geometry_document;
+pub mod geometry_modifier;
+pub mod geometry_primitives;
+pub mod polygon_deletion;
+pub mod polygon_dissolve;
+pub mod polygon_dissolve_attributes;
+pub mod polygon_editing;
+pub mod polygon_inset;
+pub mod polygon_inset_face;
+pub mod polygon_loop_cut;
+pub mod polygon_loop_cut_plan;
+pub mod polygon_mesh;
+pub mod polygon_subdivision;
+pub mod polygon_triangulation;
+pub mod polygon_uv_projection;

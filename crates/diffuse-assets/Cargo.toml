@@ -1,0 +1,22 @@
+[package]
+name = "diffuse-assets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Asset pipeline"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "asset_pipeline"
+path = "tests/asset_pipeline/main.rs"
+
+[dependencies]
+diffuse-math.workspace = true
+diffuse-scene.workspace = true
+cove-logging.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,15 @@
+pub mod animation_runtime_tests;
+pub mod camera_controller_tests;
+pub mod character_controller_tests;
+pub mod gamepad_input_tests;
+pub mod input_state_lifecycle_tests;
+pub mod script_c_bridge_context_tests;
+pub mod script_catalog_runtime_tests;
+pub mod script_compiler_tests;
+pub mod script_component_registry_tests;
+pub mod script_definition_tests;
+pub mod script_parameter_tests;
+pub mod script_presets_tests;
+pub mod script_runtime_lifecycle_tests;
+pub mod script_runtime_query_tests;
+pub mod script_spawning_tests;

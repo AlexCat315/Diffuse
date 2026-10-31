@@ -1,0 +1,26 @@
+[package]
+name = "diffuse-player"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Diffuse player"
+
+[[bin]]
+name = "diffuse-player"
+path = "src/main.rs"
+
+[dependencies]
+diffuse-editor-core.workspace = true
+diffuse-engine.workspace = true
+diffuse-game-runtime.workspace = true
+diffuse-kernel.workspace = true
+diffuse-render.workspace = true
+cove-graphics.workspace = true
+cove-logging.workspace = true
+cove-runtime.workspace = true
+cove-ui.workspace = true
+cove-ui-compose.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,10 @@
+pub mod components;
+pub mod general;
+pub mod navigation;
+pub mod navigation_catalog;
+pub mod preferences;
+pub mod session;
+pub mod shortcuts;
+pub mod workspace_information;
+pub mod assistant;
+pub mod plugins;

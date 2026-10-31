@@ -1,0 +1,20 @@
+[package]
+name = "diffuse-cinematic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Cinematic rendering"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "cinematic_renderer"
+path = "tests/cinematic_renderer/main.rs"
+
+[dependencies]
+diffuse-math.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "diffuse-intent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Intent runtime"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+diffuse-assets.workspace = true
+diffuse-capability.workspace = true
+diffuse-math.workspace = true
+diffuse-observation.workspace = true
+diffuse-scene.workspace = true
+diffuse-script.workspace = true
+diffuse-sequence.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,34 @@
+[package]
+name = "diffuse-scene"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Scene graph, ECS and physics"
+
+[lib]
+path = "src/lib.rs"
+
+[[bench]]
+name = "physics_runtime"
+path = "benches/physics_runtime.rs"
+harness = false
+
+[[bench]]
+name = "scene_runtime"
+path = "benches/scene_runtime.rs"
+harness = false
+
+[dependencies]
+diffuse-kernel.workspace = true
+diffuse-math.workspace = true
+cove-logging.workspace = true
+
+[dev-dependencies]
+diffuse-script.workspace = true
+
+[dev-dependencies.serde_json]
+workspace = true
+
+[lints]
+workspace = true

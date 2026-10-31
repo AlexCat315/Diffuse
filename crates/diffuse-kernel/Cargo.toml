@@ -1,0 +1,16 @@
+[package]
+name = "diffuse-kernel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Engine kernel protocols and identifiers"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+cove-platform.workspace = true
+
+[lints]
+workspace = true

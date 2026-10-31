@@ -1,0 +1,20 @@
+[package]
+name = "diffuse-perception"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Perception runtime"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "perception_runtime"
+path = "tests/perception_runtime/main.rs"
+
+[dependencies]
+diffuse-intent.workspace = true
+
+[lints]
+workspace = true

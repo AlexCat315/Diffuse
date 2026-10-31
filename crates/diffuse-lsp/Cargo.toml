@@ -1,0 +1,16 @@
+[package]
+name = "diffuse-lsp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Language server runtime"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+cove-logging.workspace = true
+
+[lints]
+workspace = true

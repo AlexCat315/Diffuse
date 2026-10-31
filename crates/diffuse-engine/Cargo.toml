@@ -1,0 +1,31 @@
+[package]
+name = "diffuse-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Engine host"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+diffuse-assets.workspace = true
+diffuse-audio.workspace = true
+diffuse-kernel.workspace = true
+diffuse-math.workspace = true
+diffuse-render.workspace = true
+diffuse-render-validation.workspace = true
+diffuse-scene.workspace = true
+diffuse-script.workspace = true
+cove-graphics.workspace = true
+cove-logging.workspace = true
+
+[dev-dependencies]
+cove-platform.workspace = true
+
+[build-dependencies]
+cc.workspace = true
+
+[lints]
+workspace = true

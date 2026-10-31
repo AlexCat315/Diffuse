@@ -1,0 +1,17 @@
+[package]
+name = "diffuse-documents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Studio document workspace"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "studio_documents"
+path = "tests/studio_documents/main.rs"
+
+[lints]
+workspace = true

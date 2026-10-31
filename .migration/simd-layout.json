@@ -1,0 +1,28 @@
+{
+  "toolchain": "Swift 6.4.1 arm64-apple-macosx",
+  "types": {
+    "SIMD2<Float>": {"size": 8, "stride": 8, "alignment": 8},
+    "SIMD3<Float>": {"size": 16, "stride": 16, "alignment": 16},
+    "SIMD4<Float>": {"size": 16, "stride": 16, "alignment": 16},
+    "SIMD2<Double>": {"size": 16, "stride": 16, "alignment": 16},
+    "SIMD3<Double>": {"size": 32, "stride": 32, "alignment": 16},
+    "SIMD4<Double>": {"size": 32, "stride": 32, "alignment": 16},
+    "SIMD2<Int32>": {"size": 8, "stride": 8, "alignment": 8},
+    "SIMD3<Int32>": {"size": 16, "stride": 16, "alignment": 16},
+    "SIMD4<Int32>": {"size": 16, "stride": 16, "alignment": 16},
+    "SIMD2<UInt32>": {"size": 8, "stride": 8, "alignment": 8},
+    "SIMD4<UInt32>": {"size": 16, "stride": 16, "alignment": 16},
+    "SIMD4<UInt8>": {"size": 4, "stride": 4, "alignment": 4},
+    "SIMD4<UInt16>": {"size": 8, "stride": 8, "alignment": 8},
+    "SIMD4<Float16>": {"size": 8, "stride": 8, "alignment": 8},
+    "simd_float2x2": {"size": 16, "stride": 16, "alignment": 8},
+    "simd_float3x3": {"size": 48, "stride": 48, "alignment": 16},
+    "simd_float4x4": {"size": 64, "stride": 64, "alignment": 16},
+    "simd_double4x4": {"size": 128, "stride": 128, "alignment": 16},
+    "simd_quatf": {"size": 16, "stride": 16, "alignment": 16},
+    "simd_quatd": {"size": 32, "stride": 32, "alignment": 16},
+    "Float16": {"size": 2, "stride": 2, "alignment": 2},
+    "Int": {"size": 8, "stride": 8, "alignment": 8},
+    "Bool": {"size": 1, "stride": 1, "alignment": 1}
+  }
+}

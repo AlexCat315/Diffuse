@@ -1,0 +1,21 @@
+[package]
+name = "diffuse-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "MCP server for the editor"
+
+[[bin]]
+name = "diffuse-mcp"
+path = "src/main.rs"
+
+[dependencies]
+diffuse-ai.workspace = true
+diffuse-capability.workspace = true
+diffuse-intent.workspace = true
+# G6: enable once Cove provides cove-agent
+# cove-agent.workspace = true
+
+[lints]
+workspace = true

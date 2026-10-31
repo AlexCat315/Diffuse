@@ -1,0 +1,14 @@
+pub mod asset_registry_tests;
+pub mod destructible_asset_baker_tests;
+pub mod geometry_asset_tests;
+pub mod geometry_tests;
+pub mod gltf_importer_tests;
+pub mod image_asset_decoder_tests;
+pub mod mesh_asset_catalog_tests;
+pub mod mesh_asset_tests;
+pub mod polygon_editing_tests;
+pub mod polygon_inset_tests;
+pub mod polygon_loop_cut_tests;
+pub mod polygon_topology_tests;
+pub mod portable_png;
+pub mod project_resource_walker_tests;

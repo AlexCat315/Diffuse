@@ -1,0 +1,7 @@
+pub mod crystal_rush_gameplay_tests;
+pub mod game_project_asset_index_loader_tests;
+pub mod game_project_directory_resolver_tests;
+pub mod game_project_scene_loader_tests;
+pub mod game_project_script_loader_tests;
+pub mod native_game_application_tests;
+pub mod player_install_validator_tests;

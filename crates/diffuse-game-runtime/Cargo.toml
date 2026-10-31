@@ -1,0 +1,28 @@
+[package]
+name = "diffuse-game-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Game runtime host"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+diffuse-assets.workspace = true
+diffuse-editor-core.workspace = true
+diffuse-engine.workspace = true
+diffuse-kernel.workspace = true
+diffuse-render.workspace = true
+diffuse-script.workspace = true
+cove-graphics.workspace = true
+cove-logging.workspace = true
+cove-platform.workspace = true
+
+[dev-dependencies]
+diffuse-math.workspace = true
+diffuse-scene.workspace = true
+
+[lints]
+workspace = true

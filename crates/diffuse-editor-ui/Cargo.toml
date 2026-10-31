@@ -1,0 +1,42 @@
+[package]
+name = "diffuse-editor-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Editor UI"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+diffuse-assets.workspace = true
+diffuse-card-battle.workspace = true
+diffuse-cinematic.workspace = true
+diffuse-color.workspace = true
+diffuse-editor-core.workspace = true
+diffuse-engine.workspace = true
+diffuse-exr.workspace = true
+diffuse-intent.workspace = true
+diffuse-kernel.workspace = true
+diffuse-math.workspace = true
+diffuse-media.workspace = true
+diffuse-render.workspace = true
+diffuse-scene.workspace = true
+diffuse-script.workspace = true
+# G6: enable once Cove provides cove-agent
+# cove-agent.workspace = true
+cove-graphics.workspace = true
+cove-logging.workspace = true
+cove-platform.workspace = true
+cove-runtime.workspace = true
+cove-shell.workspace = true
+cove-ui.workspace = true
+cove-ui-addons.workspace = true
+
+[dev-dependencies]
+cove-ui-compose.workspace = true
+diffuse-plugin.workspace = true
+
+[lints]
+workspace = true

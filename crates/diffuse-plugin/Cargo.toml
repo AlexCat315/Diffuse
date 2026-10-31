@@ -1,0 +1,21 @@
+[package]
+name = "diffuse-plugin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Plugin runtime"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+diffuse-capability.workspace = true
+# G4: enable once Cove provides cove-http
+# cove-http.workspace = true
+
+[dev-dependencies]
+cove-logging.workspace = true
+
+[lints]
+workspace = true

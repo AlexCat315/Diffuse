@@ -1,0 +1,21 @@
+[package]
+name = "diffuse-capability"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Capability registry for AI tools"
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "capability_runtime"
+path = "tests/capability_runtime/main.rs"
+
+[dependencies]
+# G6: enable once Cove provides cove-agent
+# cove-agent.workspace = true
+
+[lints]
+workspace = true
