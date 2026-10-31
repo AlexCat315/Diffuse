@@ -13,5 +13,10 @@ path = "src/lib.rs"
 name = "sequence_runtime"
 path = "tests/sequence_runtime/main.rs"
 
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
 [lints]
 workspace = true

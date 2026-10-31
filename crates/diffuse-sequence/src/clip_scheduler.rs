@@ -1,6 +1,6 @@
 //! `ClipScheduler` — maps sequence frames into shot and source time.
 
-use crate::sequence_document::{Clip, FrameRange, SequenceDocument, Shot, TimeBase, TrackKind};
+use crate::sequence_document::{Clip, FrameRange, Shot, TimeBase, TrackKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SequenceFPSRemapMode {
@@ -161,7 +161,7 @@ impl ClipScheduler {
     }
 
     fn blend_weight(shot_frame: i64, clip: &Clip) -> f64 {
-        let mut weight = 1.0;
+        let mut weight: f64 = 1.0;
         let local_frame = shot_frame - clip.shot_range.start;
 
         if clip.blend_in_frames > 0 {
@@ -202,9 +202,4 @@ pub(crate) fn remap_frame(
     mode: SequenceFPSRemapMode,
 ) -> i64 {
     remap_frame_count(frame, source_fps, destination_fps, mode)
-}
-
-/// Re-exported so the FPS extension can construct a `TimeBase` copy.
-pub(crate) fn _document_time_base(document: &SequenceDocument) -> TimeBase {
-    document.time_base
 }
