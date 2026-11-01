@@ -21,6 +21,62 @@ impl SceneComponentKey {
     }
 }
 
+impl super::transaction_ir::SceneMutation {
+    /// Optional values are omitted before constructing the component merge.
+    pub fn component_fields(
+        entity_id: u64,
+        type_id: impl Into<String>,
+        fields: impl IntoIterator<
+            Item = (
+                String,
+                Option<diffuse_scene::components::core::value::ComponentValue>,
+            ),
+        >,
+    ) -> Self {
+        use diffuse_scene::components::core::value::ComponentValue;
+        Self::SetComponentData {
+            entity_id,
+            type_id: type_id.into(),
+            value: ComponentValue::Object(
+                fields
+                    .into_iter()
+                    .filter_map(|(key, value)| value.map(|v| (key, v)))
+                    .collect(),
+            ),
+            mode: diffuse_scene::components::editing::ComponentWriteMode::Merge,
+        }
+    }
+
+    pub fn component_data<C: diffuse_scene::entity_id::RuntimeComponent>(
+        entity_id: u64,
+        type_id: impl Into<String>,
+        component: C,
+        registry: diffuse_scene::components::core::registry::ComponentRegistry,
+    ) -> Self {
+        use diffuse_scene::components::core::registry::{
+            ComponentEncodeContext, ComponentEncodePurpose,
+        };
+        use diffuse_scene::components::editing::ComponentWriteMode;
+        use diffuse_scene::runtime_world::RuntimeWorld;
+        let type_id = type_id.into();
+        let mut world = RuntimeWorld::new(registry.clone());
+        let entity = world.create_entity();
+        let _ = world.set_component(component, entity);
+        let mut context = ComponentEncodeContext::new(std::collections::BTreeMap::new());
+        context.purpose = ComponentEncodePurpose::GameSave;
+        let value = registry
+            .get(&type_id)
+            .and_then(|schema| (schema.encode)(&world, entity, &mut context))
+            .unwrap_or_else(|| panic!("Component codec unavailable: {type_id}"));
+        Self::SetComponentData {
+            entity_id,
+            type_id,
+            value,
+            mode: ComponentWriteMode::Replace,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -14,12 +14,11 @@ diffuse-kernel.workspace = true
 diffuse-math.workspace = true
 diffuse-scene.workspace = true
 diffuse-script-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 diffuse-assets.workspace = true
-
-[dev-dependencies.serde_json]
-workspace = true
 
 [lints]
 workspace = true

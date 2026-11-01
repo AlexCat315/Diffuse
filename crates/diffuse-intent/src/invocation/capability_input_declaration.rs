@@ -402,6 +402,110 @@ pub trait DeclaredCapabilityInput {
     }
 }
 
+/// Applies Swift's AIField/ValueRange constraints to a declared value schema.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn field_schema<T: CapabilitySchemaValue>(
+    description: Option<&str>,
+    minimum: Option<f64>,
+    maximum: Option<f64>,
+    minimum_length: Option<usize>,
+    maximum_length: Option<usize>,
+    pattern: Option<&str>,
+) -> JsonSchema {
+    apply_schema_constraints(
+        T::capability_schema(),
+        description,
+        minimum,
+        maximum,
+        minimum_length,
+        maximum_length,
+        pattern,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_schema_constraints(
+    mut schema: JsonSchema,
+    description: Option<&str>,
+    minimum: Option<f64>,
+    maximum: Option<f64>,
+    minimum_length: Option<usize>,
+    maximum_length: Option<usize>,
+    pattern: Option<&str>,
+) -> JsonSchema {
+    use diffuse_capability::capsule_schema::JsonSchemaType;
+    if let Some(description) = description.filter(|d| !d.is_empty()) {
+        schema.description = Some(
+            diffuse_capability::capability_contract::CapabilityContract::sanitise_metadata(
+                description,
+                1_024,
+            ),
+        );
+    }
+    if !schema.one_of.is_empty() {
+        schema.one_of = schema
+            .one_of
+            .into_iter()
+            .map(|child| {
+                apply_schema_constraints(
+                    child,
+                    None,
+                    minimum,
+                    maximum,
+                    minimum_length,
+                    maximum_length,
+                    pattern,
+                )
+            })
+            .collect();
+        return schema;
+    }
+    if schema.r#type == Some(JsonSchemaType::Array) && schema.items.is_some() {
+        schema.items = schema.items.map(|item| {
+            Box::new(apply_schema_constraints(
+                *item, None, minimum, maximum, None, None, None,
+            ))
+        });
+    } else if matches!(
+        schema.r#type,
+        Some(JsonSchemaType::Number | JsonSchemaType::Integer)
+    ) {
+        schema.minimum = minimum;
+        schema.maximum = maximum;
+    } else if minimum.is_some() || maximum.is_some() {
+        let mut invalid = JsonSchema::any();
+        invalid.description =
+            Some("ValueRange can only constrain numbers and numeric vectors.".to_string());
+        return invalid;
+    }
+    if minimum_length.is_some() || maximum_length.is_some() || pattern.is_some() {
+        if schema.r#type != Some(JsonSchemaType::String) {
+            let mut invalid = JsonSchema::any();
+            invalid.description =
+                Some("String constraints can only be applied to strings.".to_string());
+            return invalid;
+        }
+        schema.minimum_length = minimum_length;
+        schema.maximum_length = maximum_length;
+        schema.pattern = pattern.map(str::to_string);
+    }
+    schema
+}
+
+pub(crate) fn entity_reference_schema(requires: &[&str]) -> JsonSchema {
+    let mut schema = SceneEntityRef::capability_schema();
+    if !requires.is_empty() {
+        let mut requires = requires.to_vec();
+        requires.sort();
+        schema.description = Some(format!(
+            "{} Required components: {}.",
+            schema.description.as_deref().unwrap_or("Entity reference."),
+            requires.join(", ")
+        ));
+    }
+    schema
+}
+
 /// The schema used when a field was not declared: an open node.
 ///
 /// Registration treats this as a failure, matching Swift's

@@ -428,6 +428,132 @@ impl SceneStateAssertion {
     }
 }
 
+impl SceneStateAssertion {
+    pub fn verification_key(&self) -> String {
+        let field = match self {
+            Self::Parent { .. } => "parent",
+            Self::LocalTransform { .. } => "localTransform",
+            Self::SceneName { .. } => "sceneName",
+            Self::RigidBodyMotionType { .. } => "rigidBody.motionType",
+            Self::RigidBodyMass { .. } => "rigidBody.mass",
+            Self::RigidBodyGravityScale { .. } => "rigidBody.gravityScale",
+            Self::RigidBodyAllowSleep { .. } => "rigidBody.allowSleep",
+            Self::ColliderPrimaryShape { .. } => "collider.primaryShape",
+            Self::ColliderTrigger { .. } => "collider.isTrigger",
+            Self::ColliderShapeType { .. } => "collider.primaryShape.kind",
+            Self::ColliderBoxHalfExtents { .. } => "collider.primaryShape.boxHalfExtents",
+            Self::ColliderSphereRadius { .. } => "collider.primaryShape.sphereRadius",
+            Self::ColliderCapsuleRadius { .. } => "collider.primaryShape.radius",
+            Self::ColliderCapsuleHalfHeight { .. } => "collider.primaryShape.halfHeight",
+            Self::ColliderFriction { .. } => "collider.friction",
+            Self::ColliderRestitution { .. } => "collider.restitution",
+            Self::ColliderDensity { .. } => "collider.density",
+            Self::ColliderLayer { .. } => "collider.layer",
+            Self::ColliderLayerMask { .. } => "collider.layerMask",
+            Self::ConstraintEnabled { .. } => "constraint.isEnabled",
+            Self::LightType { .. } => "light.type",
+            Self::LightColor { .. } => "light.color",
+            Self::LightIntensity { .. } => "light.intensity",
+            Self::LightRange { .. } => "light.range",
+            Self::LightSpotInnerAngle { .. } => "light.spotInner",
+            Self::LightSpotOuterAngle { .. } => "light.spotOuter",
+            Self::LightCastShadows { .. } => "light.castShadows",
+            Self::MeshColor { .. } => "mesh.color",
+            Self::MeshVisibility { .. } => "mesh.isVisible",
+            Self::Material { .. } => "material",
+            Self::ScriptBindings { .. } => "script.bindings",
+            Self::CameraTarget { .. } => "camera.target",
+            Self::CameraUp { .. } => "camera.up",
+            Self::CameraFovRadians { .. } => "camera.fov",
+            Self::CameraAspectRatio { .. } => "camera.aspectRatio",
+            Self::CameraActive { .. } => "camera.isActive",
+            Self::AudioSource { .. } => "audio.source",
+            Self::AnimationPlayer { .. } => "animation.player",
+            Self::AudioListenerVolume { .. } => "audio.listenerVolume",
+        };
+        format!("{}:{field}", self.target_entity_id())
+    }
+    pub fn superseded_verification_keys(&self) -> std::collections::BTreeSet<String> {
+        match self {
+            Self::ColliderShapeType { .. } | Self::ColliderPrimaryShape { .. } => [
+                "collider.primaryShape",
+                "collider.primaryShape.boxHalfExtents",
+                "collider.primaryShape.sphereRadius",
+                "collider.primaryShape.radius",
+                "collider.primaryShape.halfHeight",
+            ]
+            .into_iter()
+            .map(|field| format!("{}:{field}", self.target_entity_id()))
+            .collect(),
+            _ => std::collections::BTreeSet::new(),
+        }
+    }
+}
+
+impl crate::transactions::transaction_ir::TransactionVerificationAssertion {
+    pub fn exact_postconditions(
+        operation: &crate::transactions::transaction_ir::TransactionOperation,
+    ) -> Vec<Self> {
+        use crate::transactions::transaction_ir::{SceneMutation, TransactionOperation};
+        let TransactionOperation::Scene(mutation) = operation else {
+            return Vec::new();
+        };
+        match mutation {
+            SceneMutation::SpawnImportedMeshEntity { .. }
+            | SceneMutation::SpawnEmptyEntity { .. }
+            | SceneMutation::SpawnLightEntity { .. }
+            | SceneMutation::SpawnCameraEntity { .. }
+            | SceneMutation::DeleteEntity { .. }
+            | SceneMutation::DuplicateEntity { .. }
+            | SceneMutation::DuplicateEntityWithOffset { .. } => Vec::new(),
+            SceneMutation::MoveEntity {
+                entity_id,
+                parent_id,
+                ..
+            } => vec![Self::SceneState(SceneStateAssertion::Parent {
+                entity_id: *entity_id,
+                parent_id: *parent_id,
+            })],
+            SceneMutation::SetLocalTransform {
+                entity_id,
+                transform,
+            } => vec![Self::SceneState(SceneStateAssertion::LocalTransform {
+                entity_id: *entity_id,
+                matrix: matrix_verification_array(&transform.matrix),
+            })],
+            SceneMutation::SetSceneName { entity_id, value } => {
+                vec![Self::SceneState(SceneStateAssertion::SceneName {
+                    entity_id: *entity_id,
+                    value: value.clone(),
+                })]
+            }
+            SceneMutation::SetComponentData {
+                entity_id,
+                type_id,
+                value,
+                mode,
+            } => vec![Self::ComponentData {
+                entity_id: *entity_id,
+                type_id: type_id.clone(),
+                value: value.clone(),
+                mode: *mode,
+            }],
+            SceneMutation::AddComponent { entity_id, type_id } => vec![Self::ComponentPresence {
+                entity_id: *entity_id,
+                type_id: type_id.clone(),
+                is_present: true,
+            }],
+            SceneMutation::RemoveComponentData { entity_id, type_id } => {
+                vec![Self::ComponentPresence {
+                    entity_id: *entity_id,
+                    type_id: type_id.clone(),
+                    is_present: false,
+                }]
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

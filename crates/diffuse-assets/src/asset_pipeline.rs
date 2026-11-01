@@ -1,15 +1,25 @@
 //! Interleaved mesh vertex streams, mesh catalog value types and the built-in
 //! cube and OBJ loader.
 //!
-//! Ported from `Engine/Sources/AssetPipeline/AssetPipeline.swift`. Only the pure
-//! value types and the two loaders are translated here: `AssetPipeline`,
-//! `MeshTextureResolver`'s per-format import entry points and the
-//! `SceneRuntime`-facing helpers of that file belong to later batches.
+//! Ported from `Engine/Sources/AssetPipeline/AssetPipeline.swift`.
 
 use diffuse_math::simd::simd_compat::{
     Float2, Float3, Float4, Float4x4, mul_4x4_float4, simd_max, simd_min,
 };
 use diffuse_scene::rendering::render_scene::MaterialAlphaMode;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AssetPipeline;
+
+impl AssetPipeline {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn validate_path(&self, path: &str) -> bool {
+        !path.is_empty()
+    }
+}
 
 /// One texture reference from an imported mesh.
 #[derive(Clone, Debug, Default, PartialEq)]

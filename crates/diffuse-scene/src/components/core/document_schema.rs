@@ -13,7 +13,7 @@
 use std::sync::{Mutex, OnceLock};
 
 use crate::components::core::registry::{
-    ComponentCategory, ComponentEncodeContext, ComponentDecodeContext, ComponentSchema,
+    ComponentCategory, ComponentDecodeContext, ComponentEncodeContext, ComponentSchema,
     ComponentTypeKey,
 };
 use crate::components::core::value::ComponentValue;
@@ -50,7 +50,7 @@ impl DocumentComponentSchema {
         let decode = decode_dispatch(slot);
         schema.decode = decode;
         schema.apply_edit = decode;
-        schema.make_default = make_default_dispatch(slot);
+        schema.make_default = std::sync::Arc::new(make_default_dispatch(slot));
         schema.remove = remove_dispatch(slot);
         configure(&mut schema);
         schema

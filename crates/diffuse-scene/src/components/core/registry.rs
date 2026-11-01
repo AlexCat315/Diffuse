@@ -8,7 +8,8 @@
 //! non-capturing static functions whose `&RuntimeWorld` is a *parameter*, so the
 //! registry is not generic over the world and neither type is recursive by value.
 //! MIGRATION.md §5.2 prefers fn pointers over `Box<dyn Fn>` for exactly this case;
-//! no closure here captures anything.
+//! Default factories may capture module-specific authoring defaults; these alone
+//! use `Arc<dyn Fn + Send + Sync>` so cloned registries retain those defaults.
 //!
 //! ## `ObjectIdentifier` → [`ComponentTypeKey`]
 //!
@@ -19,6 +20,7 @@
 
 use std::any::TypeId;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
@@ -184,7 +186,7 @@ type EncodeFn = fn(&RuntimeWorld, EntityID, &mut ComponentEncodeContext) -> Opti
 type DecodeFn = fn(&ComponentValue, EntityID, &mut ComponentDecodeContext, &mut RuntimeWorld);
 type AfterDuplicateFn = fn(EntityID, &mut RuntimeWorld);
 type EditFn = fn(&ComponentValue, &ComponentValue) -> Result<ComponentValue, ComponentEditError>;
-type MakeDefaultFn = fn(EntityID, &mut RuntimeWorld);
+type MakeDefaultFn = Arc<dyn Fn(EntityID, &mut RuntimeWorld) + Send + Sync>;
 type RemoveFn = fn(EntityID, &mut RuntimeWorld);
 type HasEntityFn = HasFn;
 
@@ -238,7 +240,7 @@ impl ComponentSchema {
         category: ComponentCategory,
         encode: EncodeFn,
         decode: DecodeFn,
-        make_default: MakeDefaultFn,
+        make_default: impl Fn(EntityID, &mut RuntimeWorld) + Send + Sync + 'static,
     ) -> Self {
         fn has<C: RuntimeComponent>(world: &RuntimeWorld, entity: EntityID) -> bool {
             world.has_component::<C>(entity)
@@ -264,7 +266,7 @@ impl ComponentSchema {
             after_duplicate: |_, _| {},
             normalize_changes: None,
             merge: default_merge,
-            make_default,
+            make_default: Arc::new(make_default),
             remove: remove::<C>,
         }
     }
@@ -301,7 +303,7 @@ impl ComponentSchema {
             after_duplicate: |_, _| {},
             normalize_changes: None,
             merge: default_merge,
-            make_default: |_, _| {},
+            make_default: Arc::new(|_, _| {}),
             remove: |_, _| {},
         }
     }

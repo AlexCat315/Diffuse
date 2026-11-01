@@ -214,6 +214,8 @@ pub enum CapabilityInvocationPlannerError {
     MissingIntent,
     #[error("transaction {0} is forbidden by approval policy")]
     ApprovalForbidden(String),
+    #[error("capability validation failed: {}", .0.iter().map(|failure| format!("{}: {}", failure.verb, failure.reason)).collect::<Vec<_>>().join("; "))]
+    CapabilityDenied(Vec<super::capability_invocation_planning::CapabilityValidationFailure>),
 }
 
 #[cfg(test)]

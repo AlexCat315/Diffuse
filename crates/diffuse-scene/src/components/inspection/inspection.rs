@@ -6,7 +6,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::components::core::registry::{ComponentEncodeContext, ComponentSchema};
 use crate::components::core::value::ComponentValue;
+use crate::components::required_components::make_default_component;
+use crate::runtime_world::RuntimeWorld;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +26,7 @@ pub enum ComponentFieldKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComponentNumericPresentation {
     pub minimum: Option<f64>,
     pub maximum: Option<f64>,
@@ -57,6 +61,7 @@ impl Default for ComponentNumericPresentation {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComponentColorPresentation {
     #[serde(default)]
     pub minimum: f64,
@@ -86,6 +91,7 @@ impl Default for ComponentColorPresentation {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComponentFieldVisibility {
     pub path: Vec<String>,
     pub values: Vec<ComponentValue>,
@@ -99,6 +105,7 @@ impl ComponentFieldVisibility {
 
 /// The control's stable ID is independent of the codec's string or numeric enum value.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComponentFieldChoice {
     pub id: String,
     pub label: String,
@@ -129,6 +136,7 @@ impl ComponentFieldChoice {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComponentFieldDescriptor {
     pub path: Vec<String>,
     pub id: String,
@@ -228,8 +236,9 @@ fn capitalize_words(value: &str) -> String {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComponentInspection {
-    #[serde(default)]
+    #[serde(default, rename = "sectionID")]
     pub section_id: Option<String>,
     #[serde(default)]
     pub fields: Vec<ComponentFieldDescriptor>,
@@ -333,6 +342,7 @@ impl ComponentInspection {
 
 /// A component declared by data — plugin output, module manifests.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComponentDescription {
     #[serde(rename = "typeID")]
     pub type_id: String,
@@ -351,6 +361,66 @@ pub struct ComponentDescription {
 /// Helper used by declaring code paths that need the flattened document keys.
 pub fn object_fields(value: &ComponentValue) -> BTreeMap<String, ComponentValue> {
     value.object_value().cloned().unwrap_or_default()
+}
+
+impl crate::scene_runtime::SceneRuntime {
+    /// Swift `SceneRuntime.componentDescriptions(typeID:)`.
+    ///
+    /// A pristine copy of the scene's registry installs each schema's default
+    /// document on one throwaway entity; that document drives field inference.
+    /// Schemas without a default (for example `constraint`) fall back to the first
+    /// instance already authored in the scene, then to an empty object. The
+    /// inspected scene is never mutated.
+    pub fn component_descriptions(&self, type_id: Option<&str>) -> Vec<ComponentDescription> {
+        let mut defaults_world = RuntimeWorld::new(self.component_registry().clone());
+        let entity = defaults_world.create_entity();
+        let schemas: Vec<ComponentSchema> = self
+            .component_registry()
+            .component_schemas()
+            .into_iter()
+            .filter(|schema| type_id.is_none_or(|id| schema.type_id == id))
+            .collect();
+        schemas
+            .into_iter()
+            .map(|schema| {
+                let mut world = defaults_world.clone();
+                let _ = make_default_component(&mut world, &schema, entity);
+                let mut context = ComponentEncodeContext::new(BTreeMap::from([(entity, 0)]));
+                let defaults = (schema.encode)(&world, entity, &mut context);
+                let sample = defaults
+                    .clone()
+                    .or_else(|| self.authored_inspection_sample(&schema))
+                    .unwrap_or_else(|| ComponentValue::Object(BTreeMap::new()));
+                ComponentDescription {
+                    type_id: schema.type_id.clone(),
+                    display_name: schema.display_name.clone(),
+                    category: schema.category,
+                    requires: schema.requires.clone(),
+                    is_user_addable: schema.is_user_addable,
+                    fields: schema.inspection.resolved_fields(&sample),
+                    defaults,
+                }
+            })
+            .collect()
+    }
+
+    /// Swift `authoredInspectionSample(_:)` — the first authored document of
+    /// `schema` anywhere in the scene.
+    fn authored_inspection_sample(&self, schema: &ComponentSchema) -> Option<ComponentValue> {
+        let entities = self.entities();
+        let mut context = ComponentEncodeContext::new(
+            entities
+                .iter()
+                .enumerate()
+                .map(|(index, entity)| (*entity, index as i64))
+                .collect(),
+        );
+        self.read_world(|world| {
+            entities
+                .iter()
+                .find_map(|entity| (schema.encode)(world, *entity, &mut context))
+        })
+    }
 }
 
 #[cfg(test)]
