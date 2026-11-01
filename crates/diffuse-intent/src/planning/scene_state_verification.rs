@@ -382,6 +382,213 @@ pub enum SceneStateAssertion {
 }
 
 impl SceneStateAssertion {
+    pub fn failure_description(
+        &self,
+        scene: &diffuse_scene::scene_runtime::SceneRuntime,
+    ) -> Option<String> {
+        use diffuse_scene::entity_id::EntityID;
+        use diffuse_scene::media::animation::AnimationPlayer;
+        use diffuse_scene::media::audio::{AudioListener, AudioSource};
+        use diffuse_scene::physics::joints::physics_joint::Constraint;
+        use diffuse_scene::physics::rigid_body::RigidBody;
+        use diffuse_scene::rendering::render_extraction::{
+            CameraComponent, LightComponent, RenderMaterialComponent, RenderMeshComponent,
+        };
+        use diffuse_scene::scene_bootstrap::SceneNameComponent;
+        use diffuse_script::core::script_component::ScriptComponent;
+        let id = self.target_entity_id();
+        let entity = EntityID::from_raw_value(id);
+        if !scene.contains(entity) {
+            return Some(format!("entity {id} does not exist"));
+        }
+        macro_rules! component_matches {
+            ($component:ty, $predicate:expr) => {
+                scene
+                    .component::<$component>(entity)
+                    .as_ref()
+                    .is_some_and($predicate)
+            };
+        }
+        let matched = match self {
+            Self::Parent { parent_id, .. } => {
+                scene.parent(entity).map(|e| e.raw_value()) == *parent_id
+            }
+            Self::LocalTransform { matrix, .. } => {
+                scene
+                    .local_transform(entity)
+                    .map(|t| matrix_verification_array(&t.matrix))
+                    .as_ref()
+                    == Some(matrix)
+            }
+            Self::SceneName { value, .. } => {
+                component_matches!(SceneNameComponent, |c| &c.value == value)
+            }
+            Self::RigidBodyMotionType { value, .. } => {
+                component_matches!(RigidBody, |c| c.motion_type.raw_value() == value)
+            }
+            Self::RigidBodyMass { value, .. } => {
+                component_matches!(RigidBody, |c| c.mass == *value)
+            }
+            Self::RigidBodyGravityScale { value, .. } => {
+                component_matches!(RigidBody, |c| c.gravity_scale == *value)
+            }
+            Self::RigidBodyAllowSleep { value, .. } => {
+                component_matches!(RigidBody, |c| c.allow_sleep == *value)
+            }
+            Self::ColliderPrimaryShape { value, .. } => {
+                component_matches!(
+                    Collider,
+                    |c| SceneColliderShapeVerificationState::from_shape(&c.shape()) == *value
+                )
+            }
+            Self::ColliderTrigger { value, .. } => {
+                component_matches!(Collider, |c| c.is_trigger == *value)
+            }
+            Self::ColliderShapeType { value, .. } => {
+                component_matches!(Collider, |c| c.shape().kind().raw_value() == value)
+            }
+            Self::ColliderBoxHalfExtents { value, .. } => {
+                component_matches!(Collider, |c| match c.shape() {
+                    ColliderShape::Box { half_extents, .. } => vector_array(half_extents) == *value,
+                    _ => false,
+                })
+            }
+            Self::ColliderSphereRadius { value, .. } => {
+                component_matches!(Collider, |c| match c.shape() {
+                    ColliderShape::Sphere { radius, .. } => radius == *value,
+                    _ => false,
+                })
+            }
+            Self::ColliderCapsuleRadius { value, .. } => {
+                component_matches!(Collider, |c| match c.shape() {
+                    ColliderShape::Capsule { radius, .. } => radius == *value,
+                    _ => false,
+                })
+            }
+            Self::ColliderCapsuleHalfHeight { value, .. } => {
+                component_matches!(Collider, |c| match c.shape() {
+                    ColliderShape::Capsule { half_height, .. } => half_height == *value,
+                    _ => false,
+                })
+            }
+            Self::ColliderFriction { value, .. } => {
+                component_matches!(Collider, |c| c.material.friction == *value)
+            }
+            Self::ColliderRestitution { value, .. } => {
+                component_matches!(Collider, |c| c.material.restitution == *value)
+            }
+            Self::ColliderDensity { value, .. } => {
+                component_matches!(Collider, |c| c.material.density == *value)
+            }
+            Self::ColliderLayer { value, .. } => {
+                component_matches!(Collider, |c| c.layer_id == *value)
+            }
+            Self::ColliderLayerMask { value, .. } => {
+                component_matches!(Collider, |c| c.layer_mask == *value)
+            }
+            Self::ConstraintEnabled { value, .. } => {
+                component_matches!(Constraint, |c| c.is_enabled == *value)
+            }
+            Self::LightType { value, .. } => {
+                component_matches!(LightComponent, |c| c.light_type.raw_value() == value)
+            }
+            Self::LightColor { value, .. } => {
+                component_matches!(LightComponent, |c| vector_array(c.color) == *value)
+            }
+            Self::LightIntensity { value, .. } => {
+                component_matches!(LightComponent, |c| c.intensity == *value)
+            }
+            Self::LightRange { value, .. } => {
+                component_matches!(LightComponent, |c| c.range == *value)
+            }
+            Self::LightSpotInnerAngle { value, .. } => {
+                component_matches!(LightComponent, |c| c.spot_inner_angle_degrees == *value)
+            }
+            Self::LightSpotOuterAngle { value, .. } => {
+                component_matches!(LightComponent, |c| c.spot_outer_angle_degrees == *value)
+            }
+            Self::LightCastShadows { value, .. } => {
+                component_matches!(LightComponent, |c| c.cast_shadows == *value)
+            }
+            Self::MeshColor { value, .. } => {
+                component_matches!(RenderMeshComponent, |c| vector_array(c.color_tint)
+                    == *value)
+            }
+            Self::MeshVisibility { value, .. } => {
+                component_matches!(RenderMeshComponent, |c| c.is_visible == *value)
+            }
+            Self::ScriptBindings { value, .. } => component_matches!(ScriptComponent, |c| c
+                .bindings
+                .iter()
+                .map(|b| SceneScriptBindingVerificationState::new(
+                    b.script.raw_value,
+                    b.identifier.clone(),
+                    b.is_enabled,
+                    &b.parameters_json
+                ))
+                .collect::<Vec<_>>()
+                == *value),
+            Self::CameraTarget { value, .. } => {
+                component_matches!(CameraComponent, |c| vector_array(c.target) == *value)
+            }
+            Self::CameraUp { value, .. } => {
+                component_matches!(CameraComponent, |c| vector_array(c.up) == *value)
+            }
+            Self::CameraFovRadians { value, .. } => {
+                component_matches!(CameraComponent, |c| c.fov_y_radians == *value)
+            }
+            Self::CameraAspectRatio { value, .. } => {
+                component_matches!(CameraComponent, |c| c.aspect_ratio == *value)
+            }
+            Self::CameraActive { value, .. } => {
+                component_matches!(CameraComponent, |c| c.is_active == *value)
+            }
+            Self::AudioSource { value, .. } => {
+                component_matches!(AudioSource, |c| SceneAudioSourceVerificationState::new(
+                    &c.clip_name,
+                    c.volume,
+                    c.pitch,
+                    c.loop_,
+                    c.play_on_awake,
+                    c.spatial_blend
+                ) == *value)
+            }
+            Self::AnimationPlayer { value, .. } => component_matches!(AnimationPlayer, |c| {
+                SceneAnimationPlayerVerificationState::new(
+                    c.clip_name.clone(),
+                    c.speed,
+                    c.loop_,
+                    c.is_playing,
+                    c.time,
+                ) == *value
+            }),
+            Self::AudioListenerVolume { value, .. } => {
+                component_matches!(AudioListener, |c| c.master_volume == *value)
+            }
+            Self::Material {
+                base_color,
+                metallic,
+                roughness,
+                emissive,
+                ..
+            } => component_matches!(RenderMaterialComponent, |c| {
+                let b = c.base_color_factor;
+                vec![b.x, b.y, b.z, b.w] == *base_color
+                    && c.metallic_factor == *metallic
+                    && c.roughness_factor == *roughness
+                    && vector_array(c.emissive_factor) == *emissive
+            }),
+        };
+        if matched {
+            None
+        } else {
+            Some(format!(
+                "scene state did not match field '{}'",
+                self.verification_key()
+            ))
+        }
+    }
+
     /// The entity this assertion targets.
     pub fn target_entity_id(&self) -> u64 {
         match self {

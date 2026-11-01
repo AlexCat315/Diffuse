@@ -157,7 +157,7 @@ release profile：`overflow-checks = true`，与 Swift 溢出即陷入的语义�
 - 组件以 **组件类型名 + JSON 字节** 过 ABI，JSON 格式就是组件注册表的落盘格式（§5.4），所以脚本与场景文件共用同一套编码；高频的变换、输入、时间走类型化的 `#[repr(C)]` 参数，不走 JSON。
 - 字符串与字节一律 `(ptr, len)`，返回值由宿主分配、由 `HostApi.free` 释放；所有 `#[repr(C)]` 类型的布局有编译期断言。
 - 安全封装：`ScriptContext`（包着 `*const HostApi` 和不透明句柄）、`trait ScriptBehavior { fn on_start / on_pre_physics / on_update / on_destroy }`（与 Swift `ScriptBehavior` 一一对应，默认空实现与 Swift 扩展一致）、`ScriptDefinition` / `ScriptProperty` / `ScriptPropertyOption` 构建器（对应 `ScriptAuthoring`）。
-- 导出宏 `diffuse_scripts!(GameScript, OtherScript)` 生成：`diffuse_script_abi_version() -> u32`、`diffuse_script_catalog()`（JSON：名字 + `ScriptDefinition`）、`diffuse_script_create(name, host) -> *mut c_void`、四个生命周期入口、`diffuse_script_destroy`。每个入口用 `catch_unwind` 包住，panic 转成脚本错误上报并停用该脚本实例，绝不跨 FFI 展开。
+- 导出宏 `diffuse_scripts!(GameScript, OtherScript)` 生成：`diffuse_script_abi_version() -> u32`、`diffuse_script_catalog(host)`（JSON：名字 + `ScriptDefinition`；传宿主表用于分配目录缓冲区）、`diffuse_script_create(name, host) -> *mut c_void`、四个生命周期入口、`diffuse_script_destroy`。每个入口用 `catch_unwind` 包住，panic 转成脚本错误上报并停用该脚本实例，绝不跨 FFI 展开。
 - ABI 版本：宿主只加载 `abi_version` 相同的库，不同时给出明确错误。
 
 **引擎与编辑器侧（标 `"d1": "rewrite"` 的 58 个文件，见清单）**
@@ -304,7 +304,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `transforms::transform_3d::Transform3D`（`new/identity/matrix/inverse_matrix/transform_point`）、`transforms::matrix_transforms::MatrixTransforms`（`translation/scale/rotation`）。
 - `utility::easing::Easing`（31 个变体 + `evaluate/interpolate/interpolate_vector`）、`utility::float_comparisons::FloatComparisons`（`DEFAULT_TOLERANCE`、`nearly_equal_scalar*`、`nearly_equal*`）。
 
-### `diffuse-kernel`（已 `tested`）
+### `diffuse-kernel`（原已 `tested`；`JobSystem` 新增复制支持后为 `written`）
 
 - `engine_kernel::{EngineKernelPhase, EngineKernelPhaseContext, EngineKernelFrameReport, EngineKernel}`。
 - `in_game_canvas::{InGameUIColor, InGameCanvasCommand, InGameCanvas}`。
@@ -338,12 +338,22 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `capability_registry::{CapabilityRegistry, CapabilityRegistryIntegrityError}`、`capability_validator::{CapabilityValidator, CapabilityValidationResult, CapabilityValidationError}`。
 - `drafts::precondition_checker::{PreconditionCheckInput, PreconditionChecker, PreconditionViolation}`、`release::release_phase_gate::{ReleasePhaseGate, CapabilityDraftLimits}`、`release::sha256::{digest, capability_sha256_hex_digest, CapabilityDigest}`、`support::disposal::{Registration, DisposalScope}`、`support::swift_date::SwiftDate`。
 
-### `diffuse-script-api`（已 `tested`，新建）
+### `diffuse-script-api`（新建；本轮属性/JSON 修订后为 `written`，未重新验证）
 
-- `abi`：`HostApi`（函数表）、`Slice`、`Bytes`、`Transform3`(48/16)、`GroundState`、`CharacterStance`、`ABI_VERSION`。
+- `abi`：`HostApi`（函数表；当前 ABI 2，含 allocate/free/report_error）、`Slice`、`Bytes`、`Color4`(16/4)、`Transform3`(48/16)、`GroundState`、`CharacterStance`、`ABI_VERSION`。SDK 使用独立 `0.1.0` 包版本。
 - `context::ScriptContext`（隐藏 `HostApi` 的安全封装，缺项保持 Swift 的 0/false 回退）。
 - `authoring`：`ScriptBehavior`、`ScriptAuthoring`、`ScriptDefinition`、`ScriptProperty`、`ScriptPropertyOption`、`ScriptPropertyValue`、`ScriptParameters`、`ScriptDefinitionBuilder`、`authoring::json::{JsonValue, JsonObject, parse, parse_object}`。
 - `export`：`diffuse_script_abi_version/create/on_start/on_pre_physics/on_update/on_destroy/destroy`、`CatalogEntry`、`catalog_bytes`、`diffuse_scripts!` 宏。
+
+### `diffuse-script`（原生脚本核心已 `written`；动态脚本管线待 D1 改写）
+
+- 根导出 `Script`、`ScriptCallback`、`ScriptBehavior`、`ScriptAuthoring`、`ScriptContext<'phase, 'world>`、`ScriptDefinition`、`ScriptProperty`、`ScriptPropertyValue`、`ScriptPropertyOption`、`ScriptParameterIssue`、`ScriptRuntime`、`ScriptVar`、`ScriptPresetKind`、`AnimationRuntime`。
+- `ScriptRuntime` 的 Clone 保留 Swift class 的共享实例；`register_factory` 每绑定构造状态，`register` 保留共享回调，`register_authoring_behavior` 显式选择可选的 authoring trait（Rust 无 Swift 元类型协议转换）。暂停开关通过 `is_gameplay_execution_enabled/set_gameplay_execution_enabled` 访问；回调执行时不持有注册表锁。
+- `ScriptContext` 本实体操作使用无后缀方法，其他实体使用 `_for/_of/_from`；世界变换读取会刷新层级。参数解析保留 NSNumber 对布尔值的数值桥接，authoring 类型校验仍严格拒绝数值位置的布尔值。
+- 扩展 trait：`DefaultInputActions::cove_default`、`SceneSerializerScriptSupport::{serialize_full, deserialize_full}`、`PrefabScriptSupport::{instantiate_full, capture_full}`。`ScriptDebugState` 保留按原键排序、先取 32 项，再按字形簇截断键和值。
+- `RuntimeScriptPhaseContext::with_physics_query_scene` 接收共享查询缓存；调度及 `SceneRuntime::run_script_driver` 均传场景已有缓存，五类脚本物理查询不另建后端。
+- `ScriptCompiler::{new, compile, manifest_path, resolve_executable_url, build_arguments}`：接收 Scripts crate/Cargo.toml/内部源文件，输出目录下使用 `cargo-target` 复用 Cargo 缓存；结果为 `CompilationResult { output_path, stdout, stderr, diagnostics }`。完整 rustc 消息保存在 `ScriptCompilerDiagnostic::details`。
+- `ScriptCompilationCancellationToken` 的 Clone 保持共享取消状态。默认编译时限为 None，调用方可设置 timeout；macOS/Linux 的终止升级保留 250 ms，输出管道在独立线程同时读至 EOF。SDK 导出宏要求 panic=unwind，编译器设置 release unwind 与 overflow checks。
 
 ### `diffuse-lsp`（已 `tested`）
 
@@ -452,7 +462,18 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `pipeline::commit_pipeline::{CommitEntry, CommitRequest, CommitDenialCode, CommitDenial, CommitDecision, CommitPipelineError, CommitPipeline, Handler}`；`Handler` 为 `Arc` 闭包，`CommitHandlerError` 为可保留具体错误类型的 `Box<dyn Error + Send + Sync>`。顺序保持 context 要求 → planner → forbidden 策略检查，入口策略可用 `appending` 组合。
 - `transactions::staged_transaction_store::{StagedTransactionSnapshot, StageTransactionResult, ApplyStagedTransactionResult, DiscardStagedTransactionResult, StagedTransactionStore}`；`stage(&TransactionIR, &TransactionExecutionContext)`、`apply_staged_transaction(&mut TransactionExecutionContext)`、`discard_staged_transaction(Option<&TransactionExecutionContext>)`。仅锁住 staged 状态，预览、执行和事件发布都在锁外；失败时的保留/清除顺序与 Swift 一致。
 - 补齐历史 `written` 文件里的缺口：`SceneMutation::component_fields/component_data`；`SceneStateAssertion::verification_key/superseded_verification_keys`；`TransactionVerificationAssertion::exact_postconditions`。`component_data` 始终经过 registry codec、使用 `GameSave` 编码用途；可选 merge 字段缺失时省略，显式 `ComponentValue::Null` 保留。
-- **尚未落地的接线**：`transactions::transaction_executor` 的 `TransactionExecutor::{new, preview, apply}`、`TransactionExecutionContext/TransactionApplyResult`，以及 `intent_runtime_coordinator`（包括其错误枚举）。本轮代码按这两个源文件已规划的公开类型引用；这两个清单行保持 `pending`，本轮不声称 crate 可编译。
+- `transactions::transaction_executor::{TransactionExecutionContext, TransactionApplyResult, TransactionExecutor, TransactionExecutorError, TransactionExecutionError}` 已 `written` 并在 crate 根导出。`TransactionExecutionContext::new` 接收 scene/sequence/asset registry/bus/origin 和 4 个 stream ID；`Default` 提供 Swift 的空值与流名称。scene/sequence 为可复制值，registry/bus 为 `Arc` 引用；初始化时在场景自己的 registry 注册脚本 codec。`preview(&TransactionIR, &TransactionExecutionContext)` 拒绝 asset 变更并关闭副本的 observation bus；`apply(&TransactionIR, &mut TransactionExecutionContext)` 在校验、组件变更、后置条件或 outbox 发布失败时恢复原 scene/sequence，失败事件发布错误不覆盖原错误，asset registry 的外部变化按 Swift 不回滚。
+- `intent_runtime_coordinator::{CapabilityInvocationDisposition, CapabilityInvocationResult, IntentRuntimeCoordinator, IntentRuntimeCoordinatorError, validate_confirmation_resolution}` 已 `written` 并在 crate 根导出。协调器为共享 `Arc<Mutex<...>>` 状态，入口策略按注册顺序执行，撤销历史公开为 `Arc<Mutex<UndoStack>>`；`new` 接收 owned UndoStack，`with_shared_undo_stack` 接收共享历史。`submit_plan`、`resolve_plan_confirmation`、`undo/redo` 均已接线，确认解答集及选项严格校验，AI 破坏性写入保留先整计划后破坏性警告的两轮确认，最终应用前仅重跑 Swift 原有的 standard pipeline。
+- **生产翻译进度**：`diffuse-intent` 的 22 个生产文件全部 `written`；4 个测试文件仍 `pending`。尚未运行编译、clippy 或测试，不将这些行提升为 `compiled`/`tested`。
+
+### 场景副本与共享后端（2026-11-01 配套语义修复，`written`）
+
+- `SceneRuntime`、`RuntimeWorldSchedule` 和 `ScheduleState` 支持 `Clone`：world、命令缓冲、时钟、同步缓存和帧状态按值复制，物理后端和脚本驱动器保留 Swift `AnyObject` 引用语义，查询缓存保留 Swift `PhysicsQueryScene` 类引用语义。事务预览/失败回滚和 UndoStack 不会重新创建或丢失模拟配置。
+- `physics::backend::physics_backend::SharedPhysicsBackend` 用 `Arc<Mutex<Box<dyn PhysicsBackend>>>` 共享真实实例，转发全部后端方法（含多命中重载）；`same_instance` 比较实例身份。当前生产后端的不可变 identifier 在构造时保存，查询后端返回 shared handle 值而非临时锁里的借用。
+- `PhysicsQueryScene` 的 backend 和计数缓存在同一个共享状态中；`backend/synchronize` 返回 `SharedPhysicsBackend`，`replace_shared_backend` 接收现有 handle，`stats` 仍返回值快照。`RuntimeWorldSchedule::physics_query_backend` 与 `RuntimeScriptPhaseContext::physics_query_backend` 同步返回该 handle。
+- `scripting::SharedRuntimeScriptDriver` 共享 driver 引用，调度器和 SceneRuntime 的 `set_script_driver` 接收 `impl Into<SharedRuntimeScriptDriver>`；兼容 `Box<dyn RuntimeScriptDriver>`、具体 driver 的 Box 与已有 shared handle。重复设置同一个 shared handle 不执行 reset，替换或清除时才 reset。
+- 静态对照发现并修复两处旧接线偏差：`set_physics_backend` 原来保存显式 backend 后却实际安装另一个 preferred backend；`ensure_configured_physics_backend` 原来分别创建 simulation/query/shared 三个实例，导致共享身份判断恒为 false。现在显式 override 真正参与模拟，默认模拟与查询复用 Swift 的同一个 shared backend；初始 active backend 按 Swift 为 Null，shared/query backend 为 preferred。
+- `JobSystem` 的 Rust 状态仅有只读配置对应的 worker 数和最小 chunk size，新增配置值 `Clone` 以支持 schedule 副本；该源文件旧 `tested` 状态已退回 `written`。`SceneStateAssertion::failure_description` 的全部 39 个状态分支已补齐，失败消息与 Swift 一致。
 
 ## 9. 进度与批次日志
 
@@ -537,8 +558,29 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-01 | 批次 64 | diffuse-intent 物理能力 | 1 | 525 | `BuiltInPhysicsCapabilities` 全部 `written`，11 个能力；保留同类 collider 的原尺寸与中心、异类形状默认值、局部字段更新、构造后经 registry codec 写出。按用户要求不测试 |
 | 2026-11-01 | 批次 65 | diffuse-intent 场景/媒体/脚本能力 | 1 | 683 | `BuiltInSceneUtilityCapabilities` 全部 `written`，10 个能力；保留 spawn 默认值、父子关系限制、有界脚本值、绑定 ID/句柄替换、参数 sorted JSON、音频和动画缺省行为。36 个能力均已有真实准备逻辑；按用户要求不测试 |
 | 2026-11-01 | 批次 66 | diffuse-intent 提交策略与暂存 | 2 | 315 | `CommitPipeline`、`StagedTransactionStore` 全部 `written`；按 Swift 顺序运行策略、保留错误类型、锁外发布生命周期事件；同时修复历史 `written` 文件缺失的组件变更构造与精确后置条件生成。事务执行器和协调器保持 `pending`；本轮不编译、不测试 |
+| 2026-11-01 | 批次 67 | diffuse-intent `TransactionExecutor` | 1 | 1073 | 独占批次，完整 `written`：值快照预览、scene/sequence/asset 按域应用、revision 校验、归一化后置条件重放、失败回滚、outbox 与细粒度 WorldEvent 投影；创建/删除/复制/重排及所有组件变更分支保留。按用户要求不编译、不测试 |
+| 2026-11-01 | 批次 68 | diffuse-intent `IntentRuntimeCoordinator` | 1 | 471 | 完整 `written`：入口策略注册/撤销、自动应用与暂存、两轮破坏性确认、确认前状态与授权重校验、严格答案校验、撤销/重做、确认事件 payload。22 个生产文件全部 `written`，测试文件仍 `pending`；不编译、不测试 |
+| 2026-11-01 | 批次 69 | 场景快照依赖与历史接线修复 | 8 | — | `SceneRuntime`/schedule 支持忠实值复制；backend/driver/query cache 使用共享引用；修正显式 backend 被忽略及 simulation/query 实例分离；补 39 个 `failure_description` 分支。`JobSystem` 新增 Clone 后从 `tested` 退回 `written`，没有以新建 schedule 或空后端替代副本；只做格式化、静态源代码对照与清单检查 |
+| 2026-11-01 | 批次 70 | diffuse-script 核心与输入锚点 | 6 | 875 | `ScriptBehavior`、`ScriptContext`、`ScriptDefinition`、`ScriptLifecycle`、默认输入映射和输入处理完整 `written`；保留参数合并/校验、完整组件与资源操作、prefab 实例化、触发器及物理查询。先补依赖锚点；按用户要求不翻译或运行测试、不编译 |
+| 2026-11-01 | 批次 71 | diffuse-script 控制器、动画与预设 | 8 | 838 | 三个控制器、三个预设文件和两个序列化/调试扩展完整 `written`；保留图状态优先级、过渡时钟、1D 混合、关键帧区间/四元数插值、首个 skin 的关节调色板、输入失焦释放、相机同步及角色落地边沿。只格式化和静态源码对照 |
+| 2026-11-01 | 批次 72 | diffuse-script `ScriptRuntime` | 1 | 337 | 完整 `written`：稳定名称/句柄、代次热替换、每绑定状态工厂、旧参数销毁、暂停保留实例且继续动画、结束会话有序销毁、输入与 canvas 帧资源；动态脚本六个文件仍 `pending`，本轮没有测试或编译 |
+| 2026-11-01 | 批次 73 | 脚本 SDK 与上游缺口修复 | — | — | 补 SDK 属性元数据、字符串选项、Swift 关联枚举编码、严格 JSON 数字/代理项与完整 UInt64；补 `AssetRegistry::shared`、phase registry setter、WorldTransform 通用读取刷新及共享物理查询接线。AssetRegistry 从 `tested` 回退 `written`；SDK 修订不沿用历史测试结论 |
+| 2026-11-01 | 批次 74 | diffuse-script D1 编译器 | 1 | 616 | `SwiftScriptCompiler.swift` → `ScriptCompiler` 完整改写为 `written`：Cargo release/JSON 消息、项目缓存、清晰诊断、准确 cdylib 选择、独立代次原子发布、取消注册竞态与 250 ms 终止升级、双管道并发读取和可选截止时间；Swift modulemap、动态符号链接与 Windows 导入库流程由 D1 的 std-only SDK 依赖替代。没有运行 Cargo、测试或编译 |
+| 2026-11-01 | 批次 75 | diffuse-script 时间、输入、角色桥接与 SDK 修复 | 3 | 105 | 三个小桥接文件完整 `written`；新增调用期间有效的线程上下文、独占借用保护、宿主字节分配/释放和错误状态资源作为接线锚点。SDK 宏生成全部 C 导出、修正创建符号、捕获 panic 后停用、可选 authoring 选择及空字符串保留；目录使用宿主分配器，ABI 提升为 2。通用上下文桥接和加载器仍 `pending`，没有以空函数表宣称 D1 完成 |
 
 ## 10. 已知问题与需要用户确认的事项
+
+- **2026-11-01 批次 74–75**：新增 4 个生产文件为 `written`。未执行新编译器、Cargo、测试或动态库加载；仅格式化、静态源码对照及清单检查。`script_c_bridge_context.rs` 当前只是接线锚点，实体/变换/组件/资源/参数/物理查询等完整 HostApi 条目与加载器仍未落地，对应两行继续 `pending`。
+- SDK ABI 2 目录入口明确为 `diffuse_script_catalog(host)`，以满足 D1 的“宿主分配、宿主释放”要求；不再泄漏脚本 Vec 或跨 DLL 释放脚本分配。所有生命周期与创建/销毁中的 panic 均隔离上报，实例随后停用；HostApi 生命周期必须覆盖 SDK 实例析构，后续加载器须持有该宿主句柄至最终 destroy 返回。现有 SDK 测试未修改或运行，历史验证结论不适用于这些 API 变动。
+- `diffuse-script` 复用 workspace 已有 thiserror 表达编译错误，没有新增第三方 crate。SDK 继续 std-only；Color4 用 repr(C) 结构体传色值，避免裸数组作为 C 函数值参数，并补齐 ABI 类型的布局断言。
+- Cove `NativeProcess` 的提前清 running 标志及退出监视线程错误丢失登记为 [G9](.migration/cove-gaps.md)；没有修改 Cove/Natsel。
+- HostApi 尚待补齐的变换接口需保留 LocalTransform 的完整矩阵，不能用当前 SDK 的 TRS 48 字节表达丢掉 shear；实体 0、空名称与“未提供名称”、移除时返回旧组件/资源等边界也必须在通用桥接批次逐一保留。ABI 表布局再次变化时继续提升版本，不能静默复用旧布局。
+
+- **2026-11-01 批次 70–73**：15 个脚本生产文件新增为 `written`；动态编译器、加载器与 HostApi 桥接六文件仍为 `pending`，未宣称 D1 管线已完成。SDK 本轮修订后没有编译或测试；保留现有测试源码，不修改断言以适应 API。后续 D1 批次仍须补全 HostApi 覆盖、panic 停用/报告与导出缓冲区所有权。
+- `diffuse-script` 的 `diffuse-assets` 从开发依赖提升为生产依赖，对应 Swift ScriptRuntime 对 AssetPipeline 的现有依赖；补回规定的 `cove-system` 依赖。使用 workspace 已有的 `unicode-segmentation` 保持调试状态截断的字形簇语义，没有新增第三方 crate。
+- Swift 可在泛型注册中动态查询独立的 `ScriptAuthoring` 元类型；Rust 不支持该转换，原生行为采用 `register_behavior` / `register_authoring_behavior` 两个入口，后续有 authoring 的调用点必须选后者。生命周期共享可变状态由 Mutex 串行访问，回调获得独占 `&mut ScriptContext`。
+
+- **2026-11-01 批次 67–69**：事务执行器/协调器已完成生产翻译，补齐既有状态断言的判定逻辑；场景复制所需的共享引用接线和显式物理 backend 偏差也已按 Swift 修正。本轮不运行编译、测试或基准，相关运行表现尚未验证；没有修改 Cove/Natsel，也没有新增第三方依赖。
 
 - **2026-11-01 当前用户要求：迁移不进行测试工作。** 本轮只迁移生产代码，运行 Rust 格式化与 `inventory.py --check` 静态清单检查，不运行 Swift/Rust 测试、cargo check/clippy 或运行时验证；新增完成行仅标 `written`，不提升为 `compiled`/`tested`。已有测试文件改动保留，未作为本轮工作继续扩展。
 - `diffuse-script` 把 workspace 中已有的 `serde`/`serde_json` 用于脚本绑定编码；`serde_json` 从该 crate 的 dev-dependency 提升为生产依赖，没有新增第三方 crate。

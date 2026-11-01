@@ -91,6 +91,7 @@ impl InputFrameResource {
 }
 
 /// The world, its pending commands, and the frame schedule.
+#[derive(Clone)]
 pub struct SceneRuntime {
     world: RuntimeWorld,
     command_buffer: RuntimeCommandBuffer,
@@ -1201,7 +1202,10 @@ impl SceneRuntime {
         &mut self.schedule
     }
 
-    pub fn set_script_driver(&mut self, driver: Box<dyn crate::scripting::RuntimeScriptDriver>) {
+    pub fn set_script_driver(
+        &mut self,
+        driver: impl Into<crate::scripting::SharedRuntimeScriptDriver>,
+    ) {
         self.schedule.set_script_driver(driver);
     }
 
@@ -1216,16 +1220,17 @@ impl SceneRuntime {
 
     /// Runs a script driver against this scene's world for one frame.
     ///
-    /// Swift also handed the driver a `PhysicsQueryScene` handle; the Rust
-    /// `RuntimeScriptPhaseContext` owns only the world and command buffer, so a
-    /// driver reaches physics through the scene's query methods instead.
     pub fn run_script_driver(
         &mut self,
         driver: &mut dyn crate::scripting::RuntimeScriptDriver,
         delta_time: f64,
     ) {
-        let mut context =
-            RuntimeScriptPhaseContext::new(&mut self.world, &mut self.command_buffer, delta_time);
+        let mut context = RuntimeScriptPhaseContext::with_physics_query_scene(
+            &mut self.world,
+            &mut self.command_buffer,
+            delta_time,
+            self.schedule.physics_query_scene(),
+        );
         driver.run(&mut context);
     }
 }

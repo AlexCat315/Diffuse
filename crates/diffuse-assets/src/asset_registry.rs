@@ -151,6 +151,11 @@ impl Default for AssetRegistry {
 }
 
 impl AssetRegistry {
+    pub fn shared() -> &'static Self {
+        static SHARED: std::sync::OnceLock<AssetRegistry> = std::sync::OnceLock::new();
+        SHARED.get_or_init(Self::new)
+    }
+
     /// Index the first imported mesh occupies; 0 and 1 stay reserved.
     pub const IMPORTED_MESH_START_INDEX: i64 = 2;
 

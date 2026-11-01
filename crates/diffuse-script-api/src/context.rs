@@ -8,7 +8,9 @@
 use core::ffi::{CStr, c_void};
 use core::marker::PhantomData;
 
-use crate::abi::{ABI_VERSION, Bytes, CharacterStance, GroundState, HostApi, Slice, Transform3};
+use crate::abi::{
+    ABI_VERSION, Bytes, CharacterStance, Color4, GroundState, HostApi, Slice, Transform3,
+};
 
 /// The handle a script receives in its lifecycle callbacks.
 pub struct ScriptContext {
@@ -19,10 +21,13 @@ pub struct ScriptContext {
 }
 
 impl ScriptContext {
-    /// Wraps a host table. The caller guarantees `host.instance` (when non-null)
-    /// stays alive for this context's lifetime.
+    /// Wraps a host table for one callback.
+    ///
+    /// # Safety
+    /// Every populated function and the opaque instance must remain valid for
+    /// this context's lifetime. Returned byte ranges must satisfy the ABI contract.
     #[inline]
-    pub fn new(host: HostApi) -> Self {
+    pub unsafe fn new(host: HostApi) -> Self {
         let instance = host.instance;
         ScriptContext {
             host,
@@ -57,7 +62,8 @@ impl ScriptContext {
 
     /// Copies host-owned bytes and releases them through the table.
     fn take_bytes(&self, bytes: Bytes) -> String {
-        let text = String::from_utf8_lossy(bytes.as_slice()).into_owned();
+        // SAFETY: the host contract guarantees a live initialized range until free.
+        let text = String::from_utf8_lossy(unsafe { bytes.as_slice() }).into_owned();
         if bytes.owned
             && let Some(free) = self.host.free
         {
@@ -120,35 +126,12 @@ impl ScriptContext {
         }
     }
 
-    /// `ScriptContext.isAlive`.
-    pub fn is_alive(&self, entity: u64) -> bool {
-        match self.host.entity_is_alive {
-            Some(is_alive) => is_alive(self.instance(), entity),
-            None => false,
-        }
-    }
-
-    /// `ScriptContext.contains(_:)`.
-    #[inline]
-    pub fn contains(&self, entity: u64) -> bool {
-        self.is_alive(entity)
-    }
-
-    // ---- entity lifecycle -------------------------------------------------
-
-    /// `ScriptContext.createEntity(named:parent:)`; `None` means creation failed.
-    pub fn create_entity(&self, name: Option<&str>, parent: Option<u64>) -> Option<u64> {
-        let create = self.host.create_entity?;
-        let name_slice = match name {
-            Some(value) => Self::slice(value),
-            None => Slice::EMPTY,
-        };
-        let (parent_value, has_parent) = match parent {
-            Some(value) => (value, true),
-            None => (0, false),
-        };
-        let entity = create(self.instance(), name_slice, parent_value, has_parent);
-        if entity == 0 { None } else { Some(entity) }
+    pub fn is_alive(&self) -> bool { self.contains(self.entity()) }
+    pub fn contains(&self, entity: u64) -> bool { self.host.entity_is_alive.is_some_and(|f| f(self.instance(), entity)) }
+    pub fn create_entity(&self, name: Option<&str>, transform: Transform3) -> Option<u64> {
+        let mut entity = 0;
+        let success = (self.host.create_entity?)(self.instance(), Self::slice(name.unwrap_or("")), name.is_some(), transform, &mut entity);
+        success.then_some(entity)
     }
 
     /// `ScriptContext.destroyEntity(_:)`.
@@ -190,20 +173,13 @@ impl ScriptContext {
         }
     }
 
-    /// `ScriptContext.entity(named:)`.
     pub fn entity_named(&self, name: &str) -> Option<u64> {
-        let entity_named = self.host.entity_named?;
-        let entity = entity_named(self.instance(), Self::slice(name));
-        if entity == 0 { None } else { Some(entity) }
+        let mut entity = 0;
+        (self.host.entity_named?)(self.instance(), Self::slice(name), &mut entity).then_some(entity)
     }
-
-    // ---- transforms -------------------------------------------------------
-
-    /// `ScriptContext.localTransform`.
     pub fn local_transform(&self) -> Option<Transform3> {
-        self.host
-            .local_transform
-            .map(|local_transform| local_transform(self.instance()))
+        let mut value = Transform3::default();
+        (self.host.local_transform?)(self.instance(), &mut value).then_some(value)
     }
 
     /// `ScriptContext.localTransform(of:)`.
@@ -217,11 +193,9 @@ impl ScriptContext {
         }
     }
 
-    /// `ScriptContext.worldTransform`.
     pub fn world_transform(&self) -> Option<Transform3> {
-        self.host
-            .world_transform
-            .map(|world_transform| world_transform(self.instance()))
+        let mut value = Transform3::default();
+        (self.host.world_transform?)(self.instance(), &mut value).then_some(value)
     }
 
     /// `ScriptContext.worldTransform(of:)`.
@@ -259,7 +233,7 @@ impl ScriptContext {
     pub fn component_json(&self, entity: u64, type_name: &str) -> Option<String> {
         let get_component = self.host.get_component?;
         let bytes = get_component(self.instance(), entity, Self::slice(type_name));
-        if bytes.len == 0 {
+        if bytes.ptr.is_null() {
             None
         } else {
             Some(self.take_bytes(bytes))
@@ -287,14 +261,15 @@ impl ScriptContext {
         }
     }
 
-    /// `ScriptContext.removeComponent(_:)`.
-    pub fn remove_component(&self, entity: u64, type_name: &str) -> bool {
-        match self.host.remove_component {
-            Some(remove_component) => {
-                remove_component(self.instance(), entity, Self::slice(type_name))
-            }
-            None => false,
-        }
+    pub fn remove_component(&self, entity: u64, type_name: &str) -> Option<String> {
+        let bytes = (self.host.remove_component?)(self.instance(), entity, Self::slice(type_name));
+        if bytes.ptr.is_null() { None } else { Some(self.take_bytes(bytes)) }
+    }
+    pub fn update_component_json(&self, entity: u64, name: &str, body: impl FnOnce(&mut crate::authoring::json::JsonValue)) -> bool {
+        let Some(text) = self.component_json(entity, name) else { return false; };
+        let Some(mut value) = crate::authoring::json::parse(&text) else { return false; };
+        body(&mut value);
+        value.try_to_json().is_some_and(|text| self.set_component_json(entity, name, &text))
     }
 
     // ---- parameters -------------------------------------------------------
@@ -333,7 +308,7 @@ impl ScriptContext {
     pub fn string_parameter(&self, name: &str) -> Option<String> {
         let string_parameter = self.host.string_parameter?;
         let bytes = string_parameter(self.instance(), Self::slice(name));
-        if bytes.len == 0 {
+        if bytes.ptr.is_null() {
             None
         } else {
             Some(self.take_bytes(bytes))
@@ -368,7 +343,7 @@ impl ScriptContext {
     pub fn resource_json(&self, type_name: &str) -> Option<String> {
         let get_resource = self.host.get_resource?;
         let bytes = get_resource(self.instance(), Self::slice(type_name));
-        if bytes.len == 0 {
+        if bytes.ptr.is_null() {
             None
         } else {
             Some(self.take_bytes(bytes))
@@ -385,12 +360,15 @@ impl ScriptContext {
         }
     }
 
-    /// `ScriptContext.removeResource(_:)`.
-    pub fn remove_resource(&self, type_name: &str) -> bool {
-        match self.host.remove_resource {
-            Some(remove_resource) => remove_resource(self.instance(), Self::slice(type_name)),
-            None => false,
-        }
+    pub fn remove_resource(&self, type_name: &str) -> Option<String> {
+        let bytes = (self.host.remove_resource?)(self.instance(), Self::slice(type_name));
+        if bytes.ptr.is_null() { None } else { Some(self.take_bytes(bytes)) }
+    }
+    pub fn update_resource_json(&self, name: &str, body: impl FnOnce(&mut crate::authoring::json::JsonValue)) -> bool {
+        let Some(text) = self.resource_json(name) else { return false; };
+        let Some(mut value) = crate::authoring::json::parse(&text) else { return false; };
+        body(&mut value);
+        value.try_to_json().is_some_and(|text| self.set_resource_json(name, &text))
     }
 
     // ---- UI and state -----------------------------------------------------
@@ -399,7 +377,14 @@ impl ScriptContext {
     #[allow(clippy::too_many_arguments)]
     pub fn draw_label(&self, text: &str, x: f32, y: f32, font_size: f32, color: [f32; 4]) {
         if let Some(draw_label) = self.host.draw_label {
-            draw_label(self.instance(), Self::slice(text), x, y, font_size, color);
+            draw_label(
+                self.instance(),
+                Self::slice(text),
+                x,
+                y,
+                font_size,
+                Color4::new(color),
+            );
         }
     }
 
@@ -407,7 +392,15 @@ impl ScriptContext {
     #[allow(clippy::too_many_arguments)]
     pub fn draw_rect(&self, x: f32, y: f32, w: f32, h: f32, corner_radius: f32, color: [f32; 4]) {
         if let Some(draw_rect) = self.host.draw_rect {
-            draw_rect(self.instance(), x, y, w, h, corner_radius, color);
+            draw_rect(
+                self.instance(),
+                x,
+                y,
+                w,
+                h,
+                corner_radius,
+                Color4::new(color),
+            );
         }
     }
 
@@ -435,8 +428,8 @@ impl ScriptContext {
                 value,
                 max_value,
                 corner_radius,
-                fill_color,
-                bg_color,
+                Color4::new(fill_color),
+                Color4::new(bg_color),
             );
         }
     }
@@ -498,6 +491,63 @@ impl ScriptContext {
             None => [0.0, 0.0, 0.0],
         }
     }
+    pub fn entities(&self) -> Vec<u64> { self.host.entities.map(|f| self.entity_list(f(self.instance()))).unwrap_or_default() }
+    pub fn children(&self, entity: u64) -> Vec<u64> { self.host.children.map(|f| self.entity_list(f(self.instance(), entity))).unwrap_or_default() }
+    fn entity_list(&self, bytes: Bytes) -> Vec<u64> {
+        match crate::authoring::json::parse(&self.take_bytes(bytes)) {
+            Some(crate::authoring::json::JsonValue::Array(values)) => values.iter().filter_map(crate::authoring::json::JsonValue::as_u64).collect(),
+            _ => Vec::new(),
+        }
+    }
+    pub fn translate(&self, entity: u64, delta: [f32;3]) -> bool { self.host.translate.is_some_and(|f| f(self.instance(), entity, delta[0], delta[1], delta[2])) }
+    pub fn instantiate(&self, document: &str, parent: Option<u64>, transform: Option<Transform3>) -> Option<u64> {
+        let mut entity = 0;
+        (self.host.instantiate?)(self.instance(), Self::slice(document), parent.unwrap_or(0), parent.is_some(), transform.unwrap_or_default(), transform.is_some(), &mut entity).then_some(entity)
+    }
+    pub fn parameters(&self) -> crate::authoring::json::JsonObject {
+        self.host.resolved_parameters_json.map(|f| crate::authoring::json::parse_object(&self.take_bytes(f(self.instance())))).unwrap_or_default()
+    }
+    pub fn input(&self) -> crate::authoring::json::JsonObject {
+        self.host.input_frame.map(|f| crate::authoring::json::parse_object(&self.take_bytes(f(self.instance())))).unwrap_or_default()
+    }
+    pub fn trigger_events(&self) -> crate::authoring::json::JsonObject {
+        self.host.trigger_events.map(|f| crate::authoring::json::parse_object(&self.take_bytes(f(self.instance())))).unwrap_or_default()
+    }
+    pub fn triggers_entered(&self) -> Vec<crate::authoring::json::JsonValue> { self.own_trigger_events("enters") }
+    pub fn triggers_exited(&self) -> Vec<crate::authoring::json::JsonValue> { self.own_trigger_events("exits") }
+    fn own_trigger_events(&self, key: &str) -> Vec<crate::authoring::json::JsonValue> {
+        self.trigger_events().get(key).and_then(|value| value.as_array()).unwrap_or_default().iter()
+            .filter(|value| value.as_object().and_then(|value| value.get("triggerEntity")).and_then(|value| value.as_u64()) == Some(self.entity())).cloned().collect()
+    }
+    pub fn did_trigger_enter(&self, other: u64) -> bool { self.triggers_entered().iter().any(|value| value.as_object().and_then(|value| value.get("otherEntity")).and_then(|value| value.as_u64()) == Some(other)) }
+    pub fn did_trigger_exit(&self, other: u64) -> bool { self.triggers_exited().iter().any(|value| value.as_object().and_then(|value| value.get("otherEntity")).and_then(|value| value.as_u64()) == Some(other)) }
+    pub fn character_state(&self) -> Option<crate::authoring::json::JsonValue> {
+        let bytes = (self.host.character_state?)(self.instance());
+        if bytes.ptr.is_null() { None } else { crate::authoring::json::parse(&self.take_bytes(bytes)) }
+    }
+    pub fn submit_vehicle_command(&self, json: &str) -> bool { self.host.submit_vehicle_command.is_some_and(|f| f(self.instance(), Self::slice(json))) }
+    fn query(&self, function: Option<extern "C" fn(*mut c_void, Slice, Slice) -> Bytes>, query: &str, filter: &str) -> Option<crate::authoring::json::JsonValue> {
+        let bytes = function?(self.instance(), Self::slice(query), Self::slice(filter));
+        if bytes.ptr.is_null() { None } else { crate::authoring::json::parse(&self.take_bytes(bytes)) }
+    }
+    pub fn physics_raycast(&self, query: &str, filter: &str) -> Option<crate::authoring::json::JsonValue> { self.query(self.host.physics_raycast, query, filter) }
+    pub fn physics_overlap_aabb(&self, query: &str, filter: &str) -> Option<crate::authoring::json::JsonValue> { self.query(self.host.physics_overlap_aabb, query, filter) }
+    pub fn physics_overlap_shape(&self, query: &str, filter: &str) -> Option<crate::authoring::json::JsonValue> { self.query(self.host.physics_overlap_shape, query, filter) }
+    pub fn physics_sweep_aabb(&self, query: &str, filter: &str) -> Option<crate::authoring::json::JsonValue> { self.query(self.host.physics_sweep_aabb, query, filter) }
+    pub fn physics_sweep_shape(&self, query: &str, filter: &str) -> Option<crate::authoring::json::JsonValue> { self.query(self.host.physics_sweep_shape, query, filter) }
+    pub fn raycast(&self, origin: [f32;3], direction: [f32;3], max_distance: f32, filter: &str) -> Option<crate::authoring::json::JsonValue> {
+        use crate::authoring::json::{JsonValue as V, JsonObject};
+        let vector = |v: [f32;3]| V::Array(v.into_iter().map(V::Float).collect());
+        let query = V::Object(JsonObject::from([("origin".into(), vector(origin)), ("direction".into(), vector(direction)), ("maxDistance".into(), V::Float(max_distance))])).try_to_json()?;
+        self.physics_raycast(&query, filter)
+    }
+    pub fn overlap(&self, min: [f32;3], max: [f32;3], filter: &str) -> Option<crate::authoring::json::JsonValue> {
+        self.physics_overlap_aabb(&bounds_query(min, max, None)?, filter)
+    }
+    pub fn sweep(&self, min: [f32;3], max: [f32;3], translation: [f32;3], filter: &str) -> Option<crate::authoring::json::JsonValue> {
+        self.physics_sweep_aabb(&bounds_query(min, max, Some(translation))?, filter)
+    }
+    pub fn draw_ui(&self, body: impl FnOnce(&Self)) { if self.host.canvas_exists.is_some_and(|f| f(self.instance())) { body(self); } }
 }
 
 /// Reads a NUL-terminated C string, mirroring Swift's `String(cString:)`.
@@ -512,4 +562,12 @@ pub unsafe fn c_string_to_owned(ptr: *const core::ffi::c_char) -> Option<String>
     // SAFETY: the caller guarantees a valid NUL-terminated string.
     let c_str = unsafe { CStr::from_ptr(ptr) };
     c_str.to_str().ok().map(str::to_string)
+}
+
+fn bounds_query(min: [f32;3], max: [f32;3], translation: Option<[f32;3]>) -> Option<String> {
+    use crate::authoring::json::{JsonValue as V, JsonObject};
+    let vector = |v: [f32;3]| V::Array(v.into_iter().map(V::Float).collect());
+    let mut fields = JsonObject::from([("bounds".into(), V::Object(JsonObject::from([("min".into(), vector(min)), ("max".into(), vector(max))])))]);
+    if let Some(translation) = translation { fields.insert("translation".into(), vector(translation)); }
+    V::Object(fields).try_to_json()
 }

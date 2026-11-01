@@ -7058,7 +7058,8 @@
       "rust": [
         "crates/diffuse-assets/src/asset_registry.rs"
       ],
-      "status": "tested"
+      "status": "written",
+      "notes": "批次 73 补回 Swift shared 单例；本轮未编译、未测试，历史验证状态不沿用。"
     },
     {
       "source": "Engine/Sources/AssetPipeline/Geometry/BezierSpline.swift",
@@ -7874,7 +7875,8 @@
       "rust": [
         "crates/diffuse-kernel/src/job_system.rs"
       ],
-      "status": "tested"
+      "status": "written",
+      "notes": "2026-11-01: immutable configuration now supports Clone for faithful scene snapshots; previous tested status predates this change. No compilation or tests at user request."
     },
     {
       "source": "Engine/Sources/EngineKernel/WindowID.swift",
@@ -8055,7 +8057,8 @@
       "rust": [
         "crates/diffuse-intent/src/intent_runtime_coordinator.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "2026-11-01: full production translation, including snapshot rollback, postcondition verification and confirmation lifecycle; no compilation or tests at user request."
     },
     {
       "source": "Engine/Sources/IntentRuntime/Invocation/AmbiguityScorer.swift",
@@ -8201,7 +8204,8 @@
       "rust": [
         "crates/diffuse-intent/src/transactions/transaction_executor.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "2026-11-01: full production translation, including snapshot rollback, postcondition verification and confirmation lifecycle; no compilation or tests at user request."
     },
     {
       "source": "Engine/Sources/IntentRuntime/Transactions/TransactionIR.swift",
@@ -11237,7 +11241,8 @@
       "rust": [
         "crates/diffuse-script/src/controllers/animation_runtime.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Controllers/CameraControllers.swift",
@@ -11248,7 +11253,8 @@
       "rust": [
         "crates/diffuse-script/src/controllers/camera_controllers.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Controllers/CharacterInputController.swift",
@@ -11259,7 +11265,8 @@
       "rust": [
         "crates/diffuse-script/src/controllers/character_input_controller.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Core/ScriptBehavior.swift",
@@ -11270,7 +11277,8 @@
       "rust": [
         "crates/diffuse-script/src/core/script_behavior.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Core/ScriptComponent.swift",
@@ -11293,7 +11301,8 @@
       "rust": [
         "crates/diffuse-script/src/core/script_context.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Core/ScriptDefinition.swift",
@@ -11304,7 +11313,8 @@
       "rust": [
         "crates/diffuse-script/src/core/script_definition.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Core/ScriptLifecycle.swift",
@@ -11315,7 +11325,8 @@
       "rust": [
         "crates/diffuse-script/src/core/script_lifecycle.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Core/ScriptRuntime.swift",
@@ -11326,7 +11337,8 @@
       "rust": [
         "crates/diffuse-script/src/core/script_runtime.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/DynamicScript/ScriptCBridgeCharacter.swift",
@@ -11338,7 +11350,8 @@
         "crates/diffuse-script/src/dynamic_script/script_c_bridge_character.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written",
+      "notes": "D1 完整生产翻译；批次 74–75。按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/DynamicScript/ScriptCBridgeContext.swift",
@@ -11350,7 +11363,8 @@
         "crates/diffuse-script/src/dynamic_script/script_c_bridge_context.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "pending",
+      "notes": "D1 接线锚点：线程上下文、allocator、错误状态已写；完整 HostApi 条目仍待续，保持 pending。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/DynamicScript/ScriptCBridgeInput.swift",
@@ -11362,7 +11376,8 @@
         "crates/diffuse-script/src/dynamic_script/script_c_bridge_input.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written",
+      "notes": "D1 完整生产翻译；批次 74–75。按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/DynamicScript/ScriptCBridgeTime.swift",
@@ -11374,7 +11389,8 @@
         "crates/diffuse-script/src/dynamic_script/script_c_bridge_time.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written",
+      "notes": "D1 完整生产翻译；批次 74–75。按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/DynamicScript/SwiftScriptCompiler.swift",
@@ -11386,7 +11402,8 @@
         "crates/diffuse-script/src/dynamic_script/script_compiler.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written",
+      "notes": "D1 完整生产翻译；批次 74–75。按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/DynamicScript/SwiftScriptLoader.swift",
@@ -11409,7 +11426,8 @@
       "rust": [
         "crates/diffuse-script/src/input/default_input_actions.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Input/InputStateProcessor.swift",
@@ -11420,7 +11438,8 @@
       "rust": [
         "crates/diffuse-script/src/input/input_state_processor.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Interop/ComponentRegistryScriptCodec.swift",
@@ -11443,7 +11462,8 @@
       "rust": [
         "crates/diffuse-script/src/interop/scene_serializer_script_support.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Interop/ScriptDebugState.swift",
@@ -11454,7 +11474,8 @@
       "rust": [
         "crates/diffuse-script/src/interop/script_debug_state.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Presets/ScriptPresetCatalog.swift",
@@ -11465,7 +11486,8 @@
       "rust": [
         "crates/diffuse-script/src/presets/script_preset_catalog.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Presets/ScriptPresetDefinitions.swift",
@@ -11476,7 +11498,8 @@
       "rust": [
         "crates/diffuse-script/src/presets/script_preset_definitions.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Presets/ScriptPresets.swift",
@@ -11487,7 +11510,8 @@
       "rust": [
         "crates/diffuse-script/src/presets/script_presets.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
       "source": "Engine/Sources/SemanticPipeline/AssetSemanticPipeline.swift",

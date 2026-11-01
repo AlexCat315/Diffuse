@@ -4,7 +4,7 @@
 //! Holds the `PhysicsBackend` trait rather than a concrete engine, so any backend
 //! implementation can be queried this way.
 
-use crate::physics::backend::physics_backend::PhysicsBackend;
+use crate::physics::backend::physics_backend::{PhysicsBackend, SharedPhysicsBackend};
 use crate::physics::backend::physics_backend_context::{
     PhysicsPrepareContext, PhysicsPrepareResult,
 };
@@ -20,6 +20,7 @@ use crate::physics::queries::spatial_queries::{
 };
 use crate::physics::rigid_body::RigidBody;
 use crate::runtime_world::RuntimeWorld;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Cache statistics for one `PhysicsQueryScene`.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -39,48 +40,57 @@ impl PhysicsQueryCacheStats {
     }
 }
 
-/// The mirrored query view of a world.
+/// Swift's query cache is a reference object shared by copied schedules.
+#[derive(Clone)]
 pub struct PhysicsQueryScene {
-    backend: Box<dyn PhysicsBackend>,
-    source_revision: Option<u64>,
-    body_count: usize,
-    constraint_count: usize,
-    query_count: usize,
-    rebuild_count: usize,
-    cache_hit_count: usize,
+    state: Arc<Mutex<QuerySceneState>>,
+}
+
+struct QuerySceneState {
+    backend: SharedPhysicsBackend,
+    stats: PhysicsQueryCacheStats,
 }
 
 impl PhysicsQueryScene {
     pub fn new(backend: Box<dyn PhysicsBackend>) -> Self {
-        PhysicsQueryScene {
-            backend,
-            source_revision: None,
-            body_count: 0,
-            constraint_count: 0,
-            query_count: 0,
-            rebuild_count: 0,
-            cache_hit_count: 0,
+        Self::with_shared_backend(SharedPhysicsBackend::new(backend))
+    }
+
+    pub fn with_shared_backend(backend: SharedPhysicsBackend) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(QuerySceneState {
+                backend,
+                stats: PhysicsQueryCacheStats::default(),
+            })),
         }
     }
 
-    /// The backend to query, synchronised to `world` when its physics revision moved.
-    pub fn backend(&mut self, world: &RuntimeWorld) -> &mut dyn PhysicsBackend {
-        self.query_count += 1;
-        if self.source_revision == Some(world.physics_revision()) {
-            self.cache_hit_count += 1;
-        }
-        self.synchronize(world)
+    fn lock(&self) -> MutexGuard<'_, QuerySceneState> {
+        self.state.lock().unwrap_or_else(|error| error.into_inner())
     }
 
-    /// Push a full snapshot into the backend when the world's physics revision
-    /// changed, then return the backend.
-    pub fn synchronize(&mut self, world: &RuntimeWorld) -> &mut dyn PhysicsBackend {
-        if self.source_revision == Some(world.physics_revision()) {
-            return self.backend.as_mut();
+    pub fn backend(&mut self, world: &RuntimeWorld) -> SharedPhysicsBackend {
+        let mut state = self.lock();
+        state.stats.query_count += 1;
+        if state.stats.source_revision == Some(world.physics_revision()) {
+            state.stats.cache_hit_count += 1;
         }
+        Self::synchronize_state(&mut state, world);
+        state.backend.clone()
+    }
 
+    pub fn synchronize(&mut self, world: &RuntimeWorld) -> SharedPhysicsBackend {
+        let mut state = self.lock();
+        Self::synchronize_state(&mut state, world);
+        state.backend.clone()
+    }
+
+    fn synchronize_state(state: &mut QuerySceneState, world: &RuntimeWorld) {
+        if state.stats.source_revision == Some(world.physics_revision()) {
+            return;
+        }
         let snapshot = build_physics_scene_snapshot(world, None);
-        let _: PhysicsPrepareResult = self.backend.prepare(PhysicsPrepareContext::new(
+        let _: PhysicsPrepareResult = state.backend.prepare(PhysicsPrepareContext::new(
             snapshot.settings,
             0.0,
             snapshot.bodies.clone(),
@@ -91,51 +101,49 @@ impl PhysicsQueryScene {
             Vec::new(),
             true,
         ));
-        self.source_revision = Some(world.physics_revision());
-        self.body_count = snapshot.bodies.len();
-        self.constraint_count = snapshot.constraints.len();
-        self.rebuild_count += 1;
-        self.backend.as_mut()
+        state.stats.source_revision = Some(world.physics_revision());
+        state.stats.body_count = snapshot.bodies.len();
+        state.stats.constraint_count = snapshot.constraints.len();
+        state.stats.rebuild_count += 1;
     }
 
-    /// Record that the caller already synchronised the backend for this revision,
-    /// so the next query can be served from cache.
     pub fn adopt_synchronized_world(
         &mut self,
         world: &RuntimeWorld,
         body_count: usize,
         constraint_count: usize,
     ) {
-        self.source_revision = Some(world.physics_revision());
-        self.body_count = body_count;
-        self.constraint_count = constraint_count;
+        let mut state = self.lock();
+        state.stats.source_revision = Some(world.physics_revision());
+        state.stats.body_count = body_count;
+        state.stats.constraint_count = constraint_count;
     }
 
     pub fn replace_backend(&mut self, next: Box<dyn PhysicsBackend>) {
-        self.backend = next;
-        self.invalidate();
+        self.replace_shared_backend(SharedPhysicsBackend::new(next));
+    }
+
+    pub fn replace_shared_backend(&mut self, next: SharedPhysicsBackend) {
+        let mut state = self.lock();
+        state.backend = next;
+        state.stats.source_revision = None;
+        state.stats.body_count = 0;
+        state.stats.constraint_count = 0;
     }
 
     pub fn invalidate(&mut self) {
-        self.source_revision = None;
-        self.body_count = 0;
-        self.constraint_count = 0;
+        let mut state = self.lock();
+        state.stats.source_revision = None;
+        state.stats.body_count = 0;
+        state.stats.constraint_count = 0;
     }
 
     pub fn stats(&self) -> PhysicsQueryCacheStats {
-        PhysicsQueryCacheStats {
-            source_revision: self.source_revision,
-            body_count: self.body_count,
-            constraint_count: self.constraint_count,
-            query_count: self.query_count,
-            rebuild_count: self.rebuild_count,
-            cache_hit_count: self.cache_hit_count,
-        }
+        self.lock().stats.clone()
     }
 
-    /// The backend identifier, forwarded for reports.
-    pub fn backend_identifier(&self) -> &str {
-        self.backend.identifier()
+    pub fn backend_identifier(&self) -> String {
+        self.lock().backend.identifier().to_string()
     }
 }
 

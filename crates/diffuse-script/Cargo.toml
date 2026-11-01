@@ -10,15 +10,17 @@ description = "Script compiler and loader"
 path = "src/lib.rs"
 
 [dependencies]
+cove-system.workspace = true
 diffuse-kernel.workspace = true
 diffuse-math.workspace = true
 diffuse-scene.workspace = true
 diffuse-script-api.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-
-[dev-dependencies]
 diffuse-assets.workspace = true
+unicode-segmentation.workspace = true
+thiserror.workspace = true
+libc.workspace = true
 
 [lints]
 workspace = true

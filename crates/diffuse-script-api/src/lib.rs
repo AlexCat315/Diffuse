@@ -9,7 +9,9 @@ pub mod authoring;
 pub mod context;
 pub mod export;
 
-pub use abi::{ABI_VERSION, Bytes, CharacterStance, GroundState, HostApi, Slice, Transform3};
+pub use abi::{
+    ABI_VERSION, Bytes, CharacterStance, Color4, GroundState, HostApi, Slice, Transform3,
+};
 pub use authoring::{
     ScriptAuthoring, ScriptBehavior, ScriptDefinition, ScriptDefinitionBuilder, ScriptParameters,
     ScriptProperty, ScriptPropertyOption, ScriptPropertyValue,

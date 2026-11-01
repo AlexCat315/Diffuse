@@ -9,7 +9,20 @@
 use core::ffi::{c_char, c_void};
 
 /// ABI version. Bumping this makes the host reject older script libraries.
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 3;
+
+/// Struct-by-value color argument; a bare Rust array is not a C function parameter.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Color4 {
+    pub rgba: [f32; 4],
+}
+impl Color4 {
+    pub const fn new(rgba: [f32; 4]) -> Self {
+        Self { rgba }
+    }
+}
+const _: () = assert!(core::mem::size_of::<Color4>() == 16 && core::mem::align_of::<Color4>() == 4);
 
 /// A borrowed UTF-8 byte range. Empty ranges may carry a null pointer.
 #[repr(C)]
@@ -26,7 +39,9 @@ impl Slice {
     };
 
     #[inline]
-    pub fn as_str(&self) -> Option<&str> {
+    /// # Safety
+    /// Nonempty ranges must reference initialized, live bytes for the returned borrow.
+    pub unsafe fn as_str(&self) -> Option<&str> {
         if self.len == 0 {
             return Some("");
         }
@@ -64,7 +79,9 @@ impl Bytes {
     };
 
     #[inline]
-    pub fn as_slice(&self) -> &[u8] {
+    /// # Safety
+    /// Nonempty ranges must reference initialized, live bytes for the returned borrow.
+    pub unsafe fn as_slice(&self) -> &[u8] {
         if self.len == 0 || self.ptr.is_null() {
             return &[];
         }
@@ -79,30 +96,33 @@ impl Default for Bytes {
     }
 }
 
-/// `Transform3D` in the engine's layout: `SIMD3<Float>` is 16 bytes/16-aligned
-/// (`.migration/simd-layout.json`), so this is 48 bytes with no padding.
+/// Complete column-major LocalTransform/WorldTransform matrix, including shear.
 #[repr(C, align(16))]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Transform3 {
-    pub translation: [f32; 4],
-    pub rotation: [f32; 4],
-    pub scale: [f32; 4],
-}
-
-const _: () = assert!(core::mem::size_of::<Transform3>() == 48);
-const _: () = assert!(core::mem::align_of::<Transform3>() == 16);
-const _: () = assert!(core::mem::size_of::<Slice>() == 2 * core::mem::size_of::<usize>());
-
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Transform3 { pub columns: [[f32; 4]; 4] }
 impl Transform3 {
-    #[inline]
-    pub const fn new(translation: [f32; 4], rotation: [f32; 4], scale: [f32; 4]) -> Self {
-        Transform3 {
-            translation,
-            rotation,
-            scale,
-        }
+    pub const IDENTITY: Self = Self { columns: [[1.0,0.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,0.0,1.0,0.0],[0.0,0.0,0.0,1.0]] };
+    pub const fn from_columns(columns: [[f32; 4]; 4]) -> Self { Self { columns } }
+    pub fn new(t: [f32; 4], r: [f32; 4], s: [f32; 4]) -> Self {
+        let [x,y,z,w] = r;
+        let (x2,y2,z2,xy,xz,yz,wx,wy,wz) = (x*x,y*y,z*z,x*y,x*z,y*z,w*x,w*y,w*z);
+        Self::from_columns([
+            [(1.0-2.0*(y2+z2))*s[0],2.0*(xy+wz)*s[0],2.0*(xz-wy)*s[0],0.0],
+            [2.0*(xy-wz)*s[1],(1.0-2.0*(x2+z2))*s[1],2.0*(yz+wx)*s[1],0.0],
+            [2.0*(xz+wy)*s[2],2.0*(yz-wx)*s[2],(1.0-2.0*(x2+y2))*s[2],0.0],
+            [t[0],t[1],t[2],1.0],
+        ])
     }
+    pub fn translation(&self) -> [f32; 3] { [self.columns[3][0], self.columns[3][1], self.columns[3][2]] }
+    pub fn with_translation(mut self, value: [f32;3]) -> Self { self.columns[3] = [value[0],value[1],value[2],1.0]; self }
 }
+impl Default for Transform3 { fn default() -> Self { Self::IDENTITY } }
+const _: () = assert!(core::mem::size_of::<Transform3>() == 64 && core::mem::align_of::<Transform3>() == 16);
+const _: () = assert!(core::mem::size_of::<Slice>() == 2 * core::mem::size_of::<usize>());
+const _: () = assert!(core::mem::align_of::<Slice>() == core::mem::align_of::<usize>());
+const _: () = assert!(core::mem::size_of::<Bytes>() == 3 * core::mem::size_of::<usize>());
+const _: () = assert!(core::mem::align_of::<Bytes>() == core::mem::align_of::<usize>());
+const _: () = assert!(core::mem::offset_of!(Bytes, owned) == 2 * core::mem::size_of::<usize>());
 
 /// Character ground state, matching Swift's `CharacterGroundState` raw values.
 #[repr(u8)]
@@ -135,6 +155,12 @@ pub enum CharacterStance {
     Standing = 0,
     Crouching = 1,
 }
+
+const _: () =
+    assert!(core::mem::size_of::<GroundState>() == 1 && core::mem::align_of::<GroundState>() == 1);
+const _: () = assert!(
+    core::mem::size_of::<CharacterStance>() == 1 && core::mem::align_of::<CharacterStance>() == 1
+);
 
 /// The engine-provided function table. The host fills every entry before any
 /// lifecycle callback runs; a null entry means "unsupported in this host" and
@@ -170,7 +196,7 @@ pub struct HostApi {
     // ---- entity lifecycle -------------------------------------------------
     /// `ScriptContext.createEntity(named:parent:)`.
     pub create_entity: Option<
-        extern "C" fn(instance: *mut c_void, name: Slice, parent: u64, has_parent: bool) -> u64,
+        extern "C" fn(instance: *mut c_void, name: Slice, has_name: bool, transform: Transform3, out: *mut u64) -> bool,
     >,
     /// `ScriptContext.destroyEntity(_:)`.
     pub destroy_entity: Option<extern "C" fn(instance: *mut c_void, entity: u64) -> bool>,
@@ -182,16 +208,16 @@ pub struct HostApi {
     pub parent_of:
         Option<extern "C" fn(instance: *mut c_void, entity: u64, out_parent: *mut u64) -> bool>,
     /// `ScriptContext.entity(named:)`.
-    pub entity_named: Option<extern "C" fn(instance: *mut c_void, name: Slice) -> u64>,
+    pub entity_named: Option<extern "C" fn(instance: *mut c_void, name: Slice, out: *mut u64) -> bool>,
 
     // ---- transforms -------------------------------------------------------
     /// `ScriptContext.localTransform`.
-    pub local_transform: Option<extern "C" fn(instance: *mut c_void) -> Transform3>,
+    pub local_transform: Option<extern "C" fn(instance: *mut c_void, out: *mut Transform3) -> bool>,
     /// `ScriptContext.localTransform(of:)`.
     pub local_transform_of:
         Option<extern "C" fn(instance: *mut c_void, entity: u64, out: *mut Transform3) -> bool>,
     /// `ScriptContext.worldTransform`.
-    pub world_transform: Option<extern "C" fn(instance: *mut c_void) -> Transform3>,
+    pub world_transform: Option<extern "C" fn(instance: *mut c_void, out: *mut Transform3) -> bool>,
     /// `ScriptContext.worldTransform(of:)`.
     pub world_transform_of:
         Option<extern "C" fn(instance: *mut c_void, entity: u64, out: *mut Transform3) -> bool>,
@@ -216,7 +242,7 @@ pub struct HostApi {
     >,
     /// `ScriptContext.removeComponent(_:)`.
     pub remove_component:
-        Option<extern "C" fn(instance: *mut c_void, entity: u64, type_name: Slice) -> bool>,
+        Option<extern "C" fn(instance: *mut c_void, entity: u64, type_name: Slice) -> Bytes>,
 
     // ---- parameters -------------------------------------------------------
     /// The binding's parameter JSON for this invocation.
@@ -243,7 +269,7 @@ pub struct HostApi {
     pub set_resource:
         Option<extern "C" fn(instance: *mut c_void, type_name: Slice, json: Slice) -> bool>,
     /// `ScriptContext.removeResource(_:)`.
-    pub remove_resource: Option<extern "C" fn(instance: *mut c_void, type_name: Slice) -> bool>,
+    pub remove_resource: Option<extern "C" fn(instance: *mut c_void, type_name: Slice) -> Bytes>,
 
     // ---- UI and state -----------------------------------------------------
     /// `ScriptContext.drawUI(_:)`: a label command.
@@ -254,7 +280,7 @@ pub struct HostApi {
             x: f32,
             y: f32,
             font_size: f32,
-            color: [f32; 4],
+            color: Color4,
         ),
     >,
     /// `ScriptContext.drawUI(_:)`: a rect command.
@@ -266,7 +292,7 @@ pub struct HostApi {
             w: f32,
             h: f32,
             corner_radius: f32,
-            color: [f32; 4],
+            color: Color4,
         ),
     >,
     /// `ScriptContext.drawUI(_:)`: a progress bar command.
@@ -281,8 +307,8 @@ pub struct HostApi {
             value: f32,
             max_value: f32,
             corner_radius: f32,
-            fill_color: [f32; 4],
-            bg_color: [f32; 4],
+            fill_color: Color4,
+            bg_color: Color4,
         ),
     >,
     /// `ScriptContext.reportState`: a JSON state blob handed to the editor.
@@ -308,13 +334,38 @@ pub struct HostApi {
     /// `cove_character_velocity`.
     pub character_velocity: Option<extern "C" fn(instance: *mut c_void, out: *mut [f32; 3])>,
 
+    // ---- remaining ScriptContext capabilities -----------------------------
+    pub entities: Option<extern "C" fn(instance: *mut c_void) -> Bytes>,
+    pub children: Option<extern "C" fn(instance: *mut c_void, entity: u64) -> Bytes>,
+    pub translate: Option<extern "C" fn(instance: *mut c_void, entity: u64, x: f32, y: f32, z: f32) -> bool>,
+    /// Prefab document JSON; parent and transform have explicit presence flags.
+    pub instantiate: Option<extern "C" fn(instance: *mut c_void, document: Slice, parent: u64, has_parent: bool, transform: Transform3, has_transform: bool, out: *mut u64) -> bool>,
+    pub resolved_parameters_json: Option<extern "C" fn(instance: *mut c_void) -> Bytes>,
+    pub input_frame: Option<extern "C" fn(instance: *mut c_void) -> Bytes>,
+    pub trigger_events: Option<extern "C" fn(instance: *mut c_void) -> Bytes>,
+    pub character_state: Option<extern "C" fn(instance: *mut c_void) -> Bytes>,
+    pub submit_vehicle_command: Option<extern "C" fn(instance: *mut c_void, command: Slice) -> bool>,
+    pub canvas_exists: Option<extern "C" fn(instance: *mut c_void) -> bool>,
+    /// Query/filter JSON uses Swift field names and [x,y,z] vectors; responses include every native hit field.
+    pub physics_raycast: Option<extern "C" fn(instance: *mut c_void, query: Slice, filter: Slice) -> Bytes>,
+    pub physics_overlap_aabb: Option<extern "C" fn(instance: *mut c_void, query: Slice, filter: Slice) -> Bytes>,
+    pub physics_overlap_shape: Option<extern "C" fn(instance: *mut c_void, query: Slice, filter: Slice) -> Bytes>,
+    pub physics_sweep_aabb: Option<extern "C" fn(instance: *mut c_void, query: Slice, filter: Slice) -> Bytes>,
+    pub physics_sweep_shape: Option<extern "C" fn(instance: *mut c_void, query: Slice, filter: Slice) -> Bytes>,
+
     // ---- allocation -------------------------------------------------------
+    /// Allocates initialized host-owned bytes, including valid empty strings.
+    pub allocate: Option<extern "C" fn(length: usize) -> Bytes>,
     /// Frees a `Bytes` the host allocated for this script.
     pub free: Option<extern "C" fn(bytes: Bytes)>,
+    /// Reports a failed callback. The SDK disables the instance after a panic.
+    pub report_error: Option<extern "C" fn(instance: *mut c_void, message: Slice)>,
 }
 
 const _: () =
     assert!(core::mem::size_of::<HostApi>().is_multiple_of(core::mem::align_of::<usize>()));
+const _: () = assert!(core::mem::offset_of!(HostApi, instance) == core::mem::size_of::<usize>());
+const _: () = assert!(core::mem::size_of::<HostApi>() == 59 * core::mem::size_of::<usize>());
 
 impl HostApi {
     /// A table whose entries are all null; the host fills in what it supports.
@@ -361,7 +412,24 @@ impl HostApi {
             character_is_grounded: None,
             character_ground_state: None,
             character_velocity: None,
+            entities: None,
+            children: None,
+            translate: None,
+            instantiate: None,
+            resolved_parameters_json: None,
+            input_frame: None,
+            trigger_events: None,
+            character_state: None,
+            submit_vehicle_command: None,
+            canvas_exists: None,
+            physics_raycast: None,
+            physics_overlap_aabb: None,
+            physics_overlap_shape: None,
+            physics_sweep_aabb: None,
+            physics_sweep_shape: None,
+            allocate: None,
             free: None,
+            report_error: None,
         }
     }
 

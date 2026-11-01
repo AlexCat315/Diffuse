@@ -18,7 +18,10 @@ use std::collections::BTreeMap;
 use diffuse_kernel::job_system::JobSystem;
 
 use crate::entity_id::EntityID;
-use crate::physics::backend::physics_backend::PhysicsBackend;
+use crate::particles::emitter::particle_emitter::ParticleEmitter;
+use crate::particles::particle_scalability::ParticleScalabilityStateResource;
+use crate::particles::particle_stats::{ParticleEmitterFrameStats, ParticleFrameStatsResource};
+use crate::physics::backend::physics_backend::{PhysicsBackend, SharedPhysicsBackend};
 use crate::physics::backend::physics_backend_capabilities::PhysicsBackendCapabilities;
 use crate::physics::backend::physics_backend_context::{PhysicsPrepareContext, PhysicsStepContext};
 use crate::physics::backend::physics_query_scene::PhysicsQueryScene;
@@ -49,14 +52,10 @@ use crate::physics::replay::physics_command_tape::{
 use crate::physics::replay::physics_replay_report::PhysicsCommandReplayControlResource;
 use crate::physics::rigid_body::RigidBody;
 use crate::physics::soft_bodies::soft_body::SoftBodyStateFrameResource;
-use crate::particles::emitter::particle_emitter::ParticleEmitter;
-use crate::particles::particle_scalability::ParticleScalabilityStateResource;
-use crate::particles::particle_stats::{ParticleEmitterFrameStats, ParticleFrameStatsResource};
 use crate::physics::vehicles::vehicle_state::{
     VehicleCommandFrameResource, VehicleStateFrameResource,
 };
 use crate::runtime_world::RuntimeWorld;
-use crate::scheduling::render_particles::particle_advance_options;
 use crate::scheduling::physics_collection::{
     PhysicsSyncCache, build_physics_read_view, collect_physics_bodies, collect_physics_characters,
     collect_physics_constraints, collect_physics_soft_bodies, collect_physics_vehicles,
@@ -66,19 +65,21 @@ use crate::scheduling::physics_state_hash::physics_state_hash;
 use crate::scheduling::ragdoll_bridge::{
     apply_ragdoll_animation_to_bodies, write_ragdoll_physics_to_animation,
 };
+use crate::scheduling::render_particles::particle_advance_options;
 use crate::scheduling::schedule_commands::{RuntimeCommand, RuntimeCommandBuffer};
 use crate::scheduling::schedule_debug_frame::build_physics_debug_frame;
 use crate::scheduling::schedule_frame_context::RuntimeFrameContext;
 use crate::scheduling::schedule_report::{
     RuntimeScheduleReport, ScheduleCommandReport, ScheduleJobReport, SchedulePhysicsReport,
 };
-use crate::scripting::{RuntimeScriptDriver, RuntimeScriptPhaseContext};
+use crate::scripting::{RuntimeScriptDriver, RuntimeScriptPhaseContext, SharedRuntimeScriptDriver};
 
 /// Persistent state the schedule carries between frames.
+#[derive(Clone)]
 pub struct ScheduleState {
-    pub physics_backend: Box<dyn PhysicsBackend>,
-    pub explicit_physics_backend: Option<Box<dyn PhysicsBackend>>,
-    pub script_driver: Option<Box<dyn RuntimeScriptDriver>>,
+    pub physics_backend: SharedPhysicsBackend,
+    pub explicit_physics_backend: Option<SharedPhysicsBackend>,
+    pub script_driver: Option<SharedRuntimeScriptDriver>,
     pub physics_clock: PhysicsStepClockResource,
     pub physics_frame_state: PhysicsFrameStateResource,
     pub physics_contact_frame: crate::physics::physics_events::PhysicsContactFrameResource,
@@ -91,7 +92,7 @@ pub struct ScheduleState {
     pub physics_sync_cache: PhysicsSyncCache,
     pub resolved_physics_backend_kind:
         crate::physics::backend::physics_backend_kind::PhysicsBackendKind,
-    pub shared_physics_backend: Box<dyn PhysicsBackend>,
+    pub shared_physics_backend: SharedPhysicsBackend,
     pub shared_physics_backend_kind:
         crate::physics::backend::physics_backend_kind::PhysicsBackendKind,
     pub physics_query_scene: PhysicsQueryScene,
@@ -103,10 +104,12 @@ impl ScheduleState {
     pub fn new() -> Self {
         use crate::physics::backend::physics_backend_kind::PhysicsBackendKind;
         let kind = PhysicsBackendKind::preferred();
-        let shared = kind.make_backend();
-        let query_scene = PhysicsQueryScene::new(kind.make_backend());
+        let shared = SharedPhysicsBackend::new(kind.make_backend());
+        let query_scene = PhysicsQueryScene::with_shared_backend(shared.clone());
         ScheduleState {
-            physics_backend: kind.make_backend(),
+            physics_backend: SharedPhysicsBackend::new(Box::new(
+                crate::physics::backend::null_physics_backend::NullPhysicsBackend::new(),
+            )),
             explicit_physics_backend: None,
             script_driver: None,
             physics_clock: PhysicsStepClockResource::default(),
@@ -132,30 +135,35 @@ impl ScheduleState {
     /// Physics-derived caches and the query scene are only valid while that instance
     /// survives, so this is an identity question, not a selection question.
     pub fn uses_shared_physics_backend(&self) -> bool {
-        std::ptr::eq(
-            self.physics_backend.as_ref(),
-            self.shared_physics_backend.as_ref(),
-        )
+        self.physics_backend
+            .same_instance(&self.shared_physics_backend)
     }
 
     pub fn set_physics_backend(&mut self, backend: Box<dyn PhysicsBackend>) {
-        self.physics_query_scene
-            .replace_backend(self.shared_physics_backend_kind.make_backend());
+        let backend = SharedPhysicsBackend::new(backend);
+        self.explicit_physics_backend = Some(backend.clone());
         self.physics_backend = backend;
         self.resolved_physics_backend_kind =
             crate::physics::backend::physics_backend_kind::PhysicsBackendKind::None;
+        self.physics_frame_state.backend_identifier = self.physics_backend.identifier().to_string();
     }
 
     pub fn clear_physics_backend_override(&mut self) {
         self.explicit_physics_backend = None;
         self.resolved_physics_backend_kind =
             crate::physics::backend::physics_backend_kind::PhysicsBackendKind::None;
-        self.physics_backend =
-            Box::new(crate::physics::backend::null_physics_backend::NullPhysicsBackend::new());
+        self.physics_backend = SharedPhysicsBackend::new(Box::new(
+            crate::physics::backend::null_physics_backend::NullPhysicsBackend::new(),
+        ));
+        self.physics_frame_state.backend_identifier = self.physics_backend.identifier().to_string();
     }
 
-    pub fn set_script_driver(&mut self, driver: Box<dyn RuntimeScriptDriver>) {
+    pub fn set_script_driver(&mut self, driver: impl Into<SharedRuntimeScriptDriver>) {
+        let driver = driver.into();
         if let Some(current) = self.script_driver.as_mut() {
+            if current.same_instance(&driver) {
+                return;
+            }
             current.reset();
         }
         self.script_driver = Some(driver);
@@ -216,7 +224,12 @@ pub fn run_pre_physics_scripts(
         .is_some_and(|control| control.is_replaying);
 
     if !is_replaying && let Some(driver) = state.script_driver.as_mut() {
-        let mut context = RuntimeScriptPhaseContext::new(world, commands, delta_time_seconds);
+        let mut context = RuntimeScriptPhaseContext::with_physics_query_scene(
+            world,
+            commands,
+            delta_time_seconds,
+            state.physics_query_scene.clone(),
+        );
         driver.prepare_frame(&mut context);
         driver.run_pre_physics(&mut context);
     }
@@ -273,17 +286,18 @@ pub fn ensure_configured_physics_backend(
     state.physics_backend.reset();
 
     if kind == PhysicsBackendKind::None {
-        state.physics_backend =
-            Box::new(crate::physics::backend::null_physics_backend::NullPhysicsBackend::new());
+        state.physics_backend = SharedPhysicsBackend::new(Box::new(
+            crate::physics::backend::null_physics_backend::NullPhysicsBackend::new(),
+        ));
     } else {
         if state.shared_physics_backend_kind != kind {
-            state.shared_physics_backend = kind.make_backend();
+            state.shared_physics_backend = SharedPhysicsBackend::new(kind.make_backend());
             state.shared_physics_backend_kind = kind;
             state
                 .physics_query_scene
-                .replace_backend(kind.make_backend());
+                .replace_shared_backend(state.shared_physics_backend.clone());
         }
-        state.physics_backend = kind.make_backend();
+        state.physics_backend = state.shared_physics_backend.clone();
         if state.uses_shared_physics_backend() {
             state.physics_query_scene.invalidate();
         }
@@ -1014,7 +1028,12 @@ pub fn run_post_physics_scripts(
     delta_time_seconds: f64,
 ) {
     if let Some(driver) = state.script_driver.as_mut() {
-        let mut context = RuntimeScriptPhaseContext::new(world, commands, delta_time_seconds);
+        let mut context = RuntimeScriptPhaseContext::with_physics_query_scene(
+            world,
+            commands,
+            delta_time_seconds,
+            state.physics_query_scene.clone(),
+        );
         driver.run_post_physics(&mut context);
     }
 
@@ -1051,7 +1070,9 @@ fn advance_particle_emitters(world: &mut RuntimeWorld, delta_time_seconds: f64) 
     world.update_components::<ParticleEmitter>(|entity, emitter| {
         emitter.advance(
             delta_time_seconds,
-            world_transforms.get(&entity).map(|transform| transform.matrix),
+            world_transforms
+                .get(&entity)
+                .map(|transform| transform.matrix),
             &particle_options,
         );
         let stats = emitter.last_frame_stats();

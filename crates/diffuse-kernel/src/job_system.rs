@@ -41,6 +41,7 @@ impl Default for JobDispatchReport {
 
 /// The Swift `JobSystem.shared` singleton has no direct Rust equivalent; the
 /// engine host owns one instance and passes it through `Arc`.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JobSystem {
     pub worker_count: usize,
     pub minimum_chunk_size: usize,

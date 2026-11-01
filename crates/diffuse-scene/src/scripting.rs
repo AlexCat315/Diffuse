@@ -15,6 +15,7 @@ use crate::physics::backend::physics_backend::PhysicsBackend;
 use crate::physics::backend::physics_query_scene::PhysicsQueryScene;
 use crate::physics::character_controller::{CharacterCommand, CharacterCommandFrameResource};
 use crate::physics::destruction::{DestructionCommand, DestructionCommandFrameResource};
+use crate::physics::queries::physics_query_types::*;
 use crate::physics::vehicles::vehicle_state::{VehicleCommand, VehicleCommandFrameResource};
 use crate::runtime_world::{LocalTransform, RuntimeWorld, WorldTransform};
 use crate::scene_bootstrap::SceneNameComponent;
@@ -26,9 +27,7 @@ use crate::scheduling::schedule_commands::RuntimeCommandBuffer;
 /// Swift's protocol extension supplied empty `prepareFrame`/`runPrePhysics` and a
 /// `runPostPhysics` that forwarded to `run`; the default methods below do the same.
 pub trait RuntimeScriptDriver: Send {
-    fn run(&mut self, context: &mut RuntimeScriptPhaseContext<'_>) {
-        let _ = context;
-    }
+    fn run(&mut self, context: &mut RuntimeScriptPhaseContext<'_>);
 
     fn prepare_frame(&mut self, context: &mut RuntimeScriptPhaseContext<'_>) {
         let _ = context;
@@ -43,7 +42,57 @@ pub trait RuntimeScriptDriver: Send {
         self.run(context);
     }
 
-    fn reset(&mut self) {}
+    fn reset(&mut self);
+}
+
+/// Swift's driver is a shared reference object even when its schedule is copied.
+#[derive(Clone)]
+pub struct SharedRuntimeScriptDriver(
+    std::sync::Arc<std::sync::Mutex<Box<dyn RuntimeScriptDriver>>>,
+);
+
+impl SharedRuntimeScriptDriver {
+    pub fn new(driver: Box<dyn RuntimeScriptDriver>) -> Self {
+        Self(std::sync::Arc::new(std::sync::Mutex::new(driver)))
+    }
+
+    pub fn same_instance(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Box<dyn RuntimeScriptDriver>> {
+        self.0.lock().unwrap_or_else(|error| error.into_inner())
+    }
+}
+
+impl<T: RuntimeScriptDriver + 'static> From<Box<T>> for SharedRuntimeScriptDriver {
+    fn from(driver: Box<T>) -> Self {
+        Self::new(driver)
+    }
+}
+
+impl From<Box<dyn RuntimeScriptDriver>> for SharedRuntimeScriptDriver {
+    fn from(driver: Box<dyn RuntimeScriptDriver>) -> Self {
+        Self::new(driver)
+    }
+}
+
+impl RuntimeScriptDriver for SharedRuntimeScriptDriver {
+    fn run(&mut self, context: &mut RuntimeScriptPhaseContext<'_>) {
+        self.lock().run(context);
+    }
+    fn prepare_frame(&mut self, context: &mut RuntimeScriptPhaseContext<'_>) {
+        self.lock().prepare_frame(context);
+    }
+    fn run_pre_physics(&mut self, context: &mut RuntimeScriptPhaseContext<'_>) {
+        self.lock().run_pre_physics(context);
+    }
+    fn run_post_physics(&mut self, context: &mut RuntimeScriptPhaseContext<'_>) {
+        self.lock().run_post_physics(context);
+    }
+    fn reset(&mut self) {
+        self.lock().reset();
+    }
 }
 
 /// The context a script callback receives for one phase.
@@ -51,6 +100,7 @@ pub struct RuntimeScriptPhaseContext<'a> {
     world: &'a mut RuntimeWorld,
     commands: &'a mut RuntimeCommandBuffer,
     delta_time_seconds: f64,
+    physics_query_scene: PhysicsQueryScene,
 }
 
 impl<'a> RuntimeScriptPhaseContext<'a> {
@@ -60,10 +110,29 @@ impl<'a> RuntimeScriptPhaseContext<'a> {
         commands: &'a mut RuntimeCommandBuffer,
         delta_time_seconds: f64,
     ) -> Self {
+        let kind = world
+            .resource::<crate::physics::physics_settings::PhysicsSettingsResource>()
+            .unwrap_or_default()
+            .backend_kind;
+        Self::with_physics_query_scene(
+            world,
+            commands,
+            delta_time_seconds,
+            PhysicsQueryScene::new(kind.make_backend()),
+        )
+    }
+
+    pub fn with_physics_query_scene(
+        world: &'a mut RuntimeWorld,
+        commands: &'a mut RuntimeCommandBuffer,
+        delta_time_seconds: f64,
+        physics_query_scene: PhysicsQueryScene,
+    ) -> Self {
         RuntimeScriptPhaseContext {
             world,
             commands,
             delta_time_seconds,
+            physics_query_scene,
         }
     }
 
@@ -73,9 +142,22 @@ impl<'a> RuntimeScriptPhaseContext<'a> {
         &self.world.component_registry
     }
 
+    pub fn set_component_registry(
+        &mut self,
+        registry: crate::components::core::registry::ComponentRegistry,
+    ) {
+        self.world.component_registry = registry;
+    }
+
     #[inline]
     pub fn delta_time_seconds(&self) -> f64 {
         self.delta_time_seconds
+    }
+
+    /// Registry codecs require exclusive world access and current derived transforms.
+    pub fn with_world<R>(&mut self, body: impl FnOnce(&mut RuntimeWorld) -> R) -> R {
+        self.refresh_transforms_if_needed();
+        body(self.world)
     }
 
     pub fn entities(&self) -> Vec<EntityID> {
@@ -116,12 +198,14 @@ impl<'a> RuntimeScriptPhaseContext<'a> {
     }
 
     #[inline]
-    pub fn component<C: RuntimeComponent>(&self, entity: EntityID) -> Option<C> {
+    pub fn component<C: RuntimeComponent>(&mut self, entity: EntityID) -> Option<C> {
+        self.refresh_component_transforms::<C>();
         self.world.component::<C>(entity)
     }
 
     #[inline]
-    pub fn has_component<C: RuntimeComponent>(&self, entity: EntityID) -> bool {
+    pub fn has_component<C: RuntimeComponent>(&mut self, entity: EntityID) -> bool {
+        self.refresh_component_transforms::<C>();
         self.world.has_component::<C>(entity)
     }
 
@@ -135,10 +219,12 @@ impl<'a> RuntimeScriptPhaseContext<'a> {
         entity: EntityID,
         body: impl FnOnce(&mut C),
     ) -> bool {
+        self.refresh_component_transforms::<C>();
         self.world.update_component::<C>(entity, body)
     }
 
     pub fn remove_component<C: RuntimeComponent>(&mut self, entity: EntityID) -> Option<C> {
+        self.refresh_component_transforms::<C>();
         self.world.remove_component::<C>(entity)
     }
 
@@ -208,15 +294,70 @@ impl<'a> RuntimeScriptPhaseContext<'a> {
     // MARK: - Physics queries
 
     /// The query backend, synchronised to the world's physics revision.
-    pub fn physics_query_backend<'b>(
+    pub fn physics_query_backend(
         &mut self,
-        query_scene: &'b mut PhysicsQueryScene,
-    ) -> &'b mut dyn PhysicsBackend {
+        query_scene: &mut PhysicsQueryScene,
+    ) -> crate::physics::backend::physics_backend::SharedPhysicsBackend {
         self.refresh_transforms_if_needed();
         query_scene.backend(self.world)
     }
 
     // MARK: - Frame resources
+
+    pub fn physics_raycast(
+        &mut self,
+        query: PhysicsRaycastQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Option<PhysicsRaycastHit> {
+        self.refresh_transforms_if_needed();
+        self.physics_query_scene
+            .backend(self.world)
+            .raycast(query, filter)
+    }
+
+    pub fn physics_overlap_aabb(
+        &mut self,
+        query: PhysicsOverlapAABBQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Vec<PhysicsOverlapHit> {
+        self.refresh_transforms_if_needed();
+        self.physics_query_scene
+            .backend(self.world)
+            .overlap_aabb(query, filter)
+    }
+
+    pub fn physics_overlap_shape(
+        &mut self,
+        query: PhysicsOverlapShapeQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Vec<PhysicsOverlapHit> {
+        self.refresh_transforms_if_needed();
+        self.physics_query_scene
+            .backend(self.world)
+            .overlap_shape(query, filter)
+    }
+
+    pub fn physics_sweep_aabb(
+        &mut self,
+        query: PhysicsSweepAABBQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Option<PhysicsSweepHit> {
+        self.refresh_transforms_if_needed();
+        self.physics_query_scene
+            .backend(self.world)
+            .sweep_aabb(query, filter)
+    }
+
+    pub fn physics_sweep_shape(
+        &mut self,
+        query: PhysicsSweepShapeQuery,
+        filter: PhysicsQueryFilter,
+    ) -> Option<PhysicsSweepHit> {
+        self.refresh_transforms_if_needed();
+        self.physics_query_scene
+            .backend(self.world)
+            .sweep_shape(query, filter)
+    }
 
     /// Records a character command into the entity's command frame.
     pub fn submit_character_command(&mut self, command: CharacterCommand, entity: EntityID) {
@@ -277,6 +418,12 @@ impl<'a> RuntimeScriptPhaseContext<'a> {
     fn refresh_transforms_if_needed(&mut self) {
         if self.world.hierarchy_needs_propagation() {
             self.world.propagate_transforms_default();
+        }
+    }
+
+    fn refresh_component_transforms<C: RuntimeComponent>(&mut self) {
+        if std::any::TypeId::of::<C>() == std::any::TypeId::of::<WorldTransform>() {
+            self.refresh_transforms_if_needed();
         }
     }
 }

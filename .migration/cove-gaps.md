@@ -76,6 +76,13 @@ Format:
 - Diffuse meanwhile: `diffuse-audio` implements `AudioBackend` fully (`SilentAudioBackend` today) and takes the trait object; `SDL3AudioBackend` and `MediaPlayer` are translated against the planned API above and stay blocked at their gate until this lands.
 - Status: open
 
+## G9: process running state is cleared before termination is observed
+- Needed by: `diffuse-script` cancellation and bounded compiler shutdown.
+- Cove today: `cove_system::native_process::NativeProcess::terminate(false)` clears its running flag immediately, even when a child ignores SIGTERM. `start` also discards an exit-monitor thread spawn error instead of returning it.
+- Needed: retain the running flag until the exit monitor observes termination; propagate failure to create the monitor so clients cannot wait indefinitely for a callback that has no producer.
+- Diffuse meanwhile: compile completion and the 250 ms escalation are driven by the actual `on_exit` notification, matching the source compiler's wait-for-exit behavior. No Cove files changed; resource-exhaustion behavior of the upstream monitor remains unresolved.
+- Status: open (source inspection, 2026-11-01; no tests or process execution performed).
+
 ## G8: `natsel::CharacterVirtual` cannot be stored by an owner that also owns the `World`
 - Needed by: `diffuse-scene`'s `NatselPhysicsBackend` (`Physics/Backend/Natsel/NatselDeformables.swift`'s `CharacterRecord`)
 - Natsel today: `CharacterVirtual<'w>` holds `world: &'w mut World` for its whole lifetime (`src/character/character_virtual.rs:196`). Natsel's own module comment (lines 21-25) explains this models Swift's `unowned let world`, and its three test call sites launder the lifetime through a raw pointer (`character_shared<'a>(world: *mut World, def: &CharacterDef)`). There is no `World`-level character API and no owning variant.

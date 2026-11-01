@@ -12,6 +12,7 @@
 //!   script that enqueues a command during `postPhysicsScripts` still has it drained by
 //!   the next frame's `commandApply` and does not see it silently dropped.
 
+use crate::physics::backend::physics_backend::PhysicsBackend;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
@@ -32,6 +33,7 @@ use crate::scheduling::schedule_phases::{
 use crate::scheduling::schedule_report::RuntimeScheduleReport;
 
 /// The schedule that owns a world's per-frame physics and scripting state.
+#[derive(Clone)]
 pub struct RuntimeWorldSchedule {
     state: ScheduleState,
     /// The last extracted render scene, replaced each frame by the `renderExtract` phase.
@@ -51,20 +53,17 @@ impl RuntimeWorldSchedule {
         &mut self,
         backend: Box<dyn crate::physics::backend::physics_backend::PhysicsBackend>,
     ) {
-        self.state.explicit_physics_backend = Some(backend);
-        self.state.set_physics_backend(
-            crate::physics::backend::physics_backend_kind::PhysicsBackendKind::preferred()
-                .make_backend(),
-        );
-        self.state.resolved_physics_backend_kind =
-            crate::physics::backend::physics_backend_kind::PhysicsBackendKind::None;
+        self.state.set_physics_backend(backend);
     }
 
     pub fn clear_physics_backend_override(&mut self) {
         self.state.clear_physics_backend_override();
     }
 
-    pub fn set_script_driver(&mut self, driver: Box<dyn crate::scripting::RuntimeScriptDriver>) {
+    pub fn set_script_driver(
+        &mut self,
+        driver: impl Into<crate::scripting::SharedRuntimeScriptDriver>,
+    ) {
         self.state.set_script_driver(driver);
     }
 
@@ -121,10 +120,17 @@ impl RuntimeWorldSchedule {
     }
 
     /// The query backend, synchronised to the world's physics revision.
-    pub fn physics_query_backend<'a>(
-        &'a mut self,
+    pub fn physics_query_scene(
+        &self,
+    ) -> crate::physics::backend::physics_query_scene::PhysicsQueryScene {
+        self.state.physics_query_scene.clone()
+    }
+
+    /// The query backend, synchronised to the world's physics revision.
+    pub fn physics_query_backend(
+        &mut self,
         world: &RuntimeWorld,
-    ) -> &'a mut dyn crate::physics::backend::physics_backend::PhysicsBackend {
+    ) -> crate::physics::backend::physics_backend::SharedPhysicsBackend {
         self.state.physics_query_scene.backend(world)
     }
 

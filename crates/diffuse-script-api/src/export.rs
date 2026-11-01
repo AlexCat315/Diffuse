@@ -1,332 +1,358 @@
-//! The exported entry points a script cdylib provides.
-//!
-//! MIGRATION.md §4 D1 fixes the surface: `diffuse_script_abi_version`,
-//! `diffuse_script_catalog`, `diffuse_script_create`, the four lifecycle entry
-//! points and `diffuse_script_destroy`. [`diffuse_scripts!`] generates the
-//! catalog-dependent ones. Every entry point wraps its body in `catch_unwind`, so
-//! a panic is reported as a script error and never unwinds across the FFI
-//! boundary.
+//! Stable C exports generated in each script cdylib by `diffuse_scripts!`.
 
-use core::ffi::c_void;
-use core::panic::AssertUnwindSafe;
+use crate::{
+    abi::{ABI_VERSION, Bytes, HostApi, Slice, slice_of},
+    authoring::{ScriptBehavior, ScriptDefinition, json},
+    context::ScriptContext,
+};
+use core::{ffi::c_void, panic::AssertUnwindSafe};
+use std::any::Any;
 
-use crate::abi::{ABI_VERSION, Bytes, HostApi, Slice};
-use crate::authoring::{ScriptBehavior, ScriptDefinition, json};
-use crate::context::ScriptContext;
-
-/// One script instance as stored behind `diffuse_script_create`'s pointer.
+/// The host and its opaque instance outlive this object, including its destructor.
 pub struct ScriptInstance {
     behavior: Box<dyn ScriptInstanceApi>,
+    host: HostApi,
+    disabled: bool,
 }
 
-/// Object-safe view of [`ScriptBehavior`] used behind the FFI pointer.
-pub trait ScriptInstanceApi {
+pub trait ScriptInstanceApi: Send {
     fn on_start(&mut self, context: &ScriptContext);
     fn on_pre_physics(&mut self, context: &ScriptContext);
     fn on_update(&mut self, context: &ScriptContext);
     fn on_destroy(&mut self, context: &ScriptContext);
 }
-
 impl<B: ScriptBehavior> ScriptInstanceApi for B {
     fn on_start(&mut self, context: &ScriptContext) {
         ScriptBehavior::on_start(self, context);
     }
-
     fn on_pre_physics(&mut self, context: &ScriptContext) {
         ScriptBehavior::on_pre_physics(self, context);
     }
-
     fn on_update(&mut self, context: &ScriptContext) {
         ScriptBehavior::on_update(self, context);
     }
-
     fn on_destroy(&mut self, context: &ScriptContext) {
         ScriptBehavior::on_destroy(self, context);
     }
 }
 
-/// A catalog entry: the script's name and its authoring definition.
 pub struct CatalogEntry {
     pub name: &'static str,
     pub definition: fn() -> &'static ScriptDefinition,
 }
-
-/// Builds one instance for a catalog name; the generated macro supplies this.
 pub type Factory = fn(&str) -> Option<Box<dyn ScriptInstanceApi>>;
 
-/// Runs `body`, converting a panic into the supplied fallback.
-fn guard<T>(fallback: T, body: impl FnOnce() -> T) -> T {
-    match std::panic::catch_unwind(AssertUnwindSafe(body)) {
-        Ok(value) => value,
-        Err(_) => fallback,
+fn report(host: &HostApi, message: &str) {
+    if let Some(report) = host.report_error {
+        report(host.instance, slice_of(message));
+    }
+}
+fn report_panic(host: Option<&HostApi>, operation: &str, payload: Box<dyn Any + Send>) {
+    let detail = if let Some(text) = payload.downcast_ref::<String>() {
+        text.clone()
+    } else if let Some(text) = payload.downcast_ref::<&str>() {
+        (*text).to_owned()
+    } else {
+        "non-string panic payload".to_owned()
+    };
+    // An arbitrary panic_any payload may itself panic in Drop. It must not escape the FFI guard.
+    std::mem::forget(payload);
+    if let Some(host) = host {
+        report(host, &format!("Rust script {operation} panicked: {detail}"));
     }
 }
 
-/// Wraps a raw host table pointer into a [`ScriptContext`].
-///
 /// # Safety
-///
-/// `host` must point at a live `HostApi` for the duration of the callback.
-unsafe fn context_from(host: *const HostApi) -> Option<ScriptContext> {
+/// A non-null host pointer must reference a readable table header and, after
+/// version validation, a complete HostApi. Functions and instance remain live
+/// until the resulting script instance has been destroyed.
+unsafe fn host_from(host: *const HostApi) -> Option<HostApi> {
     if host.is_null() {
         return None;
     }
-    // SAFETY: the caller guarantees a valid, live table.
-    let table = unsafe { *host };
-    if table.abi_version != ABI_VERSION {
+    // SAFETY: ABI version is always the first u32, including in older tables.
+    if unsafe { host.cast::<u32>().read() } != ABI_VERSION {
         return None;
     }
-    Some(ScriptContext::new(table))
+    // SAFETY: matching versions have exactly this table layout.
+    Some(unsafe { host.read() })
 }
 
-/// Reads a string slice argument defensively.
-fn string_from(slice: Slice) -> Option<String> {
-    slice.as_str().map(str::to_string)
-}
-
-/// Erases an instance pointer back to the concrete box.
-///
-/// # Safety
-///
-/// `ptr` must come from `diffuse_script_create` and not be destroyed yet.
-unsafe fn instance_from<'a>(ptr: *mut c_void) -> Option<&'a mut ScriptInstance> {
-    if ptr.is_null() {
-        return None;
-    }
-    // SAFETY: the caller guarantees the pointer came from `create`.
-    Some(unsafe { &mut *(ptr as *mut ScriptInstance) })
-}
-
-/// The engine's ABI version. The host refuses to load a mismatched library.
-#[unsafe(no_mangle)]
 pub extern "C" fn diffuse_script_abi_version() -> u32 {
-    ABI_VERSION
+    match std::panic::catch_unwind(|| ABI_VERSION) {
+        Ok(version) => version,
+        Err(payload) => {
+            report_panic(None, "ABI version", payload);
+            0
+        }
+    }
 }
 
-/// Creates one script instance; null means "unknown name or host mismatch".
-///
-/// `factory` is a Rust function pointer, so this entry point is `extern "Rust"`
-/// rather than `extern "C"`; only the generated `diffuse_script_create_default`
-/// is the C-visible wrapper.
-///
 /// # Safety
-///
-/// `host` must be a live table when non-null.
+/// `name` is readable for this call; `host` satisfies host_from's contract.
 pub unsafe fn diffuse_script_create(
     name: Slice,
     host: *const HostApi,
     factory: Factory,
 ) -> *mut c_void {
-    guard(core::ptr::null_mut(), || {
-        let Some(name) = string_from(name) else {
+    // SAFETY: supplied by the exported wrapper's caller.
+    let Some(host) = (unsafe { host_from(host) }) else {
+        return core::ptr::null_mut();
+    };
+    match std::panic::catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: the caller owns this UTF-8 range for the call's duration.
+        let Some(name) = (unsafe { name.as_str() }) else {
+            report(&host, "Invalid script name UTF-8.");
             return core::ptr::null_mut();
         };
-        // SAFETY: `diffuse_script_create`'s caller guarantees a live table.
-        if unsafe { context_from(host) }.is_none() {
+        let Some(behavior) = factory(name) else {
+            report(&host, &format!("Unknown script '{name}'."));
             return core::ptr::null_mut();
+        };
+        Box::into_raw(Box::new(ScriptInstance {
+            behavior,
+            host,
+            disabled: false,
+        }))
+        .cast()
+    })) {
+        Ok(instance) => instance,
+        Err(payload) => {
+            report_panic(Some(&host), "creation", payload);
+            core::ptr::null_mut()
         }
-        match factory(&name) {
-            Some(behavior) => Box::into_raw(Box::new(ScriptInstance { behavior })) as *mut c_void,
-            None => core::ptr::null_mut(),
-        }
-    })
+    }
 }
 
-/// Runs one lifecycle callback, returning 0 on success and 1 on failure.
-fn run_lifecycle(
+/// # Safety
+/// The instance is live, exclusively accessed, and created by this cdylib.
+/// The supplied host belongs to it and satisfies host_from's contract.
+unsafe fn run_lifecycle(
     instance: *mut c_void,
     host: *const HostApi,
-    callback: impl FnOnce(&mut ScriptInstance, &ScriptContext),
+    operation: &str,
+    callback: impl FnOnce(&mut dyn ScriptInstanceApi, &ScriptContext),
 ) -> i32 {
-    guard(1, || {
-        // SAFETY: the caller of the exported wrapper guarantees these pointers.
-        // SAFETY: the exported wrapper's caller guarantees both pointers.
-        let Some(script) = (unsafe { instance_from(instance) }) else {
-            return 1;
-        };
-        // SAFETY: `host` points at a live table.
-        let Some(context) = (unsafe { context_from(host) }) else {
-            return 1;
-        };
-        callback(script, &context);
-        0
-    })
+    if instance.is_null() {
+        return 1;
+    }
+    // SAFETY: the lifecycle wrapper guarantees exclusive access to this live allocation.
+    let script = unsafe { &mut *instance.cast::<ScriptInstance>() };
+    if script.disabled {
+        return 1;
+    }
+    // SAFETY: the exported entry's caller guarantees a readable table.
+    let Some(host) = (unsafe { host_from(host) }) else {
+        script.disabled = true;
+        report(&script.host, "Script HostApi version mismatch.");
+        return 1;
+    };
+    if host.instance != script.host.instance {
+        script.disabled = true;
+        report(&script.host, "Script HostApi belongs to another instance.");
+        return 1;
+    }
+    match std::panic::catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: the host remains live for this callback; the context cannot be sent to another thread.
+        let context = unsafe { ScriptContext::new(host) };
+        callback(script.behavior.as_mut(), &context);
+    })) {
+        Ok(()) => 0,
+        Err(payload) => {
+            script.disabled = true;
+            report_panic(Some(&host), operation, payload);
+            1
+        }
+    }
 }
 
-/// Runs `on_start`.
-///
 /// # Safety
-///
-/// `instance` must come from [`diffuse_script_create`]; `host` must be live.
-#[unsafe(no_mangle)]
+/// `instance` is live and exclusively accessed; `host` belongs to it.
 pub unsafe extern "C" fn diffuse_script_on_start(
     instance: *mut c_void,
     host: *const HostApi,
 ) -> i32 {
-    run_lifecycle(instance, host, |script, context| {
-        script.behavior.on_start(context)
-    })
+    // SAFETY: forwarded from the caller unchanged.
+    unsafe {
+        run_lifecycle(instance, host, "on_start", |script, context| {
+            script.on_start(context)
+        })
+    }
 }
-
-/// Runs `on_pre_physics`.
-///
 /// # Safety
-///
-/// See [`diffuse_script_on_start`].
-#[unsafe(no_mangle)]
+/// Same contract as diffuse_script_on_start.
 pub unsafe extern "C" fn diffuse_script_on_pre_physics(
     instance: *mut c_void,
     host: *const HostApi,
 ) -> i32 {
-    run_lifecycle(instance, host, |script, context| {
-        script.behavior.on_pre_physics(context)
-    })
+    // SAFETY: forwarded from the caller unchanged.
+    unsafe {
+        run_lifecycle(instance, host, "on_pre_physics", |script, context| {
+            script.on_pre_physics(context)
+        })
+    }
 }
-
-/// Runs `on_update` (Swift's `onTick`).
-///
 /// # Safety
-///
-/// See [`diffuse_script_on_start`].
-#[unsafe(no_mangle)]
+/// Same contract as diffuse_script_on_start.
 pub unsafe extern "C" fn diffuse_script_on_update(
     instance: *mut c_void,
     host: *const HostApi,
 ) -> i32 {
-    run_lifecycle(instance, host, |script, context| {
-        script.behavior.on_update(context)
-    })
+    // SAFETY: forwarded from the caller unchanged.
+    unsafe {
+        run_lifecycle(instance, host, "on_update", |script, context| {
+            script.on_update(context)
+        })
+    }
 }
-
-/// Runs `on_destroy`.
-///
 /// # Safety
-///
-/// See [`diffuse_script_on_start`].
-#[unsafe(no_mangle)]
+/// Same contract as diffuse_script_on_start.
 pub unsafe extern "C" fn diffuse_script_on_destroy(
     instance: *mut c_void,
     host: *const HostApi,
 ) -> i32 {
-    run_lifecycle(instance, host, |script, context| {
-        script.behavior.on_destroy(context)
-    })
+    // SAFETY: forwarded from the caller unchanged.
+    unsafe {
+        run_lifecycle(instance, host, "on_destroy", |script, context| {
+            script.on_destroy(context)
+        })
+    }
 }
 
-/// Releases an instance created by [`diffuse_script_create`].
+/// # Safety
+/// Destroy a live instance exactly once. Its host and opaque instance remain
+/// valid until this function returns, including when a behavior destructor panics.
+pub unsafe extern "C" fn diffuse_script_destroy(instance: *mut c_void) {
+    if instance.is_null() {
+        return;
+    }
+    // SAFETY: the caller transfers ownership of this SDK allocation exactly once.
+    let script = unsafe { Box::from_raw(instance.cast::<ScriptInstance>()) };
+    let host = script.host;
+    if let Err(payload) = std::panic::catch_unwind(AssertUnwindSafe(|| drop(script))) {
+        report_panic(Some(&host), "destruction", payload);
+    }
+}
+
+/// Catalog returned from the host allocator, released with the same host's free.
 ///
 /// # Safety
-///
-/// `instance` must come from [`diffuse_script_create`] and be destroyed once.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn diffuse_script_destroy(instance: *mut c_void) {
-    guard((), || {
-        if instance.is_null() {
-            return;
-        }
-        // SAFETY: the caller guarantees the pointer came from `create`.
-        drop(unsafe { Box::from_raw(instance as *mut ScriptInstance) });
-    })
-}
-
-/// Serializes the catalog to host-owned JSON bytes.
-pub fn catalog_bytes(entries: &[CatalogEntry]) -> Bytes {
-    let mut array = Vec::with_capacity(entries.len());
-    for entry in entries {
-        let definition = (entry.definition)();
-        let mut properties = Vec::with_capacity(definition.properties.len());
-        for property in &definition.properties {
-            let mut object = json::JsonObject::new();
-            object.insert(
-                "key".to_string(),
-                json::JsonValue::String(property.key.clone()),
-            );
-            object.insert(
-                "label".to_string(),
-                json::JsonValue::String(property.label.clone()),
-            );
-            object.insert(
-                "defaultValue".to_string(),
-                property.default_value.json_value(),
-            );
-            let mut option_values = Vec::with_capacity(property.options.len());
-            for option in &property.options {
-                let mut option_object = json::JsonObject::new();
-                option_object.insert(
-                    "label".to_string(),
-                    json::JsonValue::String(option.label.clone()),
-                );
-                option_object.insert("value".to_string(), option.value.json_value());
-                option_values.push(json::JsonValue::Object(option_object));
-            }
-            object.insert("options".to_string(), json::JsonValue::Array(option_values));
-            properties.push(json::JsonValue::Object(object));
-        }
-        let mut object = json::JsonObject::new();
-        object.insert(
-            "name".to_string(),
-            json::JsonValue::String(entry.name.to_string()),
-        );
-        object.insert("properties".to_string(), json::JsonValue::Array(properties));
-        array.push(json::JsonValue::Object(object));
-    }
-
-    let text = json::JsonValue::Array(array).to_json();
-    let mut bytes = text.into_bytes();
-    let slice = Bytes {
-        ptr: bytes.as_mut_ptr(),
-        len: bytes.len(),
-        owned: true,
+/// `host` satisfies host_from's contract. Its allocate entry returns writable,
+/// initialized host-owned bytes of the requested length or Bytes::EMPTY on error.
+pub unsafe fn catalog_bytes(entries: &[CatalogEntry], host: *const HostApi) -> Bytes {
+    // SAFETY: supplied by the exported wrapper's caller.
+    let Some(host) = (unsafe { host_from(host) }) else {
+        return Bytes::EMPTY;
     };
-    core::mem::forget(bytes);
-    slice
+    match std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let entries = entries
+            .iter()
+            .map(|entry| {
+                json::JsonValue::Object(json::JsonObject::from([
+                    ("name".into(), json::JsonValue::String(entry.name.into())),
+                    ("definition".into(), (entry.definition)().codable_value()),
+                ]))
+            })
+            .collect();
+        let Some(text) = json::JsonValue::Array(entries).try_to_json() else {
+            report(&host, "Script catalog contains non-finite property values.");
+            return Bytes::EMPTY;
+        };
+        let Some(allocate) = host.allocate else {
+            report(&host, "HostApi has no byte allocator.");
+            return Bytes::EMPTY;
+        };
+        let bytes = allocate(text.len());
+        if bytes.ptr.is_null() || bytes.len != text.len() || !bytes.owned {
+            if bytes.owned
+                && let Some(free) = host.free
+            {
+                free(bytes);
+            }
+            report(&host, "HostApi failed to allocate the script catalog.");
+            return Bytes::EMPTY;
+        }
+        // SAFETY: host.allocate guarantees this writable range; it cannot overlap the script-owned String.
+        unsafe {
+            core::ptr::copy_nonoverlapping(text.as_ptr(), bytes.ptr, text.len());
+        }
+        bytes
+    })) {
+        Ok(bytes) => bytes,
+        Err(payload) => {
+            report_panic(Some(&host), "catalog", payload);
+            Bytes::EMPTY
+        }
+    }
 }
 
-/// Generates `diffuse_script_catalog` and the factory used by
-/// [`diffuse_script_create`]'s callers.
-///
-/// ```ignore
-/// diffuse_scripts!(CrystalRush);
-/// ```
+/// Emits every C entry in the final cdylib so dependency dead-stripping cannot remove them.
 #[macro_export]
 macro_rules! diffuse_scripts {
     ($($script:ty),+ $(,)?) => {
-        /// The script catalog as JSON.
+        #[cfg(panic = "abort")]
+        compile_error!("Diffuse scripts require panic=unwind so lifecycle failures can be reported without terminating the host.");
         #[unsafe(no_mangle)]
-        pub extern "C" fn diffuse_script_catalog() -> $crate::abi::Bytes {
-            $crate::export::catalog_bytes(&[
-                $(
-                    $crate::export::CatalogEntry {
-                        name: stringify!($script),
-                        definition: <$script as $crate::ScriptDefinitionSource>::definition,
-                    },
-                )+
-            ])
+        pub extern "C" fn diffuse_script_abi_version() -> u32 { $crate::export::diffuse_script_abi_version() }
+        /// # Safety
+        /// The host table and allocator satisfy the script ABI contract.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn diffuse_script_catalog(host: *const $crate::abi::HostApi) -> $crate::abi::Bytes {
+            // SAFETY: the loader supplies a live host table and allocator.
+            unsafe { $crate::export::catalog_bytes(&[$($crate::export::CatalogEntry {
+                name: stringify!($script),
+                definition: || {
+                    use $crate::authoring::ResolveScriptDefinition as _;
+                    let probe = $crate::authoring::ScriptDefinitionProbe::<$script>::new();
+                    (&&probe).resolve_script_definition()
+                },
+            },)+], host) }
         }
-
-        /// The catalog factory, ready to pass to `diffuse_script_create`.
-        pub fn diffuse_script_factory(
-            name: &str,
-        ) -> Option<Box<dyn $crate::export::ScriptInstanceApi>> {
-            $(
-                if name == stringify!($script) {
-                    return Some(Box::new(<$script as ::core::default::Default>::default()));
-                }
-            )+
+        pub fn diffuse_script_factory(name: &str) -> Option<Box<dyn $crate::export::ScriptInstanceApi>> {
+            $(if name == stringify!($script) { return Some(Box::new(<$script as ::core::default::Default>::default())); })+
             None
         }
-
-        /// Creates one instance through the generated factory.
-        ///
         /// # Safety
-        ///
-        /// `host` must be a live table when non-null.
+        /// The name and host remain live for this call; the host outlives the created instance.
         #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn diffuse_script_create_default(
-            name: $crate::abi::Slice,
-            host: *const $crate::abi::HostApi,
-        ) -> *mut ::core::ffi::c_void {
+        pub unsafe extern "C" fn diffuse_script_create(name: $crate::abi::Slice, host: *const $crate::abi::HostApi) -> *mut ::core::ffi::c_void {
+            // SAFETY: the loader supplies a live host and name.
             unsafe { $crate::export::diffuse_script_create(name, host, diffuse_script_factory) }
+        }
+        /// # Safety
+        /// The instance is live, exclusively accessed and belongs to this host.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn diffuse_script_on_start(instance: *mut ::core::ffi::c_void, host: *const $crate::abi::HostApi) -> i32 {
+            // SAFETY: forwarded unchanged from the loader.
+            unsafe { $crate::export::diffuse_script_on_start(instance, host) }
+        }
+        /// # Safety
+        /// The instance is live, exclusively accessed and belongs to this host.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn diffuse_script_on_pre_physics(instance: *mut ::core::ffi::c_void, host: *const $crate::abi::HostApi) -> i32 {
+            // SAFETY: forwarded unchanged from the loader.
+            unsafe { $crate::export::diffuse_script_on_pre_physics(instance, host) }
+        }
+        /// # Safety
+        /// The instance is live, exclusively accessed and belongs to this host.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn diffuse_script_on_update(instance: *mut ::core::ffi::c_void, host: *const $crate::abi::HostApi) -> i32 {
+            // SAFETY: forwarded unchanged from the loader.
+            unsafe { $crate::export::diffuse_script_on_update(instance, host) }
+        }
+        /// # Safety
+        /// The instance is live, exclusively accessed and belongs to this host.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn diffuse_script_on_destroy(instance: *mut ::core::ffi::c_void, host: *const $crate::abi::HostApi) -> i32 {
+            // SAFETY: forwarded unchanged from the loader.
+            unsafe { $crate::export::diffuse_script_on_destroy(instance, host) }
+        }
+        /// # Safety
+        /// The live instance is destroyed once; its host remains live through this call.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn diffuse_script_destroy(instance: *mut ::core::ffi::c_void) {
+            // SAFETY: the loader transfers ownership once.
+            unsafe { $crate::export::diffuse_script_destroy(instance) }
         }
     };
 }
