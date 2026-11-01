@@ -617,19 +617,14 @@ impl SceneRuntime {
 
     /// The first entity whose `SceneNameComponent.value` equals `name`.
     pub fn find_entity_named(&self, name: &str) -> Option<EntityID> {
-        for id in self
-            .world
+        self.world
             .entities_with::<crate::scene_bootstrap::SceneNameComponent>()
-        {
-            if self
-                .world
-                .component::<crate::scene_bootstrap::SceneNameComponent>(id)
-                .is_some_and(|component| component.value == name)
-            {
-                return Some(id);
-            }
-        }
-        None
+            .into_iter()
+            .find(|&id| {
+                self.world
+                    .component::<crate::scene_bootstrap::SceneNameComponent>(id)
+                    .is_some_and(|component| component.value == name)
+            })
     }
 
     /// Every entity whose `SceneKindComponent.value` equals `kind`.

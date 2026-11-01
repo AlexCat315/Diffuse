@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn an_incompatible_present_component_is_reported() {
         let mut registry = ComponentRegistry::new();
-        registry.register(DocumentComponentSchema::new(
+        registry.register(DocumentComponentSchema::make_with_default(
             "mod.a",
             "A",
             ComponentCategory::Gameplay,

@@ -2,6 +2,10 @@
 //!
 //! Ported from `Engine/Sources/SceneRuntime/Particles/Emitter/Forces.swift`.
 
+// Swift's `!(a > b)` predicates also reject NaN. Keep the negated form instead
+// of rewriting to `a <= b`, which would change behaviour on NaN inputs.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 use diffuse_math::simd::simd_compat::{
     Float3, Float4, Float4x4, MATRIX_IDENTITY_FLOAT4X4, simd_cross, simd_dot, simd_inverse,
     simd_length,

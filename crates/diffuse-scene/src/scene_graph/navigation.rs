@@ -145,7 +145,7 @@ impl NavPathfinder {
             return Some(vec![start]);
         }
 
-        let sqrt2: f32 = 1.41421356;
+        let sqrt2: f32 = std::f32::consts::SQRT_2;
         let mut g_score: BTreeMap<NavCell, f32> = BTreeMap::new();
         g_score.insert(start, 0.0);
         let mut came_from: BTreeMap<NavCell, NavCell> = BTreeMap::new();
@@ -218,7 +218,7 @@ fn heuristic(a: NavCell, b: NavCell, allow_diagonal: bool) -> f32 {
     let dz = (a.z - b.z).abs();
     if allow_diagonal {
         let m = dx.min(dz);
-        (dx + dz) as f32 + (1.41421356_f32 - 2.0) * m as f32
+        (dx + dz) as f32 + (std::f32::consts::SQRT_2 - 2.0) * m as f32
     } else {
         (dx + dz) as f32
     }

@@ -42,6 +42,9 @@ impl RenderGeometryTriangle {
     }
 
     /// `init(_:_:_:color:edgeWidths:edgeA:edgeB:edgeC:)`.
+    // Swift's initialiser takes the same eight parameters; splitting them into
+    // a struct would change the call shape without improving readability.
+    #[allow(clippy::too_many_arguments)]
     pub fn with_edges(
         a: Float3,
         b: Float3,

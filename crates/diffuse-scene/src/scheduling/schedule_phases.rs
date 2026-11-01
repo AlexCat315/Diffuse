@@ -1032,7 +1032,10 @@ pub fn run_post_physics_scripts(
 
 /// Advance every `ParticleEmitter` and publish this frame's stats.
 fn advance_particle_emitters(world: &mut RuntimeWorld, delta_time_seconds: f64) {
-    if !(delta_time_seconds > 0.0) {
+    // Swift's `guard deltaTime > 0 else`: a NaN delta must also take the empty path.
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
+    let advancing = delta_time_seconds > 0.0;
+    if !advancing {
         world.set_derived_resource(ParticleFrameStatsResource::empty());
         world.set_derived_resource(ParticleScalabilityStateResource::default());
         return;

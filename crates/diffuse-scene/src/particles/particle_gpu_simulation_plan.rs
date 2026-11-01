@@ -114,8 +114,7 @@ impl ParticleGPUSimulationPlan {
             .settings
             .gpu_simulation
             .workgroup_size
-            .max(1)
-            .min(Self::MAXIMUM_WORKGROUP_SIZE);
+            .clamp(1, Self::MAXIMUM_WORKGROUP_SIZE);
         let dispatch_workgroups = if particle_capacity > 0 {
             (particle_capacity as f32 / workgroup_size as f32).ceil() as i64
         } else {

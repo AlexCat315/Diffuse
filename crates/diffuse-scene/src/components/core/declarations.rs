@@ -152,7 +152,7 @@ impl ComponentRegistry {
                     .into());
                 }
             };
-            let mut schema = DocumentComponentSchema::new(
+            let mut schema = DocumentComponentSchema::make_with_default(
                 description.type_id.clone(),
                 description.display_name.clone(),
                 description.category,

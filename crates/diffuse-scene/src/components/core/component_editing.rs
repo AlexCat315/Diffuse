@@ -232,7 +232,7 @@ mod tests {
 
     fn runtime() -> SceneRuntime {
         let mut registry = ComponentRegistry::new();
-        registry.register(DocumentComponentSchema::new(
+        registry.register(DocumentComponentSchema::make_with_default(
             "mod.health",
             "Health",
             ComponentCategory::Gameplay,

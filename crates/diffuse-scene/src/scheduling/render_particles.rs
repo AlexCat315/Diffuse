@@ -8,6 +8,10 @@
 //! fields are private). Ordering, budget semantics and the draw order of every
 //! particle are identical to the Swift implementation.
 
+// Swift's `!(a > b)` predicates also reject NaN. Keep the negated form instead
+// of rewriting to `a <= b`, which would change behaviour on NaN inputs.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 use diffuse_math::simd::simd_compat::{
     Float3, Float4, Float4x4, MATRIX_IDENTITY_FLOAT4X4, simd_clamp_scalar, simd_cross, simd_dot,
     simd_length, simd_length_squared,
@@ -721,8 +725,9 @@ fn append_ribbon_particles(
         .collect();
 
     let subdivisions = trails.ribbon_smoothing_segments;
-    let mut drafts: Vec<RibbonRenderSegment> = Vec::new();
-    drafts.reserve((segment_lengths.len() as i64 * subdivisions).max(0) as usize);
+    let mut drafts: Vec<RibbonRenderSegment> = Vec::with_capacity(
+        (segment_lengths.len() as i64 * subdivisions).max(0) as usize,
+    );
     let mut ribbon_distance: f32 = 0.0;
     let mut run_id: i64 = 0;
     for index in 0..segment_lengths.len() {

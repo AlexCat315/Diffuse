@@ -2,6 +2,10 @@
 //!
 //! Ported from `Engine/Sources/SceneRuntime/Particles/ParticleCurve.swift`.
 
+// Swift's `!(a > b)` predicates also reject NaN. Keep the negated form instead
+// of rewriting to `a <= b`, which would change behaviour on NaN inputs.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 use diffuse_math::simd::simd_compat::simd_clamp_scalar;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

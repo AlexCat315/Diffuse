@@ -425,7 +425,7 @@ impl RenderDeformableMesh {
             || self.normals.len() != self.positions.len()
             || self.texture_coordinates.len() != self.positions.len()
             || self.triangle_indices.is_empty()
-            || self.triangle_indices.len() % 3 != 0
+            || !self.triangle_indices.len().is_multiple_of(3)
         {
             return false;
         }
@@ -476,7 +476,10 @@ impl RenderDeformableMesh {
                 continue;
             }
             let normal = simd_cross(positions[i1] - positions[i0], positions[i2] - positions[i0]);
-            if !(simd_length_squared(normal) > 1.0e-12) {
+            // NaN-safe, matching Swift's `guard lengthSquared > eps else`.
+            #[allow(clippy::neg_cmp_op_on_partial_ord)]
+            let non_degenerate = simd_length_squared(normal) > 1.0e-12;
+            if !non_degenerate {
                 continue;
             }
             result[i0] += normal;
@@ -615,7 +618,7 @@ impl RenderParticle {
 
     /// `conservativeRadius` — the circumscribed billboard radius.
     pub fn conservative_radius(&self) -> f32 {
-        swift_max(0.0, self.size) * swift_max(1.0, self.stretch) * 0.70710678
+        swift_max(0.0, self.size) * swift_max(1.0, self.stretch) * std::f32::consts::FRAC_1_SQRT_2
     }
 }
 
@@ -718,15 +721,15 @@ impl ParticleRenderBatchPlan {
             if let Some(texture_path) = &key.texture_path {
                 unique_textures.insert(texture_path.clone());
             }
-            if let Some(previous) = &current_key {
-                if *previous != key {
-                    batches.push(ParticleRenderBatch::new(
-                        previous.clone(),
-                        current_start,
-                        index - current_start,
-                    ));
-                    current_start = index;
-                }
+            if let Some(previous) = &current_key
+                && *previous != key
+            {
+                batches.push(ParticleRenderBatch::new(
+                    previous.clone(),
+                    current_start,
+                    index - current_start,
+                ));
+                current_start = index;
             }
             current_key = Some(key);
         }
@@ -1298,7 +1301,8 @@ fn gpu_particle_conservative_radius(
             swift_max(1.0, 1.0 + safe_velocity * batch.velocity_stretch_scale),
         ),
     };
-    let billboard_radius = swift_max(0.0, size) * swift_max(1.0, stretch) * 0.70710678;
+    let billboard_radius =
+        swift_max(0.0, size) * swift_max(1.0, stretch) * std::f32::consts::FRAC_1_SQRT_2;
     let trail_radius = if batch.trail_length > 0.0 {
         safe_velocity * batch.trail_length
     } else {
@@ -1530,7 +1534,7 @@ impl RenderScene {
         particle_summary: Option<ParticleRenderSummary>,
     ) -> Self {
         let mut deformable_meshes = deformable_meshes;
-        deformable_meshes.sort_by(|lhs, rhs| lhs.entity.raw_value().cmp(&rhs.entity.raw_value()));
+        deformable_meshes.sort_by_key(|lhs| lhs.entity.raw_value());
         let particle_summary = particle_summary.unwrap_or_else(|| {
             ParticleRenderSummary::from_particles_with_batches(
                 &particles,

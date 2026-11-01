@@ -57,7 +57,7 @@ impl DocumentComponentSchema {
     }
 
     /// `make` with Swift's default `configure` closure.
-    pub fn new(
+    pub fn make_with_default(
         type_id: impl Into<String>,
         display_name: impl Into<String>,
         category: ComponentCategory,
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn a_document_schema_round_trips_through_the_world() {
         let default_document = object([("amount", ComponentValue::Number(3.0))]);
-        let schema = DocumentComponentSchema::new(
+        let schema = DocumentComponentSchema::make_with_default(
             "mod.health",
             "Health",
             ComponentCategory::Gameplay,
@@ -322,13 +322,13 @@ mod tests {
 
     #[test]
     fn each_schema_gets_its_own_identity() {
-        let first = DocumentComponentSchema::new(
+        let first = DocumentComponentSchema::make_with_default(
             "mod.a",
             "A",
             ComponentCategory::Scripting,
             ComponentValue::Null,
         );
-        let second = DocumentComponentSchema::new(
+        let second = DocumentComponentSchema::make_with_default(
             "mod.b",
             "B",
             ComponentCategory::Scripting,

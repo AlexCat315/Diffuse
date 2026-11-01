@@ -5,6 +5,10 @@
 //! Every RNG draw happens in the same order as the Swift original; the sampling
 //! order is part of the recorded simulation baseline.
 
+// Swift's `!(a > b)` predicates also reject NaN. Keep the negated form instead
+// of rewriting to `a <= b`, which would change behaviour on NaN inputs.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 use diffuse_math::simd::simd_compat::{
     Float3, Float4, Float4x4, MATRIX_IDENTITY_FLOAT4X4, simd_clamp_scalar, simd_inverse,
     simd_length,
@@ -46,10 +50,6 @@ impl ParticleSpawnResult {
         }
     }
 
-    pub fn dropped(&self) -> i64 {
-        self.capacity_limited_count + self.spawn_budget_limited_count
-    }
-
     pub fn include(&mut self, other: &ParticleSpawnResult) {
         self.requested += other.requested;
         self.spawned += other.spawned;
@@ -60,7 +60,6 @@ impl ParticleSpawnResult {
 
 /// A per-frame allowance of new particles. A zero `limit` means "unlimited".
 pub(crate) struct ParticleSpawnBudget {
-    pub limit: i64,
     remaining: Option<i64>,
     pub consumed_count: i64,
 }
@@ -68,7 +67,6 @@ pub(crate) struct ParticleSpawnBudget {
 impl ParticleSpawnBudget {
     pub fn new(limit: i64) -> Self {
         ParticleSpawnBudget {
-            limit: limit.max(0),
             remaining: if limit > 0 { Some(limit) } else { None },
             consumed_count: 0,
         }
@@ -165,7 +163,7 @@ impl ParticleEmitter {
                 texture_frame_seed: sample.texture_frame_seed,
             };
             self.refresh_appearance(&mut p);
-            self.runtime.particles.push(p.clone());
+            self.runtime.particles.push(p);
             if record_spawned {
                 self.runtime.last_frame_spawned_particles.push(p);
             }

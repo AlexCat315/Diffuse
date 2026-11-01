@@ -4,6 +4,10 @@
 //! The bit operations are reproduced exactly; changing any constant or shift
 //! invalidates every recorded particle baseline.
 
+// Swift's `!(a > b)` predicates also reject NaN. Keep the negated form instead
+// of rewriting to `a <= b`, which would change behaviour on NaN inputs.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 use diffuse_math::simd::simd_compat::{
     Float3, simd_cross, simd_length, simd_length_squared,
 };

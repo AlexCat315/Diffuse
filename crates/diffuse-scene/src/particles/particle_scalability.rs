@@ -232,15 +232,13 @@ impl ParticleScalabilityPolicyResource {
         }
 
         let pressure_sample = self.pressure(previous_stats);
-        let next_scale: f32;
-        if pressure_sample.0 > 0.0 {
+        let next_scale: f32 = if pressure_sample.0 > 0.0 {
             let reduction = self.pressure_step * pressure_sample.0.min(1.0);
-            next_scale = self
-                .minimum_scale
-                .max(previous_state.applied_scale * (1.0 - reduction));
+            self.minimum_scale
+                .max(previous_state.applied_scale * (1.0 - reduction))
         } else {
-            next_scale = 1.0_f32.min(previous_state.applied_scale + self.recovery_step);
-        }
+            1.0_f32.min(previous_state.applied_scale + self.recovery_step)
+        };
         ParticleScalabilityStateResource::new(
             next_scale,
             pressure_sample.0,

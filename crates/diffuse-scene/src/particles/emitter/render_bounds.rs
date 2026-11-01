@@ -2,6 +2,10 @@
 //!
 //! Ported from `Engine/Sources/SceneRuntime/Particles/Emitter/RenderBounds.swift`.
 
+// Swift's `!(a > b)` predicates also reject NaN. Keep the negated form instead
+// of rewriting to `a <= b`, which would change behaviour on NaN inputs.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 use diffuse_math::simd::simd_compat::{Float3, simd_clamp_scalar, simd_length};
 
 use crate::particles::emitter::particle_emitter::ParticleEmitter;
@@ -173,7 +177,8 @@ impl ParticleEmitter {
             1.0
         };
         let billboard_radius =
-            swift_max_f32(0.0, size) * size_scale * swift_max_f32(1.0, stretch) * 0.70710678;
+            swift_max_f32(0.0, size) * size_scale * swift_max_f32(1.0, stretch)
+                * std::f32::consts::FRAC_1_SQRT_2;
         let trail_radius = if settings.trails.trail_length > 0.0 {
             velocity_magnitude * settings.trails.trail_length
         } else {

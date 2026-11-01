@@ -1067,7 +1067,7 @@ impl ParticleTrailsModule {
         self.ribbon_tail_alpha_scale = simd_clamp_scalar(self.ribbon_tail_alpha_scale, 0.0, 1.0);
         self.ribbon_max_segment_length = self.ribbon_max_segment_length.max(0.0);
         self.ribbon_join_overlap_scale = self.ribbon_join_overlap_scale.max(0.0);
-        self.ribbon_smoothing_segments = self.ribbon_smoothing_segments.max(1).min(16);
+        self.ribbon_smoothing_segments = self.ribbon_smoothing_segments.clamp(1, 16);
         self.ribbon_texture_tiling = self.ribbon_texture_tiling.max(0.0);
         self.trail_length = self.trail_length.max(0.0);
         self.trail_segments = self.trail_segments.max(0);
@@ -1266,11 +1266,11 @@ impl ParticleModuleStack {
                 continue;
             }
             let mut normalized = module.clone();
-            if default_ids.contains(module.id.as_str()) {
-                if let Some(default_module) = defaults_by_id.get(module.id.as_str()) {
-                    normalized.stage = default_module.stage;
-                    normalized.display_name = default_module.display_name.clone();
-                }
+            if default_ids.contains(module.id.as_str())
+                && let Some(default_module) = defaults_by_id.get(module.id.as_str())
+            {
+                normalized.stage = default_module.stage;
+                normalized.display_name = default_module.display_name.clone();
             }
             repaired.push(normalized);
         }
@@ -1419,7 +1419,7 @@ impl ParticleEmitterModuleSettings {
                 settings.ribbon_max_segment_length = settings.ribbon_max_segment_length.max(0.0);
                 settings.ribbon_join_overlap_scale = settings.ribbon_join_overlap_scale.max(0.0);
                 settings.ribbon_smoothing_segments =
-                    settings.ribbon_smoothing_segments.max(1).min(16);
+                    settings.ribbon_smoothing_segments.clamp(1, 16);
                 settings.ribbon_texture_tiling = settings.ribbon_texture_tiling.max(0.0);
                 settings.trail_length = settings.trail_length.max(0.0);
                 if settings.trail_length > 0.0 {
@@ -1451,8 +1451,7 @@ impl ParticleEmitterModuleSettings {
             ParticleEmitterModuleSettings::GpuSimulation(settings) => {
                 settings.workgroup_size = settings
                     .workgroup_size
-                    .max(1)
-                    .min(ParticleGPUSimulationPlan::MAXIMUM_WORKGROUP_SIZE);
+                    .clamp(1, ParticleGPUSimulationPlan::MAXIMUM_WORKGROUP_SIZE);
             }
         }
     }
