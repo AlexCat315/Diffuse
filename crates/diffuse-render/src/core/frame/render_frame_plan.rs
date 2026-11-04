@@ -5,7 +5,7 @@
 use crate::core::render_settings::RenderSettings;
 
 /// `RenderPassKind` — a `String`-backed enum; the raw values are the case names.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RenderPassKind {
     DepthPrepass,
     ShadowPass,

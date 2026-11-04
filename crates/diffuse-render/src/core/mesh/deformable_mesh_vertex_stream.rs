@@ -6,7 +6,9 @@
 //! testable without requiring a GPU device.
 
 use diffuse_assets::asset_pipeline::MeshAsset;
-use diffuse_math::simd::simd_compat::{Float3, Float4, simd_cross, simd_normalize};
+use diffuse_math::simd::simd_compat::{
+    Float3, Float4, simd_cross, simd_length_squared, simd_normalize,
+};
 use diffuse_scene::rendering::render_scene::RenderDeformableMesh;
 
 #[derive(Clone, Debug, Default, PartialEq)]

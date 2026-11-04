@@ -1,5 +1,7 @@
 //! An immutable compute program. Bindings are owned by the recording frame.
 
+use std::sync::Arc;
+
 use std::collections::BTreeMap;
 
 use cove_graphics::rhi::{
@@ -11,18 +13,18 @@ use cove_graphics::rhi::{
 use crate::native::targets::native_shader_library::NativeShaderLibrary;
 
 pub struct NativeComputePass {
-    device: Device,
+    device: Arc<Device>,
     bindings: BindingLayout,
     pipeline: ComputePipeline,
 }
 
 impl NativeComputePass {
-    pub fn new(device: &Device, shader: &str) -> RhiResult<Self> {
-        Self::with_options(device, shader, &[], None)
+    pub fn new(device: &Arc<Device>, shader: &str) -> RhiResult<Self> {
+        Self::with_options(device, shader, &BTreeMap::new(), None)
     }
 
     pub fn with_options(
-        device: &Device,
+        device: &Arc<Device>,
         shader: &str,
         buffer_strides: &BTreeMap<u32, i64>,
         workgroup_size: Option<usize>,

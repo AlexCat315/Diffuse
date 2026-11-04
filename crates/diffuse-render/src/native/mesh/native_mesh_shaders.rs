@@ -2,6 +2,8 @@
 //! creation is transactional, and ownership is independent of material
 //! pipeline variants.
 
+use std::sync::Arc;
+
 use std::collections::BTreeMap;
 
 use cove_graphics::rhi::{BindingLayout, Device, RhiError, RhiResult, ShaderModule, ShaderStage};
@@ -50,13 +52,13 @@ impl NativeMeshShaderRole {
 }
 
 pub struct NativeMeshShaders {
-    device: Device,
+    device: Arc<Device>,
     modules: BTreeMap<NativeMeshShaderRole, ShaderModule>,
     pub bindings: BindingLayout,
 }
 
 impl NativeMeshShaders {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let roles = NativeMeshShaderRole::ALL;
         let mut artifacts = Vec::with_capacity(roles.len());
         for role in roles {

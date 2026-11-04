@@ -1,0 +1,83 @@
+{
+  "environment" : {
+    "buildConfiguration" : "debug",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-11-04T06:59:33Z",
+    "operatingSystem" : "Version 27.2 (Build 26B123)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 3,
+  "height" : 64,
+  "imageDifferences" : {
+
+  },
+  "repeats" : 1,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 9118.597333333333,
+        "p95Microseconds" : 9118.597333333333,
+        "sampleCount" : 1
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 83.375,
+        "p95Microseconds" : 88.625,
+        "sampleCount" : 3
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 7891.666,
+        "p95Microseconds" : 8076.833,
+        "sampleCount" : 3
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 5427.583,
+        "p95Microseconds" : 5430.375,
+        "sampleCount" : 3
+      },
+      "device" : "Apple M1",
+      "particleWork" : {
+        "batches" : 0,
+        "candidates" : 0,
+        "dispatchWorkgroups" : 0,
+        "indirectDraws" : 0
+      },
+      "passDraws" : {
+        "basePass" : 30,
+        "depthPrepass" : 30,
+        "editorGrid" : 3,
+        "shadowPass" : 90,
+        "skybox" : 3,
+        "tonemap" : 3,
+        "transparentMeshes" : 18
+      },
+      "passFrames" : {
+        "basePass" : 3,
+        "depthPrepass" : 3,
+        "editorGrid" : 3,
+        "shadowPass" : 3,
+        "skybox" : 3,
+        "tonemap" : 3,
+        "transparentMeshes" : 3
+      },
+      "simulationWork" : {
+        "batches" : 0,
+        "eventBytes" : 0,
+        "eventCapacity" : 0,
+        "instanceWorkgroups" : 0,
+        "particles" : 0,
+        "renderInstances" : 0,
+        "simulationWorkgroups" : 0,
+        "sortItems" : 0,
+        "sortPaddedItems" : 0,
+        "sortPasses" : 0,
+        "sortWorkgroups" : 0
+      }
+    }
+  ],
+  "scene" : "animated",
+  "warmup" : 1,
+  "width" : 64
+}

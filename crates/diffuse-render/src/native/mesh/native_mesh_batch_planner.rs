@@ -71,8 +71,8 @@ impl NativeMeshBatchPlanner {
             view_projection,
             &settings,
             &skinned_entities,
-            |mesh_index| store.mesh(mesh_index).map(|mesh| mesh.geometry.bounds),
-            |mesh_index| store.mesh(mesh_index).is_some(),
+            &|mesh_index| store.mesh(mesh_index).map(|mesh| mesh.geometry.bounds),
+            &|mesh_index| store.mesh(mesh_index).is_some(),
         );
         let mut members: HashMap<NativeMeshBatchKey, Vec<usize>> = HashMap::new();
         let mut order: Vec<NativeMeshBatchKey> = Vec::new();
@@ -82,7 +82,7 @@ impl NativeMeshBatchPlanner {
                 .mesh_indices
                 .get(index)
                 .copied()
-                .unwrap_or_else(|| instance.mesh.mesh_index);
+                .unwrap_or(instance.mesh.mesh_index);
             let dynamic = instance.entity.and_then(|entity| deformables.get(&entity));
             let mesh = match store.mesh(mesh_index) {
                 Some(mesh) => Some(mesh.clone()),
@@ -97,10 +97,10 @@ impl NativeMeshBatchPlanner {
                     "unregistered native mesh {mesh_index}"
                 )));
             };
-            for part in &(match dynamic {
+            for part in match dynamic {
                 Some(geometry) => &geometry.submeshes,
                 None => &mesh.geometry.submeshes,
-            }) {
+            } {
                 let imported = mesh
                     .materials
                     .get(part.material_index as usize)

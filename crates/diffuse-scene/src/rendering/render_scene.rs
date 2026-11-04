@@ -42,7 +42,7 @@ fn swift_clamp(lo: f32, hi: f32, value: f32) -> f32 {
 }
 
 /// glTF-compatible coverage semantics, shared by imported and runtime materials.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum MaterialAlphaMode {
     Opaque,
     Mask,

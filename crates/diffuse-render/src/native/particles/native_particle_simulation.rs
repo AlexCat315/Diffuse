@@ -2,15 +2,14 @@
 //! follows an emitter, never the batch slot; a frame owns its proposed
 //! residency and snapshots until submission succeeds.
 
+use std::sync::Arc;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use cove_graphics::rhi::{
     Buffer, BufferDescriptor, BufferUsage, CommandBuffer, Device, RhiError, RhiResult,
 };
 
-use crate::core::particles::particle_simulation_gpu_data::{
-    GPUParticleSimulationEvent, GPUParticleSimulationMetadata, GPUParticleSimulationState,
-};
 use crate::core::particles::simulation_report::GPUParticleSimulationEncodeReport;
 use crate::native::particles::native_particle_instances::{
     NativeParticleInstanceKernels, NativeParticleSimulationRender, NativeParticleSortBuffer,
@@ -18,10 +17,10 @@ use crate::native::particles::native_particle_instances::{
 };
 use crate::native::particles::native_particle_simulation_kernels::NativeParticleSimulationKernels;
 use crate::native::particles::native_particle_simulation_readback::NativeParticleSimulationReadback;
-use diffuse_scene::rendering::render_scene::RenderScene;
+use diffuse_scene::rendering::render_scene::{ParticleRenderBatch, RenderScene};
 
 pub struct NativeParticleSimulationState {
-    pub device: Device,
+    pub device: Arc<Device>,
     pub capacity: usize,
     pub event_capacity: usize,
     pub state: Buffer,
@@ -31,20 +30,20 @@ pub struct NativeParticleSimulationState {
 }
 
 impl NativeParticleSimulationState {
-    pub fn new(device: &Device, capacity: usize) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>, capacity: usize) -> RhiResult<Self> {
         if capacity == 0
             || capacity
-                > crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationUniforms::MAXIMUM_EXACT_PARTICLE_COUNT
+                > crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationUniforms::MAXIMUM_EXACT_PARTICLE_COUNT as usize
         {
             return Err(RhiError::invalid_argument(
                 "particle capacity exceeds the Float32 simulation ABI",
             ));
         }
-        let event_capacity = capacity * 2.max(1);
+        let event_capacity = capacity * 2;
         let event_capacity = event_capacity.max(1);
         let mut allocated: Vec<Buffer> = Vec::new();
         let buffers = (|| {
-            let make = |size: usize| -> RhiResult<Buffer> {
+            let mut make = |size: usize| -> RhiResult<Buffer> {
                 let result = device.make_buffer(BufferDescriptor::new(
                     size,
                     BufferUsage::STORAGE_READ
@@ -57,8 +56,9 @@ impl NativeParticleSimulationState {
             };
             let state = make(capacity * std::mem::size_of::<crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationState>())?;
             let compact = make(capacity * std::mem::size_of::<crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationState>())?;
-            let metadata =
-                make(crate::core::particles::particle_simulation_gpu_data::std::mem::size_of::<crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationMetadata>())?;
+            let metadata = make(std::mem::size_of::<
+                crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationMetadata,
+            >())?;
             let events = make(event_capacity * std::mem::size_of::<crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationEvent>())?;
             Ok((state, compact, metadata, events))
         })();
@@ -123,7 +123,7 @@ pub struct NativeParticleSimulationUpdate {
 }
 
 pub struct NativeParticleSimulation {
-    device: Device,
+    device: Arc<Device>,
     programs: BTreeMap<usize, NativeParticleSimulationKernels>,
     instance_programs: BTreeMap<usize, NativeParticleInstanceKernels>,
     pub source: Option<NativeParticleSourceBuffer>,
@@ -133,7 +133,7 @@ pub struct NativeParticleSimulation {
 }
 
 impl NativeParticleSimulation {
-    pub fn new(device: &Device) -> Self {
+    pub fn new(device: &Arc<Device>) -> Self {
         NativeParticleSimulation {
             device: device.clone(),
             programs: BTreeMap::new(),
@@ -194,6 +194,10 @@ impl NativeParticleSimulation {
         Ok(())
     }
 
+    #[allow(
+        clippy::manual_div_ceil,
+        reason = "Preserve Swift checked addition before division."
+    )]
     pub fn prepare(
         &mut self,
         scene: &RenderScene,
@@ -220,7 +224,7 @@ impl NativeParticleSimulation {
                 },
                 source => {
                     let capacity = required
-                        .max(source.map_or(0, |source| source.capacity * 2))
+                        .max(source.as_ref().map_or(0, |source| source.capacity * 2))
                         .max(256);
                     NativeParticleSourceBuffer::new(&self.device, capacity)?
                 }
@@ -289,13 +293,12 @@ impl NativeParticleSimulation {
                     .sort
                     .as_ref()
                     .is_none_or(|sort| sort.capacity < batch.render_particle_count() as usize)
-                {
-                    if let Some(sort) = entry.sort.replace(NativeParticleSortBuffer::new(
+                    && let Some(sort) = entry.sort.replace(NativeParticleSortBuffer::new(
                         &self.device,
                         batch.render_particle_count() as usize,
-                    )?) {
-                        sort.destroy();
-                    }
+                    )?)
+                {
+                    sort.destroy();
                 }
                 let Some(sort) = &entry.sort else {
                     return Err(RhiError::OutOfMemory);
@@ -321,9 +324,9 @@ impl NativeParticleSimulation {
                         batch.texture_path.clone(),
                     ),
                     render.instance_count as i64,
-                    instance_report.render_instance_count as i64,
+                    instance_report.render_instance_count,
                 ));
-                render.instance_count += instance_report.render_instance_count;
+                render.instance_count += instance_report.render_instance_count as usize;
                 update.report.render_instance_count += instance_report.render_instance_count;
                 update.report.instance_dispatch_workgroups +=
                     instance_report.instance_dispatch_workgroups;
@@ -343,11 +346,11 @@ impl NativeParticleSimulation {
             )?);
             entry.initialized = true;
             update.report.batch_count += 1;
-            update.report.particle_count += count;
-            update.report.dispatch_workgroups += ((count + group - 1) / group) as i64 as usize;
-            update.report.event_capacity += entry.state.event_capacity;
+            update.report.particle_count += count as i64;
+            update.report.dispatch_workgroups += ((count + group - 1) / group) as i64;
+            update.report.event_capacity += entry.state.event_capacity as i64;
             update.report.event_buffer_bytes +=
-                entry.state.event_capacity * std::mem::size_of::<crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationEvent>();
+                (entry.state.event_capacity * std::mem::size_of::<crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationEvent>()) as i64;
             update.entries.insert(key, entry);
         }
         Ok(update)
@@ -356,7 +359,7 @@ impl NativeParticleSimulation {
     pub fn commit(&mut self, update: NativeParticleSimulationUpdate) {
         // Retire residency the previous frame owned but the update no longer
         // carries (Swift released these through class reference counting).
-        for (key, entry) in self.entries.drain() {
+        for (key, entry) in std::mem::take(&mut self.entries) {
             if !update.entries.contains_key(&key) {
                 entry.state.destroy();
                 if let Some(sort) = &entry.sort {
@@ -379,7 +382,7 @@ impl NativeParticleSimulation {
             .render
             .as_ref()
             .and_then(|render| render.source.clone());
-        self.report = update.report.clone();
+        self.report = update.report;
         self.pending.extend(update.readbacks);
         if self.pending.len() > 64 {
             let excess = self.pending.len() - 64;
@@ -401,7 +404,7 @@ impl NativeParticleSimulation {
         max_snapshots: usize,
     ) -> RhiResult<Vec<crate::core::render_stats::GPUParticleSimulationEventSnapshot>> {
         let mut result = Vec::new();
-        for _ in 0..max_snapshots.max(0).min(self.pending.len()) {
+        for _ in 0..max_snapshots.min(self.pending.len()) {
             // A failed read remains queued, so retrying does not lose events.
             result.push(self.pending[0].read()?);
             let readback = self.pending.remove(0);

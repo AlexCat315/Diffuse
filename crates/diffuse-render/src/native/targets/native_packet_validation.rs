@@ -7,7 +7,6 @@ use crate::core::frame::viewport_target_allocation::ViewportTargetAllocation;
 use crate::core::particles::particle_gpu_data::GPUParticleInstance;
 use crate::core::particles::particle_instance_gpu_data::{
     GPUParticleAppearanceData, GPUParticleSimulationInstanceUniforms,
-    GPUParticleSortPrepareUniforms,
 };
 use crate::core::particles::particle_simulation_gpu_data::{
     GPUParticleSimulationState, GPUParticleSimulationUniforms,
@@ -233,13 +232,13 @@ impl NativePacketValidation {
                 Self::validate_particle_rendering(batch)?;
                 let (count, overflow) = batch
                     .render_particle_count()
-                    .checked_mul(batch.render_instance_multiplier());
+                    .overflowing_mul(batch.render_instance_multiplier());
                 if overflow {
                     return Err(RhiError::invalid_argument(
                         "simulated particle instance count exceeds the Float32 ABI",
                     ));
                 }
-                let (total, addition_overflow) = instances.checked_add(count);
+                let (total, addition_overflow) = instances.overflowing_add(count);
                 if addition_overflow
                     || total > GPUParticleSimulationUniforms::MAXIMUM_EXACT_PARTICLE_COUNT
                 {
@@ -278,7 +277,7 @@ impl NativePacketValidation {
 
     fn validate_particle_rendering(batch: &RenderParticleSimulationBatch) -> Result<(), RhiError> {
         let limit = GPUParticleSimulationUniforms::MAXIMUM_EXACT_PARTICLE_COUNT;
-        let (frames, overflow) = batch
+        let frames = batch
             .texture_sheet_columns
             .checked_mul(batch.texture_sheet_rows)
             .ok_or_else(|| {
@@ -303,7 +302,6 @@ impl NativePacketValidation {
             ]
             .iter()
             .all(|value| *value >= 0 && *value <= limit)
-            || overflow
             || frames > u32::MAX as i64
             || ![
                 batch.start_size,

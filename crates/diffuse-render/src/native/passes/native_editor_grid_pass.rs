@@ -1,6 +1,8 @@
 //! The editor's existing grid pass, recorded through NativeRHI. The caller owns
 //! targets and the frame; default load actions preserve scene color and depth.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{
     BindingLayout, BindingResource, BindingSetDescriptor, BindingSetEntry,
     ColorAttachmentDescriptor, CommandBuffer, CompareOp, DepthStencilState, Device,
@@ -13,14 +15,14 @@ use crate::core::lighting::grid_uniforms::EditorGridUniforms;
 use crate::native::targets::native_shader_library::NativeShaderLibrary;
 
 pub struct NativeEditorGridPass {
-    device: Device,
+    device: Arc<Device>,
     pipeline: GraphicsPipeline,
     binding_layout: BindingLayout,
     uniform_slot: u32,
 }
 
 impl NativeEditorGridPass {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         Self::with_formats(
             device,
             cove_graphics::rhi::TextureFormat::Bgra8Unorm,
@@ -29,7 +31,7 @@ impl NativeEditorGridPass {
     }
 
     pub fn with_formats(
-        device: &Device,
+        device: &Arc<Device>,
         color_format: cove_graphics::rhi::TextureFormat,
         depth_format: cove_graphics::rhi::TextureFormat,
     ) -> RhiResult<Self> {
@@ -124,7 +126,7 @@ impl NativeEditorGridPass {
         }
         let uniforms = EditorGridUniforms::make(packet);
         let data = uniforms_bytes(&uniforms);
-        let upload = self.device.upload_transient(&data, 256)?;
+        let upload = self.device.upload_transient(data, 256)?;
         let bindings = self.device.make_binding_set(
             self.binding_layout,
             BindingSetDescriptor::new(vec![BindingSetEntry::new(
@@ -152,6 +154,8 @@ impl NativeEditorGridPass {
 
 /// `withUnsafeBytes(of: uniforms) { Data($0) }`.
 fn uniforms_bytes(uniforms: &EditorGridUniforms) -> &[u8] {
+    // SAFETY: uniforms is a live, fully initialized value; the returned slice
+    // borrows it and covers exactly the repr(C) shader block.
     // EditorGridUniforms is a `#[repr(C, align(16))]` uniform block, so its
     // memory image is exactly what the grid shader reads.
     unsafe {

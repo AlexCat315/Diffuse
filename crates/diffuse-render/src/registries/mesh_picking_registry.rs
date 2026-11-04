@@ -19,6 +19,7 @@ fn component(vector: Float3, axis: usize) -> f32 {
     }
 }
 
+#[derive(Clone)]
 struct PickingTriangle {
     a: Float3,
     b: Float3,
@@ -27,6 +28,7 @@ struct PickingTriangle {
     max: Float3,
 }
 
+#[derive(Clone)]
 struct PickingNode {
     min: Float3,
     max: Float3,
@@ -297,7 +299,7 @@ impl MeshPickingRegistry {
                     continue;
                 }
                 let transformed = joint_matrices[joint as usize] * p;
-                skinned = skinned + transformed * weight;
+                skinned += transformed * weight;
                 total += weight;
             }
             let value = if total > 0.0001 { skinned } else { p };

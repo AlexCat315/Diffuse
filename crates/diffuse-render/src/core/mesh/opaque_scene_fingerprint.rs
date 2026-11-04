@@ -51,11 +51,6 @@ impl SceneHasher {
     }
 
     #[inline]
-    fn combine_f64(&mut self, value: f64) {
-        self.combine_u64(value.to_bits());
-    }
-
-    #[inline]
     fn combine_bool(&mut self, value: bool) {
         self.combine_u64(u64::from(value));
     }

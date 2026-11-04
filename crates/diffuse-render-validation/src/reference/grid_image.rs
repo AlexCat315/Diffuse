@@ -45,7 +45,7 @@ impl GridImage {
             return Err(RhiError::invalid_argument("grid image extents differ").into());
         }
         let mut data = format!("P6\n{} {}\n255\n", size.width, size.height).into_bytes();
-        for pixel in bgra.chunks_exact(4) {
+        for pixel in bgra.as_chunks::<4>().0 {
             data.extend_from_slice(&[pixel[2], pixel[1], pixel[0]]);
         }
         std::fs::write(path, data)?;
@@ -60,7 +60,7 @@ impl GridImage {
         let mut absolute = 0_i64;
         let mut maximum = 0_i64;
         let mut outliers = 0_i64;
-        for (left, right) in lhs.chunks_exact(4).zip(rhs.chunks_exact(4)) {
+        for (left, right) in lhs.as_chunks::<4>().0.iter().zip(rhs.as_chunks::<4>().0) {
             let mut delta = 0;
             for channel in 0..3 {
                 let difference = (i64::from(left[channel]) - i64::from(right[channel])).abs();

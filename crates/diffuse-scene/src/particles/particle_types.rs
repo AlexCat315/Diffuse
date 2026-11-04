@@ -75,7 +75,7 @@ macro_rules! swift_string_enum {
         $name:ident { $($(#[$variant_meta:meta])* $variant:ident => $raw:literal),+ $(,)? }
     ) => {
         $(#[$meta])*
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
         pub enum $name {
             $($(#[$variant_meta])* $variant),+
         }
@@ -154,8 +154,10 @@ swift_string_enum! {
 }
 
 impl ParticleSimulationSpace {
-    pub const ALL: [ParticleSimulationSpace; 2] =
-        [ParticleSimulationSpace::Local, ParticleSimulationSpace::World];
+    pub const ALL: [ParticleSimulationSpace; 2] = [
+        ParticleSimulationSpace::Local,
+        ParticleSimulationSpace::World,
+    ];
 }
 
 swift_string_enum! {
@@ -245,8 +247,7 @@ swift_string_enum! {
 }
 
 impl ParticleBlendMode {
-    pub const ALL: [ParticleBlendMode; 2] =
-        [ParticleBlendMode::Alpha, ParticleBlendMode::Additive];
+    pub const ALL: [ParticleBlendMode; 2] = [ParticleBlendMode::Alpha, ParticleBlendMode::Additive];
 }
 
 swift_string_enum! {

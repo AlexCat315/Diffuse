@@ -1,12 +1,12 @@
 //! GPU particle output buffers. Outputs grow independently by responsibility;
 //! source instances are frame uploads.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{Buffer, BufferDescriptor, BufferUsage, Device, RhiResult};
 
-use crate::core::particles::particle_gpu_data::{GPUParticleIndirectDrawArgs, GPUParticleInstance};
-
 pub struct NativeParticleBuffers {
-    device: Device,
+    device: Arc<Device>,
     pub visible: Option<Buffer>,
     pub indirect: Option<Buffer>,
     instance_capacity: usize,
@@ -14,7 +14,7 @@ pub struct NativeParticleBuffers {
 }
 
 impl NativeParticleBuffers {
-    pub fn new(device: &Device) -> Self {
+    pub fn new(device: &Arc<Device>) -> Self {
         NativeParticleBuffers {
             device: device.clone(),
             visible: None,

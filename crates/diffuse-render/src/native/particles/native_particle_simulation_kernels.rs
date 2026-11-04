@@ -1,5 +1,7 @@
 //! Physics and lifecycle programs for one physical workgroup size.
 
+use std::sync::Arc;
+
 use std::collections::BTreeMap;
 
 use cove_graphics::rhi::{Buffer, CommandBuffer, Device, RhiResult};
@@ -7,15 +9,15 @@ use diffuse_math::simd::simd_compat::UInt4;
 use diffuse_scene::rendering::render_scene::RenderParticleSimulationBatch;
 
 use crate::core::particles::particle_simulation_gpu_data::{
-    GPUParticleSimulationEvent, GPUParticleSimulationMetadata, GPUParticleSimulationState,
-    GPUParticleSimulationUniforms, GPUParticleSpawnUniforms, GPUParticleStateMaintenanceUniforms,
+    GPUParticleSimulationMetadata, GPUParticleSimulationState, GPUParticleSimulationUniforms,
+    GPUParticleSpawnUniforms, GPUParticleStateMaintenanceUniforms,
 };
 use crate::native::lighting::native_lighting_resources::NativeUniformUpload;
 use crate::native::particles::native_particle_simulation::NativeParticleSimulationState;
 use crate::native::passes::native_compute_pass::NativeComputePass;
 
 pub struct NativeParticleSimulationKernels {
-    device: Device,
+    device: Arc<Device>,
     workgroup_size: usize,
     simulate: NativeComputePass,
     spawn: NativeComputePass,
@@ -26,7 +28,7 @@ pub struct NativeParticleSimulationKernels {
 }
 
 impl NativeParticleSimulationKernels {
-    pub fn new(device: &Device, workgroup_size: usize) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>, workgroup_size: usize) -> RhiResult<Self> {
         let state = std::mem::size_of::<
             crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationState,
         >() as i64;
@@ -129,8 +131,7 @@ impl NativeParticleSimulationKernels {
             .min(state.capacity)
             .min(batch.plan.particle_capacity as usize);
         let requested = batch.spawn_particles.len().min(state.capacity);
-        let seeded_spawn =
-            requested.min(0usize.max(batch.plan.particle_capacity as usize - persisted));
+        let seeded_spawn = requested.min(batch.plan.particle_capacity as usize - persisted);
         let count = if reseed {
             persisted + seeded_spawn
         } else {
@@ -165,7 +166,7 @@ impl NativeParticleSimulationKernels {
                 .map(GPUParticleSimulationState::from_particle)
                 .collect();
             Self::copy(&self.device, &particles, state.state, commands)?;
-            let metadata = GPUParticleSimulationMetadata::with_append_cursor(persisted);
+            let metadata = GPUParticleSimulationMetadata::new(persisted as i64);
             Self::copy_metadata(&self.device, &metadata, state.metadata, commands)?;
         } else {
             self.reset.encode(
@@ -234,8 +235,8 @@ impl NativeParticleSimulationKernels {
             batch,
             delta_time,
             elapsed_time,
-            count,
-            state.event_capacity,
+            count as i64,
+            state.event_capacity as i64,
         );
         self.simulate.encode(
             vec![
@@ -333,12 +334,16 @@ impl NativeParticleSimulationKernels {
         Ok(count)
     }
 
+    #[allow(
+        clippy::manual_div_ceil,
+        reason = "Preserve Swift checked addition before division."
+    )]
     fn groups(&self, count: usize) -> i64 {
         1i64.max(((count + self.workgroup_size - 1) / self.workgroup_size) as i64)
     }
 
     fn copy<T: Copy>(
-        device: &Device,
+        device: &Arc<Device>,
         values: &[T],
         to: Buffer,
         commands: &mut CommandBuffer,
@@ -359,7 +364,7 @@ impl NativeParticleSimulationKernels {
     }
 
     fn copy_metadata(
-        device: &Device,
+        device: &Arc<Device>,
         metadata: &GPUParticleSimulationMetadata,
         to: Buffer,
         commands: &mut CommandBuffer,

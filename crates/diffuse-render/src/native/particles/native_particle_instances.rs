@@ -2,6 +2,8 @@
 //! kernels. Sort and conversion programs share a physical workgroup size with
 //! simulation.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{
     BindingResource, Buffer, BufferDescriptor, BufferUsage, CommandBuffer, Device, RhiResult,
 };
@@ -9,23 +11,22 @@ use diffuse_math::simd::simd_compat::Float3;
 use diffuse_scene::rendering::render_scene::{ParticleRenderBatch, RenderParticleSimulationBatch};
 
 use crate::core::particles::particle_instance_gpu_data::{
-    GPUParticleAppearance, GPUParticleAppearanceData, GPUParticleCurveKeyframe,
-    GPUParticleSimulationInstanceEncodeReport, GPUParticleSimulationInstanceUniforms,
-    GPUParticleSimulationSortEncodeReport, GPUParticleSortItem, GPUParticleSortPlan,
-    GPUParticleSortPrepareUniforms,
+    GPUParticleAppearanceData, GPUParticleCurveKeyframe, GPUParticleSimulationInstanceEncodeReport,
+    GPUParticleSimulationInstanceUniforms, GPUParticleSimulationSortEncodeReport,
+    GPUParticleSortPlan, GPUParticleSortPrepareUniforms,
 };
-use crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationState;
 use crate::native::lighting::native_lighting_resources::NativeUniformUpload;
 use crate::native::passes::native_compute_pass::NativeComputePass;
 
+#[derive(Clone)]
 pub struct NativeParticleSourceBuffer {
-    pub device: Device,
+    pub device: Arc<Device>,
     pub buffer: Buffer,
     pub capacity: usize,
 }
 
 impl NativeParticleSourceBuffer {
-    pub fn new(device: &Device, capacity: usize) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>, capacity: usize) -> RhiResult<Self> {
         let buffer =
             device.make_buffer(BufferDescriptor::labelled(
                 capacity
@@ -52,14 +53,14 @@ impl NativeParticleSourceBuffer {
 }
 
 pub struct NativeParticleSortBuffer {
-    pub device: Device,
+    pub device: Arc<Device>,
     pub buffer: Buffer,
     pub capacity: usize,
 }
 
 impl NativeParticleSortBuffer {
-    pub fn new(device: &Device, count: usize) -> RhiResult<Self> {
-        let capacity = GPUParticleSortPlan::capacity_for(count);
+    pub fn new(device: &Arc<Device>, count: usize) -> RhiResult<Self> {
+        let capacity = GPUParticleSortPlan::capacity_for(count as i64) as usize;
         let buffer = device.make_buffer(BufferDescriptor::labelled(
             capacity
                 * std::mem::size_of::<
@@ -89,7 +90,7 @@ pub struct NativeParticleSimulationRender {
 }
 
 pub struct NativeParticleInstanceKernels {
-    device: Device,
+    device: Arc<Device>,
     workgroup_size: usize,
     prepare: NativeComputePass,
     bitonic: NativeComputePass,
@@ -97,7 +98,7 @@ pub struct NativeParticleInstanceKernels {
 }
 
 impl NativeParticleInstanceKernels {
-    pub fn new(device: &Device, workgroup_size: usize) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>, workgroup_size: usize) -> RhiResult<Self> {
         let state_stride = std::mem::size_of::<
             crate::core::particles::particle_simulation_gpu_data::GPUParticleSimulationState,
         >() as i64;
@@ -174,8 +175,8 @@ impl NativeParticleInstanceKernels {
         base_instance: usize,
         commands: &mut CommandBuffer,
     ) -> RhiResult<GPUParticleSimulationInstanceEncodeReport> {
-        let plan = GPUParticleSortPlan::new(batch.render_particle_count() as usize);
-        let sort_groups = self.groups(plan.capacity);
+        let plan = GPUParticleSortPlan::new(batch.render_particle_count());
+        let sort_groups = self.groups(plan.capacity as usize);
         self.prepare.encode(
             vec![
                 cove_graphics::rhi::BindingSetEntry::new(
@@ -262,7 +263,7 @@ impl NativeParticleInstanceKernels {
                     NativeUniformUpload::binding(
                         GPUParticleSimulationInstanceUniforms::from_batch(
                             batch,
-                            base_instance,
+                            base_instance as i64,
                             &appearance,
                         ),
                         &self.device,
@@ -308,17 +309,21 @@ impl NativeParticleInstanceKernels {
             commands,
         )?;
         Ok(GPUParticleSimulationInstanceEncodeReport {
-            render_instance_count: batch.render_instance_count() as usize,
+            render_instance_count: batch.render_instance_count(),
             instance_dispatch_workgroups: instance_groups,
             sort_report: GPUParticleSimulationSortEncodeReport {
-                pass_count: plan.stages.len() + 1,
-                item_count: batch.render_particle_count() as usize,
+                pass_count: plan.stages.len() as i64 + 1,
+                item_count: batch.render_particle_count(),
                 padded_item_count: plan.capacity,
-                dispatch_workgroups: sort_groups * (plan.stages.len() + 1),
+                dispatch_workgroups: sort_groups * (plan.stages.len() as i64 + 1),
             },
         })
     }
 
+    #[allow(
+        clippy::manual_div_ceil,
+        reason = "Preserve Swift checked addition before division."
+    )]
     fn groups(&self, count: usize) -> i64 {
         ((count + self.workgroup_size - 1) / self.workgroup_size) as i64
     }

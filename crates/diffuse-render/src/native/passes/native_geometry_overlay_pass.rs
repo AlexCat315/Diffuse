@@ -1,6 +1,8 @@
 //! The editor geometry overlay: expanded CPU vertices drawn with per-fragment
 //! depth visibility, through two pipelines (surface and x-ray).
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{
     ColorAttachmentDescriptor, CommandBuffer, CompareOp, CullMode, DepthStencilState, Device,
     GraphicsPipeline, PipelineLayoutDescriptor, RenderColorTarget, RenderDepthTarget,
@@ -15,13 +17,13 @@ use crate::native::passes::native_overlay_geometry::NativeOverlayVertex;
 use crate::native::targets::native_shader_library::NativeShaderLibrary;
 
 pub struct NativeGeometryOverlayPass {
-    device: Device,
+    device: Arc<Device>,
     visible: GraphicsPipeline,
     xray: GraphicsPipeline,
 }
 
 impl NativeGeometryOverlayPass {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let vertex = device.make_shader_module(
             NativeShaderLibrary::artifact(
                 "editor_geometry",
@@ -53,14 +55,14 @@ impl NativeGeometryOverlayPass {
                 color_attachments: vec![ColorAttachmentDescriptor::blended(
                     cove_graphics::rhi::TextureFormat::Bgra8Unorm,
                 )],
-                depth_format: None,
+                depth_format: Some(cove_graphics::rhi::TextureFormat::Depth32Float),
                 depth_stencil: Some(DepthStencilState {
                     depth_compare: compare,
                     depth_write_enabled: false,
                 }),
                 fragment: Some(fragment),
                 label: None,
-                layout: layout,
+                layout,
                 primitive: cove_graphics::rhi::PrimitiveType::TriangleList,
                 rasterization: cove_graphics::rhi::RasterizationState {
                     cull_mode: CullMode::None,

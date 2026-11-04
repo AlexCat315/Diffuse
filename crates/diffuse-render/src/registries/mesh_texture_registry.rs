@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
-use diffuse_assets::asset_pipeline::{MeshAsset, MeshTexture};
+use diffuse_assets::asset_pipeline::MeshAsset;
 use diffuse_assets::import::image_asset_decoder::DecodedTextureAsset;
 use diffuse_assets::import::mesh_texture_resolver::MeshTextureResolver;
 

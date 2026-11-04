@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use cove_graphics::rhi::{
@@ -65,12 +66,12 @@ impl NativePassBenchmark {
         let mut results = Vec::new();
         let mut images = BTreeMap::new();
         for &api in &options.backends {
-            let device = Device::make(DeviceConfig {
+            let device = Arc::new(Device::make(DeviceConfig {
                 preferred_backends: vec![api],
                 enable_validation: false,
                 frames_in_flight: 3,
                 ..DeviceConfig::default()
-            })?;
+            })?);
             let mut renderer = if options.scene == ProbeScene::Grid {
                 BenchmarkRenderer::Grid(Box::new(NativeGridRenderer::new(&device, None)?))
             } else {
@@ -207,7 +208,7 @@ impl NativePassBenchmark {
                     finish()?;
                 }
             }
-            if options.frames % 3 != 0 {
+            if !options.frames.is_multiple_of(3) {
                 finish()?;
             }
             batches.push(start.elapsed().as_nanos() as f64 / options.frames as f64 / 1000.0);
@@ -342,7 +343,7 @@ impl PassBenchmarkOptions {
                 "use --scene grid|mesh|pbr|animated|post|stylized|particles|simulation --width N --height N --frames N --warmup N --repeats N --backends metal|vulkan|dx12 --output DIR",
             ));
         }
-        for pair in arguments.chunks_exact(2) {
+        for pair in arguments.as_chunks::<2>().0 {
             let value = &pair[1];
             match pair[0].as_str() {
                 "--scene" => options.scene = ProbeScene::parse(value)?,

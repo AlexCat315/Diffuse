@@ -124,7 +124,7 @@ fn prefilter(normal: Float3, roughness: f32) -> Float3 {
 
 fn radical_inverse_vd_c(bits: u32) -> f32 {
     let mut b = bits;
-    b = (b << 16) | (b >> 16);
+    b = b.rotate_right(16);
     b = ((b & 0x5555_5555) << 1) | ((b & 0xAAAA_AAAA) >> 1);
     b = ((b & 0x3333_3333) << 2) | ((b & 0xCCCC_CCCC) >> 2);
     b = ((b & 0x0F0F_0F0F) << 4) | ((b & 0xF0F0_F0F0) >> 4);

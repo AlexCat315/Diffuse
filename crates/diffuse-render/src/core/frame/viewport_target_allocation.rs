@@ -18,7 +18,7 @@ impl ViewportTargetAllocation {
 
     pub fn quantized(value: u32) -> u32 {
         let clamped = value.clamp(1, Self::MAX_DIMENSION);
-        let rounded = (clamped + Self::GRANULARITY - 1) / Self::GRANULARITY * Self::GRANULARITY;
+        let rounded = clamped.div_ceil(Self::GRANULARITY) * Self::GRANULARITY;
         rounded.min(Self::MAX_DIMENSION)
     }
 

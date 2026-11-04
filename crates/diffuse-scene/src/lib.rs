@@ -13,4 +13,5 @@ pub mod scene_runtime;
 pub mod scheduling;
 pub mod scripting;
 pub mod serialization;
-pub mod tests;
+#[cfg(test)]
+mod tests;

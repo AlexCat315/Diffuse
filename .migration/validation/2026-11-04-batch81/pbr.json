@@ -1,0 +1,81 @@
+{
+  "environment" : {
+    "buildConfiguration" : "debug",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-11-04T06:59:31Z",
+    "operatingSystem" : "Version 27.2 (Build 26B123)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 3,
+  "height" : 64,
+  "imageDifferences" : {
+
+  },
+  "repeats" : 1,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 4057.1666666666665,
+        "p95Microseconds" : 4057.1666666666665,
+        "sampleCount" : 1
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 73.167,
+        "p95Microseconds" : 76.209,
+        "sampleCount" : 3
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 3369.5,
+        "p95Microseconds" : 3514.792,
+        "sampleCount" : 3
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 2267.916,
+        "p95Microseconds" : 2406.583,
+        "sampleCount" : 3
+      },
+      "device" : "Apple M1",
+      "particleWork" : {
+        "batches" : 0,
+        "candidates" : 0,
+        "dispatchWorkgroups" : 0,
+        "indirectDraws" : 0
+      },
+      "passDraws" : {
+        "basePass" : 9,
+        "depthPrepass" : 9,
+        "editorGrid" : 3,
+        "shadowPass" : 27,
+        "skybox" : 3,
+        "tonemap" : 3
+      },
+      "passFrames" : {
+        "basePass" : 3,
+        "depthPrepass" : 3,
+        "editorGrid" : 3,
+        "shadowPass" : 3,
+        "skybox" : 3,
+        "tonemap" : 3
+      },
+      "simulationWork" : {
+        "batches" : 0,
+        "eventBytes" : 0,
+        "eventCapacity" : 0,
+        "instanceWorkgroups" : 0,
+        "particles" : 0,
+        "renderInstances" : 0,
+        "simulationWorkgroups" : 0,
+        "sortItems" : 0,
+        "sortPaddedItems" : 0,
+        "sortPasses" : 0,
+        "sortWorkgroups" : 0
+      }
+    }
+  ],
+  "scene" : "pbr",
+  "warmup" : 1,
+  "width" : 64
+}

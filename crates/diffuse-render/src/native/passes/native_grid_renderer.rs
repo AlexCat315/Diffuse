@@ -3,6 +3,8 @@
 //! This consumer supports native windows and offscreen NativeRHI textures;
 //! offscreen output is published as an owned NativeRHI image for UI sampling.
 
+use std::sync::Arc;
+
 use std::sync::Mutex;
 
 use cove_graphics::rhi::{
@@ -10,8 +12,9 @@ use cove_graphics::rhi::{
 };
 use cove_logging::{Level, LogEvent};
 
+use crate::core::frame::render_frame_plan::RenderPassKind;
 use crate::core::frame::render_packet::{RenderDrawableSize, RenderPacket};
-use crate::core::render_stats::{RenderFrameStats, RenderPassKind};
+use crate::core::render_stats::RenderFrameStats;
 use crate::native::passes::native_editor_grid_pass::NativeEditorGridPass;
 use crate::native::targets::native_render_targets::NativeRenderTargets;
 use crate::native::targets::native_window_target::NativeWindowTarget;
@@ -21,7 +24,7 @@ use crate::surface::viewport_surface::{
 };
 
 pub struct NativeGridRenderer {
-    pub device: Device,
+    pub device: Arc<Device>,
     grid: NativeEditorGridPass,
     window_target: Option<NativeWindowTarget>,
     targets: Mutex<Option<NativeRenderTargets>>,
@@ -30,9 +33,26 @@ pub struct NativeGridRenderer {
     last_error: Mutex<Option<String>>,
 }
 
+// Keep the Swift `defer { device.endFrame() }` on every return path.
+struct FrameEnd(Arc<Device>);
+impl Drop for FrameEnd {
+    fn drop(&mut self) {
+        self.0.end_frame();
+    }
+}
+
+impl Drop for NativeGridRenderer {
+    fn drop(&mut self) {
+        let _ = self.device.with_frame_session(|| {
+            self.grid.destroy();
+            Ok(())
+        });
+    }
+}
+
 impl NativeGridRenderer {
     pub fn new(
-        device: &Device,
+        device: &Arc<Device>,
         surface: Option<crate::core::frame::render_packet::RenderSurfaceDescriptor>,
     ) -> Result<Self, cove_graphics::rhi::RhiError> {
         let window_target = surface.map(|surface| NativeWindowTarget::new(device.clone(), surface));
@@ -127,6 +147,7 @@ impl NativeGridRenderer {
             return Err(cove_graphics::rhi::RhiError::OutOfMemory);
         };
         self.device.begin_frame()?;
+        let _frame = FrameEnd(self.device.clone());
         let image = self
             .window_target
             .as_ref()
@@ -138,7 +159,7 @@ impl NativeGridRenderer {
             .or_else(|| targets.color.as_ref().map(|color| color.texture()))
         else {
             drop(targets_guard);
-            self.device.end_frame();
+
             return Err(cove_graphics::rhi::RhiError::SwapchainAcquireFailed(
                 "no grid color target".into(),
             ));
@@ -183,20 +204,23 @@ impl NativeGridRenderer {
             self.device.present(image)?;
         }
         drop(targets_guard);
-        self.device.end_frame();
+
+        drop(_frame);
         let submitted = start.elapsed();
-        let mut stats = RenderFrameStats::default();
-        stats.frame_index = packet.frame_index;
-        stats.pass_count = 1;
-        stats.draw_call_count = if packet.render_settings.viewport.grid_enabled {
-            1
-        } else {
-            0
-        };
-        stats.active_passes = if packet.render_settings.viewport.grid_enabled {
-            vec![RenderPassKind::EditorGrid]
-        } else {
-            Vec::new()
+        let mut stats = RenderFrameStats {
+            frame_index: packet.frame_index,
+            pass_count: 1,
+            draw_call_count: if packet.render_settings.viewport.grid_enabled {
+                1
+            } else {
+                0
+            },
+            active_passes: if packet.render_settings.viewport.grid_enabled {
+                vec![RenderPassKind::EditorGrid]
+            } else {
+                Vec::new()
+            },
+            ..RenderFrameStats::default()
         };
         let mut pass_draw_call_counts = std::collections::BTreeMap::new();
         pass_draw_call_counts.insert(RenderPassKind::EditorGrid, stats.draw_call_count);

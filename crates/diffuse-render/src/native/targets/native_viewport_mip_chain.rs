@@ -2,6 +2,8 @@
 //! scene's used region, so allocation padding never enters the pyramid. All
 //! three NativeRHI backends use this path.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{
     BindingResource, CommandBuffer, Device, RenderColorTarget, RhiResult, Sampler,
     SamplerAddressMode, SamplerDescriptor, SamplerFilter, SamplerMipFilter, TextureDescriptor,
@@ -15,14 +17,20 @@ use crate::native::lighting::native_lighting_resources::NativeUniformUpload;
 use crate::native::passes::native_fullscreen_pass::NativeFullscreenPass;
 
 pub struct NativeViewportMipChain {
-    device: Device,
+    device: Arc<Device>,
     pass: NativeFullscreenPass,
     sampler: Sampler,
-    levels: Vec<TextureResource>,
+    levels: Vec<Arc<TextureResource>>,
+}
+
+impl Drop for NativeViewportMipChain {
+    fn drop(&mut self) {
+        self.device.destroy_sampler(self.sampler);
+    }
 }
 
 impl NativeViewportMipChain {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         // The fullscreen FXAA program has a linear resampling path when edge
         // offsets are zero: all luma taps agree and the early return samples
         // the original color. Keep this mode isolated from authored FXAA
@@ -51,10 +59,10 @@ impl NativeViewportMipChain {
 
     pub fn record(
         &mut self,
-        source: &TextureResource,
+        source: &Arc<TextureResource>,
         used: RenderDrawableSize,
         commands: &mut CommandBuffer,
-    ) -> RhiResult<Vec<TextureResource>> {
+    ) -> RhiResult<Vec<Arc<TextureResource>>> {
         let mut sizes: Vec<RenderDrawableSize> = Vec::new();
         let mut size = used;
         while size.width > 1 || size.height > 1 {
@@ -82,6 +90,7 @@ impl NativeViewportMipChain {
                         )
                         .with_label("viewport-mip"),
                     )
+                    .map(Arc::new)
                 })
                 .collect::<RhiResult<Vec<_>>>()?;
         }

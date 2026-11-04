@@ -305,7 +305,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `transforms::transform_3d::Transform3D`（`new/identity/matrix/inverse_matrix/transform_point`）、`transforms::matrix_transforms::MatrixTransforms`（`translation/scale/rotation`）。
 - `utility::easing::Easing`（31 个变体 + `evaluate/interpolate/interpolate_vector`）、`utility::float_comparisons::FloatComparisons`（`DEFAULT_TOLERANCE`、`nearly_equal_scalar*`、`nearly_equal*`）。
 
-### `diffuse-kernel`（原已 `tested`；`JobSystem` 新增复制支持后为 `written`）
+### `diffuse-kernel`（已 `tested`；批次 81 重新通过门禁与 13 个测试）
 
 - `engine_kernel::{EngineKernelPhase, EngineKernelPhaseContext, EngineKernelFrameReport, EngineKernel}`。
 - `in_game_canvas::{InGameUIColor, InGameCanvasCommand, InGameCanvas}`。
@@ -339,7 +339,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `capability_registry::{CapabilityRegistry, CapabilityRegistryIntegrityError}`、`capability_validator::{CapabilityValidator, CapabilityValidationResult, CapabilityValidationError}`。
 - `drafts::precondition_checker::{PreconditionCheckInput, PreconditionChecker, PreconditionViolation}`、`release::release_phase_gate::{ReleasePhaseGate, CapabilityDraftLimits}`、`release::sha256::{digest, capability_sha256_hex_digest, CapabilityDigest}`、`support::disposal::{Registration, DisposalScope}`、`support::swift_date::SwiftDate`。
 
-### `diffuse-script-api`（新建；本轮属性/JSON 修订后为 `written`，未重新验证）
+### `diffuse-script-api`（已 `tested`；批次 81：ABI 3，17 个测试与严格 Clippy 通过）
 
 - `abi`：`HostApi`（函数表；当前 ABI 3，57 个回调，含 allocate/free/report_error）、`Slice`、`Bytes`、`Color4`(16/4)、`Transform3`(64/16，完整矩阵)、`GroundState`、`CharacterStance`、`ABI_VERSION`。SDK 使用独立 `0.1.0` 包版本。
 - `context::ScriptContext`（隐藏 `HostApi` 的安全封装，缺项保持 Swift 的 0/false 回退）。
@@ -482,7 +482,13 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - 静态对照发现并修复两处旧接线偏差：`set_physics_backend` 原来保存显式 backend 后却实际安装另一个 preferred backend；`ensure_configured_physics_backend` 原来分别创建 simulation/query/shared 三个实例，导致共享身份判断恒为 false。现在显式 override 真正参与模拟，默认模拟与查询复用 Swift 的同一个 shared backend；初始 active backend 按 Swift 为 Null，shared/query backend 为 preferred。
 - `JobSystem` 的 Rust 状态仅有只读配置对应的 worker 数和最小 chunk size，新增配置值 `Clone` 以支持 schedule 副本；该源文件旧 `tested` 状态已退回 `written`。`SceneStateAssertion::failure_description` 的全部 39 个状态分支已补齐，失败消息与 Swift 一致。
 
-### `diffuse-render-validation`（13 个生产文件已 `written`，未编译/运行）
+### `diffuse-render`（71 个生产文件已 `compiled`，批次 81）
+
+- 设备的共享所有权使用 `Arc<cove_graphics::rhi::Device>`，持有设备的构造函数接收 `&Arc<Device>`；纯借用的上传接口仍接收 `&Device`。视口输出和 mip 为 `Arc<TextureResource>`，`surface::viewport_image::ViewportImage` 是唯一图像类型，`viewport_surface` 重新导出它。
+- 窗口目标的 swapchain/configured size 由同一 Mutex 保护，Metal/Win32/Xlib/Wayland 句柄完整转换；帧 guard 在所有错误路径结束 frame，渲染器 Drop 释放 resident pass/mesh/particle 资源，旧视口快照持有的纹理继续有效。
+- 着色器使用 Cove 的 `ShaderArtifact::load_directory/from_json`，保留平台 Metal 库选择、指纹与 workgroup family 校验；8 个 preparation stage 已接回 `ResourcePreparationContext::step`。
+
+### `diffuse-render-validation`（13 个生产文件已 `compiled`；20 个原测试文件仍 `pending`）
 
 - 根导出 `NativePassBenchmark::run(&[String])`、`NativeValidationError`、`PassTimingDistribution`、`PassBenchmarkResult`、`PassParticleWork`、`PassParticleSimulationWork`，以及八个 probe scene、`GridImage`、`GridImageDifference`、`SceneCapture`。
 - 每个 probe 的 `packet(size, frame)` 显式传帧，Grid 额外接收 `Option<RenderCamera>`。Mesh 的 `imported_fixture()` 用既有 RenderBackend bundle；Animated 的 `skinned_fixture()` 由基准 RAII 注册/撤销到共享 registry 的 index 2。
@@ -586,10 +592,19 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-04 | 批次 78 | Natsel G8 与 D1 加载器/通用桥接 | 1 完成 + 1 部分 | 154 + 30 | 用户授权下在 Natsel 补 `World: Send`、短借用角色世界句柄、`from_raw_world` 和 `world_mut`；修正 Diffuse 的多角色安全注释，并补 §2.2 的 Natsel release 溢出设置。加载器完整 `written`：先验 ABI 校验、目录严格校验、显式多脚本选择、可失败工厂、代次/元数据同锁替换。通用桥接新增 29 项（实体/层级/矩阵/参数/Prefab/画布/状态），其余待续，仍 `pending`。只做 Rust 格式化与静态检查，未运行 Cargo/测试。 |
 | 2026-11-04 | 批次 79 | D1 通用脚本桥接收尾 | 1 + 2 支持文件 | 30 | 剩余 16 个回调全部接线，共 57/57；组件复用 registry 事务校验与回滚，移除前编码/分配旧值；原生资源 codec 注册、10 类内置资源和场景 JSON 资源；输入/触发/角色状态、车辆命令及五种物理查询完整转换。通用桥接从 pending 提升 written，生产文件均 written，测试仍待续；未编译/运行测试，仅格式化、源码对照、函数表覆盖与清单检查。 |
 | 2026-11-04 | 批次 80 | diffuse-render-validation 生产代码 | 13 | 597 | 8 个 probe、回读/图像比较、SceneCapture、完整多后端基准和两个命令入口均 written；保留 warmup/三帧同步/分位数/工作量及图像阈值。复用 workspace serde/thiserror/libc，未引入新包；补 NativeRenderer 缺失的 NativeDeformableMeshes 初始化。仅格式化、源码对照与静态清单检查；未运行编译、GPU、基准或测试，20 个测试文件仍 pending。 |
+| 2026-11-04 | 批次 81 | 渲染编译门禁、SDK 与运行验证 | 既有代码修复 | — | render 的 71 个生产文件、render-validation 的 13 个生产文件通过 all-targets check/严格 Clippy，标 compiled；共享设备/纹理、深度格式、RHI 调用、帧与资源生命周期修正。SDK 17、kernel 13、media 6、assets 92 个测试通过；场景 618 通过、15 失败，保持未验证状态。8 类 Metal 小尺寸探针及 2 个 GPU 生命周期回归通过；完整原测试迁移、Swift 像素对等与跨平台运行仍待续。 |
 
 ## 10. 已知问题与需要用户确认的事项
 
-- **2026-11-04 批次 80**：`diffuse-render-validation` 的 13 个生产文件全部 `written`；上游仍未过编译门禁，本批次没有提升 compiled/tested。基准是待用户后续验证的生产工具，本轮没有执行其渲染或计时流程；测试源码未改动。
+- **2026-11-04 当前授权**：用户明确允许“编译测试和验证”，覆盖下述 2026-11-01 的历史限制；恢复 §6 的门禁流程。批次 81 没有发布新版本，没有新增第三方 crate，也没有修改 Cove/Natsel。
+- **批次 81 验证证据**：[summary.json](.migration/validation/2026-11-04-batch81/summary.json) 与同目录 8 个探针报告。`diffuse-render`/`diffuse-render-validation`、`diffuse-script-api`/`diffuse-kernel` 分别通过 `cargo check ... --all-targets` 和 `cargo clippy ... --all-targets -- -D warnings`。`diffuse-scene`/`diffuse-assets` 的 all-targets check 通过，但未完成其整 crate 严格 Clippy 门禁，不能据此推进新的下游翻译批次。
+- SDK 的原 10 个测试按 ABI 3 的完整 64 字节矩阵及现有构造签名适配，断言强度不降；新增 7 个真实 C 导出/宿主回调回归覆盖 shear 矩阵、空字符串释放、实体 0、None/空名称与父实体 0、目录元数据、panic 停用和 ABI/未知脚本拒绝。共 17 个通过。kernel 13 个测试通过；原有 1 个文档示例继续忽略。真实 FFmpeg 媒体 6 个测试通过，资源管线现有 92 个测试通过；未迁移的 baker 测试仍 pending。`diffuse-script` 的单独 test 命令只有 0 个用例，不构成宿主桥接已验证的依据。
+- **场景测试尚有 15 个失败**（618 通过，未放宽/删除/忽略任何失败断言）：组件值和存档 JSON 往返、组件描述/旧黄金文件、破坏状态存档、角色 trigger exit、粒子 grouped settings 往返/每帧生成预算、cloth/soft-body 编辑、物理能力报告和 ragdoll 混合。完整名称与位置见 summary.json。根因尚未逐项定位，不能把它们归咎于上游，也不能将 scene 标 tested；后续先处理这些失败和上游 Clippy 门禁。
+- Metal 实测为 macOS arm64 / Apple M1，grid/mesh/pbr/animated/post/stylized/particles/simulation 均为 64×64、1 预热、3 测量帧、1 次重复，提交/等待/回读/PPM/报告成功；单一后端没有图像差异对照。这些是接线验证，不是 Swift 像素对等或性能结论。新增 2 个 Rust GPU 回归验证八阶段 preparation，以及视口/mip 在尺寸增长和渲染器析构后仍可回读；在有 GPU 的本机实际执行通过。其他平台实现均保留，尚未运行验证。
+- 为恢复本机构建，按现有 StageOperation/Targets 的设置从已校验源码构建 FFmpeg 8.1.3（SHA-256 `7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3`），暂存到忽略的 `vendor/FFmpeg.artifactbundle/macos-arm64`，包含头文件、合并静态库、工具、许可证与 provenance。此为本机验证准备，**不代表 `cargo xtask native-bootstrap` 已迁移完成**。
+- **FFmpeg 归属建议，尚未修改 §2 的 crate 约定**：后续 Cove 播放组件应依赖 Cove 自己的通用媒体层，包括 FFmpeg 获取/构建/分发、demux/decode、帧与音频缓冲、时钟/寻址和通用编码接口；Diffuse 保留剪辑时间线、合成/导出策略及场景接线。建议作为独立批次连同桥接、许可证和各平台打包上移，公共 API 落地后让 Diffuse 切换依赖，避免两套底座。
+
+- **2026-11-04 批次 80 历史记录**：`diffuse-render-validation` 的 13 个生产文件全部 `written`；上游仍未过编译门禁，本批次没有提升 compiled/tested。基准是待用户后续验证的生产工具，本轮没有执行其渲染或计时流程；测试源码未改动。
 - 该 crate 新增引用 workspace 已有的 serde、thiserror、libc（Cargo.lock 只补该包的三个依赖名，没有新第三方包）；分别用于 Codable 报告、联合错误类型和 Unix 系统版本查询。Apple 用 sysctl、Linux/Android 等 Unix 用 uname、Windows 用 RtlGetVersion，均有实现；报告的 operatingSystem 是原生版本描述，非 Apple 平台不保证 Foundation 的描述措辞逐字一致。UTC measuredAt 保持整秒 ISO8601，报告字段与浮点写出格式保留。
 - 静态对照发现既有 `NativeRenderer::build` 在 Rust 漏了 Swift 构造函数里的 `NativeDeformableMeshes(device:)`；已按原位置补齐初始化，没有改动渲染算法。两个探针入口已替换脚手架空入口。
 
@@ -609,7 +624,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 - **2026-11-01 批次 67–69**：事务执行器/协调器已完成生产翻译，补齐既有状态断言的判定逻辑；场景复制所需的共享引用接线和显式物理 backend 偏差也已按 Swift 修正。本轮不运行编译、测试或基准，相关运行表现尚未验证；没有修改 Cove/Natsel，也没有新增第三方依赖。
 
-- **2026-11-01 当前用户要求：迁移不进行测试工作。** 本轮只迁移生产代码，运行 Rust 格式化与 `inventory.py --check` 静态清单检查，不运行 Swift/Rust 测试、cargo check/clippy 或运行时验证；新增完成行仅标 `written`，不提升为 `compiled`/`tested`。已有测试文件改动保留，未作为本轮工作继续扩展。
+- **2026-11-01 历史用户要求：迁移不进行测试工作（已被批次 81 的新授权覆盖）。** 本轮只迁移生产代码，运行 Rust 格式化与 `inventory.py --check` 静态清单检查，不运行 Swift/Rust 测试、cargo check/clippy 或运行时验证；新增完成行仅标 `written`，不提升为 `compiled`/`tested`。已有测试文件改动保留，未作为本轮工作继续扩展。
 - `diffuse-script` 把 workspace 中已有的 `serde`/`serde_json` 用于脚本绑定编码；`serde_json` 从该 crate 的 dev-dependency 提升为生产依赖，没有新增第三方 crate。
 - 本轮发现并补齐历史 `written` 的遗漏：`MutationComponents` 的两个构造方法、`SceneStateVerification` 的验证键/失效键/精确后置条件。迁移清单的存在性检查不会发现这类语义缺口，后续翻译仍需逐段对照源文件。
 

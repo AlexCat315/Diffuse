@@ -2,13 +2,15 @@
 //! allocates only frame-owned instance data; pipeline variants and immutable
 //! layouts remain resident.
 
+use std::sync::Arc;
+
 use std::collections::BTreeMap;
 
 use cove_graphics::rhi::{
-    BindingLayout, BindingResource, BindingSet, BindingSetDescriptor, BindingSetEntry,
-    ColorAttachmentDescriptor, CommandBuffer, CompareOp, CullMode, DepthStencilState, Device,
-    DrawIndexedArguments, FrontWinding, GraphicsPipeline, PipelineLayout, PipelineLayoutDescriptor,
-    RenderColorTarget, RenderDepthTarget, RenderPassDescriptor, RhiError, RhiResult, ScissorRect,
+    BindingResource, BindingSet, BindingSetDescriptor, BindingSetEntry, ColorAttachmentDescriptor,
+    CommandBuffer, CompareOp, CullMode, DepthStencilState, Device, DrawIndexedArguments,
+    FrontWinding, GraphicsPipeline, PipelineLayout, PipelineLayoutDescriptor, RenderColorTarget,
+    RenderDepthTarget, RenderPassDescriptor, RhiError, RhiResult, ScissorRect,
     VertexLayoutDescriptor, Viewport,
 };
 use diffuse_scene::entity_id::EntityID;
@@ -104,14 +106,14 @@ fn ring_block(resource: &BindingResource) -> Result<NativeRingBlock, RhiError> {
 }
 
 pub struct NativeMeshPass {
-    device: Device,
+    device: Arc<Device>,
     shaders: NativeMeshShaders,
     pipeline_layout: PipelineLayout,
     pipelines: BTreeMap<NativeMeshPipelineKey, GraphicsPipeline>,
 }
 
 impl NativeMeshPass {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let shaders = NativeMeshShaders::new(device)?;
         let pipeline_layout =
             device.make_pipeline_layout(PipelineLayoutDescriptor::new(vec![shaders.bindings]))?;
@@ -131,6 +133,10 @@ impl NativeMeshPass {
         self.shaders.destroy();
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Keep the original render API argument grouping."
+    )]
     pub fn prepare(
         &mut self,
         packet: &RenderPacket,
@@ -405,7 +411,7 @@ impl NativeMeshPass {
                             },
                         }]
                     },
-                    depth_format: None,
+                    depth_format: Some(cove_graphics::rhi::TextureFormat::Depth32Float),
                     depth_stencil: Some(DepthStencilState {
                         depth_compare: if kind == NativeMeshPassKind::Depth {
                             CompareOp::Less

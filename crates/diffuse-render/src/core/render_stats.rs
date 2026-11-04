@@ -57,6 +57,10 @@ pub struct GPUParticleSimulationEventRecord {
 
 impl GPUParticleSimulationEventRecord {
     /// Swift's defaulted initializer; `generation`/`appearanceIndex` default 0.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Keep the original render API argument grouping."
+    )]
     pub fn new(
         trigger: GPUParticleSimulationEventTrigger,
         source_index: u32,
@@ -117,18 +121,18 @@ impl GPUParticleSimulationEventSnapshot {
         compacted_particle_count: usize,
     ) -> Self {
         GPUParticleSimulationEventSnapshot {
-            slot: slot.max(0),
+            slot,
             emitter_raw_value,
-            event_capacity: event_capacity.max(0),
-            total_event_count: total_event_count.max(0),
-            dropped_event_count: dropped_event_count.max(0),
+            event_capacity,
+            total_event_count,
+            dropped_event_count,
             records,
-            alive_particle_count: alive_particle_count.max(0),
-            expired_particle_count: expired_particle_count.max(0),
-            collision_event_count: collision_event_count.max(0),
-            gpu_spawned_particle_count: gpu_spawned_particle_count.max(0),
-            gpu_dropped_spawn_count: gpu_dropped_spawn_count.max(0),
-            compacted_particle_count: compacted_particle_count.max(0),
+            alive_particle_count,
+            expired_particle_count,
+            collision_event_count,
+            gpu_spawned_particle_count,
+            gpu_dropped_spawn_count,
+            compacted_particle_count,
         }
     }
 }
@@ -233,6 +237,12 @@ impl RenderFrameStats {
         pass_encode_ns: BTreeMap<RenderPassKind, u64>,
     ) -> Self {
         RenderFrameStats {
+            visible_mesh_instance_count: 0,
+            culled_mesh_instance_count: 0,
+            lod_mesh_instance_count: 0,
+            mesh_batch_count: 0,
+            instanced_mesh_batch_count: 0,
+            submitted_mesh_triangle_count: 0,
             frame_index,
             pass_count,
             draw_call_count,

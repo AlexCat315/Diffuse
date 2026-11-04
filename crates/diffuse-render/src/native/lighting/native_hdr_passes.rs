@@ -1,5 +1,7 @@
 //! Sky background, HDR reference grid and final display conversion.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{
     BindingResource, BindingSetEntry, CommandBuffer, DepthStencilState, Device, RhiResult, Sampler,
     SamplerAddressMode, SamplerDescriptor, SamplerFilter, SamplerMipFilter, Texture, TextureFormat,
@@ -17,7 +19,7 @@ use crate::native::passes::native_editor_grid_pass::NativeEditorGridPass;
 use crate::native::passes::native_fullscreen_pass::NativeFullscreenPass;
 
 pub struct NativeHDRPasses {
-    device: Device,
+    device: Arc<Device>,
     sky: NativeFullscreenPass,
     tone: NativeFullscreenPass,
     grid: NativeEditorGridPass,
@@ -25,7 +27,7 @@ pub struct NativeHDRPasses {
 }
 
 impl NativeHDRPasses {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let sky = NativeFullscreenPass::new(
             device,
             "skybox",

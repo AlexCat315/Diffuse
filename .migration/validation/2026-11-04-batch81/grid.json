@@ -1,0 +1,71 @@
+{
+  "environment" : {
+    "buildConfiguration" : "debug",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-11-04T06:59:29Z",
+    "operatingSystem" : "Version 27.2 (Build 26B123)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 3,
+  "height" : 64,
+  "imageDifferences" : {
+
+  },
+  "repeats" : 1,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 700.4863333333334,
+        "p95Microseconds" : 700.4863333333334,
+        "sampleCount" : 1
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 41,
+        "p95Microseconds" : 67.5,
+        "sampleCount" : 3
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 412.25,
+        "p95Microseconds" : 434.667,
+        "sampleCount" : 3
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 347.5,
+        "p95Microseconds" : 390.625,
+        "sampleCount" : 3
+      },
+      "device" : "Apple M1",
+      "particleWork" : {
+        "batches" : 0,
+        "candidates" : 0,
+        "dispatchWorkgroups" : 0,
+        "indirectDraws" : 0
+      },
+      "passDraws" : {
+        "editorGrid" : 3
+      },
+      "passFrames" : {
+        "editorGrid" : 3
+      },
+      "simulationWork" : {
+        "batches" : 0,
+        "eventBytes" : 0,
+        "eventCapacity" : 0,
+        "instanceWorkgroups" : 0,
+        "particles" : 0,
+        "renderInstances" : 0,
+        "simulationWorkgroups" : 0,
+        "sortItems" : 0,
+        "sortPaddedItems" : 0,
+        "sortPasses" : 0,
+        "sortWorkgroups" : 0
+      }
+    }
+  ],
+  "scene" : "grid",
+  "warmup" : 1,
+  "width" : 64
+}

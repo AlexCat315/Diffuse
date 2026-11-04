@@ -1,5 +1,7 @@
 //! The editor pass pair: grid and geometry overlay.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{Device, RhiResult};
 
 use crate::native::passes::native_editor_grid_pass::NativeEditorGridPass;
@@ -11,7 +13,7 @@ pub struct NativeEditorPasses {
 }
 
 impl NativeEditorPasses {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let grid = NativeEditorGridPass::new(device)?;
         let geometry = NativeGeometryOverlayPass::new(device)?;
         Ok(NativeEditorPasses { grid, geometry })

@@ -1,31 +1,30 @@
 //! Stable GPU compaction feeds one indirect draw per authored texture/blend
 //! batch.
 
+use std::sync::Arc;
+
 use std::collections::BTreeMap;
 
 use cove_graphics::rhi::{
-    AttachmentBlendState, BindingLayout, BindingLayoutDescriptor, BindingResource, BindingSet,
-    BindingSetDescriptor, BindingSetEntry, BlendFactor, BlendOperation, ColorAttachmentDescriptor,
-    CommandBuffer, CompareOp, ComputePipeline, CullMode, DepthStencilState, Device,
-    GraphicsPipeline, PipelineLayout, PipelineLayoutDescriptor, RasterizationState,
-    RenderColorTarget, RenderDepthTarget, RenderPassDescriptor, RhiError, RhiResult, ScissorRect,
-    ShaderModule, Texture, Viewport,
+    AttachmentBlendState, BindingLayout, BindingResource, BindingSet, BindingSetDescriptor,
+    BindingSetEntry, BlendFactor, BlendOperation, Buffer, ColorAttachmentDescriptor, CommandBuffer,
+    CompareOp, CullMode, DepthStencilState, Device, GraphicsPipeline, PipelineLayout,
+    PipelineLayoutDescriptor, RasterizationState, RenderColorTarget, RenderDepthTarget,
+    RenderPassDescriptor, RhiError, RhiResult, ScissorRect, ShaderModule, Texture, Viewport,
 };
 use diffuse_math::simd::simd_compat::{
     Float3, Float4, UInt4, simd_cross, simd_length, simd_normalize,
 };
-use diffuse_scene::rendering::render_scene::{
-    ParticleBlendMode, ParticleRenderBatchPlan, RenderScene,
-};
+use diffuse_scene::rendering::render_scene::{ParticleRenderBatchPlan, RenderScene};
+
+use diffuse_scene::particles::particle_types::ParticleBlendMode;
 
 use crate::core::frame::render_camera_matrices::RenderCameraMatrices;
 use crate::core::frame::render_packet::RenderDrawableSize;
 use crate::core::particles::particle_gpu_data::{
-    GPUParticleCullBatch, GPUParticleCullUniforms, GPUParticleIndirectDrawArgs,
-    GPUParticleInstance, ParticleUniforms,
+    GPUParticleCullBatch, GPUParticleCullUniforms, GPUParticleInstance, ParticleUniforms,
 };
 use crate::native::lighting::native_lighting_resources::NativeUniformUpload;
-use crate::native::mesh::native_mesh_store::NativeMeshStore;
 use crate::native::particles::native_particle_buffers::NativeParticleBuffers;
 use crate::native::particles::native_particle_instances::NativeParticleSimulationRender;
 use crate::native::particles::native_particle_textures::NativeParticleTextures;
@@ -50,7 +49,7 @@ pub struct NativeParticleFrame {
 }
 
 pub struct NativeParticlePass {
-    device: Device,
+    device: Arc<Device>,
     bindings: BindingLayout,
     layout: PipelineLayout,
     vertex: ShaderModule,
@@ -62,7 +61,7 @@ pub struct NativeParticlePass {
 }
 
 impl NativeParticlePass {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let mut cull_strides = BTreeMap::new();
         cull_strides.insert(
             1,
@@ -260,7 +259,7 @@ impl NativeParticlePass {
                 source_start: batch.start as u32,
                 source_count: batch.count as u32,
                 output_start: batch.start as u32,
-                padding: 0,
+                _padding: 0,
             })
             .collect();
         // SAFETY: `ranges` is a live `Vec` of `#[repr(C)]` `Copy` values.
@@ -389,6 +388,7 @@ impl NativeParticlePass {
                     pass.draw_indirect(
                         frame.indirect,
                         index * std::mem::size_of::<crate::core::particles::particle_gpu_data::GPUParticleIndirectDrawArgs>(),
+                        1,
                     );
                 }
             },
@@ -424,7 +424,7 @@ impl NativeParticlePass {
                         },
                         blend: state,
                     }],
-                    depth_format: None,
+                    depth_format: Some(cove_graphics::rhi::TextureFormat::Depth32Float),
                     depth_stencil: Some(DepthStencilState {
                         depth_compare: CompareOp::LessOrEqual,
                         depth_write_enabled: false,

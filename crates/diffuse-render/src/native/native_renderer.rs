@@ -10,19 +10,20 @@
 //! to an owned struct whose frame-state fields live behind a `Mutex` so the
 //! read accessors match Swift's nonisolated properties.
 
+use std::sync::Arc;
+
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use cove_graphics::rhi::{
     ColorLoadAction, CommandBuffer, DepthLoadAction, Device, RenderColorTarget, RenderDepthTarget,
-    RhiError, RhiResult, Texture, TextureResource,
+    ResourcePreparationContext, RhiError, RhiResult, Texture, TextureResource,
 };
 use cove_logging::{Level, LogEvent};
 use diffuse_assets::asset_registry::AssetRegistry;
 use diffuse_math::simd::simd_compat::Float4;
 use diffuse_scene::rendering::render_scene::MaterialAlphaMode;
 
-use crate::core::frame::render_camera_matrices::RenderCameraMatrices;
 use crate::core::frame::render_frame_plan::{RenderFramePlanner, RenderPassKind};
 use crate::core::frame::render_packet::{
     RenderDrawableSize, RenderPacket, RenderPacketConsumer, RenderSurfaceDescriptor,
@@ -77,7 +78,7 @@ impl RendererFrameState {
 }
 
 pub struct NativeRenderer {
-    pub device: Device,
+    pub device: Arc<Device>,
     in_game_ui: Option<Box<dyn InGameUIProviding>>,
     meshes: NativeMeshStore,
     mesh_pass: NativeMeshPass,
@@ -96,11 +97,38 @@ pub struct NativeRenderer {
     viewport_publication: Mutex<ViewportSurfacePublication>,
 }
 
+// Keep the Swift `defer { device.endFrame() }` on every return path.
+struct FrameEnd(Arc<Device>);
+impl Drop for FrameEnd {
+    fn drop(&mut self) {
+        self.0.end_frame();
+    }
+}
+
+impl Drop for NativeRenderer {
+    fn drop(&mut self) {
+        let _ = self.device.with_frame_session(|| {
+            self.particle_simulation.destroy();
+            self.particles.destroy();
+            self.post.destroy();
+            self.editor.geometry.destroy();
+            self.editor.grid.destroy();
+            self.hdr_passes.destroy();
+            self.shadows.destroy();
+            self.lighting.destroy();
+            self.deformables.destroy();
+            self.mesh_pass.destroy();
+            self.meshes.destroy();
+            Ok(())
+        });
+    }
+}
+
 impl NativeRenderer {
     /// Swift's `init(device:surface:assets:inGameUI:preparation:initialSettings:
     /// particleWorkgroupSizes:)` with `preparation == nil`.
     pub fn new(
-        device: &Device,
+        device: &Arc<Device>,
         surface: Option<RenderSurfaceDescriptor>,
         assets: &'static AssetRegistry,
         in_game_ui: Option<Box<dyn InGameUIProviding>>,
@@ -114,60 +142,76 @@ impl NativeRenderer {
             in_game_ui,
             initial_settings,
             particle_workgroup_sizes,
-            false,
+            None,
         )
     }
 
     #[allow(clippy::too_many_arguments)]
     fn build(
-        device: &Device,
+        device: &Arc<Device>,
         surface: Option<RenderSurfaceDescriptor>,
         assets: &'static AssetRegistry,
         in_game_ui: Option<Box<dyn InGameUIProviding>>,
         initial_settings: &RenderSettings,
         particle_workgroup_sizes: &[usize],
-        prepared: bool,
+        preparation: Option<&ResourcePreparationContext>,
     ) -> RhiResult<Self> {
         let window_target = surface.map(|surface| NativeWindowTarget::new(device.clone(), surface));
-        let meshes = NativeMeshStore::new(device, assets)?;
-        let mesh_pass = (|| -> RhiResult<NativeMeshPass> {
-            let mut pass = NativeMeshPass::new(device)?;
-            if prepared {
-                pass.prewarm(initial_settings)?;
-            }
-            Ok(pass)
-        })()
-        .inspect_err(|_| meshes.destroy())?;
+        let meshes = renderer_preparation_step(preparation, "Meshes", || {
+            NativeMeshStore::new(device, assets)
+        })?;
+        let mesh_pass =
+            renderer_preparation_step(preparation, "Materials", || -> RhiResult<NativeMeshPass> {
+                let mut pass = NativeMeshPass::new(device)?;
+                if preparation.is_some() {
+                    pass.prewarm(initial_settings)?;
+                }
+                Ok(pass)
+            })
+            .inspect_err(|_| meshes.destroy())?;
         let deformables = NativeDeformableMeshes::new(device);
-        let lighting = NativeLightingResources::new(device).inspect_err(|_| {
+        let lighting = renderer_preparation_step(preparation, "Lighting", || {
+            NativeLightingResources::new(device)
+        })
+        .inspect_err(|_| {
             mesh_pass.destroy();
             meshes.destroy();
         })?;
-        let shadows = NativeShadowPass::new(device).inspect_err(|_| {
-            lighting.destroy();
-            mesh_pass.destroy();
-            meshes.destroy();
-        })?;
-        let hdr_passes = NativeHDRPasses::new(device).inspect_err(|_| {
-            shadows.destroy();
-            lighting.destroy();
-            mesh_pass.destroy();
-            meshes.destroy();
-        })?;
-        let editor = NativeEditorPasses::new(device).inspect_err(|_| {
-            hdr_passes.destroy();
-            shadows.destroy();
-            lighting.destroy();
-            mesh_pass.destroy();
-            meshes.destroy();
-        })?;
-        let post = (|| -> RhiResult<NativePostPasses> {
-            let mut passes = NativePostPasses::new(device)?;
-            if prepared {
-                passes.prewarm(initial_settings)?;
-            }
-            Ok(passes)
-        })()
+        let shadows =
+            renderer_preparation_step(preparation, "Shadows", || NativeShadowPass::new(device))
+                .inspect_err(|_| {
+                    lighting.destroy();
+                    mesh_pass.destroy();
+                    meshes.destroy();
+                })?;
+        let hdr_passes =
+            renderer_preparation_step(preparation, "HDR", || NativeHDRPasses::new(device))
+                .inspect_err(|_| {
+                    shadows.destroy();
+                    lighting.destroy();
+                    mesh_pass.destroy();
+                    meshes.destroy();
+                })?;
+        let editor =
+            renderer_preparation_step(preparation, "Grid", || NativeEditorPasses::new(device))
+                .inspect_err(|_| {
+                    hdr_passes.destroy();
+                    shadows.destroy();
+                    lighting.destroy();
+                    mesh_pass.destroy();
+                    meshes.destroy();
+                })?;
+        let post = renderer_preparation_step(
+            preparation,
+            "Post-processing",
+            || -> RhiResult<NativePostPasses> {
+                let mut passes = NativePostPasses::new(device)?;
+                if preparation.is_some() {
+                    passes.prewarm(initial_settings)?;
+                }
+                Ok(passes)
+            },
+        )
         .inspect_err(|_| {
             editor.grid.destroy();
             editor.geometry.destroy();
@@ -177,15 +221,19 @@ impl NativeRenderer {
             mesh_pass.destroy();
             meshes.destroy();
         })?;
-        let particles = (|| -> RhiResult<(NativeParticlePass, NativeParticleSimulation)> {
-            let mut pass = NativeParticlePass::new(device)?;
-            let mut simulation = NativeParticleSimulation::new(device);
-            if prepared {
-                pass.prewarm(initial_settings.shading.pbr)?;
-                simulation.prewarm(particle_workgroup_sizes)?;
-            }
-            Ok((pass, simulation))
-        })()
+        let particles = renderer_preparation_step(
+            preparation,
+            "Particles",
+            || -> RhiResult<(NativeParticlePass, NativeParticleSimulation)> {
+                let mut pass = NativeParticlePass::new(device)?;
+                let mut simulation = NativeParticleSimulation::new(device);
+                if preparation.is_some() {
+                    pass.prewarm(initial_settings.shading.pbr)?;
+                    simulation.prewarm(particle_workgroup_sizes)?;
+                }
+                Ok((pass, simulation))
+            },
+        )
         .inspect_err(|_| {
             post.destroy();
             editor.grid.destroy();
@@ -221,7 +269,7 @@ impl NativeRenderer {
     /// Rust has no `async`, so this runs synchronously on the calling thread.
     #[allow(clippy::too_many_arguments)]
     pub fn prepared(
-        device: &Device,
+        device: &Arc<Device>,
         surface: Option<RenderSurfaceDescriptor>,
         assets: &'static AssetRegistry,
         in_game_ui: Option<Box<dyn InGameUIProviding>>,
@@ -233,7 +281,7 @@ impl NativeRenderer {
             "Preparing shaders",
             Some(PREPARATION_TOTAL_STEPS),
             on_progress,
-            || {
+            |context| {
                 Self::build(
                     device,
                     surface,
@@ -241,7 +289,7 @@ impl NativeRenderer {
                     in_game_ui,
                     initial_settings,
                     particle_workgroup_sizes,
-                    true,
+                    Some(context),
                 )
             },
         )
@@ -309,7 +357,9 @@ impl NativeRenderer {
     }
 
     pub fn render_checked(&mut self, packet: &RenderPacket) -> RhiResult<()> {
-        self.device.with_frame_session(|| self.render_frame(packet))
+        self.device
+            .clone()
+            .with_frame_session(|| self.render_frame(packet))
     }
 
     fn render_frame(&mut self, packet: &RenderPacket) -> RhiResult<()> {
@@ -371,6 +421,7 @@ impl NativeRenderer {
             hdr,
         );
         self.device.begin_frame()?;
+        let _frame = FrameEnd(self.device.clone());
         let has_depth = packet.render_settings.shading.depth_prepass;
         let mut commands = CommandBuffer::new();
         let simulation_start = std::time::Instant::now();
@@ -387,7 +438,7 @@ impl NativeRenderer {
             .prepare(&packet.scene.deformable_meshes, &mut commands)?;
         let deformable_time = deformable_start.elapsed();
         let dynamic_geometries = dynamic.geometries();
-        let dynamic_report = dynamic.report.clone();
+        let dynamic_report = dynamic.report;
         let skin = NativeSkinBindings::new(packet, &self.device)?;
         let light_bindings = self.lighting.prepare(
             packet,
@@ -446,7 +497,6 @@ impl NativeRenderer {
             .or_else(|| targets.color.as_ref().map(|color| color.texture()))
         else {
             drop(targets_guard);
-            self.device.end_frame();
             return Err(RhiError::SwapchainAcquireFailed(
                 "no scene color target".into(),
             ));
@@ -528,6 +578,7 @@ impl NativeRenderer {
                                 ColorLoadAction::Clear([0.05, 0.06, 0.08, 1.0])
                             },
                             store: true,
+                            resolve_texture: None,
                         }),
                         RenderDepthTarget {
                             texture: targets.depth.texture(),
@@ -546,7 +597,6 @@ impl NativeRenderer {
                 RenderPassKind::Ssao | RenderPassKind::Ssr => {
                     let Some(resources) = self.post.targets() else {
                         drop(targets_guard);
-                        self.device.end_frame();
                         return Err(RhiError::OutOfMemory);
                     };
                     let output = resources.next(current);
@@ -588,6 +638,7 @@ impl NativeRenderer {
                                 texture: current,
                                 load_action: ColorLoadAction::Load,
                                 store: true,
+                                resolve_texture: None,
                             },
                             RenderDepthTarget {
                                 texture: targets.depth.texture(),
@@ -601,12 +652,10 @@ impl NativeRenderer {
                 RenderPassKind::Taa => {
                     let Some(resources) = self.post.targets() else {
                         drop(targets_guard);
-                        self.device.end_frame();
                         return Err(RhiError::OutOfMemory);
                     };
                     let Some(history) = resources.history else {
                         drop(targets_guard);
-                        self.device.end_frame();
                         return Err(RhiError::OutOfMemory);
                     };
                     let output = resources.next(current);
@@ -627,37 +676,34 @@ impl NativeRenderer {
                     current = output;
                 }
                 RenderPassKind::TransparentMeshes => {
-                    if hdr {
-                        if let Some(scene_hdr) = targets.hdr.as_ref().map(|hdr| hdr.texture()) {
-                            if next_frame.cache_hit() {
-                                let Some(snapshot) = self.post.snapshot() else {
-                                    drop(targets_guard);
-                                    self.device.end_frame();
-                                    return Err(RhiError::OutOfMemory);
-                                };
-                                let size = packet.drawable_size;
-                                commands.copy_pass(|copy| {
-                                    copy.copy_texture(
-                                        snapshot,
-                                        scene_hdr,
-                                        size.width as i64,
-                                        size.height as i64,
-                                    );
-                                });
-                                current = scene_hdr;
-                            } else if next_frame.can_capture(&packet.render_settings) {
-                                let snapshot = self.post.ensure_snapshot()?;
-                                let size = packet.drawable_size;
-                                commands.copy_pass(|copy| {
-                                    copy.copy_texture(
-                                        current,
-                                        snapshot,
-                                        size.width as i64,
-                                        size.height as i64,
-                                    );
-                                });
-                                next_frame.snapshot_valid = true;
-                            }
+                    if hdr && let Some(scene_hdr) = targets.hdr.as_ref().map(|hdr| hdr.texture()) {
+                        if next_frame.cache_hit() {
+                            let Some(snapshot) = self.post.snapshot() else {
+                                drop(targets_guard);
+                                return Err(RhiError::OutOfMemory);
+                            };
+                            let size = packet.drawable_size;
+                            commands.copy_pass(|copy| {
+                                copy.copy_texture(
+                                    snapshot,
+                                    scene_hdr,
+                                    size.width as i64,
+                                    size.height as i64,
+                                );
+                            });
+                            current = scene_hdr;
+                        } else if next_frame.can_capture(&packet.render_settings) {
+                            let snapshot = self.post.ensure_snapshot()?;
+                            let size = packet.drawable_size;
+                            commands.copy_pass(|copy| {
+                                copy.copy_texture(
+                                    current,
+                                    snapshot,
+                                    size.width as i64,
+                                    size.height as i64,
+                                );
+                            });
+                            next_frame.snapshot_valid = true;
                         }
                     }
                     if transparent_draws.is_empty() {
@@ -674,6 +720,7 @@ impl NativeRenderer {
                             texture: current,
                             load_action: ColorLoadAction::Load,
                             store: true,
+                            resolve_texture: None,
                         }),
                         RenderDepthTarget {
                             texture: targets.depth.texture(),
@@ -688,7 +735,6 @@ impl NativeRenderer {
                 RenderPassKind::Bloom => {
                     let Some(resources) = self.post.targets() else {
                         drop(targets_guard);
-                        self.device.end_frame();
                         return Err(RhiError::OutOfMemory);
                     };
                     let output = resources.next(current);
@@ -724,7 +770,6 @@ impl NativeRenderer {
                 RenderPassKind::Fxaa => {
                     let Some(input) = self.post.targets().and_then(|targets| targets.ldr) else {
                         drop(targets_guard);
-                        self.device.end_frame();
                         return Err(RhiError::OutOfMemory);
                     };
                     self.post.encode(
@@ -771,6 +816,7 @@ impl NativeRenderer {
                             texture: current,
                             load_action: ColorLoadAction::Load,
                             store: true,
+                            resolve_texture: None,
                         }),
                         RenderDepthTarget {
                             texture: targets.depth.texture(),
@@ -835,7 +881,7 @@ impl NativeRenderer {
             );
             pass_draws.insert(RenderPassKind::InGameUI, ui.draw_call_count as i64);
         }
-        let mut mipmaps: Vec<TextureResource> = Vec::new();
+        let mut mipmaps: Vec<Arc<TextureResource>> = Vec::new();
         if packet.mipmapped_viewport_output {
             if let Some(output) = targets.color.as_ref() {
                 let mut mips_guard = self
@@ -847,18 +893,15 @@ impl NativeRenderer {
                 }
                 let Some(mips) = mips_guard.as_mut() else {
                     drop(targets_guard);
-                    self.device.end_frame();
                     return Err(RhiError::OutOfMemory);
                 };
                 mipmaps = mips.record(output, packet.drawable_size, &mut commands)?;
             }
-        } else if let Some(mips) = self
-            .viewport_mips
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
-        {
-            mips.destroy();
+        } else {
+            self.viewport_mips
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take();
         }
         let encoded = start.elapsed();
         self.device.submit(
@@ -901,7 +944,8 @@ impl NativeRenderer {
         if let Some(image) = image {
             self.device.present(image)?;
         }
-        self.device.end_frame();
+
+        drop(_frame);
         let end = start.elapsed();
         let simulation_report = self.particle_simulation.last_report();
         let mut stats = RenderFrameStats::untouched();
@@ -911,7 +955,7 @@ impl NativeRenderer {
         stats.draw_call_count = pass_draws.values().sum();
         stats.pass_draw_call_counts = pass_draws.clone();
         stats.pass_encode_ns = pass_times.clone();
-        stats.cpu_prepare_ns = (prepare_end - start).as_nanos() as u64;
+        stats.cpu_prepare_ns = prepare_end.as_nanos() as u64;
         stats.cpu_encode_ns = (encoded - prepare_end).as_nanos() as u64;
         stats.cpu_post_process_encode_ns = [
             RenderPassKind::InkPaperPost,
@@ -1012,12 +1056,13 @@ impl NativeRenderer {
                     texture: color,
                     load_action: ColorLoadAction::Load,
                     store: true,
+                    resolve_texture: None,
                 },
                 cove_graphics::rhi::TextureFormat::Bgra8Unorm,
             ),
         );
         *commands = outcome.commands;
-        outcome.recording
+        Ok(outcome.recording)
     }
 
     fn ensure_targets(&self, size: RenderDrawableSize, hdr: bool) -> RhiResult<()> {
@@ -1088,5 +1133,18 @@ impl RenderPacketConsumer for NativeRenderer {
         max_snapshots: usize,
     ) -> Result<Vec<GPUParticleSimulationEventSnapshot>, RhiError> {
         NativeRenderer::drain_gpu_particle_simulation_event_snapshots(self, max_snapshots)
+    }
+}
+
+// Swift's rendererPreparationStep preserves cancellation and per-stage progress.
+fn renderer_preparation_step<T>(
+    context: Option<&ResourcePreparationContext>,
+    label: &str,
+    operation: impl FnOnce() -> RhiResult<T>,
+) -> RhiResult<T> {
+    if let Some(context) = context {
+        context.step(label, operation)
+    } else {
+        operation()
     }
 }

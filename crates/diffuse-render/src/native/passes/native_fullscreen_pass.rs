@@ -1,24 +1,26 @@
 //! One immutable full-screen pipeline; callers provide frame-owned bindings.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{
-    BindingLayout, BindingSetEntry, CommandBuffer, CullMode, DepthStencilState, Device,
-    GraphicsPipelineDescriptor, PipelineLayoutDescriptor, RasterizationState, RenderColorTarget,
-    RenderDepthTarget, RenderPassDescriptor, RhiResult, ScissorRect, ShaderStage, TextureFormat,
-    Viewport,
+    BindingLayout, BindingLayoutDescriptor, BindingSetEntry, CommandBuffer, CullMode,
+    DepthStencilState, Device, GraphicsPipeline, GraphicsPipelineDescriptor,
+    PipelineLayoutDescriptor, RasterizationState, RenderColorTarget, RenderDepthTarget,
+    RenderPassDescriptor, RhiResult, ScissorRect, ShaderStage, TextureFormat, Viewport,
 };
 
 use crate::core::frame::render_packet::RenderDrawableSize;
 use crate::native::targets::native_shader_library::NativeShaderLibrary;
 
 pub struct NativeFullscreenPass {
-    device: Device,
+    device: Arc<Device>,
     bindings: BindingLayout,
     pipeline: GraphicsPipeline,
 }
 
 impl NativeFullscreenPass {
     pub fn new(
-        device: &Device,
+        device: &Arc<Device>,
         shader: &str,
         color_format: TextureFormat,
         depth: Option<DepthStencilState>,

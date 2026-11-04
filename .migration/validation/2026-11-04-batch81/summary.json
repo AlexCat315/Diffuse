@@ -1,0 +1,181 @@
+{
+  "host": "macOS arm64 / Apple M1",
+  "date": "2026-11-04",
+  "checks": {
+    "diffuse-script-api+diffuse-kernel": "all-targets check and clippy -D warnings passed",
+    "diffuse-render+diffuse-render-validation": "all-targets check and clippy -D warnings passed",
+    "diffuse-scene+diffuse-assets": "all-targets check passed; full strict-clippy gate not run"
+  },
+  "tests": {
+    "diffuse-script-api": {
+      "passed": 17,
+      "failed": 0
+    },
+    "diffuse-kernel": {
+      "passed": 13,
+      "failed": 0,
+      "ignoredDocTests": 1
+    },
+    "diffuse-media": {
+      "passed": 6,
+      "failed": 0
+    },
+    "diffuse-assets": {
+      "passed": 92,
+      "failed": 0,
+      "unmigratedTestFiles": 1
+    },
+    "diffuse-scene": {
+      "passed": 618,
+      "failed": 15,
+      "failures": [
+        {
+          "test": "components::component_json_helpers::tests::encoded_values_round_trip_through_decode",
+          "location": "crates/diffuse-scene/src/components/component_json_helpers.rs:312:9"
+        },
+        {
+          "test": "serialization::game_save::tests::a_save_round_trips_scene_metadata_and_state",
+          "location": "crates/diffuse-scene/src/serialization/game_save.rs:245:9"
+        },
+        {
+          "test": "tests::scene_runtime::component_inspection_tests::physics_descriptions",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/component_inspection_tests.rs:141:5"
+        },
+        {
+          "test": "tests::scene_runtime::component_inspection_tests::registry_descriptions",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/component_inspection_tests.rs:221:5"
+        },
+        {
+          "test": "tests::scene_runtime::component_registry_tests::legacy_golden",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/component_registry_tests.rs:207:5"
+        },
+        {
+          "test": "tests::scene_runtime::destruction_tests::fractured_game_save_round_trip",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/destruction_tests.rs:1092:5"
+        },
+        {
+          "test": "tests::scene_runtime::destruction_tests::partial_connection_game_save_round_trip",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/destruction_tests.rs:1223:5"
+        },
+        {
+          "test": "tests::scene_runtime::destruction_tests::partial_island_game_save_round_trip",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/destruction_tests.rs:1341:63"
+        },
+        {
+          "test": "tests::scene_runtime::natsel_migration_tests::character_triggers",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/natsel_migration_tests.rs:219:5"
+        },
+        {
+          "test": "tests::scene_runtime::particle_settings_tests::grouped_scene_round_trip",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/particle_settings_tests.rs:83:5"
+        },
+        {
+          "test": "tests::scene_runtime::particle_tests::per_frame_spawn_budget_throttles_continuous_emission",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/particle_tests.rs:919:5"
+        },
+        {
+          "test": "tests::scene_runtime::physics::component_editing_tests::cloth_indices",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/physics/component_editing_tests.rs:176:10"
+        },
+        {
+          "test": "tests::scene_runtime::physics::component_editing_tests::mesh_input",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/physics/component_editing_tests.rs:275:10"
+        },
+        {
+          "test": "tests::scene_runtime::physics_backend_selection_tests::frame_state_reports_unsupported_features",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/physics_backend_selection_tests.rs:401:5"
+        },
+        {
+          "test": "tests::scene_runtime::ragdoll_tests::runtime_modes",
+          "location": "crates/diffuse-scene/src/tests/scene_runtime/ragdoll_tests.rs:150:5"
+        }
+      ]
+    },
+    "diffuse-script": {
+      "passed": 0,
+      "failed": 0,
+      "note": "No migrated test cases registered; not validated by this command"
+    },
+    "diffuse-render-validation resource_lifecycle": {
+      "passed": 2,
+      "failed": 0,
+      "note": "Actual GPU execution: preparation progress and output/mip leases across resize and renderer drop. Original 20 Swift test files still pending."
+    }
+  },
+  "ffmpeg": {
+    "version": "8.1.3",
+    "sourceSha256": "7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3",
+    "artifact": "vendor/FFmpeg.artifactbundle/macos-arm64",
+    "bootstrap": "One-off build using existing pinned Swift build settings; cargo xtask native-bootstrap migration still pending"
+  },
+  "metal": {
+    "width": 64,
+    "height": 64,
+    "frames": 3,
+    "warmup": 1,
+    "repeats": 1,
+    "backends": [
+      "metal"
+    ],
+    "validationEnabled": false,
+    "scenes": [
+      {
+        "scene": "grid",
+        "exitCode": 0,
+        "report": "grid.json",
+        "ppmSha256": "188175791a61d0407dcc04a02aacace3e341ce10eb366076dc12df07f615a629",
+        "distinctRgbColors": 651
+      },
+      {
+        "scene": "mesh",
+        "exitCode": 0,
+        "report": "mesh.json",
+        "ppmSha256": "09c3e8290686234759556c92459af4ab087347c219567275334e6dd42e320f56",
+        "distinctRgbColors": 5
+      },
+      {
+        "scene": "pbr",
+        "exitCode": 0,
+        "report": "pbr.json",
+        "ppmSha256": "6152a256e755b93d8ac6cf3e6af8ee91e706c725ba1bdb21379c76402b72978c",
+        "distinctRgbColors": 358
+      },
+      {
+        "scene": "animated",
+        "exitCode": 0,
+        "report": "animated.json",
+        "ppmSha256": "7bbdbc99ec3a4c2ceec250f8fe670c23414991a2c53e0b9e93f166bb5ddb4915",
+        "distinctRgbColors": 503
+      },
+      {
+        "scene": "post",
+        "exitCode": 0,
+        "report": "post.json",
+        "ppmSha256": "e2c8bd8f70f7a7e0487e62f009549ec4610d74d3bff8cdde98ec31e71ce57fa5",
+        "distinctRgbColors": 1727
+      },
+      {
+        "scene": "stylized",
+        "exitCode": 0,
+        "report": "stylized.json",
+        "ppmSha256": "6f85bd4da05846e7d6417c1af61cd6da4e952d5d0f10d528d4be13f1dae3a9b9",
+        "distinctRgbColors": 1704
+      },
+      {
+        "scene": "particles",
+        "exitCode": 0,
+        "report": "particles.json",
+        "ppmSha256": "95e4e54892a9b5853fbc7b2c31af5ba14ca09419a40774f7e7344d11e501e6fe",
+        "distinctRgbColors": 1001
+      },
+      {
+        "scene": "simulation",
+        "exitCode": 0,
+        "report": "simulation.json",
+        "ppmSha256": "c90aabe731e9671d1040a0d38c414101a1b4191238f474ec3efd6d3cf4770bd3",
+        "distinctRgbColors": 926
+      }
+    ],
+    "limits": "Smoke runs only. No Swift pixel baseline or cross-backend image comparison; other platforms were not run."
+  }
+}

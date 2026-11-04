@@ -1,6 +1,8 @@
 //! GPU mesh residency. Catalog revisions replace resources as a transaction,
 //! and Device retirement protects frames still using old handles.
 
+use std::sync::Arc;
+
 use std::collections::BTreeMap;
 
 use cove_graphics::rhi::{
@@ -23,7 +25,7 @@ use crate::render_backend_resource_bundle::url_for_resource;
 use crate::support::log;
 
 pub struct NativeMeshStore {
-    pub device: Device,
+    pub device: Arc<Device>,
     pub sampler: Sampler,
     pub fallbacks: Vec<Texture>,
     builtins: BTreeMap<i64, NativeMesh>,
@@ -34,7 +36,7 @@ pub struct NativeMeshStore {
 }
 
 impl NativeMeshStore {
-    pub fn new(device: &Device, registry: &'static AssetRegistry) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>, registry: &'static AssetRegistry) -> RhiResult<Self> {
         let sampler = device.make_sampler(SamplerDescriptor {
             address_mode_u: SamplerAddressMode::ClampToEdge,
             address_mode_v: SamplerAddressMode::ClampToEdge,
@@ -67,7 +69,8 @@ impl NativeMeshStore {
                 .insert(0, NativeMesh::make(device, &cube, None)?);
             let mut fixture = cube.clone();
             if let Some(url) = url_for_resource("FinalBaseMesh", "obj", "") {
-                fixture = OBJLoader::load(&url.to_string_lossy())?;
+                fixture = OBJLoader::load(&url.to_string_lossy())
+                    .map_err(|error| RhiError::invalid_argument(error.to_string()))?;
                 fixture.normalize_to_unit_bounds(2.0);
             }
             store
@@ -178,7 +181,7 @@ impl NativeMeshStore {
         MeshTextureRegistry::register(index, mesh, None);
     }
 
-    pub fn texture(device: &Device, image: &DecodedTextureAsset) -> RhiResult<Texture> {
+    pub fn texture(device: &Arc<Device>, image: &DecodedTextureAsset) -> RhiResult<Texture> {
         let texture = device.make_texture(TextureDescriptor::new(
             image.width,
             image.height,
@@ -216,7 +219,7 @@ pub struct NativeMeshGeometry {
 }
 
 impl NativeMeshGeometry {
-    pub fn destroy(&self, device: &Device) {
+    pub fn destroy(&self, device: &Arc<Device>) {
         device.destroy_buffer(self.vertices);
         device.destroy_buffer(self.indices);
     }
@@ -231,15 +234,18 @@ pub struct NativeMesh {
 
 impl NativeMesh {
     pub fn make(
-        device: &Device,
+        device: &Arc<Device>,
         asset: &MeshAsset,
         source_directory: Option<&str>,
     ) -> RhiResult<Self> {
         let empty =
             asset.vertices.is_empty() && asset.indices.is_empty() && asset.submeshes.is_empty();
         if !(empty || (asset.vertex_count() > 0 && !asset.indices.is_empty()))
-            || asset.vertices.len() % MeshAsset::VERTEX_FLOAT_COUNT != 0
-            || asset.indices.len() % 3 != 0
+            || !asset
+                .vertices
+                .len()
+                .is_multiple_of(MeshAsset::VERTEX_FLOAT_COUNT)
+            || !asset.indices.len().is_multiple_of(3)
             || !asset.vertices.iter().all(|value| value.is_finite())
             || !asset
                 .indices
@@ -248,7 +254,7 @@ impl NativeMesh {
         {
             return Err(RhiError::invalid_argument(format!(
                 "invalid mesh geometry: {}",
-                asset.name.as_deref().unwrap_or("<unnamed>")
+                asset.name.as_str()
             )));
         }
         if !asset.materials.iter().all(|material| {
@@ -257,7 +263,7 @@ impl NativeMesh {
         }) {
             return Err(RhiError::invalid_argument(format!(
                 "non-finite imported material: {}",
-                asset.name.as_deref().unwrap_or("<unnamed>")
+                asset.name.as_str()
             )));
         }
         let parts = if !empty && asset.submeshes.is_empty() {
@@ -269,12 +275,12 @@ impl NativeMesh {
             part.index_start as usize <= asset.indices.len()
                 && part.index_count as usize <= asset.indices.len() - part.index_start as usize
                 && part.index_count % 3 == 0
-                && asset.materials.len() > part.material_index
                 && part.material_index >= 0
+                && asset.materials.len() > part.material_index as usize
         }) {
             return Err(RhiError::invalid_argument(format!(
                 "invalid submesh range/material: {}",
-                asset.name.as_deref().unwrap_or("<unnamed>")
+                asset.name.as_str()
             )));
         }
         let vertex_size = 16usize.max(asset.vertex_buffer_size());
@@ -320,7 +326,7 @@ impl NativeMesh {
                             Level::Warning,
                             format!(
                                 "native mesh texture {}[{index}] uses fallback: {error}",
-                                asset.name.as_deref().unwrap_or("<unnamed>")
+                                asset.name.as_str()
                             ),
                         ));
                         continue;
@@ -338,7 +344,7 @@ impl NativeMesh {
                     bounds: asset.local_bounds(),
                 },
                 materials: asset.materials.clone(),
-                textures,
+                textures: std::mem::take(&mut textures),
             })
         })();
         match result {
@@ -356,7 +362,7 @@ impl NativeMesh {
         }
     }
 
-    pub fn destroy(&self, device: &Device) {
+    pub fn destroy(&self, device: &Arc<Device>) {
         self.geometry.destroy(device);
         for texture in self.textures.values() {
             device.destroy_texture(*texture);

@@ -1,0 +1,93 @@
+{
+  "environment" : {
+    "buildConfiguration" : "debug",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-11-04T06:59:34Z",
+    "operatingSystem" : "Version 27.2 (Build 26B123)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 3,
+  "height" : 64,
+  "imageDifferences" : {
+
+  },
+  "repeats" : 1,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 6533.333333333333,
+        "p95Microseconds" : 6533.333333333333,
+        "sampleCount" : 1
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 274.5,
+        "p95Microseconds" : 3311.416,
+        "sampleCount" : 3
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 4295.541,
+        "p95Microseconds" : 7462.084,
+        "sampleCount" : 3
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 3162.084,
+        "p95Microseconds" : 3275.125,
+        "sampleCount" : 3
+      },
+      "device" : "Apple M1",
+      "particleWork" : {
+        "batches" : 0,
+        "candidates" : 0,
+        "dispatchWorkgroups" : 0,
+        "indirectDraws" : 0
+      },
+      "passDraws" : {
+        "basePass" : 9,
+        "bloom" : 3,
+        "depthPrepass" : 9,
+        "editorGrid" : 3,
+        "fxaa" : 3,
+        "shadowPass" : 27,
+        "skybox" : 3,
+        "ssao" : 3,
+        "ssr" : 2,
+        "taa" : 3,
+        "tonemap" : 3,
+        "transparentMeshes" : 3
+      },
+      "passFrames" : {
+        "basePass" : 3,
+        "bloom" : 3,
+        "depthPrepass" : 3,
+        "editorGrid" : 3,
+        "fxaa" : 3,
+        "shadowPass" : 3,
+        "skybox" : 3,
+        "ssao" : 3,
+        "ssr" : 2,
+        "taa" : 3,
+        "tonemap" : 3,
+        "transparentMeshes" : 3
+      },
+      "simulationWork" : {
+        "batches" : 0,
+        "eventBytes" : 0,
+        "eventCapacity" : 0,
+        "instanceWorkgroups" : 0,
+        "particles" : 0,
+        "renderInstances" : 0,
+        "simulationWorkgroups" : 0,
+        "sortItems" : 0,
+        "sortPaddedItems" : 0,
+        "sortPasses" : 0,
+        "sortWorkgroups" : 0
+      }
+    }
+  ],
+  "scene" : "post",
+  "warmup" : 1,
+  "width" : 64
+}

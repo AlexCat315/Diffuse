@@ -311,7 +311,7 @@ impl DestructibleAssetBaker {
         {
             return false;
         }
-        for triangle in input.triangle_indices.chunks_exact(3) {
+        for triangle in input.triangle_indices.as_chunks::<3>().0 {
             let (a, b, c) = (triangle[0], triangle[1], triangle[2]);
             if a == b || b == c || c == a {
                 return false;
@@ -330,7 +330,7 @@ impl DestructibleAssetBaker {
 
     fn is_closed_triangle_mesh(&self, triangle_indices: &[u32]) -> bool {
         let mut edges: BTreeMap<u64, (i64, i64)> = BTreeMap::new();
-        for triangle in triangle_indices.chunks_exact(3) {
+        for triangle in triangle_indices.as_chunks::<3>().0 {
             for edge_index in 0..3 {
                 let start = triangle[edge_index];
                 let end = triangle[(edge_index + 1) % 3];
@@ -348,7 +348,7 @@ impl DestructibleAssetBaker {
 
     fn signed_mesh_volume(&self, positions: &[Float3], triangle_indices: &[u32]) -> f32 {
         let mut signed_six_volume = 0.0_f64;
-        for triangle in triangle_indices.chunks_exact(3) {
+        for triangle in triangle_indices.as_chunks::<3>().0 {
             let a = positions[triangle[0] as usize];
             let b = positions[triangle[1] as usize];
             let c = positions[triangle[2] as usize];
@@ -519,7 +519,7 @@ impl DestructibleAssetBaker {
         triangle_indices: &[u32],
     ) -> bool {
         for &point in points {
-            for triangle in triangle_indices.chunks_exact(3) {
+            for triangle in triangle_indices.as_chunks::<3>().0 {
                 let a = positions[triangle[0] as usize];
                 let b = positions[triangle[1] as usize];
                 let c = positions[triangle[2] as usize];

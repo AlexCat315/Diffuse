@@ -271,9 +271,13 @@ pub struct ShadowRenderUniforms {
 const _: () = assert!(core::mem::size_of::<ShadowRenderUniforms>() == 64);
 const _: () = assert!(core::mem::align_of::<ShadowRenderUniforms>() == 16);
 
-impl RenderLightType {
+trait RenderLightUniformCode {
+    fn uniform_code(self) -> f32;
+}
+
+impl RenderLightUniformCode for RenderLightType {
     /// `private extension RenderLightType.uniformCode`.
-    pub fn uniform_code(self) -> f32 {
+    fn uniform_code(self) -> f32 {
         match self {
             RenderLightType::Directional => 0.0,
             RenderLightType::Point => 1.0,

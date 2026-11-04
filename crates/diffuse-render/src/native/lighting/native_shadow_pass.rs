@@ -1,6 +1,8 @@
 //! A color depth atlas preserves the existing five-tap shadow filtering
 //! contract.
 
+use std::sync::Arc;
+
 use std::collections::BTreeMap;
 
 use cove_graphics::rhi::{
@@ -9,16 +11,15 @@ use cove_graphics::rhi::{
     DepthStencilState, Device, DrawIndexedArguments, FrontWinding, GraphicsPipeline,
     PipelineLayout, PipelineLayoutDescriptor, RasterizationState, RenderColorTarget,
     RenderDepthTarget, RenderPassDescriptor, RhiResult, ScissorRect, ShaderModule, Texture,
-    TextureDescriptor, TextureFormat, TextureUsage, Viewport,
+    TextureDescriptor, TextureFormat, TextureUsage, VertexLayoutDescriptor, Viewport,
 };
 use diffuse_math::simd::simd_compat::MATRIX_IDENTITY_FLOAT4X4;
 use diffuse_scene::entity_id::EntityID;
 
 use crate::core::frame::render_packet::RenderPacket;
-use crate::core::frame::render_uniforms::ShadowRenderUniforms;
 use crate::core::lighting::shadow_atlas_plan::{ShadowAtlasLight, ShadowAtlasPlan};
+use crate::core::lighting::uniforms::ShadowRenderUniforms;
 use crate::core::mesh::mesh_instance_uniforms::MeshInstanceUniforms;
-use crate::core::render_settings::RenderSettings;
 use crate::native::lighting::native_lighting_resources::NativeUniformUpload;
 use crate::native::mesh::native_mesh_batch_planner::{
     NativeMeshBatch, NativeMeshBatchKey, NativeMeshBatchPlanner,
@@ -28,7 +29,7 @@ use crate::native::mesh::native_mesh_vertex_layout::NativeMeshVertexLayout;
 use crate::native::mesh::native_skin_bindings::NativeSkinBindings;
 use crate::native::targets::native_shader_library::NativeShaderLibrary;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct NativeShadowPipelineKey {
     mirrored: bool,
     double_sided: bool,
@@ -52,14 +53,14 @@ struct NativeShadowTargets {
 }
 
 impl NativeShadowTargets {
-    fn destroy(&self, device: &Device) {
+    fn destroy(&self, device: &Arc<Device>) {
         device.destroy_texture(self.color);
         device.destroy_texture(self.depth);
     }
 }
 
 pub struct NativeShadowPass {
-    device: Device,
+    device: Arc<Device>,
     bindings: BindingLayout,
     layout: PipelineLayout,
     vertex: ShaderModule,
@@ -69,7 +70,7 @@ pub struct NativeShadowPass {
 }
 
 impl NativeShadowPass {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let vs = NativeShaderLibrary::artifact(
             "shadow_mesh",
             device.backend_api(),
@@ -178,7 +179,7 @@ impl NativeShadowPass {
             deformables,
             true,
         )?
-        .batches;
+        .0;
         // Every atlas tile shares the same caster geometry/instances. Upload it
         // once; only the 64-byte light matrix differs between tiles.
         let mut uploads = Vec::with_capacity(batches.len());
@@ -236,7 +237,7 @@ impl NativeShadowPass {
                 });
             }
             tiles.push(NativeShadowTile {
-                light: light.clone(),
+                light: *light,
                 draws,
             });
         }
@@ -312,7 +313,7 @@ impl NativeShadowPass {
                     color_attachments: vec![ColorAttachmentDescriptor::new(
                         TextureFormat::Rgba16Float,
                     )],
-                    depth_format: None,
+                    depth_format: Some(cove_graphics::rhi::TextureFormat::Depth32Float),
                     depth_stencil: Some(DepthStencilState {
                         depth_compare: CompareOp::Less,
                         depth_write_enabled: true,
@@ -365,7 +366,7 @@ fn uniforms_bytes(uniforms: &[MeshInstanceUniforms]) -> &[u8] {
     unsafe {
         std::slice::from_raw_parts(
             uniforms.as_ptr().cast::<u8>(),
-            uniforms.len() * std::mem::size_of::<MeshInstanceUniforms>(),
+            std::mem::size_of_val(uniforms),
         )
     }
 }

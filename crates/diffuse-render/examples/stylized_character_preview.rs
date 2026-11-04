@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use cove_graphics::rhi::{Device, DeviceConfig};
-use cove_logging::{LogSystem, LoggingConfiguration};
+use cove_logging::{Level, LogEvent, LogSystem, LoggingConfiguration};
 use diffuse_assets::asset_registry::AssetRegistry;
 use diffuse_math::simd::simd_compat::{Float3, Float4, Float4x4, MATRIX_IDENTITY_FLOAT4X4};
 use diffuse_scene::media::animation::JointPaletteMap;
@@ -172,11 +172,17 @@ fn main() {
     let mut logging_configuration = LoggingConfiguration::default();
     let environment: BTreeMap<String, String> = std::env::vars().collect();
     if let Err(error) = logging_configuration.apply_environment(&environment) {
-        eprintln!("logging configuration failed: {error}");
+        diffuse_render::support::log::renderer().log(&LogEvent::new(
+            Level::Error,
+            format!("logging configuration failed: {error}"),
+        ));
         return;
     }
     if let Err(error) = LogSystem::bootstrap(None, logging_configuration, None) {
-        eprintln!("logging bootstrap failed: {error}");
+        diffuse_render::support::log::renderer().log(&LogEvent::new(
+            Level::Error,
+            format!("logging bootstrap failed: {error}"),
+        ));
         return;
     }
 
@@ -186,9 +192,12 @@ fn main() {
         enable_validation: false,
         ..DeviceConfig::default()
     }) {
-        Ok(device) => device,
+        Ok(device) => std::sync::Arc::new(device),
         Err(error) => {
-            eprintln!("device creation failed: {error}");
+            diffuse_render::support::log::renderer().log(&LogEvent::new(
+                Level::Error,
+                format!("device creation failed: {error}"),
+            ));
             return;
         }
     };
@@ -203,7 +212,10 @@ fn main() {
     ) {
         Ok(renderer) => renderer,
         Err(error) => {
-            eprintln!("renderer creation failed: {error}");
+            diffuse_render::support::log::renderer().log(&LogEvent::new(
+                Level::Error,
+                format!("renderer creation failed: {error}"),
+            ));
             return;
         }
     };
@@ -222,7 +234,7 @@ fn main() {
             let phase =
                 local_frame as f32 / (config.frames_per_state.saturating_sub(1)).max(1) as f32;
             let packet = RenderPacket {
-                frame_index,
+                frame_index: frame_index as i64,
                 delta_time: 1.0 / 60.0,
                 drawable_size: config.drawable_size,
                 scene: make_scene(state, phase),
@@ -234,7 +246,10 @@ fn main() {
                 mipmapped_viewport_output: false,
             };
             if let Err(error) = renderer.render_checked(&packet) {
-                eprintln!("render failed: {error}");
+                diffuse_render::support::log::renderer().log(&LogEvent::new(
+                    Level::Error,
+                    format!("render failed: {error}"),
+                ));
                 LogSystem::flush();
                 return;
             }
@@ -247,16 +262,19 @@ fn main() {
             .map(|kind| kind.raw_value())
             .collect::<Vec<&'static str>>()
             .join(",");
-        println!(
+        diffuse_render::support::log::renderer().log(&LogEvent::new(Level::Info, format!(
             "[stylized-character-preview] state={} frames={} passes={passes_joined} drawCalls={}",
             state.raw_value(),
             config.frames_per_state,
             stats.draw_call_count
-        );
+        )));
     }
 
     if let Err(error) = device.wait_until_idle() {
-        eprintln!("device idle wait failed: {error}");
+        diffuse_render::support::log::renderer().log(&LogEvent::new(
+            Level::Error,
+            format!("device idle wait failed: {error}"),
+        ));
     }
     LogSystem::flush();
 }

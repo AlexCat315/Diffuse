@@ -1,6 +1,8 @@
 //! Resident particle images, including retryable decode failures and a white
 //! fallback.
 
+use std::sync::Arc;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use cove_graphics::rhi::{
@@ -14,7 +16,7 @@ use crate::native::mesh::native_mesh_store::NativeMeshStore;
 use crate::support::log;
 
 pub struct NativeParticleTextures {
-    device: Device,
+    device: Arc<Device>,
     pub sampler: Sampler,
     fallback: Texture,
     images: BTreeMap<String, Texture>,
@@ -22,7 +24,7 @@ pub struct NativeParticleTextures {
 }
 
 impl NativeParticleTextures {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let sampler = device.make_sampler(SamplerDescriptor {
             min_filter: SamplerFilter::Linear,
             mag_filter: SamplerFilter::Linear,
@@ -67,6 +69,7 @@ impl NativeParticleTextures {
             return *existing;
         }
         match ImageAssetDecoder::decode_rgba8_path(path)
+            .map_err(|error| cove_graphics::rhi::RhiError::invalid_argument(error.to_string()))
             .and_then(|image| NativeMeshStore::texture(&self.device, &image))
         {
             Ok(result) => {

@@ -1,5 +1,7 @@
 //! Copies each frame's counters/events before the next frame resets them.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{Buffer, BufferDescriptor, BufferUsage, CommandBuffer, Device, RhiResult};
 
 use crate::core::particles::particle_simulation_gpu_data::{
@@ -11,7 +13,7 @@ use crate::core::render_stats::{
 use crate::native::particles::native_particle_simulation::NativeParticleSimulationState;
 
 pub struct NativeParticleSimulationReadback {
-    device: Device,
+    device: Arc<Device>,
     metadata: Buffer,
     events: Buffer,
     capacity: usize,
@@ -21,7 +23,7 @@ pub struct NativeParticleSimulationReadback {
 
 impl NativeParticleSimulationReadback {
     pub fn new(
-        device: &Device,
+        device: &Arc<Device>,
         state: &NativeParticleSimulationState,
         slot: usize,
         emitter: Option<u64>,

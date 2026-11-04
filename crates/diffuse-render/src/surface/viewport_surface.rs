@@ -41,22 +41,7 @@ impl ViewportSamplingRegion {
     }
 }
 
-/// An owned scene output. Surface snapshots and UI geometry retain this lease;
-/// replacing a renderer's target does not invalidate an older snapshot.
-///
-/// Swift's `ViewportImage` is a class, so equality below is reference identity:
-/// `Arc::ptr_eq` stands in for `===`.
-pub struct ViewportImage {
-    // The resource is immutable; Device serializes access and destruction.
-    pub resource: TextureResource,
-    pub mipmaps: Vec<TextureResource>,
-}
-
-impl ViewportImage {
-    pub fn new(resource: TextureResource, mipmaps: Vec<TextureResource>) -> Self {
-        ViewportImage { resource, mipmaps }
-    }
-}
+pub use super::viewport_image::ViewportImage;
 
 /// Render-thread publication state, separate from authored render settings.
 #[derive(Clone, Default)]
@@ -123,8 +108,8 @@ pub struct ViewportSurfacePublication {
 impl ViewportSurfacePublication {
     pub fn publish(
         &mut self,
-        resource: TextureResource,
-        mipmaps: Vec<TextureResource>,
+        resource: Arc<TextureResource>,
+        mipmaps: Vec<Arc<TextureResource>>,
         region: ViewportSamplingRegion,
     ) {
         let previous = self

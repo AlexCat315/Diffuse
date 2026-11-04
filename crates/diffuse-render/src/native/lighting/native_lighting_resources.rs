@@ -2,6 +2,8 @@
 //! meshes. Also carries `NativeUniformUpload`, the frame-owned uniform helper
 //! every pass shares.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{
     BindingResource, Device, RhiResult, Sampler, SamplerAddressMode, SamplerDescriptor,
     SamplerFilter, SamplerMipFilter, Texture, TextureDescriptor, TextureFormat, TextureSubresource,
@@ -9,9 +11,9 @@ use cove_graphics::rhi::{
 };
 
 use crate::core::frame::render_packet::RenderPacket;
-use crate::core::frame::render_uniforms::SceneLightUniforms;
 use crate::core::lighting::environment_ibl::StudioEnvironmentIBL;
 use crate::core::lighting::shadow_atlas_plan::ShadowAtlasPlan;
+use crate::core::lighting::uniforms::SceneLightUniforms;
 
 #[derive(Clone)]
 pub struct NativeLightingBindings {
@@ -43,13 +45,13 @@ impl NativeUniformUpload {
 }
 
 pub struct NativeLightingResources {
-    device: Device,
+    device: Arc<Device>,
     shadow_sampler: Sampler,
     environment: Option<Texture>,
 }
 
 impl NativeLightingResources {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let shadow_sampler = device.make_sampler(SamplerDescriptor {
             min_filter: SamplerFilter::Linear,
             mag_filter: SamplerFilter::Linear,
@@ -129,7 +131,7 @@ impl NativeLightingResources {
         fallback: Texture,
     ) -> RhiResult<NativeLightingBindings> {
         let mut lights =
-            SceneLightUniforms::from_scene(&packet.scene, &plan.shadow_bindings_by_light_index());
+            SceneLightUniforms::new(&packet.scene, &plan.shadow_bindings_by_light_index());
         lights.exposure_and_light_count.z =
             packet.render_settings.shading.debug_view_mode.raw_value() as f32;
         Ok(NativeLightingBindings {

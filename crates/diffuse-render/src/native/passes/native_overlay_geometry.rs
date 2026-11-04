@@ -99,7 +99,7 @@ impl NativeOverlayGeometry {
             for face in &overlay.triangles {
                 if !(0..3).all(|lane| {
                     let width = float3_lane(face.edge_widths, lane);
-                    width.is_finite() && width >= 0.0 && width <= 64.0
+                    width.is_finite() && (0.0..=64.0).contains(&width)
                 }) || ![face.edge_a, face.edge_b, face.edge_c]
                     .iter()
                     .all(|c| (0..4).all(|lane| float4_lane(*c, lane).is_finite()))
@@ -162,8 +162,10 @@ impl NativeOverlayGeometry {
                 if !(p.w > 1e-6 && p.z >= 0.0 && p.z <= p.w) {
                     continue;
                 }
-                let r = point.size / Float2::new(overlay.viewport_size.x, overlay.viewport_size.y)
-                    * p.w;
+                let r = Float2::new(
+                    point.size / overlay.viewport_size.x,
+                    point.size / overlay.viewport_size.y,
+                ) * p.w;
                 quad(
                     &mut result,
                     [

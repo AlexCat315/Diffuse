@@ -28,6 +28,10 @@ pub type MeshBoundsLookup<'a> = dyn Fn(i64) -> Option<(Float3, Float3)> + 'a;
 impl ShadowAtlasPlanner {
     /// `makeShadowAtlasPlan(scene:drawableSize:enabled:settings:palettes:meshBounds:)`.
     #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::manual_clamp,
+        reason = "The ordered max/min keeps the Swift NaN fallback."
+    )]
     pub fn make_shadow_atlas_plan(
         scene: &RenderScene,
         drawable_size: RenderDrawableSize,
@@ -94,8 +98,12 @@ impl ShadowAtlasPlanner {
             settings.directional_cascade_split_lambda,
         );
         let mut packed_cascade_splits = Float4::splat(scene.camera.far);
-        for index in 0..cascade_splits.len().min(MAX_SHADOW_ATLAS_TILE_COUNT) {
-            set_lane(&mut packed_cascade_splits, index, cascade_splits[index]);
+        for (index, split) in cascade_splits
+            .iter()
+            .take(MAX_SHADOW_ATLAS_TILE_COUNT)
+            .enumerate()
+        {
+            set_lane(&mut packed_cascade_splits, index, *split);
         }
         let camera_forward = normalized_with_fallback(
             scene.camera.target - scene.camera.eye,

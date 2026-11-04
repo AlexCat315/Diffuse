@@ -6,10 +6,11 @@ use diffuse_assets::asset_registry::AssetRegistry;
 use diffuse_render::native::native_renderer::NativeRenderer;
 use diffuse_render::surface::in_game_ui_providing::InGameUIProviding;
 use diffuse_render::{RenderFrameStats, RenderPacket, RenderSettings};
+use std::sync::Arc;
 
 /// An independent device/session for determinism and reset comparisons.
 pub struct SceneCapture {
-    pub device: Device,
+    pub device: Arc<Device>,
     pub renderer: NativeRenderer,
 }
 impl SceneCapture {
@@ -18,13 +19,13 @@ impl SceneCapture {
         api: Option<GraphicsApi>,
         in_game_ui: Option<Box<dyn InGameUIProviding>>,
     ) -> RhiResult<Self> {
-        let device = Device::make(DeviceConfig {
+        let device = Arc::new(Device::make(DeviceConfig {
             preferred_backends: api
                 .map(|api| vec![api])
                 .unwrap_or_else(platform_default_backends),
             enable_validation: validation,
             ..DeviceConfig::default()
-        })?;
+        })?);
         let renderer = NativeRenderer::new(
             &device,
             None,

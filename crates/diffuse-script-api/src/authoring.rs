@@ -362,10 +362,9 @@ impl ScriptPropertyValue {
                         return None;
                     }
                     [values.first()?, values.get(1)?, values.get(2)?]
-                } else if let Some(values) = value.as_object() {
-                    [values.get("x")?, values.get("y")?, values.get("z")?]
                 } else {
-                    return None;
+                    let values = value.as_object()?;
+                    [values.get("x")?, values.get("y")?, values.get("z")?]
                 };
                 let mut result = [0.0; 3];
                 for index in 0..3 {

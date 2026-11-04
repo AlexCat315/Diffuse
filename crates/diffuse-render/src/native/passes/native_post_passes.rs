@@ -1,6 +1,8 @@
 //! Fullscreen effects own resident pipelines/targets, while all uniforms and
 //! bindings belong to the frame. History validity lives in RenderTemporalState.
 
+use std::sync::Arc;
+
 use std::collections::BTreeMap;
 
 use cove_graphics::rhi::{
@@ -18,7 +20,7 @@ use crate::native::passes::native_fullscreen_pass::NativeFullscreenPass;
 use crate::native::passes::native_post_targets::{NativePostRequirements, NativePostTargets};
 
 pub struct NativePostPasses {
-    device: Device,
+    device: Arc<Device>,
     sampler: Sampler,
     pipelines: BTreeMap<RenderPassKind, NativeFullscreenPass>,
     targets: Option<NativePostTargets>,
@@ -26,7 +28,7 @@ pub struct NativePostPasses {
 }
 
 impl NativePostPasses {
-    pub fn new(device: &Device) -> RhiResult<Self> {
+    pub fn new(device: &Arc<Device>) -> RhiResult<Self> {
         let sampler = device.make_sampler(SamplerDescriptor {
             min_filter: SamplerFilter::Linear,
             mag_filter: SamplerFilter::Linear,
@@ -46,6 +48,9 @@ impl NativePostPasses {
 
     /// Swift's `deinit` destroys the targets and the sampler.
     pub fn destroy(&self) {
+        for pipeline in self.pipelines.values() {
+            pipeline.destroy();
+        }
         if let Some(targets) = &self.targets {
             targets.destroy(&self.device);
         }
@@ -106,8 +111,8 @@ impl NativePostPasses {
     }
 
     fn pipeline_for(&mut self, kind: RenderPassKind) -> RhiResult<&NativeFullscreenPass> {
-        if let Some(existing) = self.pipelines.get(&kind) {
-            return Ok(existing);
+        if self.pipelines.contains_key(&kind) {
+            return Ok(self.pipelines.get(&kind).expect("existing pipeline"));
         }
         let result = NativeFullscreenPass::new(
             &self.device,
@@ -130,6 +135,10 @@ impl NativePostPasses {
             .expect("pipeline was just inserted"))
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Keep the original render API argument grouping."
+    )]
     pub fn encode<T: Copy>(
         &mut self,
         kind: RenderPassKind,
@@ -140,7 +149,11 @@ impl NativePostPasses {
         size: RenderDrawableSize,
         commands: &mut CommandBuffer,
     ) -> RhiResult<()> {
-        let pipeline = self.pipeline_for(kind)?;
+        self.pipeline_for(kind)?;
+        let pipeline = self
+            .pipelines
+            .get(&kind)
+            .expect("pipeline was just prepared");
         let Some(targets) = self.targets.as_ref() else {
             return Err(RhiError::OutOfMemory);
         };

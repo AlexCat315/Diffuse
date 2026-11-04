@@ -134,7 +134,7 @@ impl MeshWireframeRegistry {
 
     pub fn register_polygon_mesh(mesh_index: i64, polygon_mesh: &PolygonMesh) {
         let edges = polygon_mesh
-            .edges
+            .edges()
             .iter()
             .map(|edge| {
                 MeshWireframeEdge::new(
@@ -156,8 +156,7 @@ impl MeshWireframeRegistry {
 
     /// Registers several submesh topologies and merges their edges, deduplicated.
     pub fn register_submeshes(mesh_index: i64, submeshes: &[MeshWireframeTopology]) {
-        let mut merged: Vec<MeshWireframeEdge> = Vec::new();
-        merged.reserve_capacity(
+        let mut merged: Vec<MeshWireframeEdge> = Vec::with_capacity(
             submeshes
                 .iter()
                 .map(|submesh| submesh.triangle_indices.len())
@@ -202,8 +201,7 @@ impl MeshWireframeRegistry {
             return Vec::new();
         }
 
-        let mut results: Vec<MeshWireframeEdge> = Vec::new();
-        results.reserve_capacity(mesh.indices.len());
+        let mut results: Vec<MeshWireframeEdge> = Vec::with_capacity(mesh.indices.len());
         let mut seen = HashSet::new();
 
         let position = |index: u32| -> Option<Float3> {
@@ -219,7 +217,7 @@ impl MeshWireframeRegistry {
             ))
         };
 
-        let mut append_edge =
+        let append_edge =
             |i0: u32, i1: u32, seen: &mut HashSet<u64>, results: &mut Vec<MeshWireframeEdge>| {
                 if i0 == i1 {
                     return;
@@ -258,8 +256,8 @@ impl MeshWireframeRegistry {
             return Vec::new();
         }
 
-        let mut results: Vec<MeshWireframeEdge> = Vec::new();
-        results.reserve_capacity(topology.triangle_indices.len());
+        let mut results: Vec<MeshWireframeEdge> =
+            Vec::with_capacity(topology.triangle_indices.len());
         let mut seen = HashSet::new();
 
         let resolve = |index: u32| -> Option<u32> {
@@ -278,10 +276,10 @@ impl MeshWireframeRegistry {
             topology.positions.get(i).copied()
         };
 
-        let mut append_edge = |raw_i0: u32,
-                               raw_i1: u32,
-                               seen: &mut HashSet<u64>,
-                               results: &mut Vec<MeshWireframeEdge>| {
+        let append_edge = |raw_i0: u32,
+                           raw_i1: u32,
+                           seen: &mut HashSet<u64>,
+                           results: &mut Vec<MeshWireframeEdge>| {
             let (Some(i0), Some(i1)) = (resolve(raw_i0), resolve(raw_i1)) else {
                 return;
             };

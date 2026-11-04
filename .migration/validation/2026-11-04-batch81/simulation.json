@@ -1,0 +1,95 @@
+{
+  "environment" : {
+    "buildConfiguration" : "debug",
+    "framesPerCompletedBatch" : 3,
+    "measuredAt" : "2026-11-04T06:59:38Z",
+    "operatingSystem" : "Version 27.2 (Build 26B123)",
+    "shaderCompiler" : "Slang 2026.19",
+    "timingMethod" : "CPU durations and three-frame batch completion; no GPU timestamps or presentation",
+    "validationEnabled" : false
+  },
+  "frames" : 3,
+  "height" : 64,
+  "imageDifferences" : {
+
+  },
+  "repeats" : 1,
+  "results" : [
+    {
+      "backend" : "native-metal",
+      "completedBatch" : {
+        "p50Microseconds" : 12319.375,
+        "p95Microseconds" : 12319.375,
+        "sampleCount" : 1
+      },
+      "cpuEncode" : {
+        "p50Microseconds" : 211.75,
+        "p95Microseconds" : 2724.25,
+        "sampleCount" : 3
+      },
+      "cpuFrame" : {
+        "p50Microseconds" : 10520.958,
+        "p95Microseconds" : 12435.709,
+        "sampleCount" : 3
+      },
+      "cpuSubmit" : {
+        "p50Microseconds" : 6750.25,
+        "p95Microseconds" : 6823.416,
+        "sampleCount" : 3
+      },
+      "device" : "Apple M1",
+      "particleWork" : {
+        "batches" : 9,
+        "candidates" : 18528,
+        "dispatchWorkgroups" : 9,
+        "indirectDraws" : 9
+      },
+      "passDraws" : {
+        "basePass" : 9,
+        "bloom" : 3,
+        "depthPrepass" : 9,
+        "editorGrid" : 3,
+        "fxaa" : 3,
+        "particles" : 9,
+        "shadowPass" : 27,
+        "skybox" : 3,
+        "ssao" : 3,
+        "ssr" : 2,
+        "taa" : 3,
+        "tonemap" : 3,
+        "transparentMeshes" : 3
+      },
+      "passFrames" : {
+        "basePass" : 3,
+        "bloom" : 3,
+        "depthPrepass" : 3,
+        "editorGrid" : 3,
+        "fxaa" : 3,
+        "particles" : 3,
+        "shadowPass" : 3,
+        "skybox" : 3,
+        "ssao" : 3,
+        "ssr" : 2,
+        "taa" : 3,
+        "tonemap" : 3,
+        "transparentMeshes" : 3
+      },
+      "simulationWork" : {
+        "batches" : 6,
+        "eventBytes" : 589824,
+        "eventCapacity" : 12288,
+        "instanceWorkgroups" : 291,
+        "particles" : 6144,
+        "renderInstances" : 18432,
+        "simulationWorkgroups" : 99,
+        "sortItems" : 6144,
+        "sortPaddedItems" : 6144,
+        "sortPasses" : 336,
+        "sortWorkgroups" : 5544
+      }
+    }
+  ],
+  "scene" : "simulation",
+  "warmup" : 1,
+  "width" : 64
+}

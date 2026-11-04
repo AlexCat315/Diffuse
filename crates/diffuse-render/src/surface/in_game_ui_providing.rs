@@ -1,6 +1,8 @@
 //! The in-game UI provider contract: CoveUI supplies HUD geometry into the
 //! engine's NativeRHI frame.
 
+use std::sync::Arc;
+
 use cove_graphics::rhi::{CommandBuffer, Device, RenderColorTarget, TextureFormat};
 use diffuse_scene::scene_runtime::SceneRuntimeSnapshot;
 
@@ -9,7 +11,7 @@ use crate::core::frame::render_packet::RenderPacket;
 /// A borrowed target in the scene renderer's active NativeRHI frame. The
 /// provider records into these commands without beginning or submitting a frame.
 pub struct NativeInGameUITarget {
-    pub device: Device,
+    pub device: Arc<Device>,
     pub commands: CommandBuffer,
     pub color: RenderColorTarget,
     pub format: TextureFormat,
@@ -18,7 +20,7 @@ pub struct NativeInGameUITarget {
 
 impl NativeInGameUITarget {
     pub fn new(
-        device: Device,
+        device: Arc<Device>,
         commands: CommandBuffer,
         color: RenderColorTarget,
         format: TextureFormat,

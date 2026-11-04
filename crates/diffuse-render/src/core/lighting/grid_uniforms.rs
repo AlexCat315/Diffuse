@@ -8,9 +8,7 @@ use diffuse_math::simd::simd_compat::{Float4, Float4x4, simd_inverse};
 use diffuse_scene::rendering::render_scene::RenderCamera;
 
 use super::grid_plane::EditorGridPlane;
-use crate::core::frame::render_camera_matrices::{
-    RenderCameraMatrices, RenderCameraProjectionMatrix,
-};
+use crate::core::frame::render_camera_matrices::RenderCameraMatrices;
 use crate::core::frame::render_packet::{RenderDrawableSize, RenderPacket};
 use crate::core::render_settings::Backdrop;
 

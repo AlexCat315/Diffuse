@@ -3,15 +3,18 @@
 //! recording a copy alone must not advance resident revisions or retire the
 //! previous geometry.
 
+use std::sync::Arc;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use cove_graphics::rhi::{Buffer, BufferDescriptor, BufferUsage, CommandBuffer, Device, RhiResult};
 use diffuse_assets::asset_pipeline::{MeshAsset, MeshSubmesh};
-use diffuse_math::simd::simd_compat::{Float2, Float3, Float4, simd_cross, simd_normalize};
+use diffuse_math::simd::simd_compat::{Float3, Float4, simd_cross, simd_normalize};
 use diffuse_scene::entity_id::EntityID;
 use diffuse_scene::rendering::render_scene::RenderDeformableMesh;
 
 use crate::core::mesh::deformable_upload_report::DeformableMeshUploadReport;
+use crate::native::mesh::native_mesh_store::NativeMeshGeometry;
 
 /// CPU-side interleaved stream matching the static `MeshAsset` vertex layout
 /// (the core file owns the shared conversion; this copy feeds the upload paths
@@ -88,7 +91,7 @@ pub struct NativeDeformableResource {
 
 /// Owns new allocations until command submission succeeds.
 pub struct NativeDeformableUpdate {
-    pub device: Device,
+    pub device: Arc<Device>,
     pub resources: BTreeMap<EntityID, NativeDeformableResource>,
     pub allocated: BTreeSet<Buffer>,
     pub report: DeformableMeshUploadReport,
@@ -96,7 +99,7 @@ pub struct NativeDeformableUpdate {
 }
 
 impl NativeDeformableUpdate {
-    fn new(device: &Device) -> Self {
+    fn new(device: &Arc<Device>) -> Self {
         NativeDeformableUpdate {
             device: device.clone(),
             resources: BTreeMap::new(),
@@ -139,12 +142,12 @@ impl NativeDeformableUpdate {
 }
 
 pub struct NativeDeformableMeshes {
-    device: Device,
+    device: Arc<Device>,
     resources: BTreeMap<EntityID, NativeDeformableResource>,
 }
 
 impl NativeDeformableMeshes {
-    pub fn new(device: &Device) -> Self {
+    pub fn new(device: &Arc<Device>) -> Self {
         NativeDeformableMeshes {
             device: device.clone(),
             resources: BTreeMap::new(),
@@ -182,11 +185,12 @@ impl NativeDeformableMeshes {
                 previous.topology_revision != mesh.topology_revision
                     || previous.triangle_count != mesh.triangle_count()
             });
-            if !vertices_changed && !topology_changed {
-                if let Some(previous) = previous {
-                    update.resources.insert(mesh.entity, previous.clone());
-                    continue;
-                }
+            if !vertices_changed
+                && !topology_changed
+                && let Some(previous) = previous
+            {
+                update.resources.insert(mesh.entity, previous.clone());
+                continue;
             }
             let Some(stream) = NativeDeformableStream::new(mesh) else {
                 continue;
@@ -277,7 +281,7 @@ impl NativeDeformableMeshes {
     }
 
     fn copy<T: Copy>(
-        device: &Device,
+        device: &Arc<Device>,
         values: &[T],
         to: Buffer,
         commands: &mut CommandBuffer,

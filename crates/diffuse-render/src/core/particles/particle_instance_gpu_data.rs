@@ -54,7 +54,7 @@ impl GPUParticleSimulationInstanceUniforms {
         let lanes: [f32; 60] = {
             let mut lanes = [0.0f32; 60];
             let mut offset = 0usize;
-            let mut push = |value: Float4, lanes: &mut [f32; 60], offset: &mut usize| {
+            let push = |value: Float4, lanes: &mut [f32; 60], offset: &mut usize| {
                 lanes[*offset] = value.x;
                 lanes[*offset + 1] = value.y;
                 lanes[*offset + 2] = value.z;
