@@ -108,20 +108,13 @@ impl NatselPhysicsBackend {
                     inner_body_shape,
                     ..CharacterDef::default()
                 };
-                // SAFETY: the three obligations `from_raw_world` documents hold here —
-                // (1) `world` is boxed, so its address is stable and it outlives every
-                // stored record (all are destroyed before `reset` replaces the box);
-                // (2) records are only touched from `prepare`/`step`/`reset`, which hold
-                // `&mut self`, so no other borrow of the world is live concurrently;
-                // (3) the backend creates exactly one character per world and serialises
-                // construction.
                 let pointer = self.world_pointer();
                 // SAFETY: the three obligations `from_raw_world` documents hold here —
                 // `pointer` addresses the boxed world, which lives until `reset` and is
                 // replaced only after every record is destroyed; records are touched
                 // only from `prepare`/`step`/`reset`, each holding `&mut self`, so no
-                // concurrent borrow exists; and exactly one character is created per
-                // world, serially.
+                // conflicting borrow exists. Multiple characters use the same world
+                // sequentially, with world references scoped to each character call.
                 let character = unsafe { CharacterVirtual::from_raw_world(pointer, &def) };
                 let Some(mut character) = character else {
                     return Err(NatselPhysicsBackend::failure(

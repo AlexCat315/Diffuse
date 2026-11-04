@@ -50,24 +50,24 @@ diffuse-player = { path = "crates/diffuse-player" }
 diffuse-android = { path = "crates/diffuse-android" }
 
 cove-ui = { path = "../Cove" }
-cove-core = { path = "../Cove/Core" }
-cove-platform = { path = "../Cove/PlatformCore" }
-cove-system = { path = "../Cove/System" }
-cove-logging = { path = "../Cove/Logging" }
-cove-graphics = { path = "../Cove/Graphics" }
-cove-text = { path = "../Cove/Text" }
-cove-imaging = { path = "../Cove/Imaging" }
-cove-shell = { path = "../Cove/Shell" }
-cove-runtime = { path = "../Cove/Runtime" }
-cove-composition = { path = "../Cove/Compose/Composition" }
-cove-ui-compose = { path = "../Cove/Compose" }
-cove-ui-addons = { path = "../Cove/Sources" }
-cove-terminal = { path = "../Cove/Terminal" }
-cove-hosts = { path = "../Cove/Hosts" }
-cove-devtools = { path = "../Cove/DevTools" }
-cove-devtools-protocol = { path = "../Cove/DevTools/Protocol" }
-cove-agent = { path = "../Cove/Agent" }
-cove-http = { path = "../Cove/Http" }
+cove-core = { path = "../Cove/crates/core" }
+cove-platform = { path = "../Cove/crates/platform" }
+cove-system = { path = "../Cove/crates/system" }
+cove-logging = { path = "../Cove/crates/logging" }
+cove-graphics = { path = "../Cove/crates/graphics" }
+cove-text = { path = "../Cove/crates/text" }
+cove-imaging = { path = "../Cove/crates/imaging" }
+cove-shell = { path = "../Cove/crates/shell" }
+cove-runtime = { path = "../Cove/crates/runtime" }
+cove-composition = { path = "../Cove/crates/composition" }
+cove-ui-compose = { path = "../Cove/crates/compose" }
+cove-ui-addons = { path = "../Cove/crates/addons" }
+cove-terminal = { path = "../Cove/crates/terminal" }
+cove-hosts = { path = "../Cove/crates/hosts" }
+cove-devtools = { path = "../Cove/crates/devtools" }
+cove-devtools-protocol = { path = "../Cove/crates/devtools-protocol" }
+cove-agent = { path = "../Cove/crates/agent" }
+cove-http = { path = "../Cove/crates/http" }
 
 natsel = { path = "../Natsel" }
 
@@ -88,3 +88,6 @@ undocumented_unsafe_blocks = "deny"
 
 [profile.release]
 overflow-checks = true
+
+[profile.release.package.natsel]
+overflow-checks = false

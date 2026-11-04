@@ -6639,7 +6639,7 @@
       "rust": [
         "crates/diffuse-render/examples/stylized_character_preview.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Media/Package.swift",
@@ -9210,7 +9210,7 @@
       "rust": [
         "crates/diffuse-render/src/core/frame/render_camera_matrices.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Frame/RenderFramePlan.swift",
@@ -9221,7 +9221,7 @@
       "rust": [
         "crates/diffuse-render/src/core/frame/render_frame_plan.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Frame/RenderPacket.swift",
@@ -9232,7 +9232,7 @@
       "rust": [
         "crates/diffuse-render/src/core/frame/render_packet.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Frame/RenderUniforms.swift",
@@ -9254,7 +9254,7 @@
       "rust": [
         "crates/diffuse-render/src/core/frame/viewport_target_allocation.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Frame/ViewportTargetSizing.swift",
@@ -9265,7 +9265,7 @@
       "rust": [
         "crates/diffuse-render/src/core/frame/viewport_target_sizing.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Lighting/EnvironmentIBL.swift",
@@ -9276,7 +9276,7 @@
       "rust": [
         "crates/diffuse-render/src/core/lighting/environment_ibl.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Lighting/GridPlane.swift",
@@ -9287,7 +9287,7 @@
       "rust": [
         "crates/diffuse-render/src/core/lighting/grid_plane.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Lighting/GridUniforms.swift",
@@ -9298,7 +9298,7 @@
       "rust": [
         "crates/diffuse-render/src/core/lighting/grid_uniforms.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Lighting/PostEffectUniforms.swift",
@@ -9309,7 +9309,7 @@
       "rust": [
         "crates/diffuse-render/src/core/lighting/post_effect_uniforms.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Lighting/ShadowAtlasPlan.swift",
@@ -9320,7 +9320,7 @@
       "rust": [
         "crates/diffuse-render/src/core/lighting/shadow_atlas_plan.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Lighting/ShadowAtlasPlanner.swift",
@@ -9331,7 +9331,7 @@
       "rust": [
         "crates/diffuse-render/src/core/lighting/shadow_atlas_planner.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Lighting/Uniforms.swift",
@@ -9342,7 +9342,7 @@
       "rust": [
         "crates/diffuse-render/src/core/lighting/uniforms.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Mesh/DeformableMeshVertexStream.swift",
@@ -9353,7 +9353,7 @@
       "rust": [
         "crates/diffuse-render/src/core/mesh/deformable_mesh_vertex_stream.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Mesh/DeformableUploadReport.swift",
@@ -9364,7 +9364,7 @@
       "rust": [
         "crates/diffuse-render/src/core/mesh/deformable_upload_report.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Mesh/MeshInstanceUniforms.swift",
@@ -9375,7 +9375,7 @@
       "rust": [
         "crates/diffuse-render/src/core/mesh/mesh_instance_uniforms.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Mesh/MeshOutlinePolicy.swift",
@@ -9397,7 +9397,7 @@
       "rust": [
         "crates/diffuse-render/src/core/mesh/mesh_visibility_plan.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Mesh/OpaqueSceneFingerprint.swift",
@@ -9408,7 +9408,7 @@
       "rust": [
         "crates/diffuse-render/src/core/mesh/opaque_scene_fingerprint.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Mesh/ResolvedMeshMaterial.swift",
@@ -9419,7 +9419,7 @@
       "rust": [
         "crates/diffuse-render/src/core/mesh/resolved_mesh_material.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Particles/GPUParticleSimulationEventBridge.swift",
@@ -9430,7 +9430,7 @@
       "rust": [
         "crates/diffuse-render/src/core/particles/gpu_particle_simulation_event_bridge.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Particles/ParticleGPUData.swift",
@@ -9441,7 +9441,7 @@
       "rust": [
         "crates/diffuse-render/src/core/particles/particle_gpu_data.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Particles/ParticleInstanceGPUData.swift",
@@ -9452,7 +9452,7 @@
       "rust": [
         "crates/diffuse-render/src/core/particles/particle_instance_gpu_data.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Particles/ParticleSimulationGPUData.swift",
@@ -9463,7 +9463,7 @@
       "rust": [
         "crates/diffuse-render/src/core/particles/particle_simulation_gpu_data.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/Particles/SimulationReport.swift",
@@ -9474,7 +9474,7 @@
       "rust": [
         "crates/diffuse-render/src/core/particles/simulation_report.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/RenderSettings.swift",
@@ -9496,7 +9496,7 @@
       "rust": [
         "crates/diffuse-render/src/core/render_stats.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Core/RenderTemporalState.swift",
@@ -9507,7 +9507,7 @@
       "rust": [
         "crates/diffuse-render/src/core/render_temporal_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Lighting/NativeHDRPasses.swift",
@@ -9518,7 +9518,7 @@
       "rust": [
         "crates/diffuse-render/src/native/lighting/native_hdr_passes.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Lighting/NativeLightingResources.swift",
@@ -9529,7 +9529,7 @@
       "rust": [
         "crates/diffuse-render/src/native/lighting/native_lighting_resources.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Lighting/NativeShadowPass.swift",
@@ -9540,7 +9540,7 @@
       "rust": [
         "crates/diffuse-render/src/native/lighting/native_shadow_pass.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Mesh/NativeDeformableMeshes.swift",
@@ -9551,7 +9551,7 @@
       "rust": [
         "crates/diffuse-render/src/native/mesh/native_deformable_meshes.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Mesh/NativeMeshBatchPlanner.swift",
@@ -9562,7 +9562,7 @@
       "rust": [
         "crates/diffuse-render/src/native/mesh/native_mesh_batch_planner.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Mesh/NativeMeshPass.swift",
@@ -9573,7 +9573,7 @@
       "rust": [
         "crates/diffuse-render/src/native/mesh/native_mesh_pass.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Mesh/NativeMeshShaders.swift",
@@ -9584,7 +9584,7 @@
       "rust": [
         "crates/diffuse-render/src/native/mesh/native_mesh_shaders.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Mesh/NativeMeshStore.swift",
@@ -9595,7 +9595,7 @@
       "rust": [
         "crates/diffuse-render/src/native/mesh/native_mesh_store.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Mesh/NativeMeshVertexLayout.swift",
@@ -9617,7 +9617,7 @@
       "rust": [
         "crates/diffuse-render/src/native/mesh/native_skin_bindings.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/NativeRenderer.swift",
@@ -9628,7 +9628,7 @@
       "rust": [
         "crates/diffuse-render/src/native/native_renderer.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Particles/NativeParticleBuffers.swift",
@@ -9639,7 +9639,7 @@
       "rust": [
         "crates/diffuse-render/src/native/particles/native_particle_buffers.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Particles/NativeParticleInstances.swift",
@@ -9650,7 +9650,7 @@
       "rust": [
         "crates/diffuse-render/src/native/particles/native_particle_instances.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Particles/NativeParticlePass.swift",
@@ -9661,7 +9661,7 @@
       "rust": [
         "crates/diffuse-render/src/native/particles/native_particle_pass.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Particles/NativeParticleSimulation.swift",
@@ -9672,7 +9672,7 @@
       "rust": [
         "crates/diffuse-render/src/native/particles/native_particle_simulation.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Particles/NativeParticleSimulationKernels.swift",
@@ -9683,7 +9683,7 @@
       "rust": [
         "crates/diffuse-render/src/native/particles/native_particle_simulation_kernels.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Particles/NativeParticleSimulationReadback.swift",
@@ -9694,7 +9694,7 @@
       "rust": [
         "crates/diffuse-render/src/native/particles/native_particle_simulation_readback.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Particles/NativeParticleTextures.swift",
@@ -9705,7 +9705,7 @@
       "rust": [
         "crates/diffuse-render/src/native/particles/native_particle_textures.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Passes/NativeComputePass.swift",
@@ -9716,7 +9716,7 @@
       "rust": [
         "crates/diffuse-render/src/native/passes/native_compute_pass.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Passes/NativeEditorGridPass.swift",
@@ -9727,7 +9727,7 @@
       "rust": [
         "crates/diffuse-render/src/native/passes/native_editor_grid_pass.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Passes/NativeEditorPasses.swift",
@@ -9738,7 +9738,7 @@
       "rust": [
         "crates/diffuse-render/src/native/passes/native_editor_passes.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Passes/NativeFullscreenPass.swift",
@@ -9749,7 +9749,7 @@
       "rust": [
         "crates/diffuse-render/src/native/passes/native_fullscreen_pass.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Passes/NativeGeometryOverlayPass.swift",
@@ -9760,7 +9760,7 @@
       "rust": [
         "crates/diffuse-render/src/native/passes/native_geometry_overlay_pass.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Passes/NativeGridRenderer.swift",
@@ -9771,7 +9771,7 @@
       "rust": [
         "crates/diffuse-render/src/native/passes/native_grid_renderer.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Passes/NativeOverlayGeometry.swift",
@@ -9782,7 +9782,7 @@
       "rust": [
         "crates/diffuse-render/src/native/passes/native_overlay_geometry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Passes/NativePostPasses.swift",
@@ -9793,7 +9793,7 @@
       "rust": [
         "crates/diffuse-render/src/native/passes/native_post_passes.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Passes/NativePostTargets.swift",
@@ -9804,7 +9804,7 @@
       "rust": [
         "crates/diffuse-render/src/native/passes/native_post_targets.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Targets/NativePacketValidation.swift",
@@ -9815,7 +9815,7 @@
       "rust": [
         "crates/diffuse-render/src/native/targets/native_packet_validation.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Targets/NativeRenderTargets.swift",
@@ -9826,7 +9826,7 @@
       "rust": [
         "crates/diffuse-render/src/native/targets/native_render_targets.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Targets/NativeShaderLibrary.swift",
@@ -9837,7 +9837,7 @@
       "rust": [
         "crates/diffuse-render/src/native/targets/native_shader_library.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Targets/NativeViewportMipChain.swift",
@@ -9848,7 +9848,7 @@
       "rust": [
         "crates/diffuse-render/src/native/targets/native_viewport_mip_chain.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Native/Targets/NativeWindowTarget.swift",
@@ -9859,7 +9859,7 @@
       "rust": [
         "crates/diffuse-render/src/native/targets/native_window_target.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Registries/MeshBoundsRegistry.swift",
@@ -9870,7 +9870,7 @@
       "rust": [
         "crates/diffuse-render/src/registries/mesh_bounds_registry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Registries/MeshMaterialRegistry.swift",
@@ -9881,7 +9881,7 @@
       "rust": [
         "crates/diffuse-render/src/registries/mesh_material_registry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Registries/MeshPickingRegistry.swift",
@@ -9892,7 +9892,7 @@
       "rust": [
         "crates/diffuse-render/src/registries/mesh_picking_registry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Registries/MeshTextureRegistry.swift",
@@ -9903,7 +9903,7 @@
       "rust": [
         "crates/diffuse-render/src/registries/mesh_texture_registry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Registries/MeshWireframeRegistry.swift",
@@ -9914,7 +9914,7 @@
       "rust": [
         "crates/diffuse-render/src/registries/mesh_wireframe_registry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/RenderBackendResourceBundle.swift",
@@ -9925,7 +9925,7 @@
       "rust": [
         "crates/diffuse-render/src/render_backend_resource_bundle.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Support/Log.swift",
@@ -9936,7 +9936,7 @@
       "rust": [
         "crates/diffuse-render/src/support/log.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Surface/InGameUIProviding.swift",
@@ -9947,7 +9947,7 @@
       "rust": [
         "crates/diffuse-render/src/surface/in_game_ui_providing.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Surface/ViewportImage.swift",
@@ -9958,7 +9958,7 @@
       "rust": [
         "crates/diffuse-render/src/surface/viewport_image.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/RenderBackend/Surface/ViewportSurface.swift",
@@ -9969,7 +9969,7 @@
       "rust": [
         "crates/diffuse-render/src/surface/viewport_surface.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/SIMDCompat/SIMDCompat.swift",
@@ -11364,7 +11364,7 @@
       ],
       "d1": "rewrite",
       "status": "pending",
-      "notes": "D1 接线锚点：线程上下文、allocator、错误状态已写；完整 HostApi 条目仍待续，保持 pending。"
+      "notes": "D1 已有线程上下文、allocator、错误状态及29个通用HostApi条目（实体/层级/完整矩阵/参数/Prefab/画布/状态）；组件、资源、输入与触发帧、车辆和物理查询仍待接线，保持 pending。批次 78；未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/DynamicScript/ScriptCBridgeInput.swift",
@@ -11415,7 +11415,8 @@
         "crates/diffuse-script/src/dynamic_script/script_loader.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written",
+      "notes": "D1 加载器完整实现：版本先验校验、严格目录解析、显式多脚本选择、可失败实例工厂、元数据与代次原子替换、平台动态加载和互斥生命周期。批次 78；通用 HostApi 其余条目仍待续，未编译、未测试。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Input/DefaultInputActions.swift",

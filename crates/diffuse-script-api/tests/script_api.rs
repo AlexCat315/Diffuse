@@ -36,7 +36,7 @@ fn slice_is_pointer_plus_length() {
 
 #[test]
 fn abi_version_is_stable_and_reported() {
-    assert_eq!(ABI_VERSION, 1);
+    assert_eq!(ABI_VERSION, 3);
     let table = HostApi::empty();
     assert_eq!(table.version(), ABI_VERSION);
     let context = ScriptContext::new(table);

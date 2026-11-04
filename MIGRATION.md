@@ -17,6 +17,7 @@
 规则：
 
 - **不得修改 `../Cove` 或 `../Natsel`。** 缺什么、坏什么，写进 [.migration/cove-gaps.md](.migration/cove-gaps.md)（格式见该文件），然后按计划的 API 名继续写，在批次报告中标出。
+- 2026-11-04 用户明确授权补齐上游 Natsel API，本批次可修改 `../Natsel` 的 G8 相关实现；Cove 仍只读。
 - Cove 的 Rust 代码未经完整验证。Diffuse 测试失败时，先判断根因在 Diffuse 还是 Cove；属于 Cove 的写进 gaps，不要在 Diffuse 里绕过。
 
 ## 2. 目标结构
@@ -347,6 +348,8 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 ### `diffuse-script`（原生脚本核心已 `written`；动态脚本管线待 D1 改写）
 
+2026-11-04 D1 增量（批次 78，未编译/测试）：`ScriptLoader::load_factory(id, path)` 仅接受单脚本目录；多脚本使用 `load_named_factory(id, path, name)`。`ScriptFactory = Arc<dyn Fn() -> Result<Script, ScriptLoadError> + Send + Sync>`，调用方必须处理创建失败后再注册返回的 Script。目录/选择失败不会替换旧代次，`definition(id)` 返回所选脚本的元数据，实例与工厂持有原动态库。HostApi ABI 为当前 SDK 的 3；通用桥接新增 29 项但尚未完整，见 §10。
+
 - 根导出 `Script`、`ScriptCallback`、`ScriptBehavior`、`ScriptAuthoring`、`ScriptContext<'phase, 'world>`、`ScriptDefinition`、`ScriptProperty`、`ScriptPropertyValue`、`ScriptPropertyOption`、`ScriptParameterIssue`、`ScriptRuntime`、`ScriptVar`、`ScriptPresetKind`、`AnimationRuntime`。
 - `ScriptRuntime` 的 Clone 保留 Swift class 的共享实例；`register_factory` 每绑定构造状态，`register` 保留共享回调，`register_authoring_behavior` 显式选择可选的 authoring trait（Rust 无 Swift 元类型协议转换）。暂停开关通过 `is_gameplay_execution_enabled/set_gameplay_execution_enabled` 访问；回调执行时不持有注册表锁。
 - `ScriptContext` 本实体操作使用无后缀方法，其他实体使用 `_for/_of/_from`；世界变换读取会刷新层级。参数解析保留 NSNumber 对布尔值的数值桥接，authoring 类型校验仍严格拒绝数值位置的布尔值。
@@ -567,8 +570,15 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-01 | 批次 73 | 脚本 SDK 与上游缺口修复 | — | — | 补 SDK 属性元数据、字符串选项、Swift 关联枚举编码、严格 JSON 数字/代理项与完整 UInt64；补 `AssetRegistry::shared`、phase registry setter、WorldTransform 通用读取刷新及共享物理查询接线。AssetRegistry 从 `tested` 回退 `written`；SDK 修订不沿用历史测试结论 |
 | 2026-11-01 | 批次 74 | diffuse-script D1 编译器 | 1 | 616 | `SwiftScriptCompiler.swift` → `ScriptCompiler` 完整改写为 `written`：Cargo release/JSON 消息、项目缓存、清晰诊断、准确 cdylib 选择、独立代次原子发布、取消注册竞态与 250 ms 终止升级、双管道并发读取和可选截止时间；Swift modulemap、动态符号链接与 Windows 导入库流程由 D1 的 std-only SDK 依赖替代。没有运行 Cargo、测试或编译 |
 | 2026-11-01 | 批次 75 | diffuse-script 时间、输入、角色桥接与 SDK 修复 | 3 | 105 | 三个小桥接文件完整 `written`；新增调用期间有效的线程上下文、独占借用保护、宿主字节分配/释放和错误状态资源作为接线锚点。SDK 宏生成全部 C 导出、修正创建符号、捕获 panic 后停用、可选 authoring 选择及空字符串保留；目录使用宿主分配器，ABI 提升为 2。通用上下文桥接和加载器仍 `pending`，没有以空函数表宣称 D1 完成 |
+| 2026-11-04 | 批次 76 | diffuse-render Core 帧/光照/网格/粒子（队友） | 25 | 2164 | RenderBackend/Core 的 25 个生产文件全部 `written`（frame 5、lighting 7、mesh 6、particles 5、render_stats、render_temporal_state）；GPU 布局断言 23 组（SceneLightUniforms 544、ShadowUniforms 384、EditorGridUniforms 192、MeshInstanceUniforms 160、GPUParticleSimulationUniforms 272、GPUParticleSimulationInstanceUniforms 240 等，均与 .slang 结构一致）；OpaqueSceneFingerprint 以固定 FNV 累加器替代 Swift 进程内 Hasher。按用户要求不编译不测试，仅 rustfmt 与 `inventory.py --check`（0 problem(s)） |
+| 2026-11-04 | 批次 77 | Cove 路径与脚本加载器修正 | 0 完成 | — | workspace 的 Cove 依赖切到当前 `crates/` 目录；脚本实例回调加互斥、修正 Windows API 声明与符号指针转换，释放零长度目录缓冲区。加载器仍有多脚本选择、失败报告及 HostApi 接线缺口，清单退回 `pending`；没有将部分实现标为完成。 |
+| 2026-11-04 | 批次 78 | Natsel G8 与 D1 加载器/通用桥接 | 1 完成 + 1 部分 | 154 + 30 | 用户授权下在 Natsel 补 `World: Send`、短借用角色世界句柄、`from_raw_world` 和 `world_mut`；修正 Diffuse 的多角色安全注释，并补 §2.2 的 Natsel release 溢出设置。加载器完整 `written`：先验 ABI 校验、目录严格校验、显式多脚本选择、可失败工厂、代次/元数据同锁替换。通用桥接新增 29 项（实体/层级/矩阵/参数/Prefab/画布/状态），其余待续，仍 `pending`。只做 Rust 格式化与静态检查，未运行 Cargo/测试。 |
 
 ## 10. 已知问题与需要用户确认的事项
+
+- **2026-11-04 批次 78**：Natsel G8 的实现已按用户本轮授权补齐，见 [G8](.migration/cove-gaps.md)，尚未编译或测试。未修改 Cove，未新增第三方依赖。Natsel changelog 与迁移记录同步更新；本次没有发布新版本。
+- **D1 通用桥接仍未完成**：实体、层级、完整 64 字节矩阵、参数、Prefab、画布与状态条目已接线；组件/资源、输入与触发帧、完整角色状态、车辆命令、五种物理查询条目待续，文件继续 `pending`。空名称和未提供名称、空字符串和缺失参数、实体 0 和缺失实体均用显式存在标志区分。加载器现已完整 `written`，不代表整个 D1 管线完成；其可失败工厂签名在 §8 登记，后续编辑器调用方必须传播错误。
+- **2026-11-04 批次 77 历史检查**：Cove 已重排目录，workspace 依赖路径已更新并静态核对 19 个包名。该批次误试一次 `cargo check --workspace`，在旧 Cove 路径解析阶段失败，未开始编译；此后继续遵守此前不运行 Cargo/测试的迁移要求。
 
 - **2026-11-01 批次 74–75**：新增 4 个生产文件为 `written`。未执行新编译器、Cargo、测试或动态库加载；仅格式化、静态源码对照及清单检查。`script_c_bridge_context.rs` 当前只是接线锚点，实体/变换/组件/资源/参数/物理查询等完整 HostApi 条目与加载器仍未落地，对应两行继续 `pending`。
 - SDK ABI 2 目录入口明确为 `diffuse_script_catalog(host)`，以满足 D1 的“宿主分配、宿主释放”要求；不再泄漏脚本 Vec 或跨 DLL 释放脚本分配。所有生命周期与创建/销毁中的 panic 均隔离上报，实例随后停用；HostApi 生命周期必须覆盖 SDK 实例析构，后续加载器须持有该宿主句柄至最终 destroy 返回。现有 SDK 测试未修改或运行，历史验证结论不适用于这些 API 变动。
