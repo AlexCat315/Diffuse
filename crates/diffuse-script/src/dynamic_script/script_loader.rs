@@ -75,6 +75,8 @@ struct LoadedLibrary {
 // pointers into the mapped image; both stay valid for the process lifetime and
 // the loader never mutates them after construction.
 unsafe impl Send for LoadedLibrary {}
+// SAFETY: every field is immutable after construction — the map entries are
+// only read through shared references and the symbol pointers never change.
 unsafe impl Sync for LoadedLibrary {}
 
 /// Owns one SDK script instance and keeps its HostApi world alive.
@@ -100,6 +102,8 @@ struct InstanceGuard {
 // its opaque instance. The last Arc destroys it only after all callbacks end;
 // `host` remains alive through destruction.
 unsafe impl Send for InstanceGuard {}
+// SAFETY: the only mutable state is the opaque instance, and `invocation`
+// serializes every call into it, so shared references never race.
 unsafe impl Sync for InstanceGuard {}
 
 impl Drop for InstanceGuard {

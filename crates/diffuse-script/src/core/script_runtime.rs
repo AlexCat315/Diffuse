@@ -499,9 +499,14 @@ impl ExecutionPhase {
         }
     }
 }
+/// Swift's `invoke(_:script:context:)`: publishes the callback's context for the
+/// duration of the call so the C bridge and `current_script_context()` observe
+/// it, then restores whatever was current before.
 fn invoke(handler: &Option<ScriptCallback>, context: &mut ScriptContext<'_, '_>) {
     if let Some(handler) = handler {
-        handler(context);
+        crate::dynamic_script::script_c_bridge_context::with_script_context(context, |context| {
+            handler(context)
+        });
     }
 }
 

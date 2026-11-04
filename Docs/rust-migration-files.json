@@ -11254,7 +11254,7 @@
       "rust": [
         "crates/diffuse-script/src/controllers/animation_runtime.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11266,7 +11266,7 @@
       "rust": [
         "crates/diffuse-script/src/controllers/camera_controllers.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11278,7 +11278,7 @@
       "rust": [
         "crates/diffuse-script/src/controllers/character_input_controller.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11290,7 +11290,7 @@
       "rust": [
         "crates/diffuse-script/src/core/script_behavior.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11302,7 +11302,7 @@
       "rust": [
         "crates/diffuse-script/src/core/script_component.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -11314,7 +11314,7 @@
       "rust": [
         "crates/diffuse-script/src/core/script_context.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11326,7 +11326,7 @@
       "rust": [
         "crates/diffuse-script/src/core/script_definition.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11338,7 +11338,7 @@
       "rust": [
         "crates/diffuse-script/src/core/script_lifecycle.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11350,7 +11350,7 @@
       "rust": [
         "crates/diffuse-script/src/core/script_runtime.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11363,7 +11363,7 @@
         "crates/diffuse-script/src/dynamic_script/script_c_bridge_character.rs"
       ],
       "d1": "rewrite",
-      "status": "written",
+      "status": "compiled",
       "notes": "D1 完整生产翻译；批次 74–75。按用户要求未编译、未测试。"
     },
     {
@@ -11376,7 +11376,7 @@
         "crates/diffuse-script/src/dynamic_script/script_c_bridge_context.rs"
       ],
       "d1": "rewrite",
-      "status": "written",
+      "status": "compiled",
       "notes": "批次 79：完整接线全部 57 个 HostApi 回调；组件复用 registry 事务校验/回滚，原生资源显式 codec 与场景 JSON 资源，帧状态/车辆/五类物理查询完整转换；删除前编码旧值。未编译、未测试，D1 编辑器与示例等后续迁移仍待续。"
     },
     {
@@ -11389,7 +11389,7 @@
         "crates/diffuse-script/src/dynamic_script/script_c_bridge_input.rs"
       ],
       "d1": "rewrite",
-      "status": "written",
+      "status": "compiled",
       "notes": "D1 完整生产翻译；批次 74–75。按用户要求未编译、未测试。"
     },
     {
@@ -11402,7 +11402,7 @@
         "crates/diffuse-script/src/dynamic_script/script_c_bridge_time.rs"
       ],
       "d1": "rewrite",
-      "status": "written",
+      "status": "compiled",
       "notes": "D1 完整生产翻译；批次 74–75。按用户要求未编译、未测试。"
     },
     {
@@ -11415,7 +11415,7 @@
         "crates/diffuse-script/src/dynamic_script/script_compiler.rs"
       ],
       "d1": "rewrite",
-      "status": "written",
+      "status": "compiled",
       "notes": "D1 完整生产翻译；批次 74–75。按用户要求未编译、未测试。"
     },
     {
@@ -11428,7 +11428,7 @@
         "crates/diffuse-script/src/dynamic_script/script_loader.rs"
       ],
       "d1": "rewrite",
-      "status": "written",
+      "status": "compiled",
       "notes": "D1 加载器完整实现：版本先验校验、严格目录解析、显式多脚本选择、可失败实例工厂、元数据与代次原子替换、平台动态加载和互斥生命周期。批次 78；通用 HostApi 其余条目仍待续，未编译、未测试。"
     },
     {
@@ -11440,7 +11440,7 @@
       "rust": [
         "crates/diffuse-script/src/input/default_input_actions.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11452,7 +11452,7 @@
       "rust": [
         "crates/diffuse-script/src/input/input_state_processor.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11464,7 +11464,7 @@
       "rust": [
         "crates/diffuse-script/src/interop/component_registry_script_codec.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -11476,7 +11476,7 @@
       "rust": [
         "crates/diffuse-script/src/interop/scene_serializer_script_support.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11488,7 +11488,7 @@
       "rust": [
         "crates/diffuse-script/src/interop/script_debug_state.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11500,7 +11500,7 @@
       "rust": [
         "crates/diffuse-script/src/presets/script_preset_catalog.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11512,7 +11512,7 @@
       "rust": [
         "crates/diffuse-script/src/presets/script_preset_definitions.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -11524,7 +11524,7 @@
       "rust": [
         "crates/diffuse-script/src/presets/script_presets.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "完整生产翻译；批次 70–72，按用户要求未编译、未测试。"
     },
     {
@@ -13043,7 +13043,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/animation_runtime_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/CameraControllerTests.swift",
@@ -13054,7 +13054,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/camera_controller_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/CharacterControllerTests.swift",
@@ -13087,7 +13087,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/input_state_lifecycle_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptCBridgeContextTests.swift",
@@ -13098,7 +13098,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_c_bridge_context_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptCatalogRuntimeTests.swift",
@@ -13109,7 +13109,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_catalog_runtime_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptComponentRegistryTests.swift",
@@ -13120,7 +13120,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_component_registry_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptDefinitionTests.swift",
@@ -13131,7 +13131,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_definition_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptParameterTests.swift",
@@ -13142,7 +13142,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_parameter_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptPresetsTests.swift",
@@ -13153,7 +13153,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_presets_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptRuntimeLifecycleTests.swift",
@@ -13164,7 +13164,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_runtime_lifecycle_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptRuntimeQueryTests.swift",
@@ -13175,7 +13175,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_runtime_query_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptSpawningTests.swift",
@@ -13186,7 +13186,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_spawning_tests.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/SwiftScriptCompilerTests.swift",

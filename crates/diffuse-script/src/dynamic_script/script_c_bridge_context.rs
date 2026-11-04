@@ -126,6 +126,72 @@ pub(crate) fn with_host_context<R>(
     result
 }
 
+/// Swift's `coveSetCurrentScriptContext(context)` / `defer { …(previous) }` pair.
+///
+/// `ScriptRuntime.invoke` publishes every callback's context — D1 and built-in
+/// alike — so bridge functions and `current_script_context()` agree during the
+/// call and the outer frame is restored afterwards, including on unwinding.
+///
+/// The frame carries a null host: a built-in callback has no SDK HostApi
+/// instance, so [`with_current_context`] correctly refuses to lend it to bridge
+/// calls made with a real instance pointer.
+pub(crate) fn with_script_context<R>(
+    context: &mut ScriptContext<'_, '_>,
+    body: impl FnOnce(&mut ScriptContext<'_, '_>) -> R,
+) -> R {
+    let frame = Rc::new(Invocation {
+        host: std::ptr::null_mut(),
+        context: (context as *mut ScriptContext<'_, '_>).cast(),
+        borrowed: Cell::new(false),
+    });
+    INVOCATIONS.with(|frames| frames.borrow_mut().push(frame.clone()));
+    let scope = InvocationScope(frame);
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| body(context)));
+    drop(scope);
+    match result {
+        Ok(value) => value,
+        Err(payload) => std::panic::resume_unwind(payload),
+    }
+}
+
+/// Swift's `_coveCurrentScriptContext`: the context of the callback running on
+/// this thread, or `None` outside one.
+///
+/// Swift's bridge files read this property directly; Rust's do so through
+/// [`with_current_context`], which also routes by host instance. This accessor
+/// therefore exists for the callback-context tests that assert the same
+/// invariant Swift checks by identity.
+///
+/// Swift stores a `ScriptContext?` in the thread dictionary; Rust keeps the
+/// invocation stack and hands back the top frame's context address. The address
+/// is only compared, never dereferenced, so the borrow it names cannot leak.
+#[cfg(test)]
+pub(crate) fn current_script_context() -> Option<*mut c_void> {
+    INVOCATIONS.with(|frames| frames.borrow().last().map(|frame| frame.context))
+}
+
+/// Swift's zero-argument `coveDeltaTime`: the running callback's delta time as a
+/// `Float`, or `0` outside a callback.
+///
+/// The exported ABI entry [`super::script_c_bridge_time::cove_delta_time`] takes
+/// the host instance because the table is per-host; this reads the same value
+/// through the thread's current frame, which is what Swift's thread-dictionary
+/// lookup does. It exists for the callback-context tests, which observe the
+/// value the way an SDK script would.
+#[cfg(test)]
+pub(crate) fn current_delta_time() -> f32 {
+    INVOCATIONS.with(|frames| {
+        let frames = frames.borrow();
+        let Some(frame) = frames.last() else {
+            return 0.0;
+        };
+        // SAFETY: the frame's context is a live `ScriptContext` owned by the
+        // callback on this thread; only its `delta_time` field is read.
+        let context = unsafe { &*frame.context.cast::<ScriptContext<'_, '_>>() };
+        context.delta_time as f32
+    })
+}
+
 /// Null, inactive, foreign-thread and reentrant handles preserve the Swift bridge fallback.
 pub(crate) fn with_current_context<R>(
     host: *mut c_void,

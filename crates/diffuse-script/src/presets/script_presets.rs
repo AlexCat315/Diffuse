@@ -88,7 +88,10 @@ impl Script {
             let radius = context
                 .float_parameter("arrivalRadius")
                 .unwrap_or(arrival_radius);
-            if !(distance > radius) {
+            // Swift's `guard distance > radius else`: NaN must also stop.
+            #[allow(clippy::neg_cmp_op_on_partial_ord)]
+            let outside = distance > radius;
+            if !outside {
                 return;
             }
             let speed = context.float_parameter("speed").unwrap_or(speed);
@@ -114,7 +117,10 @@ impl Script {
                 return;
             };
             let direction = simd_normalize(target_world.translation() - world.translation());
-            if !(simd_length(direction) > 1e-6) {
+            // Swift's `guard simd_length(direction) > 1e-6 else`: NaN must also stop.
+            #[allow(clippy::neg_cmp_op_on_partial_ord)]
+            let usable = simd_length(direction) > 1e-6;
+            if !usable {
                 return;
             }
             let rotation = Quatf::from_to(forward, direction);

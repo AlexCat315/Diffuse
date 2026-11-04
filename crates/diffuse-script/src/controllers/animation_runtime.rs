@@ -376,7 +376,10 @@ fn clip_duration(clip: &MeshAnimation) -> f64 {
         .unwrap_or(0.0)
 }
 fn normalized(time: f64, duration: f64, loop_: bool) -> f64 {
-    if !(duration > 0.0) {
+    // Swift's `guard duration > 0 else`: a NaN duration must return the raw time.
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
+    let positive = duration > 0.0;
+    if !positive {
         return time;
     }
     if loop_ {
@@ -386,7 +389,10 @@ fn normalized(time: f64, duration: f64, loop_: bool) -> f64 {
     }
 }
 fn wrapped(time: f64, duration: f64) -> f64 {
-    if !(duration > 0.0) {
+    // Swift's `guard duration > 0 else`: a NaN duration must return the raw time.
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
+    let positive = duration > 0.0;
+    if !positive {
         return time;
     }
     let mut value = time % duration;
