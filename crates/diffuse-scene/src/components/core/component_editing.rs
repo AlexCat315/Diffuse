@@ -114,8 +114,60 @@ impl SceneRuntime {
         entity: EntityID,
         mode: ComponentWriteMode,
     ) -> Result<(), ComponentEditFailure> {
+        self.world_mut()
+            .set_component_data(value, type_id, entity, mode)
+    }
+
+    /// Installs a schema's default component and its dependencies.
+    pub fn add_component(
+        &mut self,
+        type_id: &str,
+        entity: EntityID,
+    ) -> Result<(), ComponentEditFailure> {
         let schema = self
             .component_registry()
+            .get(type_id)
+            .cloned()
+            .ok_or_else(|| ComponentEditError::UnknownType(type_id.to_string()))?;
+        make_default_component(self.world_mut(), &schema, entity)
+    }
+
+    /// Removes one component, refusing when it is not present.
+    pub fn remove_component_data(
+        &mut self,
+        type_id: &str,
+        entity: EntityID,
+    ) -> Result<(), ComponentEditFailure> {
+        let schema = self
+            .component_registry()
+            .get(type_id)
+            .cloned()
+            .ok_or_else(|| ComponentEditError::UnknownType(type_id.to_string()))?;
+        let world = self.world_mut();
+        if !(schema.has)(world, entity) {
+            return Err(ComponentEditError::MissingComponent(type_id.to_string()).into());
+        }
+        (schema.remove)(entity, world);
+        Ok(())
+    }
+}
+
+/// Registry editing shared by editor transactions and script phase contexts.
+impl RuntimeWorld {
+    pub fn component_data(&self, type_id: &str, entity: EntityID) -> Option<ComponentValue> {
+        let schema = self.component_registry.get(type_id)?;
+        component_data_in(self, schema, entity)
+    }
+
+    pub fn set_component_data(
+        &mut self,
+        value: &ComponentValue,
+        type_id: &str,
+        entity: EntityID,
+        mode: ComponentWriteMode,
+    ) -> Result<(), ComponentEditFailure> {
+        let schema = self
+            .component_registry
             .get(type_id)
             .cloned()
             .ok_or_else(|| ComponentEditError::UnknownType(type_id.to_string()))?;
@@ -149,8 +201,8 @@ impl SceneRuntime {
             normalized.clone()
         };
 
-        let mut context = ComponentDecodeContext::new(entity_map(self.world()));
-        let mut edited = self.world().clone();
+        let mut context = ComponentDecodeContext::new(entity_map(self));
+        let mut edited = self.clone();
         let requirements = edited.component_registry.required_schemas(type_id)?;
         ensure_required_components(&mut edited, &requirements, entity)?;
         for other in &schema.incompatible_with {
@@ -175,40 +227,7 @@ impl SceneRuntime {
         {
             return Err(ComponentEditError::InvalidValue(type_id.to_string()).into());
         }
-        *self.world_mut() = edited;
-        Ok(())
-    }
-
-    /// Installs a schema's default component and its dependencies.
-    pub fn add_component(
-        &mut self,
-        type_id: &str,
-        entity: EntityID,
-    ) -> Result<(), ComponentEditFailure> {
-        let schema = self
-            .component_registry()
-            .get(type_id)
-            .cloned()
-            .ok_or_else(|| ComponentEditError::UnknownType(type_id.to_string()))?;
-        make_default_component(self.world_mut(), &schema, entity)
-    }
-
-    /// Removes one component, refusing when it is not present.
-    pub fn remove_component_data(
-        &mut self,
-        type_id: &str,
-        entity: EntityID,
-    ) -> Result<(), ComponentEditFailure> {
-        let schema = self
-            .component_registry()
-            .get(type_id)
-            .cloned()
-            .ok_or_else(|| ComponentEditError::UnknownType(type_id.to_string()))?;
-        let world = self.world_mut();
-        if !(schema.has)(world, entity) {
-            return Err(ComponentEditError::MissingComponent(type_id.to_string()).into());
-        }
-        (schema.remove)(entity, world);
+        *self = edited;
         Ok(())
     }
 }

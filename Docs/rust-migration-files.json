@@ -11363,8 +11363,8 @@
         "crates/diffuse-script/src/dynamic_script/script_c_bridge_context.rs"
       ],
       "d1": "rewrite",
-      "status": "pending",
-      "notes": "D1 已有线程上下文、allocator、错误状态及29个通用HostApi条目（实体/层级/完整矩阵/参数/Prefab/画布/状态）；组件、资源、输入与触发帧、车辆和物理查询仍待接线，保持 pending。批次 78；未编译、未测试。"
+      "status": "written",
+      "notes": "批次 79：完整接线全部 57 个 HostApi 回调；组件复用 registry 事务校验/回滚，原生资源显式 codec 与场景 JSON 资源，帧状态/车辆/五类物理查询完整转换；删除前编码旧值。未编译、未测试，D1 编辑器与示例等后续迁移仍待续。"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/DynamicScript/ScriptCBridgeInput.swift",

@@ -49,6 +49,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
+name = "cmake"
+version = "0.1.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "cove-agent"
 version = "0.3.0-dev"
 dependencies = [
@@ -98,6 +107,7 @@ dependencies = [
  "cc",
  "cove-platform",
  "serde",
+ "taffy",
  "thiserror",
  "unicode-general-category",
  "unicode-segmentation",
@@ -179,6 +189,7 @@ version = "0.3.0-dev"
 dependencies = [
  "cove-composition",
  "cove-core",
+ "cove-devtools",
  "cove-graphics",
  "cove-http",
  "cove-imaging",
@@ -208,6 +219,7 @@ version = "0.3.0-dev"
 dependencies = [
  "cc",
  "cove-core",
+ "cove-native-build",
  "thiserror",
 ]
 
@@ -220,6 +232,14 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "cove-native-build"
+version = "0.3.0-dev"
+dependencies = [
+ "cc",
+ "cmake",
 ]
 
 [[package]]
@@ -247,9 +267,14 @@ dependencies = [
 name = "cove-shell"
 version = "0.3.0-dev"
 dependencies = [
+ "block2",
  "cc",
  "cove-logging",
+ "cove-native-build",
  "cove-platform",
+ "libc",
+ "objc2",
+ "objc2-app-kit",
  "thiserror",
 ]
 
@@ -284,6 +309,7 @@ version = "0.3.0-dev"
 dependencies = [
  "cc",
  "cove-core",
+ "cove-native-build",
  "thiserror",
  "unicode-general-category",
  "unicode-segmentation",
@@ -343,6 +369,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -724,6 +751,8 @@ dependencies = [
  "diffuse-kernel",
  "diffuse-math",
  "diffuse-scene",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -758,12 +787,17 @@ dependencies = [
 name = "diffuse-script"
 version = "0.1.0"
 dependencies = [
+ "cove-system",
  "diffuse-assets",
  "diffuse-kernel",
  "diffuse-math",
  "diffuse-scene",
  "diffuse-script-api",
+ "libc",
+ "serde",
  "serde_json",
+ "thiserror",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -1223,6 +1257,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
+name = "slotmap"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
+name = "smallvec"
+version = "1.16.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1242,6 +1291,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "taffy"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31f7bd2d97198df05186f93a3a3c306845f40e8b3c22bf9279cdd7e5cf5fea7d"
+dependencies = [
+ "serde",
+ "slotmap",
+ "smallvec",
 ]
 
 [[package]]

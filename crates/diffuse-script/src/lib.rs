@@ -19,7 +19,9 @@ pub use core::script_definition::{
 };
 pub use core::script_lifecycle::{Script, ScriptCallback};
 pub use core::script_runtime::ScriptRuntime;
-pub use dynamic_script::script_c_bridge_context::ScriptErrorState;
+pub use dynamic_script::script_c_bridge_context::{
+    ScriptBridgeError, ScriptErrorState, ScriptResourceRegistry,
+};
 pub use dynamic_script::script_compiler::{
     CompilationResult, ScriptCompilationCancellationToken, ScriptCompileError, ScriptCompiler,
     ScriptCompilerDiagnostic,

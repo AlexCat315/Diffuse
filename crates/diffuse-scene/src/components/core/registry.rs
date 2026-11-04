@@ -375,6 +375,19 @@ impl ComponentRegistry {
         self.schemas.iter().find(|schema| schema.type_id == type_id)
     }
 
+    /// Stable schema ID or an unambiguous runtime type name, including structural types.
+    pub fn schema_named(&self, name: &str) -> Option<&ComponentSchema> {
+        if let Some(schema) = self.get(name) {
+            return Some(schema);
+        }
+        let mut matches = self.schemas.iter().filter(|schema| {
+            schema.runtime_type_name == name
+                || schema.runtime_type_name.rsplit("::").next() == Some(name)
+        });
+        let schema = matches.next()?;
+        matches.next().is_none().then_some(schema)
+    }
+
     pub fn schema_for<C: RuntimeComponent>(&self) -> Option<&ComponentSchema> {
         let key = ComponentTypeKey::of::<C>();
         self.schemas

@@ -341,14 +341,18 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 ### `diffuse-script-api`（新建；本轮属性/JSON 修订后为 `written`，未重新验证）
 
-- `abi`：`HostApi`（函数表；当前 ABI 2，含 allocate/free/report_error）、`Slice`、`Bytes`、`Color4`(16/4)、`Transform3`(48/16)、`GroundState`、`CharacterStance`、`ABI_VERSION`。SDK 使用独立 `0.1.0` 包版本。
+- `abi`：`HostApi`（函数表；当前 ABI 3，57 个回调，含 allocate/free/report_error）、`Slice`、`Bytes`、`Color4`(16/4)、`Transform3`(64/16，完整矩阵)、`GroundState`、`CharacterStance`、`ABI_VERSION`。SDK 使用独立 `0.1.0` 包版本。
 - `context::ScriptContext`（隐藏 `HostApi` 的安全封装，缺项保持 Swift 的 0/false 回退）。
 - `authoring`：`ScriptBehavior`、`ScriptAuthoring`、`ScriptDefinition`、`ScriptProperty`、`ScriptPropertyOption`、`ScriptPropertyValue`、`ScriptParameters`、`ScriptDefinitionBuilder`、`authoring::json::{JsonValue, JsonObject, parse, parse_object}`。
 - `export`：`diffuse_script_abi_version/create/on_start/on_pre_physics/on_update/on_destroy/destroy`、`CatalogEntry`、`catalog_bytes`、`diffuse_scripts!` 宏。
 
-### `diffuse-script`（原生脚本核心已 `written`；动态脚本管线待 D1 改写）
+### `diffuse-script`（原生/动态脚本生产代码已 `written`；D1 下游与内容待续）
 
-2026-11-04 D1 增量（批次 78，未编译/测试）：`ScriptLoader::load_factory(id, path)` 仅接受单脚本目录；多脚本使用 `load_named_factory(id, path, name)`。`ScriptFactory = Arc<dyn Fn() -> Result<Script, ScriptLoadError> + Send + Sync>`，调用方必须处理创建失败后再注册返回的 Script。目录/选择失败不会替换旧代次，`definition(id)` 返回所选脚本的元数据，实例与工厂持有原动态库。HostApi ABI 为当前 SDK 的 3；通用桥接新增 29 项但尚未完整，见 §10。
+2026-11-04 D1 增量（批次 78–79，未编译/测试）：`ScriptLoader::load_factory(id, path)` 仅接受单脚本目录；多脚本使用 `load_named_factory(id, path, name)`。`ScriptFactory = Arc<dyn Fn() -> Result<Script, ScriptLoadError> + Send + Sync>`，调用方必须处理创建失败后再注册返回的 Script。目录/选择失败不会替换旧代次，`definition(id)` 返回所选脚本的元数据，实例与工厂持有原动态库。ABI 3 的 57 个 HostApi 回调现已全部接线。
+
+- `ScriptResourceRegistry::{new, register_json::<R>, register_codec::<R>}`：原生资源在执行脚本前注册并通过 `world.set_resource(registry)` 安装；前者要求已有 serde 形状，后者接受明确的 encode/decode 函数。内置 codec 覆盖 InputActionMap、InputFrameState、InGameCanvas、TriggerFrameResource、CharacterStateFrameResource、VehicleCommandFrameResource、ScriptDebugState、两个角色落地/离地事件和 ScriptAuthoringDefaults。其他原生资源须在运行脚本前注册相同名称；未注册的名称存为场景内共享、值复制的 JSON 资源，不与原生 Rust 类型自动互通。
+- `ScriptBridgeError` 与 `ScriptResourceRegistry` 从 crate 根导出。组件接受稳定 schema ID、完整 Rust 类型名或无歧义短类型名；只暴露已有 registry codec 的组件，保留实体引用的有符号原始位模式与事务编码语义。`RuntimeWorld::{component_data,set_component_data}` 与 SceneRuntime 共用原编辑器校验/依赖/回滚路径；world-space 组件读取先刷新层级。脚本组件 codec 在首次宿主回调前注册。
+- 新 ABI JSON 只用于脚本互通，不改变落盘格式：向量为裸数组，字段 camelCase；查询 shape 如 `{"box":{"halfExtents":[1,1,1]}}`，filter 的缺省值与原查询类型相同；InputActionMap 的 binding 用 `type` 标签（例如 `{"type":"key","scancode":44}`），鼠标/手柄枚举采用 Cove 的 serde 名称。角色 groundState/stance 为原始整数，帧资源实体字典使用原始 u64 的规范十进制字符串键。所有命中字段、三类触发事件、所有车辆命令字段均保留。
 
 - 根导出 `Script`、`ScriptCallback`、`ScriptBehavior`、`ScriptAuthoring`、`ScriptContext<'phase, 'world>`、`ScriptDefinition`、`ScriptProperty`、`ScriptPropertyValue`、`ScriptPropertyOption`、`ScriptParameterIssue`、`ScriptRuntime`、`ScriptVar`、`ScriptPresetKind`、`AnimationRuntime`。
 - `ScriptRuntime` 的 Clone 保留 Swift class 的共享实例；`register_factory` 每绑定构造状态，`register` 保留共享回调，`register_authoring_behavior` 显式选择可选的 authoring trait（Rust 无 Swift 元类型协议转换）。暂停开关通过 `is_gameplay_execution_enabled/set_gameplay_execution_enabled` 访问；回调执行时不持有注册表锁。
@@ -573,11 +577,12 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-04 | 批次 76 | diffuse-render Core 帧/光照/网格/粒子（队友） | 25 | 2164 | RenderBackend/Core 的 25 个生产文件全部 `written`（frame 5、lighting 7、mesh 6、particles 5、render_stats、render_temporal_state）；GPU 布局断言 23 组（SceneLightUniforms 544、ShadowUniforms 384、EditorGridUniforms 192、MeshInstanceUniforms 160、GPUParticleSimulationUniforms 272、GPUParticleSimulationInstanceUniforms 240 等，均与 .slang 结构一致）；OpaqueSceneFingerprint 以固定 FNV 累加器替代 Swift 进程内 Hasher。按用户要求不编译不测试，仅 rustfmt 与 `inventory.py --check`（0 problem(s)） |
 | 2026-11-04 | 批次 77 | Cove 路径与脚本加载器修正 | 0 完成 | — | workspace 的 Cove 依赖切到当前 `crates/` 目录；脚本实例回调加互斥、修正 Windows API 声明与符号指针转换，释放零长度目录缓冲区。加载器仍有多脚本选择、失败报告及 HostApi 接线缺口，清单退回 `pending`；没有将部分实现标为完成。 |
 | 2026-11-04 | 批次 78 | Natsel G8 与 D1 加载器/通用桥接 | 1 完成 + 1 部分 | 154 + 30 | 用户授权下在 Natsel 补 `World: Send`、短借用角色世界句柄、`from_raw_world` 和 `world_mut`；修正 Diffuse 的多角色安全注释，并补 §2.2 的 Natsel release 溢出设置。加载器完整 `written`：先验 ABI 校验、目录严格校验、显式多脚本选择、可失败工厂、代次/元数据同锁替换。通用桥接新增 29 项（实体/层级/矩阵/参数/Prefab/画布/状态），其余待续，仍 `pending`。只做 Rust 格式化与静态检查，未运行 Cargo/测试。 |
+| 2026-11-04 | 批次 79 | D1 通用脚本桥接收尾 | 1 + 2 支持文件 | 30 | 剩余 16 个回调全部接线，共 57/57；组件复用 registry 事务校验与回滚，移除前编码/分配旧值；原生资源 codec 注册、10 类内置资源和场景 JSON 资源；输入/触发/角色状态、车辆命令及五种物理查询完整转换。通用桥接从 pending 提升 written，生产文件均 written，测试仍待续；未编译/运行测试，仅格式化、源码对照、函数表覆盖与清单检查。 |
 
 ## 10. 已知问题与需要用户确认的事项
 
 - **2026-11-04 批次 78**：Natsel G8 的实现已按用户本轮授权补齐，见 [G8](.migration/cove-gaps.md)，尚未编译或测试。未修改 Cove，未新增第三方依赖。Natsel changelog 与迁移记录同步更新；本次没有发布新版本。
-- **D1 通用桥接仍未完成**：实体、层级、完整 64 字节矩阵、参数、Prefab、画布与状态条目已接线；组件/资源、输入与触发帧、完整角色状态、车辆命令、五种物理查询条目待续，文件继续 `pending`。空名称和未提供名称、空字符串和缺失参数、实体 0 和缺失实体均用显式存在标志区分。加载器现已完整 `written`，不代表整个 D1 管线完成；其可失败工厂签名在 §8 登记，后续编辑器调用方必须传播错误。
+- **D1 通用桥接批次 79 已 written，未验证**：全部 57 个回调均已有实现；原生自定义资源必须提前注册 codec，原生自定义组件必须有 registry codec，完整规则见 §8。空名称和未提供名称、空字符串和缺失参数、实体 0 和缺失实体均用显式存在标志区分；资源/组件删除返回旧值，编码失败保留原值。加载器与桥接生产代码完整不代表整个 D1 迁移完成：测试、编辑器调用方、Rust 插件、模板与示例仍须按清单迁移；可失败工厂的调用方必须传播错误。
 - **2026-11-04 批次 77 历史检查**：Cove 已重排目录，workspace 依赖路径已更新并静态核对 19 个包名。该批次误试一次 `cargo check --workspace`，在旧 Cove 路径解析阶段失败，未开始编译；此后继续遵守此前不运行 Cargo/测试的迁移要求。
 
 - **2026-11-01 批次 74–75**：新增 4 个生产文件为 `written`。未执行新编译器、Cargo、测试或动态库加载；仅格式化、静态源码对照及清单检查。`script_c_bridge_context.rs` 当前只是接线锚点，实体/变换/组件/资源/参数/物理查询等完整 HostApi 条目与加载器仍未落地，对应两行继续 `pending`。
