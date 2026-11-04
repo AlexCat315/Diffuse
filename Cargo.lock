@@ -767,6 +767,9 @@ dependencies = [
  "diffuse-math",
  "diffuse-render",
  "diffuse-scene",
+ "libc",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]

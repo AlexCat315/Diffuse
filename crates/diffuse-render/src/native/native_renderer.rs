@@ -138,6 +138,7 @@ impl NativeRenderer {
             Ok(pass)
         })()
         .inspect_err(|_| meshes.destroy())?;
+        let deformables = NativeDeformableMeshes::new(device);
         let lighting = NativeLightingResources::new(device).inspect_err(|_| {
             mesh_pass.destroy();
             meshes.destroy();

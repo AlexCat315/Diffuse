@@ -6617,7 +6617,8 @@
       "rust": [
         "crates/diffuse-render-validation/benches/render_backend.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Benchmarks/SceneRuntimeBenchmarks/main.swift",
@@ -8319,7 +8320,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/bin/native_rhi_pass_probe.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/NativePassBenchmark.swift",
@@ -8330,7 +8332,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/native_pass_benchmark.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Probes/AnimatedProbeScene.swift",
@@ -8341,7 +8344,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/probes/animated_probe_scene.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Probes/GridProbeScene.swift",
@@ -8352,7 +8356,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/probes/grid_probe_scene.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Probes/MeshProbeScene.swift",
@@ -8363,7 +8368,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/probes/mesh_probe_scene.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Probes/PBRProbeScene.swift",
@@ -8374,7 +8380,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/probes/pbr_probe_scene.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Probes/ParticleProbeScene.swift",
@@ -8385,7 +8392,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/probes/particle_probe_scene.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Probes/ParticleSimulationProbeScene.swift",
@@ -8396,7 +8404,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/probes/particle_simulation_probe_scene.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Probes/PostProbeScene.swift",
@@ -8407,7 +8416,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/probes/post_probe_scene.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Probes/StylizedProbeScene.swift",
@@ -8418,7 +8428,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/probes/stylized_probe_scene.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Reference/GridImage.swift",
@@ -8429,7 +8440,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/reference/grid_image.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/NativeRendererValidation/Reference/SceneCapture.swift",
@@ -8440,7 +8452,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/reference/scene_capture.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "批次 80：生产迁移；原生探针/回读/基准与报告流程完整实现。仅 rustfmt、静态源码对照与清单检查；未编译、未运行 GPU、基准或测试。"
     },
     {
       "source": "Engine/Sources/ObservationBus/ColdLog.swift",

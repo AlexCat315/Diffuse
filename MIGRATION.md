@@ -482,6 +482,13 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - 静态对照发现并修复两处旧接线偏差：`set_physics_backend` 原来保存显式 backend 后却实际安装另一个 preferred backend；`ensure_configured_physics_backend` 原来分别创建 simulation/query/shared 三个实例，导致共享身份判断恒为 false。现在显式 override 真正参与模拟，默认模拟与查询复用 Swift 的同一个 shared backend；初始 active backend 按 Swift 为 Null，shared/query backend 为 preferred。
 - `JobSystem` 的 Rust 状态仅有只读配置对应的 worker 数和最小 chunk size，新增配置值 `Clone` 以支持 schedule 副本；该源文件旧 `tested` 状态已退回 `written`。`SceneStateAssertion::failure_description` 的全部 39 个状态分支已补齐，失败消息与 Swift 一致。
 
+### `diffuse-render-validation`（13 个生产文件已 `written`，未编译/运行）
+
+- 根导出 `NativePassBenchmark::run(&[String])`、`NativeValidationError`、`PassTimingDistribution`、`PassBenchmarkResult`、`PassParticleWork`、`PassParticleSimulationWork`，以及八个 probe scene、`GridImage`、`GridImageDifference`、`SceneCapture`。
+- 每个 probe 的 `packet(size, frame)` 显式传帧，Grid 额外接收 `Option<RenderCamera>`。Mesh 的 `imported_fixture()` 用既有 RenderBackend bundle；Animated 的 `skinned_fixture()` 由基准 RAII 注册/撤销到共享 registry 的 index 2。
+- `SceneCapture::new(validation, api, in_game_ui)`、`render(&mut self, &RenderPacket)`、`finish()`、`readback()` 直接使用 Cove RHI；回读期间持有 viewport image 的资源租约。`GridImage::{readback,write_ppm,difference}` 处理 BGRA 回读、RGB PPM 和忽略 alpha 的逐通道比较。
+- CLI `native_rhi_pass_probe` 默认 grid；独立 `render_backend` bench 默认 mesh。完整保留 1280×720、180 帧、30 预热帧、3 次重复、每三帧 GPU 完成、最近秩 p50/p95、工作量一致性、PPM 与报告先写出再检查图像阈值。报告使用既有 Swift JSON pretty/sorted 格式化器；控制台信息统一走 cove_logging。
+
 ## 9. 进度与批次日志
 
 `python3 Tools/Migration/inventory.py --status` 输出各 crate 的计数；每个批次在下面追加一行：
@@ -578,8 +585,13 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-04 | 批次 77 | Cove 路径与脚本加载器修正 | 0 完成 | — | workspace 的 Cove 依赖切到当前 `crates/` 目录；脚本实例回调加互斥、修正 Windows API 声明与符号指针转换，释放零长度目录缓冲区。加载器仍有多脚本选择、失败报告及 HostApi 接线缺口，清单退回 `pending`；没有将部分实现标为完成。 |
 | 2026-11-04 | 批次 78 | Natsel G8 与 D1 加载器/通用桥接 | 1 完成 + 1 部分 | 154 + 30 | 用户授权下在 Natsel 补 `World: Send`、短借用角色世界句柄、`from_raw_world` 和 `world_mut`；修正 Diffuse 的多角色安全注释，并补 §2.2 的 Natsel release 溢出设置。加载器完整 `written`：先验 ABI 校验、目录严格校验、显式多脚本选择、可失败工厂、代次/元数据同锁替换。通用桥接新增 29 项（实体/层级/矩阵/参数/Prefab/画布/状态），其余待续，仍 `pending`。只做 Rust 格式化与静态检查，未运行 Cargo/测试。 |
 | 2026-11-04 | 批次 79 | D1 通用脚本桥接收尾 | 1 + 2 支持文件 | 30 | 剩余 16 个回调全部接线，共 57/57；组件复用 registry 事务校验与回滚，移除前编码/分配旧值；原生资源 codec 注册、10 类内置资源和场景 JSON 资源；输入/触发/角色状态、车辆命令及五种物理查询完整转换。通用桥接从 pending 提升 written，生产文件均 written，测试仍待续；未编译/运行测试，仅格式化、源码对照、函数表覆盖与清单检查。 |
+| 2026-11-04 | 批次 80 | diffuse-render-validation 生产代码 | 13 | 597 | 8 个 probe、回读/图像比较、SceneCapture、完整多后端基准和两个命令入口均 written；保留 warmup/三帧同步/分位数/工作量及图像阈值。复用 workspace serde/thiserror/libc，未引入新包；补 NativeRenderer 缺失的 NativeDeformableMeshes 初始化。仅格式化、源码对照与静态清单检查；未运行编译、GPU、基准或测试，20 个测试文件仍 pending。 |
 
 ## 10. 已知问题与需要用户确认的事项
+
+- **2026-11-04 批次 80**：`diffuse-render-validation` 的 13 个生产文件全部 `written`；上游仍未过编译门禁，本批次没有提升 compiled/tested。基准是待用户后续验证的生产工具，本轮没有执行其渲染或计时流程；测试源码未改动。
+- 该 crate 新增引用 workspace 已有的 serde、thiserror、libc（Cargo.lock 只补该包的三个依赖名，没有新第三方包）；分别用于 Codable 报告、联合错误类型和 Unix 系统版本查询。Apple 用 sysctl、Linux/Android 等 Unix 用 uname、Windows 用 RtlGetVersion，均有实现；报告的 operatingSystem 是原生版本描述，非 Apple 平台不保证 Foundation 的描述措辞逐字一致。UTC measuredAt 保持整秒 ISO8601，报告字段与浮点写出格式保留。
+- 静态对照发现既有 `NativeRenderer::build` 在 Rust 漏了 Swift 构造函数里的 `NativeDeformableMeshes(device:)`；已按原位置补齐初始化，没有改动渲染算法。两个探针入口已替换脚手架空入口。
 
 - **2026-11-04 批次 78**：Natsel G8 的实现已按用户本轮授权补齐，见 [G8](.migration/cove-gaps.md)，尚未编译或测试。未修改 Cove，未新增第三方依赖。Natsel changelog 与迁移记录同步更新；本次没有发布新版本。
 - **D1 通用桥接批次 79 已 written，未验证**：全部 57 个回调均已有实现；原生自定义资源必须提前注册 codec，原生自定义组件必须有 registry codec，完整规则见 §8。空名称和未提供名称、空字符串和缺失参数、实体 0 和缺失实体均用显式存在标志区分；资源/组件删除返回旧值，编码失败保留原值。加载器与桥接生产代码完整不代表整个 D1 迁移完成：测试、编辑器调用方、Rust 插件、模板与示例仍须按清单迁移；可失败工厂的调用方必须传播错误。
@@ -609,7 +621,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
   - 结论：字节一致**只**对 `.sortedKeys` 写出器有定义；默认格式化的写出器**没有任何稳定字节目标**（既不是声明顺序也不是字母序），不要尝试复现，也不要假设任何顺序。所有落盘格式测试必须显式声明 `.sortedKeys`。
   - **记录两次误判**（同一个陷阱，两个方向）：先有人用「`maxBodies` 恰好字母序在前」推出「声明顺序」；我随后用 2 键结构验证并「证伪」为「显式 `CodingKeys` 用声明顺序」——2 键只有 2 种排列，单进程内种子稳定，于是两种解释都能自洽。**不要用 <3 键或单进程的样例推断序列化规则。**
 - 无 macOS 之外的平台上无法执行的分支（例如 `diffuse-documents` 的非 macOS 归档路径）按 §2.3 保留完整 `#[cfg]` 实现；只在本机可执行的分支上跑过测试，其余需在对应平台复核。
-- **阶段 0 脚手架的占位入口**：下列文件目前只有可编译的最小 `fn main() {}`，其 Swift 源仍在清单里是 `pending`，翻译时必须整体替换，不能保留空体：`crates/diffuse-editor/src/main.rs`（`Editor/Sources/EditorApp/main.swift`）、`crates/diffuse-player/src/main.rs`（`CovePlayer/main.swift`）、`crates/diffuse-export/src/main.rs`（`CoveProjectExport/main.swift`）、`crates/diffuse-plugin-host/src/main.rs`、`crates/diffuse-mcp/src/main.rs`、`crates/diffuse-render-validation/src/bin/native_rhi_pass_probe.rs`、`crates/diffuse-editor-core/src/bin/language_server_fixture.rs`。三个 bench 入口已不再属于占位：`diffuse-scene/benches/{scene_runtime,physics_runtime}.rs` 在批次 52 完成（`harness = false`，场景/预算/打印行与 Swift 对齐），`diffuse-render-validation/benches/render_backend.rs` 见该 crate 的批次日志。
+- **阶段 0 脚手架的占位入口**：下列文件目前只有可编译的最小 `fn main() {}`，其 Swift 源仍在清单里是 `pending`，翻译时必须整体替换，不能保留空体：`crates/diffuse-editor/src/main.rs`（`Editor/Sources/EditorApp/main.swift`）、`crates/diffuse-player/src/main.rs`（`CovePlayer/main.swift`）、`crates/diffuse-export/src/main.rs`（`CoveProjectExport/main.swift`）、`crates/diffuse-plugin-host/src/main.rs`、`crates/diffuse-mcp/src/main.rs`、`crates/diffuse-editor-core/src/bin/language_server_fixture.rs`。三个 bench 入口已不再属于占位：`diffuse-scene/benches/{scene_runtime,physics_runtime}.rs` 在批次 52 完成（`harness = false`，场景/预算/打印行与 Swift 对齐），`diffuse-render-validation/benches/render_backend.rs` 见该 crate 的批次日志。
 - **Swift `JSONEncoder` 的浮点文本格式与 serde_json 不同（已实测 Swift 6.4.1）**：`100.0` 写 `100`、`1e20` 写 `1e+20`、`1e-7` 写 `1e-07`、`-0.0` 写 `-0`；serde_json 分别写 `100.0`、`1e20`、`1e-7`、`-0.0`。因此 `#[derive(Serialize)]` 的浮点**不能**与 Swift Codable 逐字节一致。凡是落盘格式含浮点（场景、组件注册表、序列、插件清单）都必须走 Swift 兼容的格式化器，并在 §5.4 的黄金文件往返测试里逐字节校验。
   - 科学计数法的上界**按宽度不同**：`Double` 在十进制指数 `>= 16` 转科学计数（`1e15`→`1000000000000000`，`1e16`→`1e+16`）；`Float` 在 `>= 8` 就转（`1e7`→`10000000`，`1e8`→`1e+08`）。两者下界相同：`1e-4`→`0.0001`，`1e-5`→`1e-05`。
   - 已落地：`diffuse_kernel::codable::{format_double, format_float, serialize_double, serialize_float}`（标量文本）；`diffuse_assets::swift_json::{to_sorted_pretty, to_compact}`（整份文档的 pretty/紧凑写出，含 Swift 的空数组 `[\n\n  ]` 布局、`\/` 转义与按 UTF-8 code unit 排序）。整份文档落盘用后者，单字段走前者。

@@ -27,6 +27,9 @@ diffuse-scene.workspace = true
 cove-graphics.workspace = true
 cove-logging.workspace = true
 cove-platform.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+libc.workspace = true
 
 [lints]
 workspace = true
