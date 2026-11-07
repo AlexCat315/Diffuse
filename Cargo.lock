@@ -596,7 +596,13 @@ dependencies = [
 name = "diffuse-context-memory"
 version = "0.1.0"
 dependencies = [
+ "cove-system",
  "diffuse-intent",
+ "diffuse-kernel",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

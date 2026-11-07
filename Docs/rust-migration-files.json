@@ -7701,7 +7701,7 @@
       "rust": [
         "crates/diffuse-context-memory/src/context_entry.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/ContextMemory/ContextMemoryStore.swift",
@@ -7712,7 +7712,7 @@
       "rust": [
         "crates/diffuse-context-memory/src/context_memory_store.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/ContextMemory/Reducers.swift",
@@ -7723,7 +7723,7 @@
       "rust": [
         "crates/diffuse-context-memory/src/reducers.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/DiffusePluginHost/main.swift",
@@ -12033,7 +12033,7 @@
       "rust": [
         "crates/diffuse-context-memory/tests/context_memory/context_memory_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EXRIOTests/ImageIOTests.swift",
