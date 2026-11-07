@@ -105,7 +105,7 @@ impl PhysicsBackend for NullPhysicsBackend {
         None
     }
 
-    fn detect_trigger_frame(&self, _max_event_count: usize) -> TriggerFrameResource {
+    fn detect_trigger_frame(&mut self, _max_event_count: usize) -> TriggerFrameResource {
         TriggerFrameResource::default()
     }
 
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn queries_return_the_null_answer() {
-        let backend = NullPhysicsBackend::new();
+        let mut backend = NullPhysicsBackend::new();
         let filter = PhysicsQueryFilter::default();
         let bounds = SpatialAABB::new(Float3::ZERO, Float3::splat(1.0));
         let ray = PhysicsRaycastQuery::new(Float3::ZERO, Float3::new(0.0, 0.0, 1.0));

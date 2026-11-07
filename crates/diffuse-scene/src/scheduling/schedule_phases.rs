@@ -63,7 +63,8 @@ use crate::scheduling::physics_collection::{
 };
 use crate::scheduling::physics_state_hash::physics_state_hash;
 use crate::scheduling::ragdoll_bridge::{
-    apply_ragdoll_animation_to_bodies, write_ragdoll_physics_to_animation,
+    RagdollSimulatedBodiesResource, apply_ragdoll_animation_to_bodies,
+    write_ragdoll_physics_to_animation,
 };
 use crate::scheduling::render_particles::particle_advance_options;
 use crate::scheduling::schedule_commands::{RuntimeCommand, RuntimeCommandBuffer};
@@ -247,6 +248,9 @@ pub fn run_pre_physics_scripts(
     frame.recording.destruction_events = destruction_events;
 
     let simulated = apply_ragdoll_animation_to_bodies(world);
+    // Swift's `ragdollSimulatedBodies` is persistent schedule state; the bridge
+    // reads it from the world, so publish the new set there as well.
+    world.set_resource(RagdollSimulatedBodiesResource::new(simulated.clone()));
     state.ragdoll_simulated_bodies = simulated;
 
     if world.hierarchy_needs_propagation() {
@@ -365,6 +369,27 @@ pub fn prepare_fixed_physics(
         }
         if !frame.descriptors.soft_bodies.is_empty() {
             required.insert(PhysicsBackendCapabilities::SOFT_BODIES);
+        }
+        for descriptor in &frame.descriptors.constraints {
+            match descriptor.constraint.configuration.kind() {
+                crate::physics::joints::physics_joint_configuration::PhysicsJointKind::Cone => {
+                    required.insert(PhysicsBackendCapabilities::CONE_JOINTS);
+                }
+                crate::physics::joints::physics_joint_configuration::PhysicsJointKind::SixDof => {
+                    required.insert(PhysicsBackendCapabilities::SIX_DOF_JOINTS);
+                }
+                _ => {}
+            }
+        }
+        let uses_cylinders = frame.descriptors.bodies.iter().any(|descriptor| {
+            descriptor.collider.as_ref().is_some_and(|collider| {
+                collider.shapes.iter().any(|instance| {
+                    instance.shape.kind() == crate::physics::collider::ColliderShapeKind::Cylinder
+                })
+            })
+        });
+        if uses_cylinders {
+            required.insert(PhysicsBackendCapabilities::CYLINDER_COLLIDERS);
         }
         let mut unsupported = required;
         unsupported.remove(supported);
@@ -898,7 +923,7 @@ pub fn detect_triggers(
         // contact callbacks. Preserve trigger previews through the query scene.
         // `stats()` must be read before the mutable borrow the backend hands out.
         let body_count = state.physics_query_scene.stats().body_count;
-        let backend = state.physics_query_scene.synchronize(world);
+        let mut backend = state.physics_query_scene.synchronize(world);
         let max_events = body_count * body_count.max(1) * 3;
         let trigger_frame = backend.detect_trigger_frame(max_events);
         state.physics_event_frame = PhysicsEventFrameResource::new(

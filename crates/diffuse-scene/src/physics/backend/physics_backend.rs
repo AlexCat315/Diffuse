@@ -107,8 +107,9 @@ impl PhysicsBackend for SharedPhysicsBackend {
     ) -> Vec<PhysicsSweepHit> {
         self.lock().sweep_shape_all(query, filter, max_hits)
     }
-    fn detect_trigger_frame(&self, max_event_count: usize) -> TriggerFrameResource {
-        self.lock().detect_trigger_frame(max_event_count)
+    fn detect_trigger_frame(&mut self, max_event_count: usize) -> TriggerFrameResource {
+        let mut backend = self.lock();
+        backend.detect_trigger_frame(max_event_count)
     }
     fn reset(&mut self) {
         self.lock().reset();
@@ -180,7 +181,7 @@ pub trait PhysicsBackend: Send + Sync {
         self.sweep_shape(query, filter).into_iter().collect()
     }
 
-    fn detect_trigger_frame(&self, max_event_count: usize) -> TriggerFrameResource;
+    fn detect_trigger_frame(&mut self, max_event_count: usize) -> TriggerFrameResource;
 
     fn reset(&mut self);
 }

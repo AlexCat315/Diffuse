@@ -157,6 +157,7 @@ dependencies = [
  "cove-ui-addons",
  "cove-ui-compose",
  "serde",
+ "serde_json",
  "unicode-segmentation",
 ]
 
@@ -240,6 +241,8 @@ version = "0.3.0-dev"
 dependencies = [
  "cc",
  "cmake",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

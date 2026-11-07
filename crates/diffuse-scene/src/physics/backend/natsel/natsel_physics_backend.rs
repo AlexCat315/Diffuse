@@ -653,7 +653,7 @@ impl PhysicsBackend for NatselPhysicsBackend {
         natsel_queries::sweep_shape_all(self, &query, &filter, max_hits)
     }
 
-    fn detect_trigger_frame(&self, max_event_count: usize) -> TriggerFrameResource {
+    fn detect_trigger_frame(&mut self, max_event_count: usize) -> TriggerFrameResource {
         natsel_queries::detect_trigger_frame(self, max_event_count)
     }
 
@@ -929,7 +929,7 @@ impl NatselPhysicsBackend {
 
     /// Trigger overlaps surface as contact events with no impulse, mirroring the
     /// `began`/`stayed`/`ended` transitions Swift synthesises from `TriggerFrameResource`.
-    fn trigger_contact_events(&self) -> Vec<PhysicsContactEvent> {
+    fn trigger_contact_events(&mut self) -> Vec<PhysicsContactEvent> {
         let triggers = natsel_queries::detect_trigger_frame(self, usize::MAX);
         let entered: BTreeSet<Pair> = triggers
             .enters

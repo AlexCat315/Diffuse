@@ -46,8 +46,7 @@ fn object<const N: usize>(entries: [(&str, ComponentValue); N]) -> ComponentValu
 fn exact_i64(value: f64) -> Option<i64> {
     if value.is_finite()
         && value.fract() == 0.0
-        && value >= -9_223_372_036_854_775_808.0
-        && value < 9_223_372_036_854_775_808.0
+        && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&value)
     {
         Some(value as i64)
     } else {
@@ -57,8 +56,9 @@ fn exact_i64(value: f64) -> Option<i64> {
 
 /// Swift's `UInt64(exactly:)`.
 fn exact_u64(value: f64) -> Option<u64> {
-    if value.is_finite() && value.fract() == 0.0 && value >= 0.0
-        && value < 18_446_744_073_709_551_616.0
+    if value.is_finite()
+        && value.fract() == 0.0
+        && (0.0..18_446_744_073_709_551_616.0).contains(&value)
     {
         Some(value as u64)
     } else {
@@ -73,9 +73,7 @@ fn numeric_equivalent(lhs: &ComponentValue, rhs: &ComponentValue) -> bool {
         (Number(a), Number(b)) => a == b,
         (SignedInteger(a), SignedInteger(b)) => a == b,
         (UnsignedInteger(a), UnsignedInteger(b)) => a == b,
-        (Number(a), SignedInteger(b)) | (SignedInteger(b), Number(a)) => {
-            exact_i64(*a) == Some(*b)
-        }
+        (Number(a), SignedInteger(b)) | (SignedInteger(b), Number(a)) => exact_i64(*a) == Some(*b),
         (Number(a), UnsignedInteger(b)) | (UnsignedInteger(b), Number(a)) => {
             exact_u64(*a) == Some(*b)
         }
@@ -178,7 +176,9 @@ fn missing_fields() {
         );
     }
     assert_eq!(
-        world.component::<CameraComponent>(entity).map(|camera| camera.is_active),
+        world
+            .component::<CameraComponent>(entity)
+            .map(|camera| camera.is_active),
         Some(false)
     );
     let emitter = world
@@ -207,9 +207,7 @@ fn legacy_golden() {
     assert_eq!(actual, expected);
 
     let document: Value = serde_json::from_str(GOLDEN).expect("golden JSON");
-    let entities = document["entities"]
-        .as_array()
-        .expect("entities array");
+    let entities = document["entities"].as_array().expect("entities array");
     let components = entities[0]["components"]
         .as_object()
         .expect("components object");
@@ -262,7 +260,11 @@ fn scene_local_registration() {
     let save = GameSave::capture(&scene, BTreeMap::new()).expect("capture save");
     let mut restored = SceneRuntime::new(scene.component_registry().clone());
     save.restore_scene(&mut restored).expect("restore save");
-    let first = restored.entities().first().copied().expect("restored entity");
+    let first = restored
+        .entities()
+        .first()
+        .copied()
+        .expect("restored entity");
     assert_eq!(
         restored
             .component::<RegistryCounter>(first)

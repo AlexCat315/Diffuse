@@ -128,7 +128,7 @@ impl PhysicsBackend for SelectionRecordingPhysicsBackend {
         None
     }
 
-    fn detect_trigger_frame(&self, _max_event_count: usize) -> TriggerFrameResource {
+    fn detect_trigger_frame(&mut self, _max_event_count: usize) -> TriggerFrameResource {
         TriggerFrameResource::default()
     }
 

@@ -143,10 +143,56 @@ impl SceneSerializer {
         let mut context = ComponentEncodeContext::new(entity_index_map.clone());
         context.purpose = purpose;
         let components = world.component_registry.encode(entity, world, &mut context);
-        document.components = components
+        let mut encoded: BTreeMap<String, serde_json::Value> = components
             .into_iter()
             .map(|component| (component.type_id.clone(), component.value.to_json_value()))
             .collect();
+
+        // Swift `SceneSerializer.encodeEntity`: an authored document drops
+        // runtime destruction fragments, while a game save keeps the sources,
+        // live fragments and retained proxies as three extra component records.
+        if purpose == ComponentEncodePurpose::GameSave {
+            let runtime =
+                world.resource::<crate::physics::destruction::DestructionRuntimeStateResource>();
+            if let Some(source) = runtime
+                .as_ref()
+                .and_then(|runtime| runtime.sources.get(&entity))
+            {
+                encoded.insert(
+                    "destructionRuntimeSource".to_string(),
+                    ComponentValue::Object(Self::serialize_destruction_runtime_source(source))
+                        .to_json_value(),
+                );
+            }
+            if let Some(fragment) =
+                world.component::<crate::physics::destruction::DestructibleFragment>(entity)
+                && let Some(&source_index) = entity_index_map.get(&fragment.source_entity)
+            {
+                encoded.insert(
+                    "destructibleFragment".to_string(),
+                    ComponentValue::Object(Self::serialize_destructible_fragment(
+                        &fragment,
+                        source_index,
+                        entity,
+                        runtime.as_ref(),
+                    ))
+                    .to_json_value(),
+                );
+            }
+            if let Some(retained) =
+                world.component::<crate::physics::destruction::DestructibleRetainedFragment>(entity)
+                && let Some(&source_index) = entity_index_map.get(&retained.source_entity)
+            {
+                encoded.insert(
+                    "destructibleRetainedFragment".to_string(),
+                    serde_json::json!({
+                        "sourceEntity": source_index,
+                        "fragmentID": retained.fragment_id,
+                    }),
+                );
+            }
+        }
+        document.components = encoded;
 
         document
     }
@@ -222,7 +268,7 @@ impl SceneSerializer {
     pub fn load_entities(
         entities: &[serde_json::Value],
         world: &mut RuntimeWorld,
-        _restore_game_state: bool,
+        restore_game_state: bool,
     ) -> Vec<EntityID> {
         let mut entity_map: BTreeMap<i64, EntityID> = BTreeMap::new();
         for (index, value) in entities.iter().enumerate() {
@@ -276,6 +322,10 @@ impl SceneSerializer {
                 continue;
             };
             world.set_parent(Some(parent), entity);
+        }
+
+        if restore_game_state {
+            Self::restore_destruction_runtime_state(entities, &entity_map, world);
         }
 
         entities
@@ -462,15 +512,18 @@ fn write_value(value: &serde_json::Value, depth: usize, out: &mut String) {
             out.push(']');
         }
         serde_json::Value::Number(number) => {
-            // Swift's number text: `100` not `100.0`, `1e+20`, `1e-07`, `-0`.
-            if let Some(value) = number.as_f64() {
+            // Swift writes an NSNumber whose integer domain is exact verbatim;
+            // routing those through `format_double` would turn 64-bit seeds such
+            // as UInt64.max into a rounded Double and break the next decode.
+            if number.is_u64() || number.is_i64() {
+                out.push_str(&number.to_string());
+            } else if let Some(value) = number.as_f64() {
+                // Swift's number text: `100` not `100.0`, `1e+20`, `1e-07`, `-0`.
                 if let Some(text) = diffuse_kernel::codable::format_double(value) {
                     out.push_str(&text);
                 } else {
                     out.push_str(&number.to_string());
                 }
-            } else if let Some(value) = number.as_i64() {
-                out.push_str(&value.to_string());
             } else {
                 out.push_str(&number.to_string());
             }

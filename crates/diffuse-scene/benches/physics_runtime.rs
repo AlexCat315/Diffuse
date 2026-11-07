@@ -139,12 +139,19 @@ impl Configuration {
         let warmup_frames = integer(environment, "COVE_PHYSICS_WARMUP_FRAMES", 120).max(0);
         let sample_frames = integer(environment, "COVE_PHYSICS_SAMPLE_FRAMES", 600).max(1);
         let worker_thread_count = integer(environment, "COVE_PHYSICS_WORKERS", 0);
-        let max_resident_growth_bytes =
-            unsigned(environment, "COVE_PHYSICS_MAX_RSS_GROWTH_BYTES", 32 * 1_024 * 1_024);
+        let max_resident_growth_bytes = unsigned(
+            environment,
+            "COVE_PHYSICS_MAX_RSS_GROWTH_BYTES",
+            32 * 1_024 * 1_024,
+        );
         let cloth_grid_size = integer(
             environment,
             "COVE_PHYSICS_CLOTH_GRID",
-            if scenario == Scenario::Cloth64 { 64 } else { 32 },
+            if scenario == Scenario::Cloth64 {
+                64
+            } else {
+                32
+            },
         );
 
         let step_budget_ms = positive(
@@ -163,18 +170,13 @@ impl Configuration {
         // Swift converts these two with `Double(_:) ?? default`, so a malformed
         // value falls back but a non-finite one is carried through; `max(0, NaN)`
         // is zero, which `f64::max` reproduces when NaN is the receiver.
-        let destruction_budget_ms = double(
-            environment,
-            "COVE_PHYSICS_DESTRUCTION_ACTIVATION_BUDGET_MS",
-        )
-        .unwrap_or(frame_budget_ms);
-        let max_destruction_activation_nanoseconds =
-            nanoseconds(destruction_budget_ms.max(0.0));
-        let destruction_step_budget_ms = double(
-            environment,
-            "COVE_PHYSICS_DESTRUCTION_STEP_BUDGET_MS",
-        )
-        .unwrap_or(physics_budget_ms);
+        let destruction_budget_ms =
+            double(environment, "COVE_PHYSICS_DESTRUCTION_ACTIVATION_BUDGET_MS")
+                .unwrap_or(frame_budget_ms);
+        let max_destruction_activation_nanoseconds = nanoseconds(destruction_budget_ms.max(0.0));
+        let destruction_step_budget_ms =
+            double(environment, "COVE_PHYSICS_DESTRUCTION_STEP_BUDGET_MS")
+                .unwrap_or(physics_budget_ms);
         let max_destruction_step_nanoseconds = nanoseconds(destruction_step_budget_ms.max(0.0));
 
         Configuration {
@@ -199,7 +201,10 @@ impl Configuration {
 
 /// `Double(environment[key] ?? "")`, accepted only when finite and positive.
 fn positive(environment: &BTreeMap<String, String>, key: &str, fallback: f64) -> f64 {
-    match environment.get(key).and_then(|value| value.parse::<f64>().ok()) {
+    match environment
+        .get(key)
+        .and_then(|value| value.parse::<f64>().ok())
+    {
         Some(value) if value.is_finite() && value > 0.0 => value,
         _ => fallback,
     }
@@ -297,7 +302,8 @@ fn make_benchmark_scene(configuration: &Configuration) -> SceneRuntime {
                     )
                 };
                 let entity = runtime.create_entity();
-                let _ = runtime.set_local_transform(LocalTransform::from_translation(position), entity);
+                let _ =
+                    runtime.set_local_transform(LocalTransform::from_translation(position), entity);
                 let velocity = if configuration.scenario == Scenario::ActiveGrid {
                     Float3::new(0.25, 0.1, 0.15)
                 } else {
@@ -337,8 +343,10 @@ fn make_benchmark_scene(configuration: &Configuration) -> SceneRuntime {
                     8.0 + (index % 3) as f32,
                     (index / columns) as f32 * grid_size as f32 * 0.06,
                 );
-                let _ = runtime.set_local_transform(LocalTransform::from_translation(position), entity);
-                let _ = runtime.set_component(Cloth::fixed_top_edge(grid_size, grid_size, 0.05), entity);
+                let _ =
+                    runtime.set_local_transform(LocalTransform::from_translation(position), entity);
+                let _ = runtime
+                    .set_component(Cloth::fixed_top_edge(grid_size, grid_size, 0.05), entity);
                 let _ = runtime.set_component(
                     SoftBody::new(
                         0.05,
@@ -381,7 +389,8 @@ fn make_benchmark_scene(configuration: &Configuration) -> SceneRuntime {
                 None,
                 0,
             );
-            let mut geometry_by_resource_id: BTreeMap<String, MeshColliderGeometry> = BTreeMap::new();
+            let mut geometry_by_resource_id: BTreeMap<String, MeshColliderGeometry> =
+                BTreeMap::new();
             let mut fragment_assets: Vec<DestructibleFragmentAsset> = Vec::new();
             let mut connections: Vec<DestructibleConnectionAsset> = Vec::new();
             for fragment_id in 0..fragments_per_asset {
@@ -446,7 +455,11 @@ fn make_benchmark_scene(configuration: &Configuration) -> SceneRuntime {
                 / (activated_fragments_per_source as f64))
                 .ceil() as i64;
             let columns = ((source_count as f64).sqrt().ceil() as i64).max(1);
-            let threshold = if uses_incremental_islands { 10_000.0 } else { 1.0 };
+            let threshold = if uses_incremental_islands {
+                10_000.0
+            } else {
+                1.0
+            };
             for source_index in 0..source_count {
                 let entity = runtime.create_entity();
                 let _ = runtime.set_local_transform(
@@ -471,8 +484,8 @@ fn make_benchmark_scene(configuration: &Configuration) -> SceneRuntime {
                     }),
                     entity,
                 );
-                let remaining = configuration.body_count
-                    - source_index * activated_fragments_per_source as i64;
+                let remaining =
+                    configuration.body_count - source_index * activated_fragments_per_source as i64;
                 let _ = runtime.set_component(
                     Destructible::new(
                         "benchmark.destructible",
@@ -670,7 +683,10 @@ fn run() {
                 .sum::<i64>(),
         );
         retained_proxy_peak = retained_proxy_peak.max(
-            runtime.world().entities_with::<DestructibleRetainedFragment>().len() as i64,
+            runtime
+                .world()
+                .entities_with::<DestructibleRetainedFragment>()
+                .len() as i64,
         );
         let compound_roots = destruction_states
             .iter()
@@ -682,13 +698,14 @@ fn run() {
                     return false;
                 };
                 collider.shapes.len() == state.retained_fragment_ids.len()
-                    && collider.shapes.iter().zip(state.retained_fragment_ids.iter()).all(
-                        |(shape_instance, fragment_id)| {
-                            let expected =
-                                format!("benchmark.destructible.convex.{fragment_id}");
+                    && collider
+                        .shapes
+                        .iter()
+                        .zip(state.retained_fragment_ids.iter())
+                        .all(|(shape_instance, fragment_id)| {
+                            let expected = format!("benchmark.destructible.convex.{fragment_id}");
                             shape_instance.shape.resource_id() == Some(expected.as_str())
-                        },
-                    )
+                        })
             })
             .count() as i64;
         compound_root_peak = compound_root_peak.max(compound_roots);
@@ -704,9 +721,8 @@ fn run() {
         );
         for mesh in &deformable_meshes {
             for position in &mesh.positions {
-                vertex_checksum += position.x * 0.000_001
-                    + position.y * 0.000_002
-                    + position.z * 0.000_003;
+                vertex_checksum +=
+                    position.x * 0.000_001 + position.y * 0.000_002 + position.z * 0.000_003;
             }
         }
         vertex_stream_samples.push(elapsed_nanoseconds(stream_started));
@@ -730,11 +746,7 @@ fn run() {
     let mut final_window = resident_samples[resident_samples.len() - window_size..].to_vec();
     final_window.sort_unstable();
     let final_resident = percentile(&final_window, 0.50);
-    let resident_growth = if final_resident > initial_resident {
-        final_resident - initial_resident
-    } else {
-        0
-    };
+    let resident_growth = final_resident.saturating_sub(initial_resident);
 
     let frame_state = runtime.physics_frame_state();
     println!(
@@ -843,7 +855,9 @@ fn run() {
         failures.push("At least 100 measured frames are required for P99 acceptance".to_string());
     }
     if backend_error_count > 0 {
-        failures.push(format!("Backend reported errors in {backend_error_count} frames"));
+        failures.push(format!(
+            "Backend reported errors in {backend_error_count} frames"
+        ));
     }
     if dropped_steps > 0 {
         failures.push(format!("Dropped {dropped_steps} fixed steps"));
@@ -868,8 +882,9 @@ fn run() {
                 > configuration.max_destruction_activation_nanoseconds
             || percentile(&sorted_steps, 0.95) > configuration.max_destruction_step_nanoseconds)
     {
-        failures
-            .push("Destructible activation missed its fragment count or burst/step budget".to_string());
+        failures.push(
+            "Destructible activation missed its fragment count or burst/step budget".to_string(),
+        );
     }
     if configuration.scenario == Scenario::DestructionIslands {
         let expected_source_count = (configuration.body_count as f64 / 15.0).ceil() as i64;
@@ -893,11 +908,16 @@ fn run() {
         && final_resident > 0
         && resident_growth > configuration.max_resident_growth_bytes
     {
-        failures.push("Sustained resident-memory growth exceeded the configured budget".to_string());
+        failures
+            .push("Sustained resident-memory growth exceeded the configured budget".to_string());
     }
     println!(
         "gate_status={} failed_checks={}",
-        if failures.is_empty() { "passed" } else { "failed" },
+        if failures.is_empty() {
+            "passed"
+        } else {
+            "failed"
+        },
         failures.len(),
     );
     for failure in &failures {
@@ -964,11 +984,7 @@ mod memory {
         // process.
         let succeeded =
             unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, size) };
-        if succeeded == 0 {
-            None
-        } else {
-            Some(counters)
-        }
+        if succeeded == 0 { None } else { Some(counters) }
     }
 
     pub fn peak_resident_bytes() -> u64 {

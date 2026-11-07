@@ -165,9 +165,7 @@ pub fn json_to_array(value: Option<&ComponentValue>) -> Option<&[ComponentValue]
 
 /// Swift `jsonToStringFloatDict` — non-numeric entries are dropped, a non-object
 /// is `nil`.
-pub fn json_to_string_float_dict(
-    value: Option<&ComponentValue>,
-) -> Option<BTreeMap<String, f32>> {
+pub fn json_to_string_float_dict(value: Option<&ComponentValue>) -> Option<BTreeMap<String, f32>> {
     let values = json_to_dict(value)?;
     let mut result = BTreeMap::new();
     for (key, value) in values {
@@ -191,25 +189,104 @@ pub fn json_to_float_array(value: Option<&ComponentValue>) -> Option<Vec<f32>> {
 }
 
 /// Swift `encodeJSONValue(_:)` — `JSONEncoder` followed by `JSONSerialization`.
+///
+/// `JSONEncoder` writes a `Float` as its shortest round-tripping decimal text;
+/// `JSONSerialization` then parses that text into an `NSNumber(Double)`. A direct
+/// `serde_json::to_value` would instead widen the `Float` to its exact `Double`
+/// (`0.03333333507180214` instead of `0.033333335`), which no longer matches a
+/// persisted Swift document. Re-parsing the shortest `Float` text here restores
+/// that second hop.
 pub fn encode_json_value<T: Serialize>(value: &T) -> Option<ComponentValue> {
-    let json = serde_json::to_value(value).ok()?;
+    let mut json = serde_json::to_value(value).ok()?;
+    round_trip_float32_numbers(&mut json);
     Some(ComponentValue::from_json_value(&json))
+}
+
+fn round_trip_float32_numbers(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Number(number) if number.is_f64() => {
+            if let Some(reparsed) = number
+                .as_f64()
+                .and_then(float32_text_round_trip)
+                .and_then(serde_json::Number::from_f64)
+            {
+                *number = reparsed;
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                round_trip_float32_numbers(value);
+            }
+        }
+        serde_json::Value::Object(values) => {
+            for value in values.values_mut() {
+                round_trip_float32_numbers(value);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Only numbers that really are a widened `Float` are rewritten: parsing that
+/// `Float`'s shortest text back into a `Double` is then value-preserving for
+/// genuine `Double` values too, so no other field can drift.
+fn float32_text_round_trip(value: f64) -> Option<f64> {
+    let narrow = value as f32;
+    if !narrow.is_finite() || (narrow as f64) != value {
+        return None;
+    }
+    diffuse_kernel::codable::format_float(narrow)?
+        .parse::<f64>()
+        .ok()
 }
 
 /// Swift `decodeJSONValue(_:as:)` — requires a valid top-level JSON object or
 /// array, then decodes `T` from it.
 pub fn decode_json_value<T: DeserializeOwned>(value: Option<&ComponentValue>) -> Option<T> {
     let value = value?;
-    if !matches!(
-        value,
-        ComponentValue::Array(_) | ComponentValue::Object(_)
-    ) || !value.is_finite_json()
+    if !matches!(value, ComponentValue::Array(_) | ComponentValue::Object(_))
+        || !value.is_finite_json()
     {
         return None;
     }
-    let json = value.to_json_value();
+    let mut json = value.to_json_value();
+    integral_double_as_integer(&mut json);
     let data = serde_json::to_vec(&json).ok()?;
     serde_json::from_slice::<T>(&data).ok()
+}
+
+/// Swift `JSONSerialization.data(withJSONObject:)` writes an integral `NSNumber`
+/// without a fractional part, so `JSONDecoder` can read it back into an integer
+/// field. `ComponentValue` keeps small integers in its `Double` domain (exactly
+/// like Swift's `.number`), and `serde_json` would emit `0.0` for those, which
+/// `deserialize_i64` rejects. Only the decode buffer is affected; persisted
+/// documents go through `to_sorted_pretty`, which already writes `0`.
+fn integral_double_as_integer(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Number(number) if number.is_f64() => {
+            let Some(raw) = number.as_f64() else {
+                return;
+            };
+            if raw.is_finite()
+                && raw.fract() == 0.0
+                && raw >= i64::MIN as f64
+                && raw < 9_223_372_036_854_775_808.0
+            {
+                *number = (raw as i64).into();
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                integral_double_as_integer(value);
+            }
+        }
+        serde_json::Value::Object(values) => {
+            for value in values.values_mut() {
+                integral_double_as_integer(value);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// A component document object, used by the serializers in place of Swift's
@@ -301,7 +378,10 @@ mod tests {
             json_to_vec3(&[1.0, 2.0, 3.0]),
             Some(Float3::new(1.0, 2.0, 3.0))
         );
-        assert_eq!(json_to_vec4(&[1.0; 4]), Some(Float4::new(1.0, 1.0, 1.0, 1.0)));
+        assert_eq!(
+            json_to_vec4(&[1.0; 4]),
+            Some(Float4::new(1.0, 1.0, 1.0, 1.0))
+        );
     }
 
     #[test]
@@ -309,7 +389,14 @@ mod tests {
         let encoded = encode_json_value(&vec![1.0f32, 2.5]).expect("encoded");
         let decoded: Vec<f32> = decode_json_value(Some(&encoded)).expect("decoded");
         assert_eq!(decoded, vec![1.0, 2.5]);
-        assert_eq!(decode_json_value::<Vec<f32>>(Some(&array(vec![1.0]))), None);
+        // Swift's `JSONSerialization.isValidJSONObject` accepts a top-level array
+        // but rejects a bare scalar, so an array must decode and a number must not.
+        assert_eq!(
+            decode_json_value::<Vec<f32>>(Some(&array(vec![1.0]))),
+            Some(vec![1.0])
+        );
+        assert_eq!(decode_json_value::<Vec<f32>>(Some(&number(1.0))), None);
+        assert_eq!(decode_json_value::<Vec<f32>>(None), None);
     }
 
     #[test]

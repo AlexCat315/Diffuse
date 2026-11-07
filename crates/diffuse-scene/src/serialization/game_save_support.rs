@@ -32,26 +32,17 @@ impl SceneSerializer {
 
     /// Swift `serializeDestructionRuntimeSource(_:)`.
     ///
-    /// The game-save call site lives in `scene_serializer.rs`; this function is
-    /// public in-crate so that path can use it, and the tests below call it
-    /// directly in the meantime.
-    #[allow(dead_code)]
+    /// Called by `SceneSerializer::encode_entity` when the purpose is a game save.
     pub(crate) fn serialize_destruction_runtime_source(
         source: &DestructionRuntimeSourceState,
     ) -> BTreeMap<String, ComponentValue> {
         let mut encoded = object([
-            (
-                "hasFractured",
-                ComponentValue::Bool(source.has_fractured),
-            ),
+            ("hasFractured", ComponentValue::Bool(source.has_fractured)),
             (
                 "isFullyFractured",
                 ComponentValue::Bool(source.is_fully_fractured),
             ),
-            (
-                "accumulatedDamage",
-                number(source.accumulated_damage),
-            ),
+            ("accumulatedDamage", number(source.accumulated_damage)),
             (
                 "brokenConnectionIDs",
                 ComponentValue::Array(
@@ -91,7 +82,9 @@ impl SceneSerializer {
             if let Some(rigid_body) = &source.authored_rigid_body {
                 snapshot.insert(
                     "rigidbody".to_string(),
-                    ComponentValue::Object(BuiltinComponentCodecs::serialize_rigid_body(rigid_body)),
+                    ComponentValue::Object(BuiltinComponentCodecs::serialize_rigid_body(
+                        rigid_body,
+                    )),
                 );
             }
             if let Some(collider) = &source.authored_collider {
@@ -121,7 +114,6 @@ impl SceneSerializer {
     /// Remaining budgets are measured against the runtime clock, so a save taken
     /// mid-frame stores how much of each budget is left rather than the original
     /// lifetime.
-    #[allow(dead_code)]
     pub(crate) fn serialize_destructible_fragment(
         fragment: &DestructibleFragment,
         source_index: i64,
@@ -146,19 +138,12 @@ impl SceneSerializer {
             && remaining_sleeping_delay > 0.0
         {
             let slept_seconds = (elapsed_seconds - sleeping_since).max(0.0) as f32;
-            remaining_sleeping_delay =
-                (remaining_sleeping_delay - slept_seconds).max(0.000_001);
+            remaining_sleeping_delay = (remaining_sleeping_delay - slept_seconds).max(0.000_001);
         }
         object([
             ("sourceEntity", integer(source_index)),
-            (
-                "fragmentID",
-                integer(i64::from(fragment.fragment_id)),
-            ),
-            (
-                "remainingLifetimeSeconds",
-                number(remaining_lifetime),
-            ),
+            ("fragmentID", integer(i64::from(fragment.fragment_id))),
+            ("remainingLifetimeSeconds", number(remaining_lifetime)),
             (
                 "remainingSleepingRecycleDelaySeconds",
                 number(remaining_sleeping_delay),
@@ -176,7 +161,6 @@ impl SceneSerializer {
     /// proxies. The resource is written back only when at least one entity
     /// restored something, so loading an authored document leaves an existing
     /// clock untouched.
-    #[allow(dead_code)]
     pub(crate) fn restore_destruction_runtime_state(
         entities: &[serde_json::Value],
         entity_map: &BTreeMap<i64, EntityID>,
@@ -205,9 +189,7 @@ impl SceneSerializer {
             let mut source = DestructionRuntimeSourceState {
                 has_fractured: json_to_bool(encoded.get("hasFractured")).unwrap_or(false),
                 is_fully_fractured: json_to_bool(encoded.get("isFullyFractured"))
-                    .unwrap_or_else(|| {
-                        json_to_bool(encoded.get("hasFractured")).unwrap_or(false)
-                    }),
+                    .unwrap_or_else(|| json_to_bool(encoded.get("hasFractured")).unwrap_or(false)),
                 accumulated_damage: json_to_float(encoded.get("accumulatedDamage")).unwrap_or(0.0),
                 broken_connection_ids: fragment_id_set(encoded.get("brokenConnectionIDs")),
                 released_fragment_ids: fragment_id_set(encoded.get("releasedFragmentIDs")),
@@ -380,10 +362,7 @@ mod tests {
             .filter_map(|value| json_to_int(Some(value)))
             .collect();
         assert_eq!(ids, vec![3, 7]);
-        assert_eq!(
-            json_to_bool(document.get("hasFractured")),
-            Some(true)
-        );
+        assert_eq!(json_to_bool(document.get("hasFractured")), Some(true));
         assert!(!document.contains_key("authoredSourceSnapshot"));
     }
 
@@ -412,10 +391,7 @@ mod tests {
             EntityID::new(1, 0),
             None,
         );
-        assert_eq!(
-            json_to_int(document.get("sourceEntity")),
-            Some(2)
-        );
+        assert_eq!(json_to_int(document.get("sourceEntity")), Some(2));
         assert_eq!(json_to_int(document.get("fragmentID")), Some(4));
         assert_eq!(
             json_to_float(document.get("remainingLifetimeSeconds")),
@@ -425,10 +401,7 @@ mod tests {
             json_to_float(document.get("remainingSleepingRecycleDelaySeconds")),
             Some(5.0)
         );
-        assert_eq!(
-            json_to_bool(document.get("wasSleeping")),
-            Some(false)
-        );
+        assert_eq!(json_to_bool(document.get("wasSleeping")), Some(false));
 
         let mut runtime = DestructionRuntimeStateResource {
             elapsed_seconds: 14.0,
@@ -451,10 +424,7 @@ mod tests {
             json_to_float(document.get("remainingSleepingRecycleDelaySeconds")),
             Some(3.0)
         );
-        assert_eq!(
-            json_to_bool(document.get("wasSleeping")),
-            Some(true)
-        );
+        assert_eq!(json_to_bool(document.get("wasSleeping")), Some(true));
     }
 
     #[test]
@@ -489,11 +459,7 @@ mod tests {
         let source = world.create_entity();
         let fragment = world.create_entity();
         let retained = world.create_entity();
-        let entity_map = BTreeMap::from([
-            (0, source),
-            (1, fragment),
-            (2, retained),
-        ]);
+        let entity_map = BTreeMap::from([(0, source), (1, fragment), (2, retained)]);
         let entities = vec![
             serde_json::json!({
                 "components": {
@@ -546,7 +512,11 @@ mod tests {
             .expect("runtime");
         assert!(runtime.sources.get(&source).expect("source").has_fractured);
         assert_eq!(
-            runtime.sources.get(&source).expect("source").accumulated_damage,
+            runtime
+                .sources
+                .get(&source)
+                .expect("source")
+                .accumulated_damage,
             3.0
         );
         assert_eq!(

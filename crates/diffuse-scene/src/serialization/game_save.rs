@@ -18,14 +18,14 @@
 
 use std::collections::BTreeMap;
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use thiserror::Error;
 
 use crate::scene_runtime::SceneRuntime;
 use crate::serialization::scene_serializer::{
-    to_sorted_pretty, SceneSerializer, SceneSerializerError,
+    SceneSerializer, SceneSerializerError, to_sorted_pretty,
 };
 
 /// Swift `GameSaveError`: the only two failures `load` reports.
@@ -130,8 +130,7 @@ impl GameSave {
 
     /// Parses a save document produced by [`GameSave::serialized`].
     pub fn load(text: &str) -> Result<GameSave, GameSaveError> {
-        let root: Value =
-            serde_json::from_str(text).map_err(|_| GameSaveError::InvalidFormat)?;
+        let root: Value = serde_json::from_str(text).map_err(|_| GameSaveError::InvalidFormat)?;
         let Value::Object(root) = root else {
             return Err(GameSaveError::InvalidFormat);
         };
@@ -139,10 +138,7 @@ impl GameSave {
         // Swift: `(root["version"] as? NSNumber)?.intValue ?? 0`. JSON booleans
         // bridge to `NSNumber` there, so `true`/`false` read as 1/0; anything that
         // is not a number reads as 0.
-        let version = root
-            .get("version")
-            .map(number_int_value)
-            .unwrap_or(0);
+        let version = root.get("version").map(number_int_value).unwrap_or(0);
         if version != GameSave::CURRENT_VERSION {
             return Err(GameSaveError::UnsupportedVersion(version));
         }
@@ -182,7 +178,9 @@ impl GameSave {
     }
 
     /// Decodes the game-state payload, or `None` if the save carried no state.
-    pub fn decode_state<State: DeserializeOwned>(&self) -> Result<Option<State>, serde_json::Error> {
+    pub fn decode_state<State: DeserializeOwned>(
+        &self,
+    ) -> Result<Option<State>, serde_json::Error> {
         match &self.state {
             None => Ok(None),
             Some(state) => serde_json::from_str(state).map(Some),
@@ -241,8 +239,19 @@ mod tests {
         let save = GameSave::capture(&scene, metadata).expect("capture");
         let state = save.serialized().expect("serialized");
         let loaded = GameSave::load(&state).expect("load");
-        assert_eq!(loaded.metadata.get("level").map(String::as_str), Some("dock"));
-        assert_eq!(loaded, save);
+        assert_eq!(
+            loaded.metadata.get("level").map(String::as_str),
+            Some("dock")
+        );
+        // Swift keeps `scene` as `Data` and re-serializes it on load without
+        // `.prettyPrinted`, so the two payloads differ in layout but not in
+        // content. Assert the document is identical and the save document it
+        // produces is byte-identical — that is the actual on-disk contract.
+        assert_eq!(
+            serde_json::from_str::<Value>(&loaded.scene).expect("scene"),
+            serde_json::from_str::<Value>(&save.scene).expect("scene")
+        );
+        assert_eq!(loaded.serialized().expect("re-serialized"), state);
     }
 
     #[test]
@@ -259,15 +268,17 @@ mod tests {
 
     #[test]
     fn metadata_is_dropped_when_a_single_value_is_not_a_string() {
-        let save =
-            GameSave::load("{\"version\" : 2, \"scene\" : {}, \"metadata\" : {\"a\" : \"x\", \"b\" : 1}}")
-                .expect("load");
+        let save = GameSave::load(
+            "{\"version\" : 2, \"scene\" : {}, \"metadata\" : {\"a\" : \"x\", \"b\" : 1}}",
+        )
+        .expect("load");
         assert!(save.metadata.is_empty());
     }
 
     #[test]
     fn a_null_state_is_kept_as_a_present_payload() {
-        let save = GameSave::load("{\"version\" : 2, \"scene\" : {}, \"state\" : null}").expect("load");
+        let save =
+            GameSave::load("{\"version\" : 2, \"scene\" : {}, \"state\" : null}").expect("load");
         assert_eq!(save.state.as_deref(), Some("null"));
         let decoded: Option<Value> = save.decode_state().expect("decode");
         assert_eq!(decoded, Some(Value::Null));

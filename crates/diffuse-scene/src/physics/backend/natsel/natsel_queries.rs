@@ -330,7 +330,7 @@ fn shape_proxy(points: &[natsel::math::types::Vec3], radius: f32) -> ShapeProxy 
 
 /// `detectTriggerFrame(maxEventCount:)`.
 pub(crate) fn detect_trigger_frame(
-    backend: &NatselPhysicsBackend,
+    backend: &mut NatselPhysicsBackend,
     max_event_count: usize,
 ) -> TriggerFrameResource {
     if max_event_count == 0 {
@@ -472,6 +472,9 @@ pub(crate) fn detect_trigger_frame(
         .take(max_event_count)
         .collect();
     let active: Vec<Pair> = current.iter().copied().take(max_event_count).collect();
+    // Swift `triggerPairs = current` before returning: without this, exits are
+    // computed against an empty set forever and a leaving body never emits Exit.
+    backend.trigger_pairs = current;
     TriggerFrameResource::new(
         enters
             .into_iter()
@@ -560,8 +563,8 @@ mod tests {
 
     #[test]
     fn trigger_frame_with_zero_budget_is_empty() {
-        let backend = NatselPhysicsBackend::new();
-        let frame = detect_trigger_frame(&backend, 0);
+        let mut backend = NatselPhysicsBackend::new();
+        let frame = detect_trigger_frame(&mut backend, 0);
         assert!(frame.enters.is_empty());
         assert!(frame.exits.is_empty());
         assert!(frame.active.is_empty());

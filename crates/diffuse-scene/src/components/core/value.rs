@@ -18,7 +18,7 @@ pub const MAX_EXACT_DOUBLE_INTEGER: u64 = 9_007_199_254_740_992;
 
 /// A lossless, Codable component document. Large integer identifiers and seeds
 /// retain their integer representation; ordinary numbers use JSON's numeric value.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum ComponentValue {
     Null,
     Bool(bool),
@@ -31,6 +31,62 @@ pub enum ComponentValue {
     /// iteration order that MIGRATION.md §5.2 requires for output that reaches a
     /// file or hash.
     Object(BTreeMap<String, ComponentValue>),
+}
+
+/// Swift's `Int64(exactly:)`.
+fn exact_i64(value: f64) -> Option<i64> {
+    if value.is_finite()
+        && value.fract() == 0.0
+        && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&value)
+    {
+        Some(value as i64)
+    } else {
+        None
+    }
+}
+
+/// Swift's `UInt64(exactly:)`.
+fn exact_u64(value: f64) -> Option<u64> {
+    if value.is_finite()
+        && value.fract() == 0.0
+        && (0.0..18_446_744_073_709_551_616.0).contains(&value)
+    {
+        Some(value as u64)
+    } else {
+        None
+    }
+}
+
+/// Swift `ComponentValue.==` is hand-written: JSON has one numeric domain, so a
+/// number that survived `Codable` normalization as an integer compares equal to
+/// its `Double` spelling. Component editing relies on that when it confirms an
+/// edit against the re-encoded component document.
+impl PartialEq for ComponentValue {
+    fn eq(&self, other: &Self) -> bool {
+        use ComponentValue::{
+            Array, Bool, Null, Number, Object, SignedInteger, String, UnsignedInteger,
+        };
+        match (self, other) {
+            (Null, Null) => true,
+            (Bool(a), Bool(b)) => a == b,
+            (String(a), String(b)) => a == b,
+            (Number(a), Number(b)) => a == b,
+            (SignedInteger(a), SignedInteger(b)) => a == b,
+            (UnsignedInteger(a), UnsignedInteger(b)) => a == b,
+            (Number(a), SignedInteger(b)) | (SignedInteger(b), Number(a)) => {
+                exact_i64(*a) == Some(*b)
+            }
+            (Number(a), UnsignedInteger(b)) | (UnsignedInteger(b), Number(a)) => {
+                exact_u64(*a) == Some(*b)
+            }
+            (SignedInteger(a), UnsignedInteger(b)) | (UnsignedInteger(b), SignedInteger(a)) => {
+                u64::try_from(*a).ok() == Some(*b)
+            }
+            (Array(a), Array(b)) => a == b,
+            (Object(a), Object(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl ComponentValue {

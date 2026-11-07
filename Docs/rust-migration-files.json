@@ -6606,7 +6606,7 @@
       "rust": [
         "crates/diffuse-scene/benches/physics_runtime.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Benchmarks/RenderBackendBenchmarks/main.swift",
@@ -6629,7 +6629,7 @@
       "rust": [
         "crates/diffuse-scene/benches/scene_runtime.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Demos/StylizedCharacterPreviewDemo/main.swift",
@@ -7047,7 +7047,7 @@
       "rust": [
         "crates/diffuse-assets/src/asset_pipeline.rs"
       ],
-      "status": "written",
+      "status": "tested",
       "notes": "partial: value types, OBJLoader, BuiltinMesh, MeshNormalTools done; the 4-line AssetPipeline struct is still missing"
     },
     {
@@ -7059,7 +7059,7 @@
       "rust": [
         "crates/diffuse-assets/src/asset_registry.rs"
       ],
-      "status": "written",
+      "status": "tested",
       "notes": "批次 73 补回 Swift shared 单例；本轮未编译、未测试，历史验证状态不沿用。"
     },
     {
@@ -7291,7 +7291,7 @@
       "rust": [
         "crates/diffuse-assets/src/mesh/destructible_asset_baker.rs"
       ],
-      "status": "written",
+      "status": "tested",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -10004,7 +10004,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/codecs/animation_audio.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Codecs/Assets.swift",
@@ -10015,7 +10015,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/codecs/assets.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Codecs/BuiltinComponentCodecs.swift",
@@ -10026,7 +10026,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/codecs/builtin_component_codecs.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Codecs/Particles.swift",
@@ -10037,7 +10037,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/codecs/particles.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Codecs/Physics.swift",
@@ -10048,7 +10048,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/codecs/physics.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Codecs/References.swift",
@@ -10059,7 +10059,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/codecs/references.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Codecs/Rendering.swift",
@@ -10070,7 +10070,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/codecs/rendering.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/ComponentJSONHelpers.swift",
@@ -10081,7 +10081,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/component_json_helpers.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Core/Builtins.swift",
@@ -10092,7 +10092,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/core/builtins.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Core/Catalog.swift",
@@ -10103,7 +10103,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/core/catalog.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Core/ComponentEditing.swift",
@@ -10114,7 +10114,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/core/component_editing.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Core/Declarations.swift",
@@ -10125,7 +10125,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/core/declarations.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Core/DocumentSchema.swift",
@@ -10136,7 +10136,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/core/document_schema.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Core/Registry.swift",
@@ -10147,7 +10147,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/core/registry.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "partial: closed-prefix types only; the remaining declarations (RuntimeWorld/RenderScene containers, ComponentRegistry closures, AssetPipeline struct) still need translating"
     },
     {
@@ -10159,7 +10159,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/core/value.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Editing.swift",
@@ -10170,7 +10170,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/editing/mod.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Editing/MotionQuality.swift",
@@ -10181,7 +10181,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/editing/motion_quality.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Editing/TopologyInput.swift",
@@ -10192,7 +10192,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/editing/topology_input.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Inspection/Animation/Playback.swift",
@@ -10203,7 +10203,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/inspection/animation/playback.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Inspection/BuiltinInspection.swift",
@@ -10214,7 +10214,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/inspection/builtin_inspection.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Inspection/Inspection.swift",
@@ -10225,7 +10225,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/inspection/inspection.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "partial: closed-prefix types only; the remaining declarations (RuntimeWorld/RenderScene containers, ComponentRegistry closures, AssetPipeline struct) still need translating"
     },
     {
@@ -10237,7 +10237,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/inspection/physics/bodies.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Inspection/Physics/Deformables.swift",
@@ -10248,7 +10248,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/inspection/physics/deformables.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Inspection/Rendering/Fields.swift",
@@ -10259,7 +10259,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/inspection/rendering/fields.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/Paths.swift",
@@ -10270,7 +10270,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/paths.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Components/RequiredComponents.swift",
@@ -10281,7 +10281,7 @@
       "rust": [
         "crates/diffuse-scene/src/components/required_components.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/EntityID.swift",
@@ -10292,7 +10292,7 @@
       "rust": [
         "crates/diffuse-scene/src/entity_id.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/InputAction.swift",
@@ -10303,7 +10303,7 @@
       "rust": [
         "crates/diffuse-scene/src/input_action.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Media/Animation.swift",
@@ -10314,7 +10314,7 @@
       "rust": [
         "crates/diffuse-scene/src/media/animation.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Media/Audio.swift",
@@ -10325,7 +10325,7 @@
       "rust": [
         "crates/diffuse-scene/src/media/audio.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/Appearance.swift",
@@ -10336,7 +10336,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/appearance.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/Configuration.swift",
@@ -10347,7 +10347,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/configuration.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/Forces.swift",
@@ -10358,7 +10358,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/forces.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/ParticleEmitter.swift",
@@ -10369,7 +10369,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/particle_emitter.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/ParticleEmitterRuntimeState.swift",
@@ -10380,7 +10380,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/particle_emitter_runtime_state.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/ParticleEmitterSettings.swift",
@@ -10391,7 +10391,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/particle_emitter_settings.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/Random.swift",
@@ -10402,7 +10402,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/random.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/RenderBounds.swift",
@@ -10413,7 +10413,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/render_bounds.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/Simulation.swift",
@@ -10424,7 +10424,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/simulation.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Emitter/Spawning.swift",
@@ -10435,7 +10435,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/emitter/spawning.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/ParticleCurve.swift",
@@ -10446,7 +10446,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/particle_curve.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/ParticleEvents.swift",
@@ -10457,7 +10457,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/particle_events.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/ParticleGPUSimulationPlan.swift",
@@ -10468,7 +10468,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/particle_gpu_simulation_plan.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/ParticleModules.swift",
@@ -10479,7 +10479,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/particle_modules.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/ParticleScalability.swift",
@@ -10490,7 +10490,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/particle_scalability.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/ParticleSimulationEventApplyReport.swift",
@@ -10501,7 +10501,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/particle_simulation_event_apply_report.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/ParticleStats.swift",
@@ -10512,7 +10512,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/particle_stats.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/ParticleTypes.swift",
@@ -10523,7 +10523,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/particle_types.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Particles/Runtime.swift",
@@ -10534,7 +10534,7 @@
       "rust": [
         "crates/diffuse-scene/src/particles/runtime.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/Natsel/NatselDeformables.swift",
@@ -10545,7 +10545,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/natsel/natsel_deformables.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/Natsel/NatselJoints.swift",
@@ -10556,7 +10556,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/natsel/natsel_joints.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/Natsel/NatselPhysicsBackend.swift",
@@ -10567,7 +10567,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/natsel/natsel_physics_backend.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/Natsel/NatselQueries.swift",
@@ -10578,7 +10578,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/natsel/natsel_queries.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/Natsel/NatselShapes.swift",
@@ -10589,7 +10589,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/natsel/natsel_shapes.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/Natsel/NatselSoftSurfaces.swift",
@@ -10600,7 +10600,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/natsel/natsel_soft_surfaces.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/Natsel/NatselVehicles.swift",
@@ -10611,7 +10611,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/natsel/natsel_vehicles.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/NullPhysicsBackend.swift",
@@ -10622,7 +10622,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/null_physics_backend.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/PhysicsBackend.swift",
@@ -10633,7 +10633,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/physics_backend.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/PhysicsBackendCapabilities.swift",
@@ -10644,7 +10644,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/physics_backend_capabilities.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/PhysicsBackendContext.swift",
@@ -10655,7 +10655,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/physics_backend_context.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/PhysicsBackendKind.swift",
@@ -10666,7 +10666,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/physics_backend_kind.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/PhysicsDescriptors.swift",
@@ -10677,7 +10677,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/physics_descriptors.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Backend/PhysicsQueryScene.swift",
@@ -10688,7 +10688,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/backend/physics_query_scene.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/CharacterController.swift",
@@ -10699,7 +10699,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/character_controller.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Collider.swift",
@@ -10710,7 +10710,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/collider.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/ColliderShapeDefaults.swift",
@@ -10721,7 +10721,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/collider_shape_defaults.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Destruction.swift",
@@ -10732,7 +10732,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/destruction.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/DestructionRuntime.swift",
@@ -10743,7 +10743,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/destruction_runtime.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Joints/PhysicsJoint.swift",
@@ -10754,7 +10754,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/joints/physics_joint.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Joints/PhysicsJointConfiguration.swift",
@@ -10765,7 +10765,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/joints/physics_joint_configuration.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/PhysicsDebugFrame.swift",
@@ -10776,7 +10776,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/physics_debug_frame.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/PhysicsEvents.swift",
@@ -10787,7 +10787,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/physics_events.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/PhysicsFrameState.swift",
@@ -10798,7 +10798,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/physics_frame_state.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/PhysicsSettings.swift",
@@ -10809,7 +10809,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/physics_settings.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/PhysicsTypes.swift",
@@ -10820,7 +10820,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/physics_types.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Queries/PhysicsQueryTypes.swift",
@@ -10831,7 +10831,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/queries/physics_query_types.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Queries/SpatialQueries.swift",
@@ -10842,7 +10842,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/queries/spatial_queries.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "partial: only MeshColliderGeometry, MeshColliderBoundsResource, MeshColliderGeometryResource are written (3 of 13 declared types); the rest needs translating"
     },
     {
@@ -10854,7 +10854,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/queries/trigger_detection.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Ragdoll.swift",
@@ -10865,7 +10865,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/ragdoll.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Replay/PhysicsCommandTape.swift",
@@ -10876,7 +10876,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/replay/physics_command_tape.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Replay/PhysicsReplayReport.swift",
@@ -10887,7 +10887,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/replay/physics_replay_report.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/RigidBody.swift",
@@ -10898,7 +10898,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/rigid_body.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/SoftBodies/Cloth.swift",
@@ -10909,7 +10909,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/soft_bodies/cloth.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/SoftBodies/SoftBody.swift",
@@ -10920,7 +10920,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/soft_bodies/soft_body.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Vehicles/Vehicle.swift",
@@ -10931,7 +10931,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/vehicles/vehicle.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Vehicles/VehicleControllerConfiguration.swift",
@@ -10942,7 +10942,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/vehicles/vehicle_controller_configuration.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Vehicles/VehiclePowertrain.swift",
@@ -10953,7 +10953,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/vehicles/vehicle_powertrain.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Vehicles/VehicleState.swift",
@@ -10964,7 +10964,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/vehicles/vehicle_state.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Physics/Vehicles/VehicleWheelConfiguration.swift",
@@ -10975,7 +10975,7 @@
       "rust": [
         "crates/diffuse-scene/src/physics/vehicles/vehicle_wheel_configuration.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Rendering/RenderExtraction.swift",
@@ -10986,7 +10986,7 @@
       "rust": [
         "crates/diffuse-scene/src/rendering/render_extraction.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "partial: 5 component types done (RenderMeshComponent, RenderMaterialComponent, CameraComponent, LightType, LightComponent); ExtractedRenderSceneResource needs RenderScene/RenderCamera, still pending"
     },
     {
@@ -10998,7 +10998,7 @@
       "rust": [
         "crates/diffuse-scene/src/rendering/render_geometry_overlay.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Rendering/RenderScene.swift",
@@ -11009,7 +11009,7 @@
       "rust": [
         "crates/diffuse-scene/src/rendering/render_scene.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "partial: closed-prefix types only; the remaining declarations (RuntimeWorld/RenderScene containers, ComponentRegistry closures, AssetPipeline struct) still need translating"
     },
     {
@@ -11021,7 +11021,7 @@
       "rust": [
         "crates/diffuse-scene/src/runtime_world.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "partial: closed-prefix types only; the remaining declarations (RuntimeWorld/RenderScene containers, ComponentRegistry closures, AssetPipeline struct) still need translating"
     },
     {
@@ -11033,7 +11033,7 @@
       "rust": [
         "crates/diffuse-scene/src/scene_bootstrap.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "partial: 4 component types + 3 matrix helpers done; bootstrap_editor_preview_scene is an `extension SceneRuntime` and needs ParticleEmitter, still pending"
     },
     {
@@ -11045,7 +11045,7 @@
       "rust": [
         "crates/diffuse-scene/src/scene_graph/navigation.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/SceneGraph/Prefab.swift",
@@ -11056,7 +11056,7 @@
       "rust": [
         "crates/diffuse-scene/src/scene_graph/prefab.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/SceneGraph/SceneGraph.swift",
@@ -11067,7 +11067,7 @@
       "rust": [
         "crates/diffuse-scene/src/scene_graph/scene_graph.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/SceneRuntime.swift",
@@ -11078,7 +11078,7 @@
       "rust": [
         "crates/diffuse-scene/src/scene_runtime.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/PhysicsCollection.swift",
@@ -11089,7 +11089,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/physics_collection.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/PhysicsStateHash.swift",
@@ -11100,7 +11100,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/physics_state_hash.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/RagdollBridge.swift",
@@ -11111,7 +11111,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/ragdoll_bridge.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/RenderParticles.swift",
@@ -11122,7 +11122,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/render_particles.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/RenderSceneExtraction.swift",
@@ -11133,7 +11133,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/render_scene_extraction.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/ScheduleCommands.swift",
@@ -11144,7 +11144,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/schedule_commands.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/ScheduleDebugFrame.swift",
@@ -11155,7 +11155,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/schedule_debug_frame.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/ScheduleFrameContext.swift",
@@ -11166,7 +11166,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/schedule_frame_context.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/SchedulePhases.swift",
@@ -11177,7 +11177,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/schedule_phases.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/ScheduleReport.swift",
@@ -11188,7 +11188,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/schedule_report.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scheduling/WorldSchedule.swift",
@@ -11199,7 +11199,7 @@
       "rust": [
         "crates/diffuse-scene/src/scheduling/world_schedule.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Scripting.swift",
@@ -11210,7 +11210,7 @@
       "rust": [
         "crates/diffuse-scene/src/scripting.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Serialization/GameSave.swift",
@@ -11221,7 +11221,7 @@
       "rust": [
         "crates/diffuse-scene/src/serialization/game_save.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Serialization/GameSaveSupport.swift",
@@ -11232,7 +11232,7 @@
       "rust": [
         "crates/diffuse-scene/src/serialization/game_save_support.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/SceneRuntime/Serialization/SceneSerializer.swift",
@@ -11243,7 +11243,7 @@
       "rust": [
         "crates/diffuse-scene/src/serialization/scene_serializer.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/ScriptRuntime/Controllers/AnimationRuntime.swift",
@@ -11811,7 +11811,7 @@
       "rust": [
         "crates/diffuse-assets/tests/asset_pipeline/destructible_asset_baker_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AssetPipelineTests/GLTFImporterTests.swift",
@@ -12713,7 +12713,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/advanced_rigid_body_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/Animation/PlaybackEditingTests.swift",
@@ -12724,7 +12724,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/animation/playback_editing_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/ComponentDeclarationTests.swift",
@@ -12735,7 +12735,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/component_declaration_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/ComponentInspectionTests.swift",
@@ -12746,7 +12746,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/component_inspection_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/ComponentRegistryTests.swift",
@@ -12757,7 +12757,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/component_registry_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/CompoundColliderTests.swift",
@@ -12768,7 +12768,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/compound_collider_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/DestructionTests.swift",
@@ -12779,7 +12779,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/destruction_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/EmptyMeshColliderTests.swift",
@@ -12790,7 +12790,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/empty_mesh_collider_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/GameSaveTests.swift",
@@ -12801,7 +12801,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/game_save_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/LocalTransformConvenienceTests.swift",
@@ -12812,7 +12812,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/local_transform_convenience_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/NativeCharacterControllerTests.swift",
@@ -12823,7 +12823,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/native_character_controller_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/NatselMigrationTests.swift",
@@ -12834,7 +12834,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/natsel_migration_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/NavigationTests.swift",
@@ -12845,7 +12845,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/navigation_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/ParticleSettingsTests.swift",
@@ -12856,7 +12856,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/particle_settings_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/ParticleTests.swift",
@@ -12867,7 +12867,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/particle_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/Physics/ComponentEditingTests.swift",
@@ -12878,7 +12878,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/physics/component_editing_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/PhysicsBackendSelectionTests.swift",
@@ -12889,7 +12889,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/physics_backend_selection_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/PhysicsJointTests.swift",
@@ -12900,7 +12900,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/physics_joint_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/PrefabTests.swift",
@@ -12911,7 +12911,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/prefab_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/RagdollTests.swift",
@@ -12922,7 +12922,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/ragdoll_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/RenderExtractionTests.swift",

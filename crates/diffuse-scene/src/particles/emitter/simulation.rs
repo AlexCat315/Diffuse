@@ -12,9 +12,7 @@
 // of rewriting to `a <= b`, which would change behaviour on NaN inputs.
 #![allow(clippy::neg_cmp_op_on_partial_ord)]
 
-use diffuse_math::simd::simd_compat::{
-    Float3, Float4, Float4x4, simd_clamp_scalar,
-};
+use diffuse_math::simd::simd_compat::{Float3, Float4, Float4x4, simd_clamp_scalar};
 
 use crate::particles::emitter::particle_emitter::ParticleEmitter;
 use crate::particles::emitter::spawning::{ParticleSpawnBudget, ParticleSpawnResult};
@@ -108,8 +106,7 @@ impl ParticleEmitter {
         }
         self.runtime.last_frame_spawned_particles.clear();
         self.runtime.last_frame_events.clear();
-        let live_particle_limit = options
-            .live_particle_limit(self.settings.emission.max_particles);
+        let live_particle_limit = options.live_particle_limit(self.settings.emission.max_particles);
         let mut frame_stats = ParticleEmitterFrameStats::new(
             dt,
             self.runtime.particles.len() as i64,
@@ -134,13 +131,12 @@ impl ParticleEmitter {
             current_emitter_position,
             dt,
         );
-        let collision_context = if self.settings.gpu_simulation.simulation_space
-            == ParticleSimulationSpace::Local
-        {
-            self.make_collision_context(world_transform)
-        } else {
-            None
-        };
+        let collision_context =
+            if self.settings.gpu_simulation.simulation_space == ParticleSimulationSpace::Local {
+                self.make_collision_context(world_transform)
+            } else {
+                None
+            };
         let defers_event_sub_emitters_to_external_simulation =
             self.has_event_sub_emitter_rules() && self.gpu_simulation_plan().uses_gpu();
         let mut spawn_budget =
@@ -163,15 +159,13 @@ impl ParticleEmitter {
                 frame_stats.collision_count += 1;
                 if !defers_event_sub_emitters_to_external_simulation {
                     self.record_event(ParticleSubEmitterTrigger::Collision, &p);
-                    event_sub_emitter_spawn_result.include(
-                        &self.spawn_sub_emitter_particles(
-                            ParticleSubEmitterTrigger::Collision,
-                            &p,
-                            survivors.len() as i64,
-                            &mut event_particles,
-                            &mut spawn_budget,
-                        ),
-                    );
+                    event_sub_emitter_spawn_result.include(&self.spawn_sub_emitter_particles(
+                        ParticleSubEmitterTrigger::Collision,
+                        &p,
+                        survivors.len() as i64,
+                        &mut event_particles,
+                        &mut spawn_budget,
+                    ));
                 }
             }
             p.age += dt;
@@ -182,15 +176,13 @@ impl ParticleEmitter {
                 frame_stats.expired_particle_count += 1;
                 if !defers_event_sub_emitters_to_external_simulation {
                     self.record_event(ParticleSubEmitterTrigger::Death, &p);
-                    event_sub_emitter_spawn_result.include(
-                        &self.spawn_sub_emitter_particles(
-                            ParticleSubEmitterTrigger::Death,
-                            &p,
-                            survivors.len() as i64,
-                            &mut event_particles,
-                            &mut spawn_budget,
-                        ),
-                    );
+                    event_sub_emitter_spawn_result.include(&self.spawn_sub_emitter_particles(
+                        ParticleSubEmitterTrigger::Death,
+                        &p,
+                        survivors.len() as i64,
+                        &mut event_particles,
+                        &mut spawn_budget,
+                    ));
                 }
             }
         }
@@ -198,12 +190,12 @@ impl ParticleEmitter {
         let event_spawn_result = self.append_event_particles(event_particles);
         frame_stats.requested_spawn_count += event_sub_emitter_spawn_result.requested;
         frame_stats.sub_emitter_spawned_count += event_spawn_result.spawned;
-        frame_stats.capacity_limited_spawn_count +=
-            event_sub_emitter_spawn_result.capacity_limited_count
-                + event_spawn_result.capacity_limited_count;
-        frame_stats.spawn_budget_limited_count +=
-            event_sub_emitter_spawn_result.spawn_budget_limited_count
-                + event_spawn_result.spawn_budget_limited_count;
+        frame_stats.capacity_limited_spawn_count += event_sub_emitter_spawn_result
+            .capacity_limited_count
+            + event_spawn_result.capacity_limited_count;
+        frame_stats.spawn_budget_limited_count += event_sub_emitter_spawn_result
+            .spawn_budget_limited_count
+            + event_spawn_result.spawn_budget_limited_count;
 
         if !self.settings.emission.is_emitting {
             self.runtime.previous_emitter_position = Some(current_emitter_position);
@@ -230,20 +222,19 @@ impl ParticleEmitter {
             let to_spawn = self.runtime.emission_accumulator as i64;
             if to_spawn > 0 {
                 self.runtime.emission_accumulator -= to_spawn as f32;
-                let spawn_result = self.spawn(
+                let spawn_result = self.spawn_with_budget(
                     to_spawn,
                     world_transform,
                     None,
                     inherited_world_velocity,
                     Some(live_particle_limit),
                     true,
+                    &mut spawn_budget,
                 );
                 frame_stats.requested_spawn_count += spawn_result.requested;
                 frame_stats.continuous_spawned_count += spawn_result.spawned;
-                frame_stats.capacity_limited_spawn_count +=
-                    spawn_result.capacity_limited_count;
-                frame_stats.spawn_budget_limited_count +=
-                    spawn_result.spawn_budget_limited_count;
+                frame_stats.capacity_limited_spawn_count += spawn_result.capacity_limited_count;
+                frame_stats.spawn_budget_limited_count += spawn_result.spawn_budget_limited_count;
             }
         }
         if self.settings.emission.burst_count > 0 && self.settings.emission.burst_interval > 0.0 {
@@ -258,25 +249,25 @@ impl ParticleEmitter {
                 let to_spawn = self.runtime.burst_spawn_accumulator as i64;
                 if to_spawn > 0 {
                     self.runtime.burst_spawn_accumulator -= to_spawn as f32;
-                    let spawn_result = self.spawn(
+                    let spawn_result = self.spawn_with_budget(
                         to_spawn,
                         world_transform,
                         None,
                         inherited_world_velocity,
                         Some(live_particle_limit),
                         true,
+                        &mut spawn_budget,
                     );
                     frame_stats.requested_spawn_count += spawn_result.requested;
                     frame_stats.burst_spawned_count += spawn_result.spawned;
-                    frame_stats.capacity_limited_spawn_count +=
-                        spawn_result.capacity_limited_count;
+                    frame_stats.capacity_limited_spawn_count += spawn_result.capacity_limited_count;
                     frame_stats.spawn_budget_limited_count +=
                         spawn_result.spawn_budget_limited_count;
                 }
             }
         }
-        let distance_rate_multiplier = emission_step
-            .average_multiplier(&self.settings.emission.distance_emission_rate_curve);
+        let distance_rate_multiplier =
+            emission_step.average_multiplier(&self.settings.emission.distance_emission_rate_curve);
         let distance_spawn_result = self.spawn_distance_emission(
             self.runtime.previous_emitter_position,
             current_emitter_position,
@@ -309,7 +300,10 @@ impl ParticleEmitter {
     /// Applies collision/death events produced by an external simulation backend
     /// and spawns matching sub-emitter particles through the same rules as CPU
     /// simulation.
-    pub fn apply_simulation_events(&mut self, events: &[ParticleEvent]) -> ParticleEmitterFrameStats {
+    pub fn apply_simulation_events(
+        &mut self,
+        events: &[ParticleEvent],
+    ) -> ParticleEmitterFrameStats {
         self.runtime.last_frame_spawned_particles.clear();
         self.runtime.last_frame_events.clear();
         let mut frame_stats = ParticleEmitterFrameStats::new(
@@ -366,12 +360,12 @@ impl ParticleEmitter {
         let event_spawn_result = self.append_event_particles(event_particles);
         frame_stats.requested_spawn_count += event_sub_emitter_spawn_result.requested;
         frame_stats.sub_emitter_spawned_count += event_spawn_result.spawned;
-        frame_stats.capacity_limited_spawn_count +=
-            event_sub_emitter_spawn_result.capacity_limited_count
-                + event_spawn_result.capacity_limited_count;
-        frame_stats.spawn_budget_limited_count +=
-            event_sub_emitter_spawn_result.spawn_budget_limited_count
-                + event_spawn_result.spawn_budget_limited_count;
+        frame_stats.capacity_limited_spawn_count += event_sub_emitter_spawn_result
+            .capacity_limited_count
+            + event_spawn_result.capacity_limited_count;
+        frame_stats.spawn_budget_limited_count += event_sub_emitter_spawn_result
+            .spawn_budget_limited_count
+            + event_spawn_result.spawn_budget_limited_count;
         frame_stats.live_particle_count = self.runtime.particles.len() as i64;
         frame_stats.spawn_budget_consumed_count = spawn_budget.consumed_count;
         self.runtime.last_frame_stats = frame_stats;
@@ -446,8 +440,8 @@ impl ParticleEmitter {
         }
         let start_age = self.runtime.emitter_age;
         if self.settings.emission.looping {
-            self.runtime.emitter_age = (self.runtime.emitter_age + dt)
-                % self.settings.emission.duration;
+            self.runtime.emitter_age =
+                (self.runtime.emitter_age + dt) % self.settings.emission.duration;
             let sample_age = (start_age + dt * 0.5) % self.settings.emission.duration;
             return ActiveEmissionStep {
                 delta: dt,
@@ -462,7 +456,10 @@ impl ParticleEmitter {
             };
         }
 
-        let remaining = swift_max_f32(0.0, self.settings.emission.duration - self.runtime.emitter_age);
+        let remaining = swift_max_f32(
+            0.0,
+            self.settings.emission.duration - self.runtime.emitter_age,
+        );
         let active_delta = swift_min_f32(dt, remaining);
         self.runtime.emitter_age += dt;
         let sample_age = start_age + active_delta * 0.5;
@@ -481,7 +478,12 @@ impl ParticleEmitter {
 
     fn has_event_sub_emitter_rules(&self) -> bool {
         self.legacy_sub_emitter_rule().is_some()
-            || self.settings.sub_emitters.rules.iter().any(|rule| rule.is_active())
+            || self
+                .settings
+                .sub_emitters
+                .rules
+                .iter()
+                .any(|rule| rule.is_active())
     }
 }
 

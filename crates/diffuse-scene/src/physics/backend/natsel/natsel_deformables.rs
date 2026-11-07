@@ -132,6 +132,22 @@ impl NatselPhysicsBackend {
                     },
                 );
             } else if let Some(record) = self.characters.get_mut(&descriptor.entity) {
+                // Swift teleports an unchanged controller whose authored transform
+                // moved. `stepCharacters` writes its simulated transform back into
+                // the descriptor, so a mere simulation step must not re-teleport.
+                if record.descriptor.world_transform != descriptor.world_transform {
+                    let rotation =
+                        NatselPhysicsBackend::rotation(descriptor.world_transform.matrix);
+                    record.character.rotation = NatselPhysicsBackend::nq(rotation.vector);
+                    let center = rotation.act(controller.center);
+                    record
+                        .character
+                        .set_position(NatselPhysicsBackend::np(Float3::new(
+                            descriptor.world_transform.translation().x + center.x,
+                            descriptor.world_transform.translation().y + center.y,
+                            descriptor.world_transform.translation().z + center.z,
+                        )));
+                }
                 record.descriptor = descriptor;
             }
         }

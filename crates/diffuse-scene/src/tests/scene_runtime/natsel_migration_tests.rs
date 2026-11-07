@@ -195,8 +195,10 @@ fn character_triggers() {
     runtime.set_component(trigger_collider, trigger);
 
     let character = runtime.create_entity();
-    let mut controller = CharacterController::default();
-    controller.gravity_scale = 0.0;
+    let controller = CharacterController {
+        gravity_scale: 0.0,
+        ..Default::default()
+    };
     runtime.set_component(controller, character);
 
     let first = runtime.tick(1.0 / 60.0, 0, Vec::new());
