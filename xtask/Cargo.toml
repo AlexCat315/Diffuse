@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 cove-logging.workspace = true
+cove-package.workspace = true
 cove-system.workspace = true
 libc.workspace = true
 serde.workspace = true

@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Media decoding through FFmpeg"
+description = "Diffuse media composition and export"
 
 [lib]
 path = "src/lib.rs"
@@ -13,9 +13,6 @@ path = "src/lib.rs"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-
-[build-dependencies]
-cc.workspace = true
 
 [lints]
 workspace = true

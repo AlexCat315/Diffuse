@@ -20,7 +20,6 @@ diffuse-exr.workspace = true
 diffuse-intent.workspace = true
 diffuse-kernel.workspace = true
 diffuse-math.workspace = true
-diffuse-media.workspace = true
 diffuse-render.workspace = true
 diffuse-scene.workspace = true
 diffuse-script.workspace = true

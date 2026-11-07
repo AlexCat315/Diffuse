@@ -21,7 +21,7 @@ impl PluginBuild {
             .join(name);
         if !is_executable(&bun) {
             return Err(ToolError::message(
-                "Run cove studio plugins prepare first",
+                "Bun runtime is missing from Engine/Sources/PluginRuntime/Resources/bun",
             ));
         }
         let destination = self.output.clone().unwrap_or_else(|| {
@@ -75,14 +75,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_missing_bun_runtime_asks_for_the_prepare_step() {
+    fn a_missing_bun_runtime_reports_its_location() {
         let build = PluginBuild {
             directory: PathBuf::from("/tmp/plugin"),
             root: PathBuf::from("/nonexistent/cove"),
             output: None,
         };
         let error = build.run().unwrap_err();
-        assert_eq!(error.to_string(), "Run cove studio plugins prepare first");
+        assert_eq!(
+            error.to_string(),
+            "Bun runtime is missing from Engine/Sources/PluginRuntime/Resources/bun"
+        );
     }
 
     #[test]
@@ -93,14 +96,10 @@ mod tests {
             output: None,
         };
         let destination = build.output.clone().unwrap_or_else(|| {
-            build
-                .directory
-                .parent()
-                .unwrap()
-                .join(format!(
-                    "{}.coveplugin",
-                    build.directory.file_name().unwrap().to_string_lossy()
-                ))
+            build.directory.parent().unwrap().join(format!(
+                "{}.coveplugin",
+                build.directory.file_name().unwrap().to_string_lossy()
+            ))
         });
         assert_eq!(destination, PathBuf::from("/tmp/plugins/studio.coveplugin"));
     }

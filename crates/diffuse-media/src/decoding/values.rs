@@ -187,13 +187,13 @@ fn standardize(path: &str) -> String {
 /// `MediaError`: the three failure domains the Swift runtime distinguished.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MediaError {
-    /// `case invalid(String)` — caller-supplied values that cannot be used.
+    /// `case invalid(String)` - caller-supplied values that cannot be used.
     #[error("{0}")]
     Invalid(String),
-    /// `case decoding(String)` — FFmpeg could not open or read the stream.
+    /// `case decoding(String)` - the media could not be opened or probed.
     #[error("{0}")]
     Decoding(String),
-    /// `case export(String)` — the export worker failed.
+    /// `case export(String)` - the export worker failed.
     #[error("{0}")]
     Export(String),
 }
@@ -207,56 +207,6 @@ impl MediaError {
             }
         }
     }
-}
-
-/// Interleaved, native Float32 stereo PCM at 48 kHz, ready for an audio sink.
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct PCMBuffer {
-    /// Interleaved stereo `f32` samples in the host's native byte order.
-    pub samples: Vec<u8>,
-}
-
-impl PCMBuffer {
-    /// Swift's internal `init(samples:)`.
-    pub(crate) fn new(samples: Vec<u8>) -> Self {
-        PCMBuffer { samples }
-    }
-
-    /// `var sampleRate: Int { 48000 }`.
-    #[inline]
-    pub fn sample_rate(&self) -> usize {
-        48_000
-    }
-
-    /// `var channels: Int { 2 }`.
-    #[inline]
-    pub fn channels(&self) -> usize {
-        2
-    }
-
-    /// `var frameCount: Int { samples.count / (2 * MemoryLayout<Float>.size) }`.
-    #[inline]
-    pub fn frame_count(&self) -> usize {
-        self.samples.len() / (2 * core::mem::size_of::<f32>())
-    }
-
-    /// `var duration: Double { Double(frameCount) / Double(sampleRate) }`.
-    #[inline]
-    pub fn duration(&self) -> f64 {
-        self.frame_count() as f64 / self.sample_rate() as f64
-    }
-}
-
-/// One decoded video frame in tightly packed RGBA8.
-#[derive(Clone, Debug, PartialEq)]
-pub struct VideoFrame {
-    pub rgba: Vec<u8>,
-    pub width: usize,
-    pub height: usize,
-    /// Bytes per row. The C bridge always writes `width * 4`.
-    pub stride: usize,
-    /// Presentation time in seconds, relative to the stream start.
-    pub time: f64,
 }
 
 /// `MediaAsset.Video`.
@@ -277,35 +227,89 @@ pub struct MediaAsset {
 impl MediaAsset {
     /// `MediaAsset.inspect(_:)`.
     ///
-    /// Both probes run even when the first fails, exactly like the two `try?`
-    /// calls in Swift, so a file with only audio or only video still inspects.
+    /// The pinned 8.1.3 C bridge opened two decoders (audio-only and
+    /// video-only). FFmpeg 9.x's `ffprobe` reports the same facts in one pass,
+    /// including files carrying just one kind of stream.
     pub fn inspect(url: &MediaUrl) -> Result<Self, MediaError> {
-        let audio = crate::decoding::decoder::FileDecoder::new(url, false).ok();
-        let video = crate::decoding::decoder::FileDecoder::new(url, true).ok();
-        if audio.is_none() && video.is_none() {
+        if !url.is_file_url() {
+            return Err(MediaError::Decoding(format!(
+                "Only local files can be inspected: {}",
+                url.last_path_component()
+            )));
+        }
+        let probe = crate::editing::tools::FFmpegTools::ffprobe()?;
+        let output = std::process::Command::new(&probe)
+            .args([
+                "-v",
+                "error",
+                "-show_format",
+                "-show_streams",
+                "-of",
+                "json",
+            ])
+            .arg(url.path())
+            .output()
+            .map_err(|error| MediaError::Decoding(format!("ffprobe failed: {error}")))?;
+        if !output.status.success() {
             return Err(MediaError::Decoding(format!(
                 "No supported media streams: {}",
                 url.last_path_component()
             )));
         }
-        let audio_duration = audio
-            .as_ref()
-            .map_or(0.0, |decoder| decoder.info().duration);
-        let video_duration = video
-            .as_ref()
-            .map_or(0.0, |decoder| decoder.info().duration);
+        let document: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|error| MediaError::Decoding(format!("ffprobe JSON: {error}")))?;
+        let streams: Vec<&serde_json::Value> = document
+            .get("streams")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .collect();
+        let video = streams.iter().find(|stream| {
+            stream.get("codec_type").and_then(serde_json::Value::as_str) == Some("video")
+        });
+        let width = video
+            .and_then(|stream| stream.get("width"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize;
+        let height = video
+            .and_then(|stream| stream.get("height"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize;
+        let has_audio = streams.iter().any(|stream| {
+            stream.get("codec_type").and_then(serde_json::Value::as_str) == Some("audio")
+        });
+        if video.is_none() && !has_audio {
+            return Err(MediaError::Decoding(format!(
+                "No supported media streams: {}",
+                url.last_path_component()
+            )));
+        }
+        let duration = number(
+            document
+                .get("format")
+                .and_then(|format| format.get("duration")),
+        )
+        .or_else(|| {
+            streams
+                .iter()
+                .find_map(|stream| number(stream.get("duration")))
+        })
+        .unwrap_or(0.0);
         Ok(MediaAsset {
-            duration: audio_duration.max(video_duration),
-            video: video.map(|decoder| {
-                let info = decoder.info();
-                MediaAssetVideo {
-                    // `Int(info.width)`: the bridge only reports non-negative
-                    // codec dimensions, so this is the same value widened.
-                    width: info.width.max(0) as usize,
-                    height: info.height.max(0) as usize,
-                }
-            }),
-            has_audio: audio.is_some(),
+            duration,
+            video: (width > 0 && height > 0).then_some(MediaAssetVideo { width, height }),
+            has_audio,
         })
     }
+}
+
+/// ffprobe emits durations as strings; stream objects sometimes use numbers.
+fn number(value: Option<&serde_json::Value>) -> Option<f64> {
+    value.and_then(|value| {
+        value
+            .as_str()
+            .and_then(|text| text.parse::<f64>().ok())
+            .or_else(|| value.as_f64())
+    })
 }

@@ -29,10 +29,10 @@ Format:
 
 ## G3: `cove-package` cannot bundle helper executables or extra resources
 - Needed by: editor packaging (`DiffusePluginHost` ships beside the editor; `Editor/cove.json` `desktopHelpers`), player export, shader artifacts in `RenderBackend/Resources`
-- Cove today: `Tools/Package` bundles one binary plus `Assets/` as `AppContent.resources`
+- Cove today: `xtask/` (crate `cove-package`) still bundles one binary plus `Assets/` and `Platforms/<p>/Resources`; `bundle()`, `Cli`, `Command`, `Project` and `Target` are all private, only `main()`/`cargo_main()` are public
 - Needed: `[package.metadata.cove] helpers = ["diffuse-plugin-host"]` and additional resource directories
-- Diffuse meanwhile: `cargo xtask package` wraps `cove_package` and copies helpers and resources itself
-- Status: open
+- Diffuse meanwhile: batch 85 wired `cove-package` in as the thin forwarding layer (`xtask/src/main.rs`); the helpers/resources copy wrapper is still **not implemented**
+- Status: partially wired (G3 itself still open)
 
 ## G4: no general HTTP client; Linux has no TLS
 - Needed by: `diffuse-ai` (model API calls: POST, headers, streamed responses), `diffuse-plugin` (`Network/Transfers.swift`), `diffuse-editor-core` (toolchain downloads), `xtask`
@@ -93,3 +93,15 @@ Format:
 - Historical resolution (not verification of the 2026-11-04 checkout): **fixed in Natsel** (user authorised editing Natsel). Two additive changes, `cargo test` 530 → 532 passing, no behaviour change:
   - `unsafe impl Send for World {}` in `src/simulation/world_runtime.rs`, with a `// SAFETY:` comment naming why the privately-owned traversal stacks transfer safely and why `Sync` is deliberately omitted.
   - `CharacterVirtual::from_raw_world(world: *mut World, def) -> Option<CharacterVirtual<'a>>` plus `world_mut(&mut self)`, in `src/character/character_virtual.rs`. This is the sanctioned way to express Swift's `unowned let world`; its doc comment states the caller's three obligations. Diffuse now has one auditable `unsafe` call instead of two `unsafe` blocks.
+
+## G7: `cove-package audit` rejects Cargo targets outside `src/`
+- Needed by: `cargo xtask audit` in the Diffuse workspace
+- Cove today: `xtask/src/audit.rs` inspects `cargo metadata --no-deps --locked` and fails with `Rust target outside src/: .../benches/physics_runtime.rs`
+- Diffuse meanwhile: keep the standard Cargo `benches/` layout; do not use `audit` until benchmarks move under `src/` or Cove relaxes the check
+- Status: open (upstream layout constraint)
+
+## G8: `cove-media`'s FFmpeg build produces no command line tools
+- Needed by: `diffuse-media::MediaExporter` (`-filter_complex` export) and `MediaAsset::inspect`
+- Cove today: `ffmpeg-sys-next =9.0.1` with the `build` feature clones `release/9.0` into `OUT_DIR` and configures with `--disable-programs`; only static libraries, and the media crate has no encoder/muxer
+- Diffuse meanwhile: batch 85 keeps the export strategy and resolves an external FFmpeg 9.x CLI (`COVE_FFMPEG_EXECUTABLE`/`COVE_FFPROBE_EXECUTABLE`, shipped `Tools`/`Helpers`, then `PATH`); the `cove-media` `ffmpeg` feature is not enabled on any Diffuse crate yet
+- Status: open (export capability needs a Cove API or a permanent external-tool dependency)

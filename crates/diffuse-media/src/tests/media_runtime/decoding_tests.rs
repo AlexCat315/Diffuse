@@ -1,10 +1,11 @@
-//! `MediaRuntimeTests` — Swift's `DecodingTests.swift`.
+//! `MediaRuntimeTests` — Swift's `DecodingTests.swift`, re-grounded on the
+//! FFmpeg 9.x command line tools that `cove-media` aligns with.
 //!
 //! Fixtures are the same three files the Swift target bundled: `tone.wav`,
-//! `tone.m4a` and `video.mp4`. They are read from `crates/diffuse-media/fixtures`,
-//! the Rust equivalent of `Bundle.module.resourceURL/Fixtures`.
+//! `tone.m4a` and `video.mp4`. They are read from `crates/diffuse-media/fixtures`.
+//! The synchronous PCM/frame readers belonged to the removed `CFFmpegBridge`;
+//! their stream-level facts are now asserted through `MediaAsset::inspect`.
 
-use crate::decoding::readers::{AudioFile, AudioReader, VideoReader};
 use crate::decoding::values::{MediaAsset, MediaError, MediaUrl};
 use crate::editing::composition::{CompositionClip, CompositionVideo, MediaComposition};
 use crate::editing::export::MediaExporter;
@@ -18,61 +19,41 @@ fn fixture(name: &str) -> MediaUrl {
     MediaUrl::from_file_path(path.to_string_lossy().into_owned())
 }
 
-/// `pcmResamplingDrainsTailAndEnforcesResidentLimit`
+/// `pcmResamplingDrainsTailAndEnforcesResidentLimit` — the WAV fixture must
+/// still be recognized as a 0.25 s audio-only asset.
 #[test]
-fn pcm_resampling_drains_tail_and_enforces_resident_limit() {
-    let pcm = AudioFile::decode(&fixture("tone.wav")).expect("tone.wav decodes");
-    assert_eq!(pcm.channels(), 2);
-    assert_eq!(pcm.sample_rate(), 48_000);
-    assert_eq!(pcm.frame_count(), 12_000);
+fn wav_asset_probe_reports_audio_only() {
+    let asset = MediaAsset::inspect(&fixture("tone.wav")).expect("tone.wav inspects");
+    assert!(asset.has_audio);
+    assert!(asset.video.is_none());
+    assert!((asset.duration - 0.25).abs() < 0.01);
     assert!(
-        pcm.samples.iter().any(|byte| *byte != 0),
-        "decoded PCM must not be all zero bytes"
+        MediaAsset::inspect(&fixture("video.mp4"))
+            .expect("video.mp4 inspects")
+            .video
+            .is_some()
     );
-    assert!(AudioFile::decode_with_limit(&fixture("tone.wav"), 100).is_err());
-    assert!(AudioFile::decode(&fixture("video.mp4")).is_err());
 }
 
-/// `compressedAudioDecodesWithoutAnExternalProcess`
+/// `compressedAudioDecodesWithoutAnExternalProcess` — compressed audio must
+/// still probe as audio-only with a usable duration.
 #[test]
-fn compressed_audio_decodes_without_an_external_process() {
+fn compressed_audio_asset_probe_reports_stream_facts() {
     let info = MediaAsset::inspect(&fixture("tone.m4a")).expect("tone.m4a inspects");
     assert!(info.has_audio);
     assert!(info.video.is_none());
-
-    let reader = AudioReader::new(&fixture("tone.m4a")).expect("reader opens");
-    let mut frames = 0usize;
-    while let Some(buffer) = reader.next_buffer().expect("buffer reads") {
-        frames += buffer.frame_count();
-    }
-    assert!(frames >= 12_000, "decoded {frames} frames");
-    reader.seek(0.0).expect("seek succeeds");
-    assert!(reader.next_buffer().expect("buffer reads").is_some());
+    assert!(info.duration > 0.0);
 }
 
-/// `videoFramesSeekAndResetAfterEOF`
+/// `videoFramesSeekAndResetAfterEOF` — dimensions, duration and the remote-URL
+/// rejection are the parts that survive without the synchronous frame reader.
 #[test]
-fn video_frames_seek_and_reset_after_eof() {
+fn video_asset_probe_reports_dimensions_and_duration() {
     let asset = MediaAsset::inspect(&fixture("video.mp4")).expect("video.mp4 inspects");
     let video = asset.video.expect("video stream present");
     assert_eq!(video.width, 16);
     assert_eq!(video.height, 16);
     assert!((asset.duration - 1.0).abs() < 0.01);
-
-    let reader = VideoReader::new(&fixture("video.mp4")).expect("reader opens");
-    let mut count = 0usize;
-    while let Some(frame) = reader.next_frame().expect("frame reads") {
-        assert_eq!(frame.rgba.len(), 16 * 16 * 4);
-        assert!(frame.rgba[0] > 200 && frame.rgba[1] < 30);
-        count += 1;
-    }
-    assert_eq!(count, 10);
-    // `try #require(await reader.frame(at: 0.5))`
-    let frame = reader
-        .frame_at(0.5)
-        .expect("frame reads")
-        .expect("frame at 0.5 exists");
-    assert!((frame.time - 0.5).abs() < 0.01);
     // `try MediaAsset.inspect(URL(string: "https://example.com/video.mp4")!)`
     let remote = MediaUrl::parse("https://example.com/video.mp4").expect("URL(string:) parses");
     assert!(MediaAsset::inspect(&remote).is_err());
@@ -132,7 +113,7 @@ fn trims_and_concatenates_video_with_silent_audio() {
         CompositionClip::new("video.mp4", 0.5, 0.3),
     ];
 
-    let exporter = MediaExporter::new(FFmpegTools::executable().expect("pinned FFmpeg found"));
+    let exporter = MediaExporter::new(FFmpegTools::executable().expect("FFmpeg 9.x CLI found"));
     exporter
         .export(&composition, &root, &output)
         .expect("export succeeds");

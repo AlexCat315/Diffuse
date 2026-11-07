@@ -33,7 +33,7 @@ git submodule update --init --recursive
 ./cove build Editor --mac
 ```
 
-先安装 Cove SDK；`./cove` 选择 `Editor/cove.json` 声明的共享版本，也支持用 `COVE_SDK_ROOT` 选择本地开发源码。`cove studio native-bootstrap` 随后安装 SDK 发布的原生依赖，构建 Studio 的 FFmpeg、OpenEXR/Imath，并准备固定版本的 Bun 桌面插件运行时；Windows 下自动初始化 MSVC 工具链。
+先安装 Cove SDK；`./cove` 选择 `Editor/cove.json` 声明的共享版本，也支持用 `COVE_SDK_ROOT` 选择本地开发源码。`cargo xtask setup` 准备原生工具链；FFmpeg 由 `cove-media` 提供，OpenEXR/Imath 与固定版本的 Bun 桌面插件运行时另行暂存；Windows 下自动初始化 MSVC 工具链。
 
 后续日常开发只需要：
 
@@ -69,7 +69,7 @@ SDK 的共享核心、跨平台调试服务、浏览器原型与示例位于 [Co
 | OpenEXR | CMake 源码编译 | submodule `Engine/third-party/openexr` |
 | Natsel | Swift Package Manager | 跟随 `AlexCat315/Natsel` main，锁文件记录实际提交 |
 | Bun | TypeScript 桌面插件运行时 | 固定版本 1.4.4，SHA-256 校验 |
-| FFmpeg | 固定版本 LGPL 静态库和桌面工具 | 官方 8.1.3 源码，SHA-256 校验 |
+| FFmpeg | Cove 通用媒体层（FFmpeg 9.x 静态库编入 `OUT_DIR`） | Cove `cove-media` / `ffmpeg-sys-next`；剪辑导出使用外部 FFmpeg 9.x CLI |
 
 构建模式：每个 SPM 包的 native 依赖都在自己的 `<package>/third-party/` 下，CMake 编译产物落到 `<package>/vendor/`（gitignored），SPM 通过 `.binaryTarget(path:)` 消费。
 

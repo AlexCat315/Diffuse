@@ -1,120 +1,71 @@
-//! Locating the pinned FFmpeg executable.
+//! Locating the FFmpeg command line tools.
 //!
-//! Installed workstations ship a pinned tool beside their executable; source
-//! builds use the same tool staged under `vendor/`. The Swift version resolved
-//! its package root from `#filePath`, which Rust replaces with
-//! `CARGO_MANIFEST_DIR` at compile time and the artifact root at run time
-//! (`DIFFUSE_NATIVE_ROOT`, default `vendor/`, MIGRATION.md §2.3).
-//!
-//! Every `#if os` / `#if arch` branch of the Swift source becomes a `#[cfg]` here
-//! (MIGRATION.md §2.3, "platform coverage").
+//! `cove-media` builds FFmpeg 9.x into `OUT_DIR` with `--disable-programs`, so
+//! no CLI is part of that artifact. Diffuse resolves the external tools in this
+//! order: an explicit override, tools shipped beside the executable, then the
+//! system `PATH` (Homebrew's FFmpeg 9.x on macOS). The pinned 8.1.3
+//! `FFmpeg.artifactbundle/<variant>/bin` candidate was removed with the
+//! artifact bundle in batch 85.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::decoding::values::MediaError;
 
 /// `public enum FFmpegTools`.
 pub struct FFmpegTools;
 
-/// `let name = "ffmpeg.exe" if Windows else "ffmpeg"`.
 #[cfg(windows)]
-const EXECUTABLE_NAME: &str = "ffmpeg.exe";
+const FFMPEG_NAME: &str = "ffmpeg.exe";
 #[cfg(not(windows))]
-const EXECUTABLE_NAME: &str = "ffmpeg";
+const FFMPEG_NAME: &str = "ffmpeg";
 
-/// The `vendor/FFmpeg.artifactbundle/<variant>/bin` component.
-const ARTIFACT_VARIANT: &str = variant_directory();
-
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-const fn variant_directory() -> &'static str {
-    "macos-arm64"
-}
-
-#[cfg(all(target_os = "macos", not(target_arch = "aarch64")))]
-const fn variant_directory() -> &'static str {
-    "macos-x86_64"
-}
-
-#[cfg(all(windows, target_arch = "aarch64"))]
-const fn variant_directory() -> &'static str {
-    "windows-arm64"
-}
-
-#[cfg(all(windows, not(target_arch = "aarch64")))]
-const fn variant_directory() -> &'static str {
-    "windows-x86_64"
-}
-
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-const fn variant_directory() -> &'static str {
-    "linux-aarch64"
-}
-
-#[cfg(all(target_os = "linux", not(target_arch = "aarch64")))]
-const fn variant_directory() -> &'static str {
-    "linux-x86_64"
-}
-
-#[cfg(all(target_os = "android", target_arch = "aarch64"))]
-const fn variant_directory() -> &'static str {
-    "android-arm64"
-}
-
-#[cfg(all(target_os = "android", not(target_arch = "aarch64")))]
-const fn variant_directory() -> &'static str {
-    "android-x86_64"
-}
-
-#[cfg(all(target_os = "ios", target_arch = "aarch64"))]
-const fn variant_directory() -> &'static str {
-    "ios-arm64"
-}
+#[cfg(windows)]
+const FFPROBE_NAME: &str = "ffprobe.exe";
+#[cfg(not(windows))]
+const FFPROBE_NAME: &str = "ffprobe";
 
 impl FFmpegTools {
     /// Environment override consulted before the shipped locations.
     pub const EXECUTABLE_OVERRIDE: &'static str = "COVE_FFMPEG_EXECUTABLE";
+    /// Separate override for the probe used by `MediaAsset::inspect`.
+    pub const PROBE_OVERRIDE: &'static str = "COVE_FFPROBE_EXECUTABLE";
 
     /// `public static func executable() throws -> URL`.
-    ///
-    /// Candidates, in Swift's order:
-    /// 1. `COVE_FFMPEG_EXECUTABLE`, when set (inserted first);
-    /// 2. `<executable dir>/Tools/ffmpeg`;
-    /// 3. `<executable dir>/../Helpers/ffmpeg`;
-    /// 4. `<package root>/vendor/FFmpeg.artifactbundle/<variant>/bin/ffmpeg`.
-    ///
-    /// `<executable dir>` is the directory of the running binary, as
-    /// `Bundle.main.executableURL` reports it.
     pub fn executable() -> Result<PathBuf, MediaError> {
+        Self::locate(FFMPEG_NAME, Self::EXECUTABLE_OVERRIDE)
+    }
+
+    /// The probe ships alongside `ffmpeg` in every FFmpeg distribution.
+    pub fn ffprobe() -> Result<PathBuf, MediaError> {
+        Self::locate(FFPROBE_NAME, Self::PROBE_OVERRIDE)
+    }
+
+    fn locate(name: &str, override_variable: &str) -> Result<PathBuf, MediaError> {
         let mut candidates: Vec<PathBuf> = Vec::new();
-        if let Some(override_path) = std::env::var_os(Self::EXECUTABLE_OVERRIDE) {
+        if let Some(override_path) = std::env::var_os(override_variable) {
             candidates.push(PathBuf::from(override_path));
         }
         let directory = executable_directory();
-        candidates.push(directory.join("Tools").join(EXECUTABLE_NAME));
+        candidates.push(directory.join("Tools").join(name));
         if let Some(parent) = directory.parent() {
-            candidates.push(parent.join("Helpers").join(EXECUTABLE_NAME));
+            candidates.push(parent.join("Helpers").join(name));
         } else {
             // `deletingLastPathComponent()` of a root directory yields the root.
-            candidates.push(directory.join("Helpers").join(EXECUTABLE_NAME));
+            candidates.push(directory.join("Helpers").join(name));
         }
-        candidates.push(
-            package_root()
-                .join("vendor")
-                .join("FFmpeg.artifactbundle")
-                .join(ARTIFACT_VARIANT)
-                .join("bin")
-                .join(EXECUTABLE_NAME),
-        );
-        match candidates
+        if let Some(paths) = std::env::var_os("PATH") {
+            for entry in std::env::split_paths(&paths) {
+                candidates.push(entry.join(name));
+            }
+        }
+        candidates
             .into_iter()
-            .find(|candidate| is_executable_file(candidate.as_path()))
-        {
-            Some(found) => Ok(found),
-            None => Err(MediaError::Export(
-                "Pinned FFmpeg tool is missing. Run `cargo xtask native-bootstrap` or configure COVE_FFMPEG_EXECUTABLE."
-                    .to_string(),
-            )),
-        }
+            .find(|candidate| is_executable_file(candidate))
+            .ok_or_else(|| {
+                MediaError::Export(format!(
+                    "{name} is missing. Install FFmpeg 9.x or set {override_variable}."
+                ))
+            })
     }
 }
 
@@ -128,20 +79,8 @@ fn executable_directory() -> PathBuf {
     }
 }
 
-/// Swift derived the package root from `#filePath` (four `deletingLastPathComponent`
-/// calls from `Sources/MediaRuntime/Editing/Tools.swift`). The Rust crate lives at
-/// `crates/diffuse-media/src/editing/tools.rs`, so `CARGO_MANIFEST_DIR/../..` is the
-/// workspace root that holds `vendor/`.
-fn package_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|path| path.parent())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
-}
-
 /// `FileManager.default.isExecutableFile(atPath:)`.
-fn is_executable_file(path: &std::path::Path) -> bool {
+fn is_executable_file(path: &Path) -> bool {
     let Ok(metadata) = std::fs::metadata(path) else {
         return false;
     };

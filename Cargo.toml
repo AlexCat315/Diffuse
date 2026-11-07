@@ -68,6 +68,8 @@ cove-devtools = { path = "../Cove/crates/devtools" }
 cove-devtools-protocol = { path = "../Cove/crates/devtools-protocol" }
 cove-agent = { path = "../Cove/crates/agent" }
 cove-http = { path = "../Cove/crates/http" }
+cove-media = { path = "../Cove/crates/media" }
+cove-package = { path = "../Cove/xtask" }
 
 natsel = { path = "../Natsel" }
 

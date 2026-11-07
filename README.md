@@ -105,7 +105,7 @@ git submodule update --init --recursive
 ./cove build Editor
 ```
 
-`./cove` uses the shared Cove SDK declared by `Editor/cove.json`, or `COVE_SDK_ROOT` for a local development checkout. `cove studio native-bootstrap` installs the SDK’s released native artifacts, builds Studio’s FFmpeg and OpenEXR/Imath dependencies, and stages the pinned Bun desktop runtime. It is cross-platform and initializes the MSVC toolchain on Windows.
+`./cove` uses the shared Cove SDK declared by `Editor/cove.json`, or `COVE_SDK_ROOT` for a local development checkout. `cargo xtask setup` prepares the native toolchain; FFmpeg comes from `cove-media`, while OpenEXR/Imath and the pinned Bun desktop runtime are staged separately. It is cross-platform and initializes the MSVC toolchain on Windows.
 
 After the first bootstrap, day-to-day development only needs:
 

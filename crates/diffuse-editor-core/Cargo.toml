@@ -25,7 +25,6 @@ diffuse-intent.workspace = true
 diffuse-kernel.workspace = true
 diffuse-lsp.workspace = true
 diffuse-math.workspace = true
-diffuse-media.workspace = true
 diffuse-observation.workspace = true
 diffuse-perception.workspace = true
 diffuse-plugin.workspace = true
