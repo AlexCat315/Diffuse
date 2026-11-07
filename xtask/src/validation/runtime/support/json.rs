@@ -126,28 +126,28 @@ fn non_boolean(value: &Value) -> Option<&Value> {
 
 // MARK: - Required accessors
 
-pub fn object<'a>(
-    value: Option<&'a Value>,
+pub fn object(
+    value: Option<&Value>,
     what: impl FnOnce() -> String,
-) -> Result<&'a Map<String, Value>, ToolError> {
-    value.and_then(Value::as_object).ok_or_else(|| {
-        ToolError::message(format!("Expected a JSON object for {}", what()))
-    })
+) -> Result<&Map<String, Value>, ToolError> {
+    value
+        .and_then(Value::as_object)
+        .ok_or_else(|| ToolError::message(format!("Expected a JSON object for {}", what())))
 }
 
-pub fn array<'a>(
-    value: Option<&'a Value>,
+pub fn array(
+    value: Option<&Value>,
     what: impl FnOnce() -> String,
-) -> Result<&'a Vec<Value>, ToolError> {
-    value.and_then(Value::as_array).ok_or_else(|| {
-        ToolError::message(format!("Expected a JSON array for {}", what()))
-    })
+) -> Result<&Vec<Value>, ToolError> {
+    value
+        .and_then(Value::as_array)
+        .ok_or_else(|| ToolError::message(format!("Expected a JSON array for {}", what())))
 }
 
-pub fn required_objects<'a>(
-    value: Option<&'a Value>,
+pub fn required_objects(
+    value: Option<&Value>,
     what: impl FnOnce() -> String,
-) -> Result<Vec<&'a Map<String, Value>>, ToolError> {
+) -> Result<Vec<&Map<String, Value>>, ToolError> {
     let what = what();
     Ok(array(value, || what.clone())?
         .iter()
@@ -155,14 +155,17 @@ pub fn required_objects<'a>(
         .collect())
 }
 
-pub fn required_string<'a>(
-    value: Option<&'a Value>,
+pub fn required_string(
+    value: Option<&Value>,
     what: impl FnOnce() -> String,
-) -> Result<&'a str, ToolError> {
+) -> Result<&str, ToolError> {
     string(value).ok_or_else(|| ToolError::message(format!("Expected a string for {}", what())))
 }
 
-pub fn required_int(value: Option<&Value>, what: impl FnOnce() -> String) -> Result<i64, ToolError> {
+pub fn required_int(
+    value: Option<&Value>,
+    what: impl FnOnce() -> String,
+) -> Result<i64, ToolError> {
     int(value).ok_or_else(|| ToolError::message(format!("Expected an integer for {}", what())))
 }
 

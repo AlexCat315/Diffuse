@@ -1,6 +1,5 @@
 pub mod async_bridge;
 pub mod box_;
-pub mod build_products;
 pub mod check;
 pub mod child_process;
 pub mod flags;

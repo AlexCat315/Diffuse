@@ -193,9 +193,9 @@ fn transform_rotation_only(matrix: Float4x4) -> Float4x4 {
 
 fn composed_transform_matrix(translation: Float3, rotation: Float4x4, scale: Float3) -> Float4x4 {
     let mut matrix = rotation;
-    matrix.columns[0] *= scale.x;
-    matrix.columns[1] *= scale.y;
-    matrix.columns[2] *= scale.z;
+    matrix.columns[0] = matrix.columns[0] * scale.x;
+    matrix.columns[1] = matrix.columns[1] * scale.y;
+    matrix.columns[2] = matrix.columns[2] * scale.z;
     matrix.columns[3] = Float4::new(translation.x, translation.y, translation.z, 1.0);
     matrix
 }

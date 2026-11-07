@@ -23,7 +23,7 @@ pub fn json_serialization_double(value: f64) -> String {
         return if value.is_sign_negative() { "-0" } else { "0" }.to_string();
     }
     let (negative, digits, exponent) = scientific_parts(value, 17);
-    let text = if exponent < -4 || exponent >= 17 {
+    if !(-4..17).contains(&exponent) {
         // Scientific notation, exponent always signed and at least two digits.
         let (mantissa, rest) = digits.split_at(1);
         let fraction = rest.trim_end_matches('0');
@@ -68,8 +68,7 @@ pub fn json_serialization_double(value: f64) -> String {
             out.push_str(digits.trim_end_matches('0'));
         }
         out
-    };
-    text
+    }
 }
 
 /// Shortest round-tripping text in the spelling Swift's `JSONEncoder` uses.
@@ -231,11 +230,7 @@ pub fn javascript_quote(value: &str) -> String {
             '\t' => out.push_str("\\t"),
             '\u{08}' => out.push_str("\\b"),
             '\u{0C}' => out.push_str("\\f"),
-            other
-                if (other as u32) < 0x20
-                    || other == '\u{2028}'
-                    || other == '\u{2029}' =>
-            {
+            other if (other as u32) < 0x20 || other == '\u{2028}' || other == '\u{2029}' => {
                 out.push_str(&format!("\\u{:04x}", other as u32));
             }
             other => out.push(other),
@@ -287,10 +282,7 @@ mod tests {
 
     #[test]
     fn json_serialization_strings_keep_unicode_and_slashes() {
-        assert_eq!(
-            json_serialization_quote("a/b"),
-            "\"a/b\""
-        );
+        assert_eq!(json_serialization_quote("a/b"), "\"a/b\"");
         assert_eq!(json_serialization_quote("a\tb"), "\"a\\tb\"");
         assert_eq!(json_serialization_quote("a\u{1}b"), "\"a\\u0001b\"");
         assert_eq!(json_serialization_quote("你好"), "\"你好\"");

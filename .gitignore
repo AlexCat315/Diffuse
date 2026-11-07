@@ -60,6 +60,9 @@ zig-out/
 **/CMakeUserPresets.json
 # ...but Tools/Developer/Sources/Build is first-party SwiftPM source code
 !Tools/Developer/Sources/Build/
+# ...and xtask/src/build is first-party Rust source (the port of that Swift code)
+!xtask/src/build/
+!xtask/src/build/**
 
 # Qt/compiled artifacts
 **/moc_*.cpp

@@ -7998,7 +7998,7 @@
       "rust": [
         "crates/diffuse-intent/src/capabilities/built_in_camera_material_capabilities.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -8010,7 +8010,7 @@
       "rust": [
         "crates/diffuse-intent/src/capabilities/built_in_physics_capabilities.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -8022,7 +8022,7 @@
       "rust": [
         "crates/diffuse-intent/src/capabilities/built_in_scene_utility_capabilities.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -8034,7 +8034,7 @@
       "rust": [
         "crates/diffuse-intent/src/capabilities/built_in_typed_capabilities.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -8046,7 +8046,7 @@
       "rust": [
         "crates/diffuse-intent/src/capabilities/cove_capability.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -8058,7 +8058,7 @@
       "rust": [
         "crates/diffuse-intent/src/intent_runtime_coordinator.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: full production translation, including snapshot rollback, postcondition verification and confirmation lifecycle; no compilation or tests at user request."
     },
     {
@@ -8070,7 +8070,7 @@
       "rust": [
         "crates/diffuse-intent/src/invocation/ambiguity_scorer.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Invocation/CapabilityInputDeclaration.swift",
@@ -8081,7 +8081,7 @@
       "rust": [
         "crates/diffuse-intent/src/invocation/capability_input_declaration.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Invocation/CapabilityInvocation.swift",
@@ -8092,7 +8092,7 @@
       "rust": [
         "crates/diffuse-intent/src/invocation/capability_invocation.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Invocation/CapabilityInvocationPlanning.swift",
@@ -8103,7 +8103,7 @@
       "rust": [
         "crates/diffuse-intent/src/invocation/capability_invocation_planning.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -8115,7 +8115,7 @@
       "rust": [
         "crates/diffuse-intent/src/pipeline/commit_pipeline.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -8127,7 +8127,7 @@
       "rust": [
         "crates/diffuse-intent/src/planning/edit.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Planning/IntentIR.swift",
@@ -8138,7 +8138,7 @@
       "rust": [
         "crates/diffuse-intent/src/planning/intent_ir.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Planning/SceneStateVerification.swift",
@@ -8149,7 +8149,7 @@
       "rust": [
         "crates/diffuse-intent/src/planning/scene_state_verification.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Transactions/EventComponents.swift",
@@ -8160,7 +8160,7 @@
       "rust": [
         "crates/diffuse-intent/src/transactions/event_components.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Transactions/IntentTransactionBuilder.swift",
@@ -8171,7 +8171,7 @@
       "rust": [
         "crates/diffuse-intent/src/transactions/intent_transaction_builder.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Transactions/MutationComponents.swift",
@@ -8182,7 +8182,7 @@
       "rust": [
         "crates/diffuse-intent/src/transactions/mutation_components.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Transactions/StagedTransactionStore.swift",
@@ -8193,7 +8193,7 @@
       "rust": [
         "crates/diffuse-intent/src/transactions/staged_transaction_store.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: faithful production translation; user requested no testing; compilation and runtime verification not performed."
     },
     {
@@ -8205,7 +8205,7 @@
       "rust": [
         "crates/diffuse-intent/src/transactions/transaction_executor.rs"
       ],
-      "status": "written",
+      "status": "compiled",
       "notes": "2026-11-01: full production translation, including snapshot rollback, postcondition verification and confirmation lifecycle; no compilation or tests at user request."
     },
     {
@@ -8217,7 +8217,7 @@
       "rust": [
         "crates/diffuse-intent/src/transactions/transaction_ir.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Transactions/UndoStack.swift",
@@ -8228,7 +8228,7 @@
       "rust": [
         "crates/diffuse-intent/src/transactions/undo_stack.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/IntentRuntime/Transactions/WorldEvent.swift",
@@ -8239,7 +8239,7 @@
       "rust": [
         "crates/diffuse-intent/src/transactions/world_event.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/LanguageServerRuntime/ByteStream.swift",
@@ -13043,7 +13043,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/animation_runtime_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/CameraControllerTests.swift",
@@ -13054,7 +13054,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/camera_controller_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/CharacterControllerTests.swift",
@@ -13087,7 +13087,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/input_state_lifecycle_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptCBridgeContextTests.swift",
@@ -13098,7 +13098,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_c_bridge_context_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptCatalogRuntimeTests.swift",
@@ -13109,7 +13109,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_catalog_runtime_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptComponentRegistryTests.swift",
@@ -13120,7 +13120,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_component_registry_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptDefinitionTests.swift",
@@ -13131,7 +13131,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_definition_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptParameterTests.swift",
@@ -13142,7 +13142,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_parameter_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptPresetsTests.swift",
@@ -13153,7 +13153,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_presets_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptRuntimeLifecycleTests.swift",
@@ -13164,7 +13164,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_runtime_lifecycle_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptRuntimeQueryTests.swift",
@@ -13175,7 +13175,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_runtime_query_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/ScriptSpawningTests.swift",
@@ -13186,7 +13186,7 @@
       "rust": [
         "crates/diffuse-script/src/tests/script_runtime/script_spawning_tests.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/SwiftScriptCompilerTests.swift",
@@ -13407,7 +13407,7 @@
       "rust": [
         "xtask/src/build/ios_staging/entry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/Bundle.swift",
@@ -13418,7 +13418,7 @@
       "rust": [
         "xtask/src/build/media_staging/bundle.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/Entry.swift",
@@ -13429,7 +13429,7 @@
       "rust": [
         "xtask/src/build/media_staging/entry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/SourceDownload.swift",
@@ -13440,7 +13440,7 @@
       "rust": [
         "xtask/src/build/media_staging/source_download.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/StageOperation.swift",
@@ -13451,7 +13451,7 @@
       "rust": [
         "xtask/src/build/media_staging/stage_operation.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/Targets.swift",
@@ -13462,7 +13462,7 @@
       "rust": [
         "xtask/src/build/media_staging/targets.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Build/NativeBootstrap/Bootstrap.swift",
@@ -13528,7 +13528,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/arguments.rs"
       ],
-      "status": "pending"
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Bootstrap.swift",
@@ -13539,7 +13540,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/bootstrap.rs"
       ],
-      "status": "pending"
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Compile.swift",
@@ -13550,7 +13552,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/compile.rs"
       ],
-      "status": "pending"
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Entry.swift",
@@ -13561,7 +13564,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/entry.rs"
       ],
-      "status": "pending"
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/JSON.swift",
@@ -13572,7 +13576,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/json.rs"
       ],
-      "status": "pending"
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/JSONParser.swift",
@@ -13583,7 +13588,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/json_parser.rs"
       ],
-      "status": "pending"
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Rebuild.swift",
@@ -13594,7 +13600,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/rebuild.rs"
       ],
-      "status": "pending"
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Reflection.swift",
@@ -13605,7 +13612,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/reflection.rs"
       ],
-      "status": "pending"
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Support.swift",
@@ -13616,7 +13624,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/support.rs"
       ],
-      "status": "pending"
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/VulkanBootstrap/Bootstrap.swift",
@@ -13627,7 +13636,8 @@
       "rust": [
         "xtask/src/build/vulkan_bootstrap/bootstrap.rs"
       ],
-      "status": "pending"
+      "reason": "Cove cove-graphics 改用运行期 dlopen + vendored headers，不再需要 Vulkan SDK 引导",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Build/VulkanBootstrap/Entry.swift",
@@ -13638,7 +13648,8 @@
       "rust": [
         "xtask/src/build/vulkan_bootstrap/entry.rs"
       ],
-      "status": "pending"
+      "reason": "Cove cove-graphics 改用运行期 dlopen + vendored headers，不再需要 Vulkan SDK 引导",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Boundaries/Checks.swift",
@@ -13649,7 +13660,8 @@
       "rust": [
         "xtask/src/checks/boundaries/checks.rs"
       ],
-      "status": "pending"
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Boundaries/Entry.swift",
@@ -13660,7 +13672,8 @@
       "rust": [
         "xtask/src/checks/boundaries/entry.rs"
       ],
-      "status": "pending"
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Boundaries/Manifest.swift",
@@ -13671,7 +13684,8 @@
       "rust": [
         "xtask/src/checks/boundaries/manifest.rs"
       ],
-      "status": "pending"
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/Baseline.swift",
@@ -13682,7 +13696,8 @@
       "rust": [
         "xtask/src/checks/maintainability/baseline.rs"
       ],
-      "status": "pending"
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/Entry.swift",
@@ -13693,7 +13708,8 @@
       "rust": [
         "xtask/src/checks/maintainability/entry.rs"
       ],
-      "status": "pending"
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/Inventory.swift",
@@ -13704,7 +13720,8 @@
       "rust": [
         "xtask/src/checks/maintainability/inventory.rs"
       ],
-      "status": "pending"
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/OrderedMap.swift",
@@ -13715,7 +13732,8 @@
       "rust": [
         "xtask/src/checks/maintainability/ordered_map.rs"
       ],
-      "status": "pending"
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/StructuralGuard.swift",
@@ -13726,7 +13744,8 @@
       "rust": [
         "xtask/src/checks/maintainability/structural_guard.rs"
       ],
-      "status": "pending"
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/CoveDev/Entry.swift",
@@ -13748,7 +13767,8 @@
       "rust": [
         "xtask/src/export/android_export.rs"
       ],
-      "status": "pending"
+      "reason": "生成 SwiftPM Package.swift 游戏包，与 D1（用户脚本改 Rust cdylib）冲突；Android 打包由 cove-package 承担",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/CoveDev/Export/GameplayPackage.swift",
@@ -13759,7 +13779,8 @@
       "rust": [
         "xtask/src/export/gameplay_package.rs"
       ],
-      "status": "pending"
+      "reason": "生成 SwiftPM Package.swift 游戏包，与 D1（用户脚本改 Rust cdylib）冲突；Android 打包由 cove-package 承担",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/CoveDev/Plugins/TypeScriptBuild.swift",
@@ -13781,7 +13802,8 @@
       "rust": [
         "xtask/src/infrastructure/image_codec/decoded_image.rs"
       ],
-      "status": "pending"
+      "reason": "仅服务于已删除的 Swift/Wasm 像素验证，Cove cove-imaging 已有等价",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/AndroidTools.swift",
@@ -13792,7 +13814,8 @@
       "rust": [
         "xtask/src/validation/android/android_tools.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Arguments.swift",
@@ -13803,7 +13826,8 @@
       "rust": [
         "xtask/src/validation/android/arguments.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Bitmap.swift",
@@ -13814,7 +13838,8 @@
       "rust": [
         "xtask/src/validation/android/bitmap.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Command.swift",
@@ -13825,7 +13850,8 @@
       "rust": [
         "xtask/src/validation/android/command.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Demo.swift",
@@ -13836,7 +13862,8 @@
       "rust": [
         "xtask/src/validation/android/demo.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Entry.swift",
@@ -13847,7 +13874,8 @@
       "rust": [
         "xtask/src/validation/android/entry.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Gallery.swift",
@@ -13858,7 +13886,8 @@
       "rust": [
         "xtask/src/validation/android/gallery.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Game.swift",
@@ -13869,7 +13898,8 @@
       "rust": [
         "xtask/src/validation/android/game.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/JSON.swift",
@@ -13880,7 +13910,8 @@
       "rust": [
         "xtask/src/validation/android/json.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Logging.swift",
@@ -13891,7 +13922,8 @@
       "rust": [
         "xtask/src/validation/android/logging.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Rounding.swift",
@@ -13902,7 +13934,8 @@
       "rust": [
         "xtask/src/validation/android/rounding.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Text.swift",
@@ -13913,7 +13946,8 @@
       "rust": [
         "xtask/src/validation/android/text.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Validate.swift",
@@ -13924,7 +13958,8 @@
       "rust": [
         "xtask/src/validation/android/validate.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Arguments.swift",
@@ -13935,7 +13970,8 @@
       "rust": [
         "xtask/src/validation/browser/arguments.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Analysis.swift",
@@ -13946,7 +13982,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/analysis.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Inspection.swift",
@@ -13957,7 +13994,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/inspection.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Logs.swift",
@@ -13968,7 +14006,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/logs.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Native.swift",
@@ -13979,7 +14018,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/native.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Observation.swift",
@@ -13990,7 +14030,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/observation.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Preview.swift",
@@ -14001,7 +14042,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/preview.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Support.swift",
@@ -14012,7 +14054,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/support.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Entry.swift",
@@ -14023,7 +14066,8 @@
       "rust": [
         "xtask/src/validation/browser/entry.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Chromium.swift",
@@ -14034,7 +14078,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/chromium.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Frame.swift",
@@ -14045,7 +14090,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/frame.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Locator.swift",
@@ -14056,7 +14102,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/locator.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Page.swift",
@@ -14067,7 +14114,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/page.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Pixels.swift",
@@ -14078,7 +14126,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/pixels.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/ScriptTarget.swift",
@@ -14089,7 +14138,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/script_target.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/JSON.swift",
@@ -14100,7 +14150,8 @@
       "rust": [
         "xtask/src/validation/browser/json.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/BuildFonts.swift",
@@ -14111,7 +14162,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/build_fonts.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/Dev.swift",
@@ -14122,7 +14174,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/dev.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/NativeDemo.swift",
@@ -14133,7 +14186,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/native_demo.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/Serve.swift",
@@ -14144,7 +14198,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/serve.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/Verify.swift",
@@ -14155,7 +14210,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/verify.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/VerifyDev.swift",
@@ -14166,7 +14222,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/verify_dev.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Commands.swift",
@@ -14177,7 +14234,8 @@
       "rust": [
         "xtask/src/validation/browser/support/commands.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Formatting.swift",
@@ -14188,7 +14246,8 @@
       "rust": [
         "xtask/src/validation/browser/support/formatting.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/HTTP.swift",
@@ -14199,7 +14258,8 @@
       "rust": [
         "xtask/src/validation/browser/support/http.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Locked.swift",
@@ -14210,7 +14270,8 @@
       "rust": [
         "xtask/src/validation/browser/support/locked.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Server.swift",
@@ -14221,7 +14282,8 @@
       "rust": [
         "xtask/src/validation/browser/support/server.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Spawn.swift",
@@ -14232,7 +14294,8 @@
       "rust": [
         "xtask/src/validation/browser/support/spawn.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/System.swift",
@@ -14243,7 +14306,8 @@
       "rust": [
         "xtask/src/validation/browser/support/system.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Transport/CDP.swift",
@@ -14254,7 +14318,8 @@
       "rust": [
         "xtask/src/validation/browser/transport/cdp.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Transport/Inbox.swift",
@@ -14265,7 +14330,8 @@
       "rust": [
         "xtask/src/validation/browser/transport/inbox.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Transport/Receiver.swift",
@@ -14276,7 +14342,8 @@
       "rust": [
         "xtask/src/validation/browser/transport/receiver.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Transport/WebSocket.swift",
@@ -14287,7 +14354,8 @@
       "rust": [
         "xtask/src/validation/browser/transport/web_socket.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/Entry.swift",
@@ -14298,7 +14366,8 @@
       "rust": [
         "xtask/src/validation/gpu/entry.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/Runner.swift",
@@ -14309,7 +14378,8 @@
       "rust": [
         "xtask/src/validation/gpu/runner.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/Tee.swift",
@@ -14320,7 +14390,8 @@
       "rust": [
         "xtask/src/validation/gpu/tee.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/Verification.swift",
@@ -14331,7 +14402,8 @@
       "rust": [
         "xtask/src/validation/gpu/verification.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/XUnit.swift",
@@ -14342,7 +14414,8 @@
       "rust": [
         "xtask/src/validation/gpu/x_unit.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/IOS/Device.swift",
@@ -14353,7 +14426,8 @@
       "rust": [
         "xtask/src/validation/ios/device.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/IOS/Entry.swift",
@@ -14364,7 +14438,8 @@
       "rust": [
         "xtask/src/validation/ios/entry.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/IOS/Frame.swift",
@@ -14375,7 +14450,8 @@
       "rust": [
         "xtask/src/validation/ios/frame.rs"
       ],
-      "status": "pending"
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Activate.swift",
@@ -14386,7 +14462,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/activate.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Capture.swift",
@@ -14397,7 +14474,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/capture.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Commands.swift",
@@ -14408,7 +14486,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/commands.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Endpoint.swift",
@@ -14419,7 +14498,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/endpoint.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Input.swift",
@@ -14430,7 +14510,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/input.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Query.swift",
@@ -14441,7 +14522,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/query.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Resize.swift",
@@ -14452,7 +14534,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/resize.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Session.swift",
@@ -14463,7 +14546,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/session.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Socket.swift",
@@ -14474,7 +14558,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/socket.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Timings.swift",
@@ -14485,7 +14570,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/timings.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Editor/EditorNativeLoop.swift",
@@ -14496,7 +14582,8 @@
       "rust": [
         "xtask/src/validation/runtime/editor/editor_native_loop.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Entry.swift",
@@ -14507,7 +14594,8 @@
       "rust": [
         "xtask/src/validation/runtime/entry.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/AgentDiagnostics.swift",
@@ -14518,7 +14606,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/agent_diagnostics.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/Client.swift",
@@ -14529,7 +14618,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/client.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/CrystalRush.swift",
@@ -14540,7 +14630,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/crystal_rush.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/EditorBridge.swift",
@@ -14551,7 +14642,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/editor_bridge.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/ProtocolCheck.swift",
@@ -14562,7 +14654,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/protocol_check.rs"
       ],
-      "status": "pending"
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/AsyncBridge.swift",
@@ -14595,7 +14688,8 @@
       "rust": [
         "xtask/src/validation/runtime/support/build_products.rs"
       ],
-      "status": "pending"
+      "reason": "Swift .build/debug 产物定位；Rust 端改用 target/debug",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/Check.swift",
@@ -14705,7 +14799,8 @@
       "rust": [
         "xtask/src/tests/boundary/manifest_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/BrowserTests/HostTests.swift",
@@ -14716,7 +14811,8 @@
       "rust": [
         "xtask/src/tests/browser/host_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/IOSSimulatorTests/DeviceTests.swift",
@@ -14727,7 +14823,8 @@
       "rust": [
         "xtask/src/tests/ios_simulator/device_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/ImageCodecTests/DecodedImageTests.swift",
@@ -14738,7 +14835,8 @@
       "rust": [
         "xtask/src/tests/image_codec/decoded_image_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/MaintainabilityTests/StructuralGuardTests.swift",
@@ -14749,7 +14847,8 @@
       "rust": [
         "xtask/src/tests/maintainability/structural_guard_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/MediaStagingTests/SourceDownloadTests.swift",
@@ -14760,7 +14859,8 @@
       "rust": [
         "xtask/src/tests/media_staging/source_download_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/PluginStagingTests/PluginStagingTests.swift",
@@ -14771,7 +14871,8 @@
       "rust": [
         "xtask/src/tests/plugin_staging/plugin_staging_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/RegressionReportTests/RegressionReportTests.swift",
@@ -14782,7 +14883,8 @@
       "rust": [
         "xtask/src/tests/regression_report/regression_report_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/RuntimeValidationTests/AsyncBridgeTests.swift",
@@ -14793,7 +14895,8 @@
       "rust": [
         "xtask/src/tests/runtime_validation/async_bridge_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/RuntimeValidationTests/ConnectionTests.swift",
@@ -14804,7 +14907,8 @@
       "rust": [
         "xtask/src/tests/runtime_validation/connection_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/RuntimeValidationTests/EndpointTests.swift",
@@ -14815,7 +14919,8 @@
       "rust": [
         "xtask/src/tests/runtime_validation/endpoint_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/RuntimeValidationTests/InputSequenceTests.swift",
@@ -14826,7 +14931,8 @@
       "rust": [
         "xtask/src/tests/runtime_validation/input_sequence_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/ShaderToolchainTests/ShaderToolchainTests.swift",
@@ -14837,7 +14943,8 @@
       "rust": [
         "xtask/src/tests/shader_toolchain/shader_toolchain_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/ToolSupportTests/ProcessTests.swift",
@@ -14848,7 +14955,8 @@
       "rust": [
         "xtask/src/tests/tool_support/process_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "Tools/Developer/Tests/ToolSupportTests/ToolSupportTests.swift",
@@ -14859,7 +14967,8 @@
       "rust": [
         "xtask/src/tests/tool_support/tool_support_tests.rs"
       ],
-      "status": "pending"
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
+      "status": "removed"
     },
     {
       "source": "examples/CrystalRush/Scripts/CrystalRush.swift",

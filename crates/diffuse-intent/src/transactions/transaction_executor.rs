@@ -640,7 +640,7 @@ impl TransactionExecutor {
                 .iter()
                 .map(|(key, field)| {
                     let canonical = value
-                        .value_at(&[key.as_str()])
+                        .value_at(std::slice::from_ref(key))
                         .map(|value| Self::component_expectation(field, value))
                         .unwrap_or_else(|| field.clone());
                     (key.clone(), canonical)
@@ -1464,6 +1464,10 @@ impl TransactionExecutor {
         let r22 = matrix.columns[2].z / sz;
         let r01 = matrix.columns[1].x / sy;
         let r00 = matrix.columns[0].x / sx;
+        // Swift `Float.maximum(-1, Float.minimum(1, r02))` keeps IEEE
+        // minimum/maximum semantics: a NaN input yields the other operand.
+        // `clamp` would propagate NaN instead.
+        #[allow(clippy::manual_clamp)]
         let sin_beta = r02.min(1.0).max(-1.0);
         let beta = sin_beta.asin();
         let to_degrees = 180.0 / std::f32::consts::PI;

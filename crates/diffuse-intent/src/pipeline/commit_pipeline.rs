@@ -101,6 +101,10 @@ impl std::fmt::Display for CommitDenial {
     }
 }
 
+// Swift's `CommitDecision` carries the whole request by value. Boxing the
+// payload would change the public shape registered in MIGRATION.md §8 for an
+// enum that is built once per commit and never stored in bulk.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum CommitDecision {
     Proceed(CommitRequest),
