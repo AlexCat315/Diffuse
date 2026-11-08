@@ -6840,7 +6840,7 @@
       "rust": [
         "crates/diffuse-ai/src/planning/scene_edit_plan_executor.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Semantic/SceneSemanticEncoder.swift",

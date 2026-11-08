@@ -120,3 +120,131 @@ pub fn empty_object() -> JsonSchema {
 pub fn choice(alternatives: Vec<JsonSchema>) -> JsonSchema {
     JsonSchema::choice(alternatives)
 }
+
+/// The entity-reference pattern every scene capability declares.
+const SCENE_REFERENCE_PATTERN: &str = "^scene:[0-9]+$";
+
+/// Validates capability input against `schema`.
+///
+/// Swift's `JSONSchemaValidator` evaluates regex patterns. Cove's only matches a
+/// literal pattern and one identifier pattern, so the scene-reference pattern is
+/// checked here and removed from the copy delegated to Cove. Every Diffuse
+/// validation path uses this function; see `.migration/cove-gaps.md` G10.
+pub fn validate_capability_input(
+    value: &serde_json::Value,
+    schema: &JsonSchema,
+) -> Result<(), JsonSchemaViolation> {
+    let mut delegated = schema.clone();
+    strip_scene_reference_patterns(&mut delegated);
+    check_scene_references(value, schema, "$")?;
+    JsonSchemaValidator::validate(value, &delegated)
+}
+
+fn strip_scene_reference_patterns(schema: &mut JsonSchema) {
+    if schema.pattern.as_deref() == Some(SCENE_REFERENCE_PATTERN) {
+        schema.pattern = None;
+    }
+    for property in schema.properties.values_mut() {
+        strip_scene_reference_patterns(property);
+    }
+    if let Some(items) = schema.items.as_deref_mut() {
+        strip_scene_reference_patterns(items);
+    }
+    for alternative in &mut schema.one_of {
+        strip_scene_reference_patterns(alternative);
+    }
+}
+
+/// Checks the scene-reference pattern at the same positions Cove would. The
+/// structural checks stay with Cove; this walk only reports a pattern failure.
+fn check_scene_references(
+    value: &serde_json::Value,
+    schema: &JsonSchema,
+    path: &str,
+) -> Result<(), JsonSchemaViolation> {
+    if !schema.one_of.is_empty() {
+        let mut first_error = None;
+        for alternative in &schema.one_of {
+            match check_scene_references(value, alternative, path) {
+                Ok(()) => return Ok(()),
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+        // No alternative carries the pattern, so the pattern cannot be what
+        // fails; leave the mismatch to Cove.
+        if let Some(error) = first_error {
+            return Err(error);
+        }
+        return Ok(());
+    }
+    match value {
+        serde_json::Value::Object(object) => {
+            for (key, child) in object {
+                if let Some(child_schema) = schema.properties.get(key) {
+                    check_scene_references(child, child_schema, &format!("{path}.{key}"))?;
+                }
+            }
+        }
+        serde_json::Value::Array(values) => {
+            if let Some(items) = &schema.items {
+                for (index, child) in values.iter().enumerate() {
+                    check_scene_references(child, items, &format!("{path}[{index}]"))?;
+                }
+            }
+        }
+        serde_json::Value::String(string)
+            if schema.pattern.as_deref() == Some(SCENE_REFERENCE_PATTERN) =>
+        {
+            let valid = string.strip_prefix("scene:").is_some_and(|digits| {
+                !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
+            });
+            if !valid {
+                return Err(JsonSchemaViolation {
+                    path: path.to_string(),
+                    reason: "does not match required pattern".to_string(),
+                });
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{JsonSchema, SCENE_REFERENCE_PATTERN, string_pattern, validate_capability_input};
+
+    fn scene_schema() -> JsonSchema {
+        string_pattern(None, Some(7), Some(32), Some(SCENE_REFERENCE_PATTERN))
+    }
+
+    #[test]
+    fn scene_references_match_the_swift_pattern() {
+        for reference in ["scene:0", "scene:1", "scene:123"] {
+            validate_capability_input(&serde_json::json!(reference), &scene_schema())
+                .unwrap_or_else(|error| panic!("{reference} rejected: {error}"));
+        }
+    }
+
+    #[test]
+    fn malformed_scene_references_are_rejected() {
+        for reference in ["1", "scene:", "scene:1a", "scene:-1", "Scene:1"] {
+            let error = validate_capability_input(&serde_json::json!(reference), &scene_schema())
+                .expect_err(reference);
+            assert_eq!(error.path, "$");
+            assert_eq!(error.reason, "does not match required pattern");
+        }
+    }
+
+    #[test]
+    fn scene_references_inside_objects_report_their_path() {
+        let mut properties = std::collections::BTreeMap::new();
+        properties.insert("entity_id".to_string(), scene_schema());
+        let schema = super::object(properties, vec!["entity_id".to_string()], None, false);
+        let error = validate_capability_input(&serde_json::json!({"entity_id": "nope"}), &schema)
+            .expect_err("invalid reference");
+        assert_eq!(error.path, "$.entity_id");
+    }
+}

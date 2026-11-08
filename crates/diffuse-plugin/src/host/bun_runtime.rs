@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 use cove_system::command::{ProcessBudget, ProcessCommand, ProcessEvent};
 use cove_system::session::ProcessSession;
-use diffuse_capability::capsule_schema::JsonSchemaValidator;
+use diffuse_capability::capsule_schema::validate_capability_input;
 
 use crate::PluginError;
 use crate::contract::plugin_manifest::{PluginImportPermission, PluginResourceLimits};
@@ -101,7 +101,7 @@ impl BunPluginRuntime {
             .into());
         };
         let value: serde_json::Value = serde_json::from_slice(input)?;
-        JsonSchemaValidator::validate(&value, &package.input_schema(entry))
+        validate_capability_input(&value, &package.input_schema(entry))
             .map_err(|error| BunRuntimeError::Rejected(error.to_string()))?;
 
         let plugin_id = package.manifest.id.clone();

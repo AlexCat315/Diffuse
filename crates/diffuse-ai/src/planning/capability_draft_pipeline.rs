@@ -9,7 +9,7 @@ use diffuse_capability::capability_contract::{
     CapabilityAccess, CapabilityContract, CapabilityExposureSnapshot, PluginCapabilityAuthority,
 };
 use diffuse_capability::capability_registry::CapabilityRegistry;
-use diffuse_capability::capsule_schema::JsonSchemaValidator;
+use diffuse_capability::capsule_schema::validate_capability_input;
 use diffuse_capability::drafts::capability_draft_limits::CapabilityDraftLimits;
 use diffuse_capability::support::swift_date::SwiftDate;
 use diffuse_plugin::base64_data::Data;
@@ -248,7 +248,7 @@ impl CapabilityDraftStore {
         let canonical = canonicalise(input)?;
         let value: serde_json::Value = serde_json::from_slice(&canonical)
             .map_err(|error| CapabilityDraftError::InvalidInput(error.to_string()))?;
-        JsonSchemaValidator::validate(&value, &exposed.input_schema)
+        validate_capability_input(&value, &exposed.input_schema)
             .map_err(|error| CapabilityDraftError::InvalidInput(error.to_string()))?;
         let plugin_authority = plugin_authority(exposed, snapshot)?;
         let mut drafts = self.lock_drafts();
@@ -354,7 +354,7 @@ impl CapabilityDraftStore {
             }
             let value: serde_json::Value = serde_json::from_slice(draft.validated_input.as_slice())
                 .map_err(|error| CapabilityDraftError::InvalidInput(error.to_string()))?;
-            JsonSchemaValidator::validate(&value, &current.input_schema)
+            validate_capability_input(&value, &current.input_schema)
                 .map_err(|error| CapabilityDraftError::InvalidInput(error.to_string()))?;
             validated.push(draft);
         }

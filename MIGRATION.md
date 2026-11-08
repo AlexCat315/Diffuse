@@ -416,6 +416,17 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `SceneCapabilityDraftLowering::plan` 注入 `"op"` 后按排序键重编码并解码回 `SceneEditStep`；不可下调的自注册能力抛 `unsupportedBuiltInCapability`。
 - 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets`（仅 6 条既有 `dead_code`）、6 个新增单元测试、迁移文件 `rustfmt --check` 全部通过。
 
+### `diffuse-ai` Planning（批次 91 `written`）
+
+- `SceneEditPlanExecutor` 把旧 `SceneEditPlan` 转成 `TransactionIR`：快照契约核对（version + schemaHash）→ 旧诊断（`legacy_validation_error`，只决定错误优先级，结果丢弃）→ 规范化输入 → 严格 schema 校验 → `BuiltInTypedCapabilityCatalog::registration` 精确 hash 匹配 → typed `prepare` → 影子场景应用；invocations/assertions/base revision/approval policy 与 `provenance: .proposal` 逐项对应。
+- `canonical_capability_input`：先 `serde_json::to_string(step)`（保留 `serialize_float` 的 RawValue 文本），解析为 `BTreeMap<String, Box<RawValue>>` 后删除 `"op"`，再紧凑序列化（键有序），`argument_names` 即排序后的键。残留差异只有 `\/` 与 `/` 转义、极少数 17 位 Double 文本，二者只影响不透明的 `input_digest`，不进落盘状态。
+- `.aiDefault` → `BuiltInTypedCapabilityCatalog::registry()`（`build_transaction_with_defaults`）；Swift `UInt16(clamping:)` → `clamp(0, i64::from(u16::MAX))`；准备上下文的运行时类型名取 `rsplit("::").next()`，并给有变换但缺 `LocalTransform` 的实体补隐性条目（typed 能力的组件前置检查按 Swift 短名匹配）。
+- `component_data` 走 `ComponentRegistry::built_in()`；`SetComponentData` 的 `"script"` 写回用 `encode_script_binding_for_editing`，属性合并用 `BTreeMap<String, Box<RawValue>>`（`{"key":fragment}` 回退保留）。
+- 偏差：`script_index` 为负时返回 `MissingField("valid script_index")`（Swift 的 `UInt16` 转换会 trap）；`canonical_capability_input` 的编码失败（如 NaN Float）归为 `InvalidCapabilityInput`（Swift 直接抛 `EncodingError`）；旧计划的 3 元素 `material_base_color` 在 typed `scene.set_material` 的 `Vec4` schema 下被拒（既有 typed 行为）。
+- 校验入口统一为 `diffuse_capability::capsule_schema::validate_capability_input`：Cove 的 `JsonSchemaValidator` 只支持字面量 pattern 和一个标识符 pattern，`^scene:[0-9]+$` 由 Diffuse 自行判定后从委派副本剥离（`.migration/cove-gaps.md` G10）；契约 hash 与对外 schema 不变。
+- `JSONValue` 数字改用 `diffuse_kernel::codable::{format_double, serialize_double}`，整值不再写成 `1.0`。
+- 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets`、7 个新增单元测试、迁移文件 `rustfmt --check`、`inventory.py --check` 通过；`diffuse-capability`/`diffuse-intent`/`diffuse-plugin` 回归 36/89/53 个测试全过。
+
 ### `diffuse-exr`（已 `tested`）
 
 - `EXRReader`/`LayerInfo`/`EXRReaderError`、`EXRWriter`/`Layer`/`PixelType`/`EXRWriterError`、FFI 类型 `CoveEXRContext`/`CoveEXRLayerDesc`（24 字节、8 对齐，已断言）。
@@ -663,6 +674,8 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-08 | 批次 89 语义记录 | — | — | — | ① Swift `actor AIWorldContext` → `Mutex<AIWorldContextState>`，`materializeSnapshot` 保留 FIFO 8 条上限与 `"world"` 流游标；② 外部类型扩展 `WorldPropertyValue.inferredDisplayValue` → `InferredDisplayValue` trait，`%.4g` 复用 `diffuse_observation::event_symbolic_view::format_general`；③ `WorkflowContext` 的 `{kind,payload}` 与未知 kind 文案手写 serde，`GameLevelPhase`/`FilmNarrativePhase` 保留原始字符值；④ 嵌套类型按父类型前缀展开（`WorkstationContextDomain`、`SceneSemanticSnapshotEntity`、`SceneSemanticSnapshotScriptBindingRecord`），`type`→`type_`、`ref`→`ref_` 并显式键名，修正 `colliderLayerID`/`vehicleEngineRPM`/`parametersJSON` 的 camelCase 缩写；⑤ 新增 `diffuse-kernel`/`serde`/`serde_json` 依赖，均为既有 workspace 条目，无第三方新增 |
 | 2026-11-08 | 批次 90 | diffuse-ai（Planning 三件套） | 3 | 701 | `SceneEditPlan`（376 行）+ `CapabilityDraftPipeline`（274 行）+ `Proposal`（51 行）；`check -p diffuse-ai --all-targets`、`clippy -p diffuse-ai --all-targets`、6 个新增单元测试、迁移文件 `rustfmt --check` 通过，3 行标 `written`。`SceneEditPlanExecutor.swift`（843 行）留待下一批 |
 | 2026-11-08 | 批次 90 语义记录 | — | — | — | ① `SceneEditOp` 36 个 wire 字符串与 `capabilityID` 映射逐字保留，`SceneEditStep` 的蛇形键显式对齐 Swift CodingKeys；② `Float` 标量/数组分别接 `serialize_float` 与本地逐元素 `format_float`，避免 f32→f64 文本漂移；`JSONValue` 手写 `Codable` 复刻解码顺序与 `jsonFragment` 文本；③ `CapabilityDraftStore` 的 Swift `actor` → `Mutex`，校验顺序、错误文案、限制常量、`.sortedKeys` 规范化与双 registry 入口全部保留；④ `SceneCapabilityDraftLowering` 注入 `op` 后重编码并解码回 `SceneEditStep` |
+| 2026-11-08 | 批次 91 | diffuse-ai（SceneEditPlanExecutor） | 1 | 843 | `Engine/Sources/AIRuntime/Planning/SceneEditPlanExecutor.swift` → `crates/diffuse-ai/src/planning/scene_edit_plan_executor.rs`；`check -p diffuse-ai --all-targets`、`clippy -p diffuse-ai --all-targets`、7 个新增单元测试、迁移文件 `rustfmt --check`、`inventory.py --check` 通过，1 行标 `written`；`diffuse-capability`/`diffuse-intent`/`diffuse-plugin` 回归 36/89/53 个测试全过 |
+| 2026-11-08 | 批次 91 语义记录 | — | — | — | ① 快照契约核对（version + schemaHash）→ 旧诊断（仅决定错误优先级）→ 严格 schema 校验 → typed `prepare` → 影子场景应用的顺序逐项对应，`legacy_validation_error` 的 mutations 结果按 Swift 丢弃；② `.aiDefault` → `BuiltInTypedCapabilityCatalog::registry()`；③ `canonical_capability_input` 用 `Box<RawValue>` 保留 Float 文本，残留 `\/` 与 17 位 Double 文本只影响不透明 `input_digest`；④ `UInt16(clamping:)` → `clamp(0, u16::MAX)`；准备上下文用运行时类型短名并补隐性 `LocalTransform`；⑤ `component_data` 用 `ComponentRegistry::built_in()`，脚本属性合并用 `RawValue` 保留数字文本；⑥ 偏差：负 `script_index` 返回 `MissingField` 而非 trap，输入编码错误归为 `InvalidCapabilityInput`，3 元素 `material_base_color` 不满足 typed `Vec4`；⑦ 新增 `validate_capability_input`：Diffuse 自行校验 `^scene:[0-9]+$` 后从委派副本剥离（G10），修复 Cove 校验器把所有合法实体引用判为不匹配的问题 |
 
 ## 10. 已知问题与需要用户确认的事项
 

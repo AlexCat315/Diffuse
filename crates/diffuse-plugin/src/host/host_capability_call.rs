@@ -6,7 +6,7 @@
 
 use diffuse_capability::capability_contract::CapabilitySourceKind;
 use diffuse_capability::capability_registry::CapabilityRegistry;
-use diffuse_capability::capsule_schema::JsonSchemaValidator;
+use diffuse_capability::capsule_schema::validate_capability_input;
 use serde::{Deserialize, Serialize};
 
 use crate::base64_data::Data;
@@ -136,7 +136,7 @@ impl PluginCompositionValidator {
                     capability_id: call.capability_id.clone(),
                     reason: error.to_string(),
                 })?;
-            JsonSchemaValidator::validate(&value, &contract.input_schema).map_err(|error| {
+            validate_capability_input(&value, &contract.input_schema).map_err(|error| {
                 PluginCompositionError::InvalidArguments {
                     capability_id: call.capability_id.clone(),
                     reason: error.to_string(),

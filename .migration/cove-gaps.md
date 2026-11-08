@@ -105,3 +105,10 @@ Format:
 - Cove today: `ffmpeg-sys-next =9.0.1` with the `build` feature clones `release/9.0` into `OUT_DIR` and configures with `--disable-programs`; only static libraries, and the media crate has no encoder/muxer
 - Diffuse meanwhile: batch 85 keeps the export strategy and resolves an external FFmpeg 9.x CLI (`COVE_FFMPEG_EXECUTABLE`/`COVE_FFPROBE_EXECUTABLE`, shipped `Tools`/`Helpers`, then `PATH`); the `cove-media` `ffmpeg` feature is not enabled on any Diffuse crate yet
 - Status: open (export capability needs a Cove API or a permanent external-tool dependency)
+
+## G10: `JsonSchemaValidator` does not evaluate regex patterns
+- Needed by: every capability input carrying a `scene:<number>` reference (`diffuse-intent` typed capabilities, `diffuse-ai` capability drafts and `SceneEditPlanExecutor`)
+- Cove today: `simple_pattern_matches` accepts a literal-equal value or the hard-coded identifier pattern `^[a-z0-9][a-z0-9_-]{0,63}$`; any other `pattern`, including Diffuse's `^scene:[0-9]+$`, never matches. Swift's `JSONSchemaValidator` evaluates the regex, so a valid reference such as `scene:1` is rejected with `does not match required pattern`.
+- Needed: a pattern matcher for the JSON Schema subset (at minimum anchored, character-class and quantifier patterns), or a hook that lets a host register the patterns it serves.
+- Diffuse meanwhile: `diffuse_capability::capsule_schema::validate_capability_input` checks `^scene:[0-9]+$` itself and validates a copy of the schema with that pattern removed; every Diffuse validation path (`AnyCapabilityRegistration::prepare`, capability drafts, plugin host calls, the scene edit executor) goes through it. Contract schema hashes and advertised schemas keep the original pattern.
+- Status: open (source inspection, 2026-11-08; covered by `capsule_schema` unit tests).

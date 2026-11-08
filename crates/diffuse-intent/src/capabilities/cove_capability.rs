@@ -6,7 +6,7 @@ use diffuse_capability::capability_contract::{
     CapabilityAccess, CapabilityContract, CapabilitySource, ReleasePhase,
 };
 use diffuse_capability::capability_descriptor::CapabilityDescriptor;
-use diffuse_capability::capsule_schema::{JsonSchema, JsonSchemaValidator};
+use diffuse_capability::capsule_schema::{JsonSchema, validate_capability_input};
 use diffuse_scene::media::animation::AnimationPlayer;
 use diffuse_scene::media::audio::AudioSource;
 use diffuse_scene::physics::{collider::Collider, rigid_body::RigidBody};
@@ -372,7 +372,7 @@ impl AnyCapabilityRegistration {
                 };
                 let value: serde_json::Value =
                     serde_json::from_slice(data).map_err(|e| invalid(e.to_string()))?;
-                JsonSchemaValidator::validate(&value, &contract.input_schema)
+                validate_capability_input(&value, &contract.input_schema)
                     .map_err(|e| invalid(e.to_string()))?;
                 let input: C::Input =
                     serde_json::from_slice(data).map_err(|e| invalid(e.to_string()))?;

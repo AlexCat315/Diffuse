@@ -1,7 +1,7 @@
 //! AI-compatible scene edit plans: the legacy `SceneEditStep` wire format that
 //! `SceneCapabilityDraftLowering` still produces while it remains.
 
-use diffuse_kernel::codable::format_double;
+use diffuse_kernel::codable::{format_double, serialize_double};
 use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -19,7 +19,7 @@ impl Serialize for JSONValue {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             JSONValue::String(value) => serializer.serialize_str(value),
-            JSONValue::Number(value) => serializer.serialize_f64(*value),
+            JSONValue::Number(value) => serialize_double(value, serializer),
             JSONValue::Bool(value) => serializer.serialize_bool(*value),
             JSONValue::Array(values) => values.serialize(serializer),
         }
@@ -61,18 +61,12 @@ impl JSONValue {
                 let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
                 format!("\"{escaped}\"")
             }
-            JSONValue::Number(value) => {
-                if value % 1.0 == 0.0 {
-                    format!("{value:.0}")
-                } else {
-                    match format_double(*value) {
-                        Some(text) => text,
-                        None if value.is_nan() => "nan".to_string(),
-                        None if *value > 0.0 => "inf".to_string(),
-                        None => "-inf".to_string(),
-                    }
-                }
-            }
+            JSONValue::Number(value) => match format_double(*value) {
+                Some(text) => text,
+                None if value.is_nan() => "nan".to_string(),
+                None if *value > 0.0 => "inf".to_string(),
+                None => "-inf".to_string(),
+            },
             JSONValue::Bool(value) => {
                 if *value {
                     "true".to_string()
