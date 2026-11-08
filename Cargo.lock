@@ -518,12 +518,15 @@ dependencies = [
  "diffuse-capability",
  "diffuse-context-memory",
  "diffuse-intent",
+ "diffuse-kernel",
  "diffuse-math",
  "diffuse-observation",
  "diffuse-perception",
  "diffuse-plugin",
  "diffuse-scene",
  "diffuse-script",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -940,8 +943,14 @@ version = "0.1.0"
 name = "diffuse-semantic"
 version = "0.1.0"
 dependencies = [
+ "cove-system",
  "diffuse-intent",
+ "diffuse-kernel",
  "diffuse-perception",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

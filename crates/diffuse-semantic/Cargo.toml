@@ -14,8 +14,16 @@ name = "semantic_pipeline"
 path = "tests/semantic_pipeline/main.rs"
 
 [dependencies]
+cove-system.workspace = true
 diffuse-intent.workspace = true
+diffuse-kernel.workspace = true
 diffuse-perception.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

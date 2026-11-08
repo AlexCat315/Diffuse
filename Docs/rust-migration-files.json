@@ -6752,7 +6752,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/ai_world_context.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Context/AssetWorkflowContext.swift",
@@ -6763,7 +6763,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/asset_workflow_context.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Context/WorkflowContext.swift",
@@ -6774,7 +6774,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/workflow_context.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Context/WorkstationContext.swift",
@@ -6785,7 +6785,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/workstation_context.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Context/WorldView.swift",
@@ -6796,7 +6796,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/world_view.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Planning/CapabilityDraftPipeline.swift",
@@ -6862,7 +6862,7 @@
       "rust": [
         "crates/diffuse-ai/src/semantic/scene_semantic_snapshot.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/CapabilityState.swift",
@@ -11538,7 +11538,7 @@
       "rust": [
         "crates/diffuse-semantic/src/asset_semantic_pipeline.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/SemanticPipeline/Backends/GeometryBackend.swift",
@@ -11549,7 +11549,7 @@
       "rust": [
         "crates/diffuse-semantic/src/backends/geometry_backend.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/SemanticPipeline/Backends/SemanticAnalyzerBackend.swift",
@@ -11560,7 +11560,7 @@
       "rust": [
         "crates/diffuse-semantic/src/backends/semantic_analyzer_backend.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/SemanticPipeline/Backends/VisionBackend.swift",
@@ -11571,7 +11571,7 @@
       "rust": [
         "crates/diffuse-semantic/src/backends/vision_backend.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/SemanticPipeline/Memory/FileBackedSemanticMemoryStore.swift",
@@ -11582,7 +11582,7 @@
       "rust": [
         "crates/diffuse-semantic/src/memory/file_backed_semantic_memory_store.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/SemanticPipeline/Memory/SemanticMemoryStore.swift",
@@ -11593,7 +11593,7 @@
       "rust": [
         "crates/diffuse-semantic/src/memory/semantic_memory_store.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/SemanticPipeline/SemanticContracts.swift",
@@ -11604,7 +11604,7 @@
       "rust": [
         "crates/diffuse-semantic/src/semantic_contracts.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/SemanticPipeline/SemanticWorldEventMapper.swift",
@@ -11615,7 +11615,7 @@
       "rust": [
         "crates/diffuse-semantic/src/semantic_world_event_mapper.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/SequenceRuntime/BindingValidator.swift",
@@ -13211,7 +13211,7 @@
       "rust": [
         "crates/diffuse-semantic/tests/semantic_pipeline/semantic_pipeline_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/SequenceRuntimeTests/SequenceRuntimeTests.swift",

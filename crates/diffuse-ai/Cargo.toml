@@ -13,12 +13,15 @@ path = "src/lib.rs"
 diffuse-capability.workspace = true
 diffuse-context-memory.workspace = true
 diffuse-intent.workspace = true
+diffuse-kernel.workspace = true
 diffuse-math.workspace = true
 diffuse-observation.workspace = true
 diffuse-perception.workspace = true
 diffuse-plugin.workspace = true
 diffuse-scene.workspace = true
 diffuse-script.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 # G6: enable once Cove provides cove-agent
 # cove-agent.workspace = true
 # G4: enable once Cove provides cove-http
