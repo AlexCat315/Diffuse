@@ -407,6 +407,15 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - 快照：嵌套 `SceneSemanticSnapshot.Entity`/`ScriptBindingRecord` 按父类型前缀展开为 `SceneSemanticSnapshotEntity`/`SceneSemanticSnapshotScriptBindingRecord`；可选字段统一 `skip_serializing_if = "Option::is_none"`（serde 对 `Option` 缺省即 `None`，等价 Swift `decodeIfPresent`）。
 - 门禁状态：`cargo check -p diffuse-ai --all-targets` 与迁移文件的 `rustfmt --check` 通过（其余空占位文件由 `cargo fmt` 补行会污染差异，未纳入）；仅剩 6 条预期 `dead_code`（`system_prompt_section`/`requires_strict_approval` 待 `Session` 后续批次接线）。本批无对应测试文件，未跑测试。
 
+### `diffuse-ai` Planning（批次 90 `written`）
+
+- `SceneEditPlan`/`SceneEditStep`/`SceneEditOp` 保留 Swift 的 wire 形状：`op` 的 36 个原始字符串逐字复制，`capabilityID`（Swift 扩展）改为 `capability_id`/`from_capability_id` 并保留 `set_script_enabled → scene.set_script_bindings` 这一唯一非同名映射；`SceneEditStep` 用 `rename_all = "snake_case"` 匹配 Swift CodingKeys，`entityRef`/`spawnParentRef`/`parentRef` 显式写成 `entity_id`/`spawn_parent_id`/`parent_id`，`spot_*`/`camera_fov_y` 用 Swift 的短键。
+- `Float` 字段走 `diffuse_kernel::codable::serialize_float`，`[Float]` 数组用本地 `float_serde::float_vec` 逐元素写 `format_float` 的 `RawValue`（避免 serde_json 把 `0.1f32` 写成紧凑 f64 文本）；`JSONValue` 的手写 `Codable` 用 `serde_json::Value` 复刻 Bool→Double→Array→String 的解码顺序，`jsonFragment` 保留 `%.0f` 整值分支与 Swift `String(Double)` 的科学计数阈值。
+- `Proposal` 非 `Codable`，只保留字段与默认值（`requiresApproval`、0.85、空 `toolUseID`），`UUID().uuidString` 走 `diffuse_kernel::codable::new_uuid`，`Date` 用 `SwiftDate`。
+- `CapabilityDraftStore`：Swift `actor` → `Mutex<BTreeMap>`；`create_draft`/`validated_drafts` 的校验顺序、`CapabilityDraftError` 文案与 100/1 MiB/5 min 限制逐条对应，`canonicalise` 用默认有序 map 复刻 `.sortedKeys`，输入校验走 `JsonSchemaValidator::validate`；`create_draft_with_registry`/`validated_drafts_with_registry` 保留「对外用本 store 的 registry、会话用调用方原子快照」的双入口。
+- `SceneCapabilityDraftLowering::plan` 注入 `"op"` 后按排序键重编码并解码回 `SceneEditStep`；不可下调的自注册能力抛 `unsupportedBuiltInCapability`。
+- 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets`（仅 6 条既有 `dead_code`）、6 个新增单元测试、迁移文件 `rustfmt --check` 全部通过。
+
 ### `diffuse-exr`（已 `tested`）
 
 - `EXRReader`/`LayerInfo`/`EXRReaderError`、`EXRWriter`/`Layer`/`PixelType`/`EXRWriterError`、FFI 类型 `CoveEXRContext`/`CoveEXRLayerDesc`（24 字节、8 对齐，已断言）。
@@ -652,6 +661,8 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-08 | 批次 88 语义记录 | — | — | — | ① `AssetSemanticPipeline` 的 `TaskGroup` → `std::thread::scope`，各 backend 并行分析后按注入顺序合并；`apply` 的 `async throws` → `Result<Vec<SemanticProposal>, SemanticMemoryError>`；② 文件记忆存储的 Swift `actor` → `Mutex<BTreeMap>`，`JSONEncoder [.sortedKeys]` 由 `serde_json` 默认有序 map + 按 `fingerprintHash`/`regionAlias`/`updatedAt` 排序复刻，写入走 `cove_system::files::atomic_write`，持久化失败时保留旧索引；③ `SemanticMemoryEntry` 的 `Float`/`Date` 分别接 `serialize_float` 与 `SwiftDate`；④ `VisionBackend` 依赖 `diffuse-perception` 的 `PerceptionWorker`，测试用 stub worker；`Engine/third-party/sdl3/test/trashcan.png` 在仓库中不存在，Swift 侧 `XCTSkip` 条件在 Rust 侧保留为同条件提前返回；⑤ 新增依赖均为既有 workspace 条目（`cove-system`/`diffuse-kernel`/`serde`/`serde_json`/`thiserror`/`tempfile`），无第三方新增 |
 | 2026-11-08 | 批次 89 | diffuse-ai（Context 首批 + 快照依赖） | 6 | 1071 | `AIWorldContext`/`WorldView`/`WorkflowContext`/`WorkstationContext`/`AssetWorkflowContext` 5 个 Context 文件（848 行）加依赖的 `SceneSemanticSnapshot.swift`（223 行）；`cargo check -p diffuse-ai --all-targets`、迁移文件的 `rustfmt --check`、`inventory.py --check` 通过，6 行标 `written`。crate 仍有 6 条预期 `dead_code`（`system_prompt_section` 待 `Session` 接线），本批无测试文件，未跑测试 |
 | 2026-11-08 | 批次 89 语义记录 | — | — | — | ① Swift `actor AIWorldContext` → `Mutex<AIWorldContextState>`，`materializeSnapshot` 保留 FIFO 8 条上限与 `"world"` 流游标；② 外部类型扩展 `WorldPropertyValue.inferredDisplayValue` → `InferredDisplayValue` trait，`%.4g` 复用 `diffuse_observation::event_symbolic_view::format_general`；③ `WorkflowContext` 的 `{kind,payload}` 与未知 kind 文案手写 serde，`GameLevelPhase`/`FilmNarrativePhase` 保留原始字符值；④ 嵌套类型按父类型前缀展开（`WorkstationContextDomain`、`SceneSemanticSnapshotEntity`、`SceneSemanticSnapshotScriptBindingRecord`），`type`→`type_`、`ref`→`ref_` 并显式键名，修正 `colliderLayerID`/`vehicleEngineRPM`/`parametersJSON` 的 camelCase 缩写；⑤ 新增 `diffuse-kernel`/`serde`/`serde_json` 依赖，均为既有 workspace 条目，无第三方新增 |
+| 2026-11-08 | 批次 90 | diffuse-ai（Planning 三件套） | 3 | 701 | `SceneEditPlan`（376 行）+ `CapabilityDraftPipeline`（274 行）+ `Proposal`（51 行）；`check -p diffuse-ai --all-targets`、`clippy -p diffuse-ai --all-targets`、6 个新增单元测试、迁移文件 `rustfmt --check` 通过，3 行标 `written`。`SceneEditPlanExecutor.swift`（843 行）留待下一批 |
+| 2026-11-08 | 批次 90 语义记录 | — | — | — | ① `SceneEditOp` 36 个 wire 字符串与 `capabilityID` 映射逐字保留，`SceneEditStep` 的蛇形键显式对齐 Swift CodingKeys；② `Float` 标量/数组分别接 `serialize_float` 与本地逐元素 `format_float`，避免 f32→f64 文本漂移；`JSONValue` 手写 `Codable` 复刻解码顺序与 `jsonFragment` 文本；③ `CapabilityDraftStore` 的 Swift `actor` → `Mutex`，校验顺序、错误文案、限制常量、`.sortedKeys` 规范化与双 registry 入口全部保留；④ `SceneCapabilityDraftLowering` 注入 `op` 后重编码并解码回 `SceneEditStep` |
 
 ## 10. 已知问题与需要用户确认的事项
 

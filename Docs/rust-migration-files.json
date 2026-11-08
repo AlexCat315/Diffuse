@@ -6807,7 +6807,7 @@
       "rust": [
         "crates/diffuse-ai/src/planning/capability_draft_pipeline.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Planning/Proposal.swift",
@@ -6818,7 +6818,7 @@
       "rust": [
         "crates/diffuse-ai/src/planning/proposal.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Planning/SceneEditPlan.swift",
@@ -6829,7 +6829,7 @@
       "rust": [
         "crates/diffuse-ai/src/planning/scene_edit_plan.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/AIRuntime/Planning/SceneEditPlanExecutor.swift",
