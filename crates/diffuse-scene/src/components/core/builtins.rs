@@ -526,7 +526,7 @@ impl ComponentRegistry {
                 decode,
                 make_default,
             );
-            schema.runtime_type_name = "Constraint".to_string();
+            schema.runtime_type_name = "PhysicsJoint".to_string();
             schema.is_user_addable = false;
             schema.inspection = ComponentInspection::constraint();
             schema
@@ -647,7 +647,7 @@ mod tests {
 
         let constraint = registry.get("constraint").expect("constraint");
         assert!(!constraint.is_user_addable);
-        assert_eq!(constraint.runtime_type_name, "Constraint");
+        assert_eq!(constraint.runtime_type_name, "PhysicsJoint");
 
         let asset_reference = registry.get("assetReference").expect("assetReference");
         assert!(!asset_reference.is_user_addable);

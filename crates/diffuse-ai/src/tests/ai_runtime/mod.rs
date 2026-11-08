@@ -2,6 +2,7 @@ pub mod ai_runtime_tests;
 pub mod capability_exposure_tests;
 pub mod completion_tests;
 pub mod component_mutation_test_support;
+pub mod fixture_http;
 pub mod plugin_session_update_tests;
 pub mod project_tool_session_tests;
 pub mod retry_policy_tests;

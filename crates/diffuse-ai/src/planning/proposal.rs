@@ -47,4 +47,36 @@ impl Proposal {
             capability_drafts: Vec::new(),
         }
     }
+
+    /// Swift's initializer with every argument explicit.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_options(
+        id: String,
+        session_id: String,
+        semantic_intent: String,
+        plan: SceneEditPlan,
+        base_scene_revision: Option<u64>,
+        reasoning: Option<String>,
+        confidence: f64,
+        approval_policy: TransactionApprovalPolicy,
+        created_at: SwiftDate,
+        tool_use_id: String,
+        capability_exposure_snapshot: Option<CapabilityExposureSnapshot>,
+        capability_drafts: Vec<CapabilityInvocationDraft>,
+    ) -> Self {
+        Self {
+            id,
+            session_id,
+            semantic_intent,
+            plan,
+            base_scene_revision,
+            reasoning,
+            confidence,
+            approval_policy,
+            created_at,
+            tool_use_id,
+            capability_exposure_snapshot,
+            capability_drafts,
+        }
+    }
 }

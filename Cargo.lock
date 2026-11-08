@@ -515,6 +515,8 @@ dependencies = [
 name = "diffuse-ai"
 version = "0.1.0"
 dependencies = [
+ "cove-agent",
+ "cove-http",
  "diffuse-capability",
  "diffuse-context-memory",
  "diffuse-intent",

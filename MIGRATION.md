@@ -427,6 +427,63 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `JSONValue` 数字改用 `diffuse_kernel::codable::{format_double, serialize_double}`，整值不再写成 `1.0`。
 - 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets`、7 个新增单元测试、迁移文件 `rustfmt --check`、`inventory.py --check` 通过；`diffuse-capability`/`diffuse-intent`/`diffuse-plugin` 回归 36/89/53 个测试全过。
 
+### `diffuse-ai` Session（批次 92 `written`）
+
+- `Session`（Swift `actor`）→ 普通结构体 + 单个 `Mutex<SessionState>`；锁只在读写状态时持有，绝不跨网络 I/O，`cancel_active_run` 用 `active_inference_id` + 每次网络调用后的 `ensure_active` 保持 Swift 的取消语义。`init` → `new`，Swift 默认参数拆为 `new`（全参）与 `with_defaults`。
+- 网络层从 `URLSession` 改为同步 `cove_http::{Client, ClientConfig, Request}`；`HttpClient` 的 `send`/`bytes` 在全平台可用。SSE 流式响应用 `Response::into_body()` 的 `BufReader` 按行解析，Anthropic/OpenAI-compatible/OpenAI Responses 三套事件逐字段对应 Swift（Swift 侧该路径受 Objective-C 条件编译限制，这里全平台实现）。
+- 重试：`RetryPolicy::{is_retryable, delay_with_random_unit}`；408/429/5xx 与 `HttpError::{Timeout, Network}` 按指数退避 + `Retry-After` 重试，`std::thread::sleep` 等待；重试耗尽后按原 Swift 分支映射为 `HttpError`/`Other`。
+- 无法用 `async throws` 闭包表达的能力接回同步 `Arc<dyn Fn(...) -> Result<...>>`：`SessionProgressHandler`、`ComponentDescriptionProvider`、`PluginQuerySnapshotProvider`、`ProjectToolExecutor`；harness `SessionHarness` 同样是阻塞闭包。
+- `SessionError` 的 `MalformedResponse { detail }`/`PlanDecodingFailed { detail }` 用结构体变体承载 Swift 的关联值，`Display` 文案逐字保留；`CapabilityDraftError`/`ToolPolicyError`/`PluginCapabilityExecutionFailure` 通过 `From` 展平。
+- 系统提示词逐字保留：`SESSION_INTRO`、`PROJECT_TOOLS_SECTION`、`SESSION_RULES`（`concat!`），实体索引按选中项与其父子优先截断到 100 条，`compact_dict` 的键集合与 Swift 手写字典一致；`serde_json::Map` 默认有序键近似 `.sortedKeys`。
+- `handle_submit` 解析 `draft_ids` 用 `Uuid::parse`（36 字符规范形），低层内建草案走 `SceneCapabilityDraftLowering::plan`，其余作为 typed Draft 留在 `Proposal` 等 EditorCore 展开。
+- 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets`（仅剩既有条目警告）、13 个单元测试全过、迁移文件 `rustfmt --check`、`inventory.py --check` 通过。
+
+### `diffuse-ai` Session 配置与 Tools（批次 93 `written`）
+
+- `SessionConfig`：六个 Swift 静态工厂拆成无默认值入口 + `*_with_options`，并补 `new_with_defaults` 对应 `init(apiKey:model:baseURL:apiFormat:)` 的默认值；`AssetCatalog.systemPromptSection` 逐字保留三行文案。
+- `SessionWorkflowScope`：`restricting` 用 `BTreeSet::intersection` 复刻 Swift `Set` 交集；`SessionAgentContext.includes` 的 `nil = 全部` 语义保留。
+- `CapabilityExposureSessionStore`：Swift `actor` → `Mutex<StoreState>`；`DisposalScope` 的草案清理改由 `Entry` 的 `Drop` 执行（所有移除路径一致），TTL 下限 1 秒、8 会话上限、16 活跃能力上限、LRU 淘汰与 `generation &+= 1` 逐项对应；`discardInvalidatedSessions` 的先换权威再回收、按被引用插件逐个比对 `scopedIdentity` 保留。
+- 会话内 Draft 校验改用 `create_draft_with_registry`/`validated_drafts_with_registry` 传入 store 的当前 registry，对应 Swift `createDraft(..., registry:)`（entry 创建后 registry 可能已被原子替换）。
+- `CapabilityToolset`/`EditPlanTool` 的工具定义全部由 `CapabilityRegistry` 契约生成；`frameworkContracts` 在 registry 完整性错误时返回空集，`EditPlanTool` 在无可用步骤 schema 时用 `maxItems: 0` 拒绝一切变更步骤。
+- 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets`（仅剩 `plugin_capability_executor` 的既有枚举体积警告，属下一批）、13 个单元测试、迁移文件 `rustfmt --check`、`inventory.py --check` 通过。
+
+### `diffuse-ai` Tools（批次 94 `written`）
+
+- `ToolPolicy`：`@Sendable` 处理器链 → `Arc<dyn Fn(ToolCall) -> Result<ToolPolicyDecision, ToolPolicyError> + Send + Sync>`，注册顺序短路、`invalidRewrite` 校验（名称与来源不可改写）与 `ToolPolicyError` 文案逐字保留。
+- `FindEntitiesTool`/`EditPlanTool` 一样从 `CapabilityRegistry` 契约生成 schema；registry 缺失 `scene.find_entities` 时回退空对象 schema（Swift 同款回退）。
+- `ProjectToolset`：22 个宿主工具 + `respond`，默认值参数改 `provider_definitions_with_defaults`；`UIDiagnosticTools.tools` → `cove_agent::ui_tools::Tools::tools()`；`JsonSchema::object` 的 `required` 排序与 `additionalProperties: false` 由 Cove 构造器提供。
+- `PluginCapabilityExecutor`：`PluginQuerySnapshotProvider` 的 `@Sendable async throws` → 阻塞 `Arc<dyn Fn>`；读取路径的输入大小、场景修订、快照权威、查询快照、输出 1 MiB 与 JSON 合法性检查顺序逐项对应；写入路径按 draft 顺序展开宿主调用、用 `PluginCompositionValidator` 校验组合、记录外层插件调用与内建原语调用并重建 invocation 顺序。
+- 偏差：Rust 的 `PluginCapabilityInvoking::validate` 返回 `bool`（Swift 为 throws），无法保留插件侧具体错误，统一映射为 `AuthorityChanged`；`canonicalObject` 的解析失败文案来自 serde（Swift 为 `String(describing:)`）。
+- `InvocationSegment::Plugin` 的调用记录装箱，消除 248 字节枚举体积告警。
+- 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets`（零告警）、13 个单元测试、迁移文件 `rustfmt --check`、`inventory.py --check` 通过。
+
+### `diffuse-ai` AIRuntimeTests（批次 95 `written`）
+
+- `RetryPolicyTests`/`CompletionTests`/`PluginSessionUpdateTests`/`WorkflowScopeTests` 都是纯函数或 `Mutex` 驱动的同步测试，Swift `async` 直接去掉，XCTest 断言映射为 `assert!`/`assert_eq!`。
+- `WorkflowScopeTests` 的 `CapabilityExposureSessionStore(exposurePolicy:)` 展开为 `with_configuration(BuiltInTypedCapabilityCatalog::registry(), CapabilityDraftStore::DEFAULT_TTL, policy, BTreeMap::new(), None)`；`#expect(throws:)` 用 `matches!` 断言 `SessionNotFound`。
+- `ComponentMutationTestSupport`：Swift 对外部类型的扩展改为本地 `DecodedComponent` trait（Rust 孤儿规则），`SceneMutation`/`TransactionOperation` 各自实现；`SceneRuntime::set_component_data(..., ComponentWriteMode::Replace)` 对应 Swift 默认 `mode: .replace`。
+- 偏差：`RetryPolicy::max_retries` 是 `usize`，无法表达 Swift 的负值；`testClampsNegativeInputs` 用 `0` 并只断言浮点字段的钳制。
+- 测试模块在 `lib.rs` 以 `#[cfg(test)]` 门禁，避免 `#[test]` 项在常规构建中被剥离后留下未用导入与辅助函数告警；`Session::record_turn` 提升为 `pub(crate)`。
+- 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets`（零告警）、26 个测试（新增 13 个）、迁移文件 `rustfmt --check`、`inventory.py --check` 通过。
+
+### `diffuse-ai` AIRuntimeTests（批次 96 `written`）
+
+- Swift 用 `URLProtocol` 子类注入响应；`cove_http` 没有传输层接缝，改为 `tests/ai_runtime/fixture_http.rs` 中的真实回环 HTTP/1.1 服务：非阻塞 `TcpListener`（`127.0.0.1:0`），后台线程按到达顺序记录请求体（请求体支持 `Content-Length` 与 `chunked`），处理器按零基索引返回 JSON；`Drop` 置停止标志并 join。
+- `ToolPolicyTests`：空策略直通、按注册顺序折叠改写、首个拒绝短路、处理器错误原样传播。偏差：Swift 处理器可抛任意 `TestError`，Rust 处理器只能返回 `ToolPolicyError`，该用例改用 `InvalidRewrite` 作为最接近的可观测等价物。
+- 会话拒绝用例覆盖 `search_capabilities`/`execute_edit_plan`/`find_entities`：拒绝结果写入第二轮请求（`Tool call denied`）并继续规划；非法参数改写在 `rebuilding_tool_call` 处失败并同样降级为拒绝观察。
+- `storePolicyDeniesAndRewrites` 用 `with_configuration` 重建 Swift 默认 store 权威（stable + `allowed_domains = ["scene"]`）；store 的 `create_draft` 以 `ToolCallOrigin::Mcp` 进入策略，策略改写后的 `validated_input` 生效。
+- `ProjectToolSessionTests`：三种 provider 的工具过滤/选择绑定、agent 指令与 section 注入、项目工具失败回传模型；`HarnessSessionTests` 覆盖 harness 逐步决策、无模型直接跑工具、拒绝工具作为失败观察、32 步预算、跨轮状态与线格式解码/序列化。
+- 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets`（零告警）、38 个测试（新增 12 个）、迁移文件 `rustfmt --check`、`inventory.py --check` 通过；2 行标 `written`。
+
+### `diffuse-ai` AIRuntimeTests（批次 97 `written`）
+
+- `AIRuntimeTests.swift`（4999 行，263 个测试）整体翻译为 `tests/ai_runtime/ai_runtime_tests.rs`，逐一对应 263 个 Rust `#[test]`（名称映射经脚本核对，4 处差异为缩写/数字规范化与 Swift 拼写笔误 `Stickt`→`strict` 的修正）；按 §6.2 单文件超 700 行独占一批。
+- Swift `Optional<Any>.asFloat`/`.asFloatArray` 扩展（4978-4998 行）改本地 `value_as_float`/`value_as_float_array`：值经 f32→f64 往返，回 cast 恢复作者写入的 Float 原值。
+- 覆盖 proximity（近距筛选/半径排除/localPosition 回落/距离排序/双参缺失）、enriched 实体字段（light/physics/capsule/scriptBindings/transform/light color/mesh/audio/animation/collider/rigidbody）、spawn 初始字段（intensity/color/fov/parent）、多步计划不覆盖前序 collider 改动、AssetCatalog 系统提示词注入（audio/animation/mesh/空目录）等。
+- **跨 crate 修正**：`diffuse-scene` 的 `components/core/builtins.rs:529` 把 `constraint` 的 `runtime_type_name` 误设为 `"Constraint"`，而 `SetConstraintEnabledCapability` 按 Swift 要求 `"PhysicsJoint"`（`CapabilityInputDeclaration.swift:314` `case constraint = "PhysicsJoint"`；`String(describing: Constraint.self)` 解析 typealias 得 `"PhysicsJoint"`）。`component_types` 由 `runtime_type_name` 填充，导致所有 `set_constraint_enabled` 校验报 `MissingRequiredComponent`。改回 `"PhysicsJoint"` 并同步该文件第 650 行断言；`diffuse-scene` 633 个测试全过。
+- 变异测试（3 个代表性新测试均证明会咬）：① `session.rs:2999` 半径判断 `+ 1000.0` 使 `find_entities_near_position_excludes_entities_outside_radius` 失败；② `lightType` 键改名使 `find_entities_result_includes_light_fields` 失败；③ `session_config.rs:44` audio 段门禁 `&& false` 使 `asset_catalog_audio_clips_appear_in_system_prompt_section` 失败。三处变异已全部还原。
+- 门禁：`cargo check -p diffuse-ai --all-targets`、`cargo clippy -p diffuse-ai --all-targets -- -D warnings`（零告警）、`cargo test -p diffuse-ai -- --test-threads=1`（301 个）、`cargo test -p diffuse-scene`（633 个）、迁移文件 `rustfmt --check`、`inventory.py --check` 通过；1 行标 `written`。
+
 ### `diffuse-exr`（已 `tested`）
 
 - `EXRReader`/`LayerInfo`/`EXRReaderError`、`EXRWriter`/`Layer`/`PixelType`/`EXRWriterError`、FFI 类型 `CoveEXRContext`/`CoveEXRLayerDesc`（24 字节、8 对齐，已断言）。
@@ -676,6 +733,18 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-08 | 批次 90 语义记录 | — | — | — | ① `SceneEditOp` 36 个 wire 字符串与 `capabilityID` 映射逐字保留，`SceneEditStep` 的蛇形键显式对齐 Swift CodingKeys；② `Float` 标量/数组分别接 `serialize_float` 与本地逐元素 `format_float`，避免 f32→f64 文本漂移；`JSONValue` 手写 `Codable` 复刻解码顺序与 `jsonFragment` 文本；③ `CapabilityDraftStore` 的 Swift `actor` → `Mutex`，校验顺序、错误文案、限制常量、`.sortedKeys` 规范化与双 registry 入口全部保留；④ `SceneCapabilityDraftLowering` 注入 `op` 后重编码并解码回 `SceneEditStep` |
 | 2026-11-08 | 批次 91 | diffuse-ai（SceneEditPlanExecutor） | 1 | 843 | `Engine/Sources/AIRuntime/Planning/SceneEditPlanExecutor.swift` → `crates/diffuse-ai/src/planning/scene_edit_plan_executor.rs`；`check -p diffuse-ai --all-targets`、`clippy -p diffuse-ai --all-targets`、7 个新增单元测试、迁移文件 `rustfmt --check`、`inventory.py --check` 通过，1 行标 `written`；`diffuse-capability`/`diffuse-intent`/`diffuse-plugin` 回归 36/89/53 个测试全过 |
 | 2026-11-08 | 批次 91 语义记录 | — | — | — | ① 快照契约核对（version + schemaHash）→ 旧诊断（仅决定错误优先级）→ 严格 schema 校验 → typed `prepare` → 影子场景应用的顺序逐项对应，`legacy_validation_error` 的 mutations 结果按 Swift 丢弃；② `.aiDefault` → `BuiltInTypedCapabilityCatalog::registry()`；③ `canonical_capability_input` 用 `Box<RawValue>` 保留 Float 文本，残留 `\/` 与 17 位 Double 文本只影响不透明 `input_digest`；④ `UInt16(clamping:)` → `clamp(0, u16::MAX)`；准备上下文用运行时类型短名并补隐性 `LocalTransform`；⑤ `component_data` 用 `ComponentRegistry::built_in()`，脚本属性合并用 `RawValue` 保留数字文本；⑥ 偏差：负 `script_index` 返回 `MissingField` 而非 trap，输入编码错误归为 `InvalidCapabilityInput`，3 元素 `material_base_color` 不满足 typed `Vec4`；⑦ 新增 `validate_capability_input`：Diffuse 自行校验 `^scene:[0-9]+$` 后从委派副本剥离（G10），修复 Cove 校验器把所有合法实体引用判为不匹配的问题 |
+| 2026-11-08 | 批次 92 | diffuse-ai（Session 全部 + SceneSemanticEncoder） | 7 | 2760 | `Semantic/SceneSemanticEncoder.swift`（428 行）与 `Session/{CapabilityState,Completion,ConversationTurn,Harness,RetryPolicy,Session}.swift`（32/46/21/145/50/2038 行）；`check -p diffuse-ai --all-targets`、`clippy -p diffuse-ai --all-targets`、13 个单元测试、迁移文件 `rustfmt --check`、`inventory.py --check` 通过，7 行标 `written`。`diffuse-ai` 首次接入 `cove-http` |
+| 2026-11-08 | 批次 92 语义记录 | — | — | — | ① Swift `actor Session` → `Mutex<SessionState>`，锁只覆盖状态读写、不跨网络 I/O，`active_inference_id` + `ensure_active` 保留取消；`async throws` 闭包统一改为阻塞 `Arc<dyn Fn>`；② SSE 三套事件格式在 `BufReader` 上逐行解析，Swift 的 Objective-C 条件编译限制不再适用，全平台实现；③ 重试沿用 `RetryPolicy`（408/429/5xx、`Timeout`/`Network`、指数退避 + `Retry-After`），`thread::sleep` 等待；④ `SessionError` 结构体变体承载关联值，`Display` 文案逐字保留，草案/策略/执行失败经 `From` 展平；⑤ 系统提示词与 `SESSION_RULES` 逐字保留，实体索引 100 条截断保留选中项及父子，`serde_json` 有序 Map 近似 `.sortedKeys`；⑥ `handle_submit` 用 `Uuid::parse` 校验 36 字符 ID，内建草案走 `SceneCapabilityDraftLowering`，插件草案留在 `Proposal` 等 EditorCore 展开；⑦ `cove-http.workspace = true` 首次启用（Cove 已提供，G4 关闭）
+| 2026-11-08 | 批次 93 | diffuse-ai（Session 配置/作用域/Signal + Tools 三件套） | 6 | 868 | `SessionConfig.swift`、`SessionWorkflowScope.swift`、`Signal.swift`、`CapabilityExposureSessionStore.swift`、`CapabilityToolset.swift`、`EditPlanTool.swift`；补 `SessionConfig::new_with_defaults`，会话 Draft 校验改走带 live registry 的入口；`check`/`clippy`/13 个测试/`rustfmt --check`/`inventory.py --check` 通过，6 行标 `written` |
+| 2026-11-08 | 批次 93 语义记录 | — | — | — | ① `CapabilityExposureSessionStore` 的 `actor` → `Mutex`，`DisposalScope` 由 `Entry::drop` 承担，所有移除路径（替换/过期/淘汰/工作流切换/会话删除）统一释放 Draft；② LRU 淘汰用 `total_cmp` 复刻 Swift `min(by:)`；③ `replaceRegistry` 先切权威再回收失效会话，`scopedIdentity` 仅忽略 `enabledPluginIDs`；④ `createDraft`/`validatedDrafts` 使用 store 当前 registry 而非 entry 创建时的快照 registry，对齐 Swift 显式 `registry:` 参数；⑤ `EditPlanTool` 的 required 集合语义不变（Swift `Set` 去重/无序），无步骤 schema 时 `maxItems: 0`；⑥ `CapabilityToolset::searchResult` 由有序 Map 序列化复刻 `.sortedKeys`
+| 2026-11-08 | 批次 94 | diffuse-ai（Tools 四件套） | 4 | 652 | `FindEntitiesTool.swift`、`PluginCapabilityExecutor.swift`、`ProjectToolset.swift`、`ToolPolicy.swift`；`check`/`clippy`（零告警）/13 个测试/`rustfmt --check`/`inventory.py --check` 通过，4 行标 `written` |
+| 2026-11-08 | 批次 94 语义记录 | — | — | — | ① `ToolPolicy` 处理器 → `Arc<dyn Fn>`，改名/改来源的 `invalidRewrite` 校验保留；② `ProjectToolset` 的诊断工具改用 `cove_agent::ui_tools::Tools`，`respond` 与 22 个工具描述逐字保留；③ `PluginCapabilityExecutor` 的读取/写入校验顺序、1 MiB 输出上限、组合校验与 invocation 段重建逐项对应；④ `InvocationSegment` 装箱消除体积告警；⑤ 偏差：`PluginCapabilityInvoking::validate` 的 bool 返回值丢失插件侧错误详情，统一映射为 `AuthorityChanged`
+| 2026-11-08 | 批次 95 | diffuse-ai（AIRuntimeTests 首批） | 5 | 180 | `RetryPolicyTests`/`WorkflowScopeTests`/`CompletionTests`/`PluginSessionUpdateTests`/`ComponentMutationTestSupport`；`check`/`clippy`（零告警）/26 个测试/`rustfmt --check`/`inventory.py --check` 通过，5 行标 `written` |
+| 2026-11-08 | 批次 95 语义记录 | — | — | — | ① `ComponentMutationTestSupport` 的扩展方法改本地 trait（孤儿规则），`SceneRuntime` 每次调用新建内建 registry；② `WorkflowScopeTests` 的 store 初始化展开为全参 `with_configuration`，`#expect(throws:)` → `matches!(..., SessionNotFound)`；③ `Session::record_turn` 提升为 `pub(crate)`；④ 测试模块加 `#[cfg(test)]` 门禁，消除非测试构建中的未用导入/辅助函数告警；⑤ 偏差：`max_retries: usize` 无法表达负值，负值钳制仅验证浮点字段 |
+| 2026-11-08 | 批次 96 | diffuse-ai（AIRuntimeTests 第二批） | 2 | 531 | `ToolPolicyTests`/`ProjectToolSessionTests`（含 `HarnessSessionTests`）+ 回环 HTTP 夹具；`check`/`clippy`（零告警）/38 个测试/`rustfmt --check`/`inventory.py --check` 通过，2 行标 `written` |
+| 2026-11-08 | 批次 96 语义记录 | — | — | — | ① `URLProtocol` 注入改为真实回环 HTTP 服务（`cove_http` 无传输接缝），按索引记录/应答并支持 chunked 请求体；② 偏差：策略处理器错误只能为 `ToolPolicyError`，Swift `TestError` 用 `InvalidRewrite` 等价替代；③ store 用例显式重建默认权威（stable + scene 域），`create_draft` 以 `Mcp` 来源评估策略 |
+| 2026-11-08 | 批次 97 | diffuse-ai（AIRuntimeTests 主文件） | 1 | 4999 | `Engine/Tests/AIRuntimeTests/AIRuntimeTests.swift` → `crates/diffuse-ai/src/tests/ai_runtime/ai_runtime_tests.rs`，263↔263 个测试；`check`/`clippy -D warnings`（零告警）/`test -p diffuse-ai`（301）/`test -p diffuse-scene`（633）/`rustfmt --check`/`inventory.py --check` 通过，1 行标 `written`；3 个新测试经变异测试证明会咬（已还原） |
+| 2026-11-08 | 批次 97 语义记录 | — | — | — | ① Swift `Optional<Any>.asFloat`/`.asFloatArray` → 本地 `value_as_float`/`value_as_float_array`（f32→f64 往返回 cast 恢复原值）；② proximity/enriched/spawn 初始字段/多步计划/AssetCatalog 系统提示词逐字保留断言与容差；③ **跨 crate 修正**：`diffuse-scene` `builtins.rs:529` 的 `constraint.runtime_type_name` 由误设的 `"Constraint"` 改回 `"PhysicsJoint"`（Swift `case constraint = "PhysicsJoint"`、`String(describing: Constraint.self)` 解析 typealias），并同步第 650 行断言，修复所有 `set_constraint_enabled` 校验报 `MissingRequiredComponent` 的迁移 bug；④ 名称映射 4 处差异为缩写/数字规范化与 Swift 笔误 `Stickt`→`strict` 修正 |
 
 ## 10. 已知问题与需要用户确认的事项
 
