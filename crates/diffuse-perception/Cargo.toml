@@ -14,7 +14,18 @@ name = "perception_runtime"
 path = "tests/perception_runtime/main.rs"
 
 [dependencies]
+cove-system.workspace = true
 diffuse-intent.workspace = true
+diffuse-kernel.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[build-dependencies]
+cc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

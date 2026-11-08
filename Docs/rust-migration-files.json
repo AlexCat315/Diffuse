@@ -8543,7 +8543,7 @@
       "rust": [
         "crates/diffuse-perception/src/core/manifest_scanner.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Core/PerceptionContracts.swift",
@@ -8554,7 +8554,7 @@
       "rust": [
         "crates/diffuse-perception/src/core/perception_contracts.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Core/PerceptionSchemaValidator.swift",
@@ -8565,7 +8565,7 @@
       "rust": [
         "crates/diffuse-perception/src/core/perception_schema_validator.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Core/PerceptionService.swift",
@@ -8576,7 +8576,7 @@
       "rust": [
         "crates/diffuse-perception/src/core/perception_service.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Gates/EvaluationGate.swift",
@@ -8587,7 +8587,7 @@
       "rust": [
         "crates/diffuse-perception/src/gates/evaluation_gate.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Gates/LicenseGate.swift",
@@ -8598,7 +8598,7 @@
       "rust": [
         "crates/diffuse-perception/src/gates/license_gate.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Support/LocalArtifactStore.swift",
@@ -8609,7 +8609,7 @@
       "rust": [
         "crates/diffuse-perception/src/support/local_artifact_store.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Support/PerceptionWorldEventMapper.swift",
@@ -8620,7 +8620,7 @@
       "rust": [
         "crates/diffuse-perception/src/support/perception_world_event_mapper.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Support/SHA256Portable.swift",
@@ -8631,7 +8631,7 @@
       "rust": [
         "crates/diffuse-perception/src/support/sha256_portable.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Worker/AppleVisionPerceptionWorker.swift",
@@ -8642,7 +8642,7 @@
       "rust": [
         "crates/diffuse-perception/src/worker/apple_vision_perception_worker.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Worker/PerceptionWorker.swift",
@@ -8653,7 +8653,7 @@
       "rust": [
         "crates/diffuse-perception/src/worker/perception_worker.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PerceptionRuntime/Worker/PerceptionWorkerFactory.swift",
@@ -8664,7 +8664,7 @@
       "rust": [
         "crates/diffuse-perception/src/worker/perception_worker_factory.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/PluginRuntime/Contract/Activation.swift",
@@ -12605,7 +12605,7 @@
       "rust": [
         "crates/diffuse-perception/tests/perception_runtime/perception_runtime_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/PluginRuntimeTests/BunRuntimeTests.swift",
