@@ -28,6 +28,7 @@ use crate::state::workspace::editor_workbench_state::{
     EditorOutputTab, EditorScriptNavigationRequest, EditorViewportMode,
 };
 
+#[derive(Clone)]
 pub enum EditorAction {
     /// Dispatched every engine frame.
     TickFrame(u64),
