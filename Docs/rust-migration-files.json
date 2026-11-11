@@ -565,7 +565,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/editor_plugin_capability_error.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/HostPool.swift",
@@ -1370,7 +1370,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/rendering/hud/atlas_delivery.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Rendering/HUD/InGameUIHost.swift",
@@ -1733,7 +1733,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/support/editor_scene_json.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Support/EditorSceneTransformMath.swift",
@@ -1997,7 +1997,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/models/editor_hierarchy_lock_component.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Models/EditorSceneNode.swift",
@@ -2008,7 +2008,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/models/editor_scene_node.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/ProjectExporter.swift",
