@@ -2158,7 +2158,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/assistance.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/AssistanceReplies.swift",
@@ -2182,7 +2182,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/details.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/Editing.swift",
