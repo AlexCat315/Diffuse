@@ -7767,7 +7767,7 @@
       "rust": [
         "crates/diffuse-engine/src/engine_core.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/EngineCore/EngineFFI.swift",
@@ -7811,7 +7811,7 @@
       "rust": [
         "crates/diffuse-engine/src/render_thread.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/EngineCore/Scripting/Syntax/TreeSitterBridge.swift",
@@ -7834,7 +7834,7 @@
       "rust": [
         "crates/diffuse-engine/src/simulation_thread.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/EngineKernel/EngineKernel.swift",
