@@ -3097,7 +3097,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/developer_tools/models/developer_monitor_snapshot.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/DeveloperTools/Models/DeveloperTraceModels.swift",
@@ -3108,7 +3108,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/developer_tools/models/developer_trace_models.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/DeveloperTools/Particles/DeveloperParticleColors.swift",
@@ -3119,7 +3119,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/developer_tools/particles/developer_particle_colors.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/DeveloperTools/Particles/DeveloperParticleTrendAnalysis.swift",
@@ -3163,7 +3163,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/developer_tools/shared/developer_diagnostic_colors.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/DeveloperTools/Shared/DeveloperStatComponents.swift",
