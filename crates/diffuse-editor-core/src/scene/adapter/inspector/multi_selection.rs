@@ -14,8 +14,8 @@ use crate::localization::localized;
 use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
 use crate::scene::editor_inspector_schema::{
     EditorInspectorAssetRef, EditorInspectorEntityOption, EditorInspectorField,
-    EditorInspectorFieldGroup, EditorInspectorFieldPresentation, EditorInspectorFieldValue,
-    EditorInspectorSection, EditorInspectorSectionLayout, EditorInspectorStringOption,
+    EditorInspectorFieldGroup, EditorInspectorFieldValue, EditorInspectorSection,
+    EditorInspectorSectionLayout, EditorInspectorStringOption,
 };
 
 impl EditorSceneAdapter {
