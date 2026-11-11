@@ -305,7 +305,7 @@ impl EditorSceneAdapter {
     }
 }
 
-fn bindings_component_value(bindings: &[ScriptBinding]) -> ComponentValue {
+pub(crate) fn bindings_component_value(bindings: &[ScriptBinding]) -> ComponentValue {
     ComponentValue::Object(std::collections::BTreeMap::from([(
         "bindings".to_string(),
         ComponentValue::Array(

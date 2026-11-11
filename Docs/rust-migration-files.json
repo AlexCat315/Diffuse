@@ -1667,7 +1667,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/inspector/script_bindings.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Particles/Feedback.swift",
