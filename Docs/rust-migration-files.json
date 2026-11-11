@@ -2920,7 +2920,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/localization.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/AssetBrowser/AssetBrowserPanel.swift",
@@ -4122,7 +4122,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/projects/frame_cadence.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Projects/ProjectList.swift",
@@ -4155,7 +4155,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/resources_support.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Root/Chrome/EditorPresentationBoundary.swift",
@@ -4177,7 +4177,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/root/chrome/editor_visual_theme.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Root/Chrome/ModalBarrier.swift",
@@ -4475,7 +4475,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/shell/canvas_chrome.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Shell/ContentPicker.swift",
