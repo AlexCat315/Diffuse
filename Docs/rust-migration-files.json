@@ -1634,7 +1634,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/inspector/physics/physics_settings.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Inspector/Physics/Vehicle.swift",
