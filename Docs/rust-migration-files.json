@@ -1480,7 +1480,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/entity_queries.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Hierarchy.swift",
@@ -1491,7 +1491,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/hierarchy.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/History.swift",
@@ -1755,7 +1755,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/transactions.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Transform.swift",

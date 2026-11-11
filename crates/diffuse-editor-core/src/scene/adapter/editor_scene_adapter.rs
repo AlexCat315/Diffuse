@@ -125,6 +125,15 @@ impl EditorSceneAdapter {
         self.scene.borrow().clone()
     }
 
+    /// Mutates the authored scene in place. Swift's class exposed `scene` as a
+    /// mutable property; the accessor keeps `&self` call sites working.
+    pub(crate) fn with_scene_mut<Result>(
+        &self,
+        body: impl FnOnce(&mut SceneRuntime) -> Result,
+    ) -> Result {
+        body(&mut self.scene.borrow_mut())
+    }
+
     /// Replaces the scene the way Swift's `didSet` did: the script driver is
     /// re-attached to the new value.
     pub fn set_scene(&self, scene: SceneRuntime) {
