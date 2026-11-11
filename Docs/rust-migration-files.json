@@ -819,7 +819,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/assets/project_runtime_resources.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Bridge/RpcCompatClient.swift",
