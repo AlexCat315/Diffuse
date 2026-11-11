@@ -1788,7 +1788,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/editor_inspector_schema.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/GameSaveDocument.swift",
@@ -1843,7 +1843,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/enum_options.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/FieldControls.swift",
@@ -1854,7 +1854,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/field_controls.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/Rendering/Builtins.swift",
