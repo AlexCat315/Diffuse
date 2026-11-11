@@ -1017,7 +1017,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/diagnostics/formatting.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Diagnostics/Frame/Trend.swift",
@@ -1028,7 +1028,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/diagnostics/frame/trend.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Diagnostics/Issues/Assessment.swift",
@@ -1050,7 +1050,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/diagnostics/issues/diagnostic_issue.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Diagnostics/Particles/Authoring.swift",
