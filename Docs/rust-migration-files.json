@@ -2350,7 +2350,7 @@
         "crates/diffuse-editor-core/src/scripting/static_/project_static_scripts.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Toolchain/Activation.swift",
