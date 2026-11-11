@@ -31,27 +31,28 @@ use crate::scene::history::editor_scene_edit_history::EditorSceneEditHistory;
 use crate::scene::inspector::rendering::renderers::EditorInspectorRendererRegistry;
 use crate::scripting::dynamic::project_script_catalog::ProjectScriptCatalogEntry;
 
+#[derive(Clone)]
 pub struct EditorSceneAdapter {
-    scene: RefCell<SceneRuntime>,
-    pub editor_viewport_camera: Cell<RenderCamera>,
-    uses_editor_viewport_camera: Cell<bool>,
-    pub on_viewport_camera_changed: RefCell<Option<Rc<dyn Fn()>>>,
+    scene: Rc<RefCell<SceneRuntime>>,
+    pub editor_viewport_camera: Rc<Cell<RenderCamera>>,
+    uses_editor_viewport_camera: Rc<Cell<bool>>,
+    pub on_viewport_camera_changed: Rc<RefCell<Option<Rc<dyn Fn()>>>>,
     pub transaction_executor: TransactionExecutor,
-    pub initial_selection_id: Cell<Option<u64>>,
-    pub initial_expanded_ids: RefCell<BTreeSet<u64>>,
+    pub initial_selection_id: Rc<Cell<Option<u64>>>,
+    pub initial_expanded_ids: Rc<RefCell<BTreeSet<u64>>>,
     pub script_runtime: ScriptRuntime,
-    pub script_catalog_entries: RefCell<Vec<ProjectScriptCatalogEntry>>,
-    pub managed_script_identifiers: RefCell<BTreeSet<String>>,
-    pub dynamic_script_display_names: RefCell<BTreeMap<String, String>>,
-    pub dynamic_script_aliases: RefCell<BTreeMap<String, String>>,
+    pub script_catalog_entries: Rc<RefCell<Vec<ProjectScriptCatalogEntry>>>,
+    pub managed_script_identifiers: Rc<RefCell<BTreeSet<String>>>,
+    pub dynamic_script_display_names: Rc<RefCell<BTreeMap<String, String>>>,
+    pub dynamic_script_aliases: Rc<RefCell<BTreeMap<String, String>>>,
     pub particle_feedback: ParticleFeedbackInbox,
-    pub inspector_renderers: RefCell<EditorInspectorRendererRegistry>,
-    pub edit_history: RefCell<EditorSceneEditHistory>,
-    is_authoring_enabled: Cell<bool>,
-    pub on_revision_changed: RefCell<Option<Rc<dyn Fn(u64)>>>,
-    pub on_transaction_error: RefCell<Option<Rc<dyn Fn(String)>>>,
+    pub inspector_renderers: Rc<RefCell<EditorInspectorRendererRegistry>>,
+    pub edit_history: Rc<RefCell<EditorSceneEditHistory>>,
+    is_authoring_enabled: Rc<Cell<bool>>,
+    pub on_revision_changed: Rc<RefCell<Option<Rc<dyn Fn(u64)>>>>,
+    pub on_transaction_error: Rc<RefCell<Option<Rc<dyn Fn(String)>>>>,
     pub additional_inspector_sections:
-        RefCell<Option<Rc<dyn Fn(u64) -> Vec<EditorInspectorSection>>>>,
+        Rc<RefCell<Option<Rc<dyn Fn(u64) -> Vec<EditorInspectorSection>>>>>,
 }
 
 impl EditorSceneAdapter {
@@ -98,25 +99,25 @@ impl EditorSceneAdapter {
         let mut edit_history = EditorSceneEditHistory::with_limit(100);
         edit_history.reset(scene.clone());
         EditorSceneAdapter {
-            scene: RefCell::new(scene),
-            editor_viewport_camera: Cell::new(Self::default_viewport_camera()),
-            uses_editor_viewport_camera: Cell::new(false),
-            on_viewport_camera_changed: RefCell::new(None),
+            scene: Rc::new(RefCell::new(scene)),
+            editor_viewport_camera: Rc::new(Cell::new(Self::default_viewport_camera())),
+            uses_editor_viewport_camera: Rc::new(Cell::new(false)),
+            on_viewport_camera_changed: Rc::new(RefCell::new(None)),
             transaction_executor: TransactionExecutor::new(),
-            initial_selection_id: Cell::new(initial_selection_id),
-            initial_expanded_ids: RefCell::new(initial_expanded_ids),
+            initial_selection_id: Rc::new(Cell::new(initial_selection_id)),
+            initial_expanded_ids: Rc::new(RefCell::new(initial_expanded_ids)),
             script_runtime,
-            script_catalog_entries: RefCell::new(Vec::new()),
-            managed_script_identifiers: RefCell::new(BTreeSet::new()),
-            dynamic_script_display_names: RefCell::new(BTreeMap::new()),
-            dynamic_script_aliases: RefCell::new(BTreeMap::new()),
+            script_catalog_entries: Rc::new(RefCell::new(Vec::new())),
+            managed_script_identifiers: Rc::new(RefCell::new(BTreeSet::new())),
+            dynamic_script_display_names: Rc::new(RefCell::new(BTreeMap::new())),
+            dynamic_script_aliases: Rc::new(RefCell::new(BTreeMap::new())),
             particle_feedback: ParticleFeedbackInbox::new(),
-            inspector_renderers: RefCell::new(inspector_renderers),
-            edit_history: RefCell::new(edit_history),
-            is_authoring_enabled: Cell::new(true),
-            on_revision_changed: RefCell::new(None),
-            on_transaction_error: RefCell::new(None),
-            additional_inspector_sections: RefCell::new(None),
+            inspector_renderers: Rc::new(RefCell::new(inspector_renderers)),
+            edit_history: Rc::new(RefCell::new(edit_history)),
+            is_authoring_enabled: Rc::new(Cell::new(true)),
+            on_revision_changed: Rc::new(RefCell::new(None)),
+            on_transaction_error: Rc::new(RefCell::new(None)),
+            additional_inspector_sections: Rc::new(RefCell::new(None)),
         }
     }
 
