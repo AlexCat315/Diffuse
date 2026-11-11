@@ -27,12 +27,7 @@ impl NavGrid {
     }
 
     /// `init(width:depth:cellSize:origin:)`.
-    pub fn with_cell_size_origin(
-        width: i64,
-        depth: i64,
-        cell_size: f32,
-        origin: Float3,
-    ) -> Self {
+    pub fn with_cell_size_origin(width: i64, depth: i64, cell_size: f32, origin: Float3) -> Self {
         let width = width.max(0);
         let depth = depth.max(0);
         let cell_size = if cell_size > 0.0 { cell_size } else { 1.0 };
@@ -118,7 +113,6 @@ impl NavCell {
 pub struct NavPathfinder;
 
 impl NavPathfinder {
-
     /// Finds a path between two grid cells, allowing diagonal moves.
     ///
     /// Returns the cell sequence from `start` to `goal` inclusive, or `None`

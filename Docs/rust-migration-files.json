@@ -1546,7 +1546,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/inspector/multi_selection.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Inspector/Particles/Bindings.swift",

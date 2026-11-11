@@ -153,11 +153,7 @@ impl RuntimeWorld {
     ///
     /// Swift's guard falls back to `world` itself (so the declared optional is
     /// never `nil`); the same always-`Some` behaviour is preserved here.
-    pub fn local_transform_for_world(
-        &self,
-        world: Float4x4,
-        entity: EntityID,
-    ) -> Option<Float4x4> {
+    pub fn local_transform_for_world(&self, world: Float4x4, entity: EntityID) -> Option<Float4x4> {
         if let Some(parent) = self.parent(entity) {
             if let Some(parent_world) = self.world_transform(parent) {
                 return Some(parent_world.matrix.inverse() * world);
