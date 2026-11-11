@@ -89,6 +89,19 @@ impl EditorViewportShadingMode {
         EditorViewportShadingMode::Metallic,
     ];
 
+    /// Swift's `String` raw value, also used by the developer diagnostics rows.
+    pub const fn raw_value(self) -> &'static str {
+        match self {
+            EditorViewportShadingMode::Lit => "lit",
+            EditorViewportShadingMode::Wireframe => "wireframe",
+            EditorViewportShadingMode::Unlit => "unlit",
+            EditorViewportShadingMode::BaseColor => "baseColor",
+            EditorViewportShadingMode::Normal => "normal",
+            EditorViewportShadingMode::Roughness => "roughness",
+            EditorViewportShadingMode::Metallic => "metallic",
+        }
+    }
+
     /// Debug-view index handed to the mesh shader (`exposure_light_count.z`).
     /// `.wireframe` shades the surface normally (lit) and overlays edges, so it
     /// maps to the same shaded path as `.lit`.
