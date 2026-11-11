@@ -1821,7 +1821,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/choices/emitter_choices.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/Choices/PhysicsChoices.swift",
@@ -1832,7 +1832,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/choices/physics_choices.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/EnumOptions.swift",
