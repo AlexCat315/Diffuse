@@ -416,6 +416,7 @@ dependencies = [
  "cove-composition",
  "cove-core",
  "cove-imaging",
+ "cove-native-build",
  "cove-platform",
  "cove-text",
  "libc",

@@ -24,6 +24,7 @@ use diffuse_capability::support::swift_date::SwiftDate as CapabilitySwiftDate;
 use diffuse_context_memory::context_entry::{ContextEntry, EntryKind};
 use diffuse_context_memory::context_memory_store::{ContextMemoryError, ContextMemoryStore};
 use diffuse_intent::transactions::transaction_ir::TransactionApprovalPolicy;
+use diffuse_intent::BuiltInTypedCapabilityCatalog;
 use diffuse_intent::transactions::world_event::{WorldEvent, WorldPropertyValue};
 use diffuse_kernel::codable::format_float;
 use diffuse_observation::publisher::ObservationBus;
@@ -235,7 +236,7 @@ impl Session {
         plugin_query_snapshot_provider: Option<PluginQuerySnapshotProvider>,
         tool_policy: Option<ToolPolicy>,
     ) -> Self {
-        let registry = capability_registry.unwrap_or_else(CapabilityRegistry::default_registry);
+        let registry = capability_registry.unwrap_or_else(BuiltInTypedCapabilityCatalog::registry);
         let mut workflow_scope = SessionWorkflowScope::new();
         workflow_scope.context = workflow_context;
         let client_config = ClientConfig {

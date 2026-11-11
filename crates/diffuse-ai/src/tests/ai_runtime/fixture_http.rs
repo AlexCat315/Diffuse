@@ -53,6 +53,7 @@ pub struct FixtureHttpServer {
     base_url: String,
     address: SocketAddr,
     requests: Arc<Mutex<Vec<Vec<u8>>>>,
+    paths: Arc<Mutex<Vec<String>>>,
     stopped: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
@@ -77,14 +78,16 @@ impl FixtureHttpServer {
             .expect("nonblocking fixture listener");
         let base_url = format!("http://127.0.0.1:{}", address.port());
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let paths = Arc::new(Mutex::new(Vec::new()));
         let stopped = Arc::new(AtomicBool::new(false));
         let thread_requests = Arc::clone(&requests);
+        let thread_paths = Arc::clone(&paths);
         let thread_stopped = Arc::clone(&stopped);
         let thread = std::thread::spawn(move || {
             while !thread_stopped.load(Ordering::SeqCst) {
                 match listener.accept() {
                     Ok((stream, _)) => {
-                        serve_connection(stream, &handler, &thread_requests);
+                        serve_connection(stream, &handler, &thread_requests, &thread_paths);
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         std::thread::sleep(Duration::from_millis(1));
@@ -97,6 +100,7 @@ impl FixtureHttpServer {
             base_url,
             address,
             requests,
+            paths,
             stopped,
             thread: Some(thread),
         }
@@ -118,6 +122,15 @@ impl FixtureHttpServer {
         let requests = self.requests();
         serde_json::from_slice(&requests[index]).expect("fixture request is JSON")
     }
+
+    /// Request target paths in arrival order (for example `/v1/responses`).
+    pub fn request_path(&self, index: usize) -> String {
+        let paths = match self.paths.lock() {
+            Ok(paths) => paths.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        };
+        paths[index].clone()
+    }
 }
 
 impl Drop for FixtureHttpServer {
@@ -131,8 +144,12 @@ impl Drop for FixtureHttpServer {
     }
 }
 
-fn serve_connection<F>(mut stream: TcpStream, handler: &F, requests: &Mutex<Vec<Vec<u8>>>)
-where
+fn serve_connection<F>(
+    mut stream: TcpStream,
+    handler: &F,
+    requests: &Mutex<Vec<Vec<u8>>>,
+    paths: &Mutex<Vec<String>>,
+) where
     F: Fn(usize, &[u8]) -> FixtureResponse,
 {
     let _ = stream.set_nonblocking(false);
@@ -149,6 +166,12 @@ where
         );
         return;
     };
+    let target = head
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .unwrap_or("")
+        .to_string();
     let index = {
         let mut recorded = match requests.lock() {
             Ok(recorded) => recorded,
@@ -158,6 +181,13 @@ where
         recorded.push(body.clone());
         index
     };
+    {
+        let mut recorded_paths = match paths.lock() {
+            Ok(recorded) => recorded,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        recorded_paths.push(target);
+    }
     let response = handler(index, &body);
     let mut head = format!(
         "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n",

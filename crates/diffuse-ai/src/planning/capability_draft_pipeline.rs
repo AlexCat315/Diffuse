@@ -12,6 +12,7 @@ use diffuse_capability::capability_registry::CapabilityRegistry;
 use diffuse_capability::capsule_schema::validate_capability_input;
 use diffuse_capability::drafts::capability_draft_limits::CapabilityDraftLimits;
 use diffuse_capability::support::swift_date::SwiftDate;
+use diffuse_intent::BuiltInTypedCapabilityCatalog;
 use diffuse_plugin::base64_data::Data;
 use serde::{Deserialize, Serialize};
 
@@ -153,7 +154,8 @@ pub struct CapabilityDraftStore {
 
 impl Default for CapabilityDraftStore {
     fn default() -> Self {
-        Self::new(CapabilityRegistry::default_registry())
+        // Swift's `init(registry: CapabilityRegistry = .aiDefault)`.
+        Self::new(BuiltInTypedCapabilityCatalog::registry())
     }
 }
 

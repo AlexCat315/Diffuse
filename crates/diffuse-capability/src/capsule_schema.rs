@@ -155,6 +155,16 @@ fn strip_scene_reference_patterns(schema: &mut JsonSchema) {
     }
 }
 
+/// Outcome of walking one schema position for the scene-reference pattern.
+enum PatternCheck {
+    /// The schema at this position does not carry the pattern.
+    NotApplicable,
+    /// A patterned position matched, or every patterned position did.
+    Satisfied,
+    /// A patterned position did not match and no alternative satisfied it.
+    Violated(JsonSchemaViolation),
+}
+
 /// Checks the scene-reference pattern at the same positions Cove would. The
 /// structural checks stay with Cove; this walk only reports a pattern failure.
 fn check_scene_references(
@@ -162,36 +172,74 @@ fn check_scene_references(
     schema: &JsonSchema,
     path: &str,
 ) -> Result<(), JsonSchemaViolation> {
+    match scene_reference_check(value, schema, path) {
+        PatternCheck::Violated(error) => Err(error),
+        PatternCheck::NotApplicable | PatternCheck::Satisfied => Ok(()),
+    }
+}
+
+fn scene_reference_check(
+    value: &serde_json::Value,
+    schema: &JsonSchema,
+    path: &str,
+) -> PatternCheck {
     if !schema.one_of.is_empty() {
-        let mut first_error = None;
+        let mut satisfied = false;
+        let mut violation = None;
         for alternative in &schema.one_of {
-            match check_scene_references(value, alternative, path) {
-                Ok(()) => return Ok(()),
-                Err(error) => {
-                    first_error.get_or_insert(error);
+            match scene_reference_check(value, alternative, path) {
+                PatternCheck::Satisfied => satisfied = true,
+                PatternCheck::Violated(error) => {
+                    violation.get_or_insert(error);
                 }
+                PatternCheck::NotApplicable => {}
             }
         }
-        // No alternative carries the pattern, so the pattern cannot be what
-        // fails; leave the mismatch to Cove.
-        if let Some(error) = first_error {
-            return Err(error);
+        // An alternative that carries no pattern cannot excuse a value the
+        // patterned alternative rejects: `choice([string(pattern), null])` must
+        // still reject `"nope"`.
+        if satisfied {
+            return PatternCheck::Satisfied;
         }
-        return Ok(());
+        if let Some(error) = violation {
+            return PatternCheck::Violated(error);
+        }
+        return PatternCheck::NotApplicable;
     }
     match value {
         serde_json::Value::Object(object) => {
+            let mut satisfied = false;
             for (key, child) in object {
                 if let Some(child_schema) = schema.properties.get(key) {
-                    check_scene_references(child, child_schema, &format!("{path}.{key}"))?;
+                    match scene_reference_check(child, child_schema, &format!("{path}.{key}")) {
+                        PatternCheck::Satisfied => satisfied = true,
+                        PatternCheck::Violated(error) => return PatternCheck::Violated(error),
+                        PatternCheck::NotApplicable => {}
+                    }
                 }
+            }
+            if satisfied {
+                PatternCheck::Satisfied
+            } else {
+                PatternCheck::NotApplicable
             }
         }
         serde_json::Value::Array(values) => {
-            if let Some(items) = &schema.items {
-                for (index, child) in values.iter().enumerate() {
-                    check_scene_references(child, items, &format!("{path}[{index}]"))?;
+            let Some(items) = &schema.items else {
+                return PatternCheck::NotApplicable;
+            };
+            let mut satisfied = false;
+            for (index, child) in values.iter().enumerate() {
+                match scene_reference_check(child, items, &format!("{path}[{index}]")) {
+                    PatternCheck::Satisfied => satisfied = true,
+                    PatternCheck::Violated(error) => return PatternCheck::Violated(error),
+                    PatternCheck::NotApplicable => {}
                 }
+            }
+            if satisfied {
+                PatternCheck::Satisfied
+            } else {
+                PatternCheck::NotApplicable
             }
         }
         serde_json::Value::String(string)
@@ -200,16 +248,17 @@ fn check_scene_references(
             let valid = string.strip_prefix("scene:").is_some_and(|digits| {
                 !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
             });
-            if !valid {
-                return Err(JsonSchemaViolation {
+            if valid {
+                PatternCheck::Satisfied
+            } else {
+                PatternCheck::Violated(JsonSchemaViolation {
                     path: path.to_string(),
                     reason: "does not match required pattern".to_string(),
-                });
+                })
             }
         }
-        _ => {}
+        _ => PatternCheck::NotApplicable,
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -245,6 +294,30 @@ mod tests {
         let schema = super::object(properties, vec!["entity_id".to_string()], None, false);
         let error = validate_capability_input(&serde_json::json!({"entity_id": "nope"}), &schema)
             .expect_err("invalid reference");
+        assert_eq!(error.path, "$.entity_id");
+    }
+
+    #[test]
+    fn optional_scene_references_still_reject_malformed_strings() {
+        let schema = super::choice(vec![scene_schema(), super::null()]);
+        validate_capability_input(&serde_json::json!(null), &schema).expect("null is allowed");
+        validate_capability_input(&serde_json::json!("scene:7"), &schema)
+            .expect("valid reference is allowed");
+        let error = validate_capability_input(&serde_json::json!("nope"), &schema)
+            .expect_err("invalid reference inside choice");
+        assert_eq!(error.path, "$");
+        assert_eq!(error.reason, "does not match required pattern");
+    }
+
+    #[test]
+    fn optional_object_properties_reject_malformed_scene_references() {
+        let mut properties = std::collections::BTreeMap::new();
+        properties.insert("entity_id".to_string(), scene_schema());
+        let schema = super::object(properties, Vec::new(), None, false);
+        validate_capability_input(&serde_json::json!({"entity_id": null}), &schema)
+            .expect("null is allowed");
+        let error = validate_capability_input(&serde_json::json!({"entity_id": "nope"}), &schema)
+            .expect_err("invalid optional reference");
         assert_eq!(error.path, "$.entity_id");
     }
 }
