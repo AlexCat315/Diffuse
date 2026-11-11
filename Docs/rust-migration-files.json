@@ -3130,7 +3130,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/developer_tools/particles/developer_particle_trend_analysis.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/DeveloperTools/Particles/ParticleDiagnosticsView.swift",
