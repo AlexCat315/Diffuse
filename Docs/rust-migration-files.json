@@ -1160,7 +1160,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editing/viewport/editor_viewport_input_controller.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Editing/Viewport/EditorViewportProjection.swift",
@@ -1204,7 +1204,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editing/viewport/editor_viewport_snap_settings.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/EditorCoreResourceBundle.swift",
