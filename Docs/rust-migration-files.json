@@ -830,7 +830,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/bridge/rpc_compat_client.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/AIProviders.swift",
@@ -2545,7 +2545,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/store_scope.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Viewports/EditorNavigationState.swift",
