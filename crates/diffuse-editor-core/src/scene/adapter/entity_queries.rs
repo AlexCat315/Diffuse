@@ -112,7 +112,7 @@ impl EditorSceneAdapter {
         }
     }
 
-    fn format_vector(&self, value: Float3) -> String {
+    pub(crate) fn format_vector(&self, value: Float3) -> String {
         format!(
             "{}, {}, {}",
             self.format(value.x),
@@ -121,7 +121,7 @@ impl EditorSceneAdapter {
         )
     }
 
-    fn format(&self, value: f32) -> String {
+    pub(crate) fn format(&self, value: f32) -> String {
         format!("{value:.2}")
     }
 

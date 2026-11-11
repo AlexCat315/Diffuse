@@ -1568,7 +1568,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/inspector/particles/scalability.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Inspector/Particles/Section.swift",
