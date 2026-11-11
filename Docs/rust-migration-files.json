@@ -962,7 +962,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/tool.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Workbench/Contributed.swift",
@@ -1325,7 +1325,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/input/input_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Localization.swift",
