@@ -3902,7 +3902,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/shared/editor_panel_components.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/SourceControl/Panel.swift",
