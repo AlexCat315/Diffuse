@@ -62,6 +62,20 @@ impl BunPluginRuntime {
         }
     }
 
+    /// The host process mounts and unmounts process permissions around the
+    /// same service instance, as Swift did by holding `PluginProcessService`
+    /// next to `BunPluginRuntime`.
+    pub fn processes(&self) -> &PluginProcessService {
+        &self.processes
+    }
+
+    /// The host process mounts and unmounts HTTP permissions around the same
+    /// service instance, as Swift did by holding `PluginHTTPService` next to
+    /// `BunPluginRuntime`.
+    pub fn http(&self) -> &PluginHTTPService {
+        &self.http
+    }
+
     pub fn validate_component(
         &self,
         package: &ValidatedPluginPackage,

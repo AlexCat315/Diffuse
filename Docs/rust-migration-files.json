@@ -59,7 +59,7 @@
       "rust": [
         "crates/diffuse-mcp/src/main.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Documents/Package.swift",
@@ -7734,7 +7734,7 @@
       "rust": [
         "crates/diffuse-plugin-host/src/main.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/EXRIO/EXRReader.swift",
@@ -11714,7 +11714,7 @@
       "rust": [
         "crates/diffuse-ai/src/tests/ai_runtime/capability_exposure_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AIRuntimeTests/CompletionTests.swift",

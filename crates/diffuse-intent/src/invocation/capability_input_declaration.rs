@@ -632,8 +632,9 @@ mod tests {
             .filter_map(|value| value.as_str())
             .collect();
         assert_eq!(required, vec!["entity", "mass"], "name is optional");
-        // The field is not renamed in `cove_agent`, so it serializes snake_case.
-        assert_eq!(json["additional_properties"], serde_json::json!(false));
+        assert_eq!(json["additionalProperties"], serde_json::json!(false));
+        let decoded: JsonSchema = serde_json::from_value(json).expect("decode");
+        assert_eq!(decoded.additional_properties, Some(false));
     }
 
     #[test]

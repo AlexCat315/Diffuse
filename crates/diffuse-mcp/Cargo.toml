@@ -14,8 +14,9 @@ path = "src/main.rs"
 diffuse-ai.workspace = true
 diffuse-capability.workspace = true
 diffuse-intent.workspace = true
-# G6: enable once Cove provides cove-agent
-# cove-agent.workspace = true
+diffuse-kernel.workspace = true
+cove-agent.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true
