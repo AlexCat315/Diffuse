@@ -1557,7 +1557,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/inspector/particles/bindings.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Inspector/Particles/Scalability.swift",
@@ -1579,7 +1579,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/inspector/particles/section.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Inspector/Physics/Collider.swift",
@@ -1865,7 +1865,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/rendering/builtins.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/Rendering/Registration.swift",
@@ -1887,7 +1887,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/rendering/registrations/animation_graph.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/Rendering/Registrations/Particles.swift",
@@ -1898,7 +1898,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/rendering/registrations/particles.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/Rendering/Registrations/Physics.swift",
@@ -1909,7 +1909,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/rendering/registrations/physics.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/Rendering/Registrations/ScriptForm.swift",
@@ -1920,7 +1920,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/rendering/registrations/script_form.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/Rendering/Renderers.swift",
