@@ -11,6 +11,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use diffuse_audio::audio_engine::AudioEngine;
 use diffuse_math::simd::simd_compat::Float3;
 use diffuse_scene::components::core::registry::ComponentRegistry;
 use diffuse_scene::entity_id::EntityID;
@@ -31,12 +32,21 @@ use crate::scene::history::editor_scene_edit_history::EditorSceneEditHistory;
 use crate::scene::inspector::rendering::renderers::EditorInspectorRendererRegistry;
 use crate::scripting::dynamic::project_script_catalog::ProjectScriptCatalogEntry;
 
+/// Swift's `(() -> Void)?` callback.
+pub type AdapterCallback = Rc<dyn Fn()>;
+/// Swift's `((UInt64) -> Void)?` callback.
+pub type RevisionCallback = Rc<dyn Fn(u64)>;
+/// Swift's `((String) -> Void)?` callback.
+pub type TransactionErrorCallback = Rc<dyn Fn(String)>;
+/// Swift's `((UInt64) -> [EditorInspectorSection])?`.
+pub type InspectorSectionsProvider = Rc<dyn Fn(u64) -> Vec<EditorInspectorSection>>;
+
 #[derive(Clone)]
 pub struct EditorSceneAdapter {
     scene: Rc<RefCell<SceneRuntime>>,
     pub editor_viewport_camera: Rc<Cell<RenderCamera>>,
     uses_editor_viewport_camera: Rc<Cell<bool>>,
-    pub on_viewport_camera_changed: Rc<RefCell<Option<Rc<dyn Fn()>>>>,
+    pub on_viewport_camera_changed: Rc<RefCell<Option<AdapterCallback>>>,
     pub transaction_executor: TransactionExecutor,
     pub initial_selection_id: Rc<Cell<Option<u64>>>,
     pub initial_expanded_ids: Rc<RefCell<BTreeSet<u64>>>,
@@ -46,13 +56,15 @@ pub struct EditorSceneAdapter {
     pub dynamic_script_display_names: Rc<RefCell<BTreeMap<String, String>>>,
     pub dynamic_script_aliases: Rc<RefCell<BTreeMap<String, String>>>,
     pub particle_feedback: ParticleFeedbackInbox,
+    /// Swift drove audio through the process-wide `AudioEngine.shared`; the
+    /// Rust engine is embedder-owned, so the adapter owns one instance.
+    pub audio_engine: Rc<AudioEngine>,
     pub inspector_renderers: Rc<RefCell<EditorInspectorRendererRegistry>>,
     pub edit_history: Rc<RefCell<EditorSceneEditHistory>>,
     is_authoring_enabled: Rc<Cell<bool>>,
-    pub on_revision_changed: Rc<RefCell<Option<Rc<dyn Fn(u64)>>>>,
-    pub on_transaction_error: Rc<RefCell<Option<Rc<dyn Fn(String)>>>>,
-    pub additional_inspector_sections:
-        Rc<RefCell<Option<Rc<dyn Fn(u64) -> Vec<EditorInspectorSection>>>>>,
+    pub on_revision_changed: Rc<RefCell<Option<RevisionCallback>>>,
+    pub on_transaction_error: Rc<RefCell<Option<TransactionErrorCallback>>>,
+    pub additional_inspector_sections: Rc<RefCell<Option<InspectorSectionsProvider>>>,
 }
 
 impl EditorSceneAdapter {
@@ -112,6 +124,7 @@ impl EditorSceneAdapter {
             dynamic_script_display_names: Rc::new(RefCell::new(BTreeMap::new())),
             dynamic_script_aliases: Rc::new(RefCell::new(BTreeMap::new())),
             particle_feedback: ParticleFeedbackInbox::new(),
+            audio_engine: Rc::new(AudioEngine::with_default_backend()),
             inspector_renderers: Rc::new(RefCell::new(inspector_renderers)),
             edit_history: Rc::new(RefCell::new(edit_history)),
             is_authoring_enabled: Rc::new(Cell::new(true)),

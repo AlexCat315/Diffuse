@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use diffuse_plugin::base64_data::Data;
 use diffuse_plugin::processes::contract::{Operation, PluginProcessRequest, PluginProcessUpdate};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use crate::contributions::host::{StepError, StepPlugin};
 
