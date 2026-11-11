@@ -709,7 +709,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/ui_queue.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Projects/Export.swift",
