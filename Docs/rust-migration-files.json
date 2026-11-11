@@ -2953,7 +2953,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/asset_browser/asset_import_file_copier.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/AssetBrowser/AssetThumbnailRenderer.swift",
@@ -3714,7 +3714,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/gutter_labels.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/ScriptEditor/GutterNavigation.swift",
@@ -3725,7 +3725,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/gutter_navigation.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/ScriptEditor/Hover/HoverOverlay.swift",
