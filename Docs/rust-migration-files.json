@@ -1799,7 +1799,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/game_save_document.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/History/EditorSceneEditHistory.swift",
