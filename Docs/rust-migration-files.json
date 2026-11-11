@@ -1711,7 +1711,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/serialization.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Spawn.swift",
