@@ -620,7 +620,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/plugin_components.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/PluginServices.swift",
