@@ -1336,7 +1336,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/localization.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Projects/EditorProjectLifecycle.swift",
@@ -1942,7 +1942,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/manifest/editor_scene_manifest.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Manifest/Node.swift",
@@ -1953,7 +1953,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/manifest/node.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Manifest/Physics/ColliderInspector.swift",
@@ -1975,7 +1975,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/manifest/settings.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Manifest/TransformMath.swift",
@@ -1986,7 +1986,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/manifest/transform_math.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Models/EditorHierarchyLockComponent.swift",
@@ -2457,7 +2457,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/assistant/editor_assistant_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Assistant/EditorOutputState.swift",
@@ -2468,7 +2468,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/assistant/editor_output_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/EditorPresentationState.swift",
@@ -2479,7 +2479,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/editor_presentation_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/EditorReducer.swift",
@@ -2501,7 +2501,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/editor_selection_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/EditorState.swift",
@@ -2512,7 +2512,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/editor_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/EditorStore.swift",
@@ -2534,7 +2534,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/editor_timing_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/StoreScope.swift",
@@ -2556,7 +2556,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/viewports/editor_navigation_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Viewports/EditorShadowsState.swift",
@@ -2567,7 +2567,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/viewports/editor_shadows_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Viewports/EditorSnappingState.swift",
@@ -2578,7 +2578,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/viewports/editor_snapping_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Viewports/EditorViewportState.swift",
@@ -2589,7 +2589,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/viewports/editor_viewport_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Workspace/Content.swift",
@@ -2611,7 +2611,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/workspace/editor_document_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Workspace/EditorWindowState.swift",
@@ -2622,7 +2622,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/workspace/editor_window_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Workspace/EditorWorkbenchState.swift",
@@ -2633,7 +2633,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/workspace/editor_workbench_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Workspace/EditorWorkspaceProfile.swift",
