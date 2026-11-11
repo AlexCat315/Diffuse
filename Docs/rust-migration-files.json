@@ -1458,7 +1458,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/components.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/EditorSceneAdapter.swift",
@@ -1700,7 +1700,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/scripts.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Serialization.swift",
