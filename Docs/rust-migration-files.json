@@ -2490,7 +2490,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/editor_reducer.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/EditorSelectionState.swift",
