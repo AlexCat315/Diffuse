@@ -2254,7 +2254,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/script_language_position.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/ScriptLanguageProtocol.swift",
@@ -2290,7 +2290,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/script_markdown_text.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/SemanticQueries.swift",
@@ -2314,7 +2314,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/watched_files.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/SourceKit/SourceKitLSPCapabilities.swift",
