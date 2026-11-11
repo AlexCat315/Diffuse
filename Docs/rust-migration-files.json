@@ -7789,7 +7789,7 @@
       "rust": [
         "crates/diffuse-engine/src/latest_value_buffer.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/EngineCore/LockedState.swift",
@@ -7800,7 +7800,7 @@
       "rust": [
         "crates/diffuse-engine/src/locked_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/EngineCore/RenderThread.swift",
