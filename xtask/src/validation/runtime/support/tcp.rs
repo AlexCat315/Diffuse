@@ -35,9 +35,9 @@ impl TcpClient {
 
     pub fn send(&mut self, data: &[u8]) -> Result<(), ToolError> {
         use std::io::Write;
-        self.stream.write_all(data).map_err(|error| {
-            ToolError::message(format!("write failed: {error}"))
-        })
+        self.stream
+            .write_all(data)
+            .map_err(|error| ToolError::message(format!("write failed: {error}")))
     }
 
     pub fn read_line(&mut self, timeout: f64) -> Result<Vec<u8>, ToolError> {
@@ -50,9 +50,7 @@ impl TcpClient {
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
                 if self.buffer.is_empty() {
-                    return Err(ToolError::message(
-                        "Timed out waiting for a bridge reply",
-                    ));
+                    return Err(ToolError::message("Timed out waiting for a bridge reply"));
                 }
                 return Ok(std::mem::take(&mut self.buffer));
             }
@@ -61,9 +59,7 @@ impl TcpClient {
             match self.stream.read(&mut chunk) {
                 Ok(0) => {
                     if self.buffer.is_empty() {
-                        return Err(ToolError::message(
-                            "Timed out waiting for a bridge reply",
-                        ));
+                        return Err(ToolError::message("Timed out waiting for a bridge reply"));
                     }
                     return Ok(std::mem::take(&mut self.buffer));
                 }
@@ -73,9 +69,7 @@ impl TcpClient {
                         || error.kind() == std::io::ErrorKind::TimedOut =>
                 {
                     if self.buffer.is_empty() {
-                        return Err(ToolError::message(
-                            "Timed out waiting for a bridge reply",
-                        ));
+                        return Err(ToolError::message("Timed out waiting for a bridge reply"));
                     }
                     return Ok(std::mem::take(&mut self.buffer));
                 }

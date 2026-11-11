@@ -24,13 +24,17 @@ fn lowercase_uuid() -> String {
         .map(|value| value.as_nanos())
         .unwrap_or_default();
     let count = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mixed = (nanos as u64) ^ (count.wrapping_mul(0x9E37_79B9_7F4A_7C15)) ^ (std::process::id() as u64);
+    let mixed =
+        (nanos as u64) ^ (count.wrapping_mul(0x9E37_79B9_7F4A_7C15)) ^ (std::process::id() as u64);
     let a = mixed as u32;
     let b = (mixed >> 32) as u16;
     let c = ((mixed >> 16) & 0x0FFF) as u16 | 0x4000;
     let d = ((mixed >> 48) & 0x3FFF) as u16 | 0x8000;
     let e = mixed.wrapping_mul(6364136223846793005) >> 16;
-    format!("{a:08x}-{b:04x}-{c:04x}-{d:04x}-{:012x}", e & 0xFFFF_FFFF_FFFF)
+    format!(
+        "{a:08x}-{b:04x}-{c:04x}-{d:04x}-{:012x}",
+        e & 0xFFFF_FFFF_FFFF
+    )
 }
 
 /// Opens (creating or truncating) a file that a child process writes to. The

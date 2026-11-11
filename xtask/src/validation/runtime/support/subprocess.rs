@@ -94,13 +94,9 @@ mod tests {
 
     #[test]
     fn standard_input_is_delivered() {
-        let output = Subprocess::run_command(
-            &["cat".into()],
-            &environment(),
-            Some(b"payload"),
-            5.0,
-        )
-        .expect("runs");
+        let output =
+            Subprocess::run_command(&["cat".into()], &environment(), Some(b"payload"), 5.0)
+                .expect("runs");
         assert_eq!(output.stdout, b"payload");
     }
 }

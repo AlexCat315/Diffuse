@@ -19,6 +19,7 @@ pub mod json_format;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use crate::build::native_bootstrap::entry::NativeBootstrap;
 use crate::build::plugin_staging::bun_staging::PluginStaging;
 use crate::plugins::type_script_build::PluginBuild;
 use crate::support::repository;
@@ -35,6 +36,7 @@ fn main() -> ExitCode {
     {
         Some("plugin-build") => plugin_build(),
         Some("plugins") => plugins(),
+        Some("native-bootstrap") => native_bootstrap(),
         // `cove_package::main()` calls `Cli::parse()` on the process argv, so
         // the forwarded branch must leave argv untouched.
         _ => cove_package::main(),
@@ -69,6 +71,17 @@ fn plugin_build() -> ExitCode {
         output,
     };
     match build.run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => fail(&error.to_string()),
+    }
+}
+
+fn native_bootstrap() -> ExitCode {
+    let arguments: Vec<String> = std::env::args_os()
+        .skip(2)
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .collect();
+    match NativeBootstrap::run(&arguments) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => fail(&error.to_string()),
     }

@@ -13481,7 +13481,7 @@
       "rust": [
         "xtask/src/build/native_bootstrap/bootstrap.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Build/NativeBootstrap/Entry.swift",
@@ -13492,7 +13492,7 @@
       "rust": [
         "xtask/src/build/native_bootstrap/entry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Build/PluginStaging/Archive.swift",

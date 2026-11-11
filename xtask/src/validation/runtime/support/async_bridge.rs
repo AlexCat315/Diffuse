@@ -27,12 +27,8 @@ impl AsyncBridge {
         }));
         match outcome {
             Ok(Ok(value)) => Ok(value),
-            Ok(Err(_)) => Err(ToolError::message(
-                "Async validation did not complete",
-            )),
-            Err(_) => Err(ToolError::message(
-                "Async validation did not complete",
-            )),
+            Ok(Err(_)) => Err(ToolError::message("Async validation did not complete")),
+            Err(_) => Err(ToolError::message("Async validation did not complete")),
         }
     }
 }

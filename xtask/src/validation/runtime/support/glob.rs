@@ -99,10 +99,7 @@ mod tests {
 
     #[test]
     fn missing_directories_yield_no_matches() {
-        assert!(
-            Glob::paths(std::path::Path::new("/nonexistent/cove-glob"), "*")
-                .is_empty()
-        );
+        assert!(Glob::paths(std::path::Path::new("/nonexistent/cove-glob"), "*").is_empty());
     }
 
     #[test]

@@ -37,10 +37,7 @@ impl ChildProcess {
         stderr: Stream,
     ) -> Result<Self, ToolError> {
         let mut command = Command::new(executable);
-        command
-            .args(arguments)
-            .env_clear()
-            .envs(environment.iter());
+        command.args(arguments).env_clear().envs(environment.iter());
         command.stdin(match stdin {
             Stream::Pipe => Stdio::piped(),
             Stream::Discard => Stdio::null(),
@@ -91,9 +88,9 @@ impl ChildProcess {
             .stdin
             .as_mut()
             .ok_or_else(|| ToolError::message("Child process standard input is not piped"))?;
-        stdin.write_all(data).map_err(|error| {
-            ToolError::message(format!("Cannot write to child process: {error}"))
-        })
+        stdin
+            .write_all(data)
+            .map_err(|error| ToolError::message(format!("Cannot write to child process: {error}")))
     }
 
     pub fn close_input(&mut self) {
@@ -129,9 +126,7 @@ impl ChildProcess {
                     }
                 }
                 None => {
-                    return Err(ToolError::message(
-                        "Child process exited before responding",
-                    ));
+                    return Err(ToolError::message("Child process exited before responding"));
                 }
             }
         }

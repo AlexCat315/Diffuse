@@ -47,7 +47,8 @@ impl PosixIo {
             .collect();
         // SAFETY: `entries` is a live, exclusively borrowed buffer of the length
         // passed as `nfds`; `poll` only writes `revents` into it.
-        let ready = unsafe { libc::poll(entries.as_mut_ptr(), entries.len() as libc::nfds_t, millis) };
+        let ready =
+            unsafe { libc::poll(entries.as_mut_ptr(), entries.len() as libc::nfds_t, millis) };
         if ready < 0 {
             let code = std::io::Error::last_os_error();
             if code.raw_os_error() == Some(libc::EINTR) {
@@ -129,7 +130,11 @@ mod tests {
         let (read_end, write_end) = (descriptors[0], descriptors[1]);
         PosixIo::write(write_end, b"hello").expect("write");
         PosixIo::close(write_end);
-        assert!(PosixIo::readable(&[read_end], 1.0).expect("ready").contains(&read_end));
+        assert!(
+            PosixIo::readable(&[read_end], 1.0)
+                .expect("ready")
+                .contains(&read_end)
+        );
         assert_eq!(PosixIo::read(read_end, 64).as_deref(), Some(&b"hello"[..]));
         // A closed write end reports end of file rather than an empty read.
         assert!(PosixIo::read(read_end, 64).is_none());
