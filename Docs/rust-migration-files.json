@@ -4753,7 +4753,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/game_project_directory_resolver.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/GameRuntime/GameProjectSceneLoader.swift",
@@ -7778,7 +7778,7 @@
       "rust": [
         "crates/diffuse-engine/src/engine_ffi.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Sources/EngineCore/LatestValueBuffer.swift",
