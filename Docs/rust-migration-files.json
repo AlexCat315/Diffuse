@@ -158,7 +158,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/chat/ai_chat_message.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Chat/EditLog.swift",
@@ -169,7 +169,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/chat/edit_log.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Chat/EditorAIRequestPolicy.swift",
@@ -180,7 +180,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/chat/editor_ai_request_policy.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Chat/EditorAISettings.swift",
@@ -202,7 +202,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/chat/editor_agent_task_service.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Completions.swift",
@@ -235,7 +235,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/plugins/editor_plugin_authorization_store.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Plugins/EditorPluginHostLocator.swift",
@@ -2600,7 +2600,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/workspace/content.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Workspace/EditorDocumentState.swift",
@@ -2644,7 +2644,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/state/workspace/editor_workspace_profile.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Tasks/Catalog.swift",
@@ -6752,7 +6752,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/ai_world_context.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Context/AssetWorkflowContext.swift",
@@ -6763,7 +6763,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/asset_workflow_context.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Context/WorkflowContext.swift",
@@ -6774,7 +6774,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/workflow_context.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Context/WorkstationContext.swift",
@@ -6785,7 +6785,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/workstation_context.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Context/WorldView.swift",
@@ -6796,7 +6796,7 @@
       "rust": [
         "crates/diffuse-ai/src/context/world_view.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Planning/CapabilityDraftPipeline.swift",
@@ -6807,7 +6807,7 @@
       "rust": [
         "crates/diffuse-ai/src/planning/capability_draft_pipeline.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Planning/Proposal.swift",
@@ -6818,7 +6818,7 @@
       "rust": [
         "crates/diffuse-ai/src/planning/proposal.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Planning/SceneEditPlan.swift",
@@ -6829,7 +6829,7 @@
       "rust": [
         "crates/diffuse-ai/src/planning/scene_edit_plan.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Planning/SceneEditPlanExecutor.swift",
@@ -6840,7 +6840,7 @@
       "rust": [
         "crates/diffuse-ai/src/planning/scene_edit_plan_executor.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Semantic/SceneSemanticEncoder.swift",
@@ -6851,7 +6851,7 @@
       "rust": [
         "crates/diffuse-ai/src/semantic/scene_semantic_encoder.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Semantic/SceneSemanticSnapshot.swift",
@@ -6862,7 +6862,7 @@
       "rust": [
         "crates/diffuse-ai/src/semantic/scene_semantic_snapshot.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/CapabilityState.swift",
@@ -6873,7 +6873,7 @@
       "rust": [
         "crates/diffuse-ai/src/session/capability_state.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/Completion.swift",
@@ -6884,7 +6884,7 @@
       "rust": [
         "crates/diffuse-ai/src/session/completion.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/ConversationTurn.swift",
@@ -6895,7 +6895,7 @@
       "rust": [
         "crates/diffuse-ai/src/session/conversation_turn.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/Harness.swift",
@@ -6906,7 +6906,7 @@
       "rust": [
         "crates/diffuse-ai/src/session/harness.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/RetryPolicy.swift",
@@ -6917,7 +6917,7 @@
       "rust": [
         "crates/diffuse-ai/src/session/retry_policy.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/Session.swift",
@@ -6928,7 +6928,7 @@
       "rust": [
         "crates/diffuse-ai/src/session/session.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/SessionConfig.swift",
@@ -6939,7 +6939,7 @@
       "rust": [
         "crates/diffuse-ai/src/session/session_config.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/SessionWorkflowScope.swift",
@@ -6950,7 +6950,7 @@
       "rust": [
         "crates/diffuse-ai/src/session/session_workflow_scope.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Session/Signal.swift",
@@ -6961,7 +6961,7 @@
       "rust": [
         "crates/diffuse-ai/src/session/signal.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Tools/CapabilityExposureSessionStore.swift",
@@ -6972,7 +6972,7 @@
       "rust": [
         "crates/diffuse-ai/src/tools/capability_exposure_session_store.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Tools/CapabilityToolset.swift",
@@ -6983,7 +6983,7 @@
       "rust": [
         "crates/diffuse-ai/src/tools/capability_toolset.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Tools/EditPlanTool.swift",
@@ -6994,7 +6994,7 @@
       "rust": [
         "crates/diffuse-ai/src/tools/edit_plan_tool.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Tools/FindEntitiesTool.swift",
@@ -7005,7 +7005,7 @@
       "rust": [
         "crates/diffuse-ai/src/tools/find_entities_tool.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Tools/PluginCapabilityExecutor.swift",
@@ -7016,7 +7016,7 @@
       "rust": [
         "crates/diffuse-ai/src/tools/plugin_capability_executor.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Tools/ProjectToolset.swift",
@@ -7027,7 +7027,7 @@
       "rust": [
         "crates/diffuse-ai/src/tools/project_toolset.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AIRuntime/Tools/ToolPolicy.swift",
@@ -7038,7 +7038,7 @@
       "rust": [
         "crates/diffuse-ai/src/tools/tool_policy.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AssetPipeline/AssetPipeline.swift",
@@ -11703,7 +11703,7 @@
       "rust": [
         "crates/diffuse-ai/src/tests/ai_runtime/ai_runtime_tests.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AIRuntimeTests/CapabilityExposureTests.swift",
@@ -11725,7 +11725,7 @@
       "rust": [
         "crates/diffuse-ai/src/tests/ai_runtime/completion_tests.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AIRuntimeTests/ComponentMutationTestSupport.swift",
@@ -11736,7 +11736,7 @@
       "rust": [
         "crates/diffuse-ai/src/tests/ai_runtime/component_mutation_test_support.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AIRuntimeTests/PluginSessionUpdateTests.swift",
@@ -11747,7 +11747,7 @@
       "rust": [
         "crates/diffuse-ai/src/tests/ai_runtime/plugin_session_update_tests.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AIRuntimeTests/ProjectToolSessionTests.swift",
@@ -11758,7 +11758,7 @@
       "rust": [
         "crates/diffuse-ai/src/tests/ai_runtime/project_tool_session_tests.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AIRuntimeTests/RetryPolicyTests.swift",
@@ -11769,7 +11769,7 @@
       "rust": [
         "crates/diffuse-ai/src/tests/ai_runtime/retry_policy_tests.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AIRuntimeTests/ToolPolicyTests.swift",
@@ -11780,7 +11780,7 @@
       "rust": [
         "crates/diffuse-ai/src/tests/ai_runtime/tool_policy_tests.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AIRuntimeTests/WorkflowScopeTests.swift",
@@ -11791,7 +11791,7 @@
       "rust": [
         "crates/diffuse-ai/src/tests/ai_runtime/workflow_scope_tests.rs"
       ],
-      "status": "written"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/AssetPipelineTests/AssetRegistryTests.swift",

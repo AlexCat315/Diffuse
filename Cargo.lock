@@ -651,11 +651,13 @@ dependencies = [
 name = "diffuse-editor-core"
 version = "0.1.0"
 dependencies = [
+ "cove-agent",
  "cove-devtools",
  "cove-graphics",
  "cove-logging",
  "cove-platform",
  "cove-runtime",
+ "cove-system",
  "cove-ui",
  "cove-ui-compose",
  "diffuse-ai",
@@ -677,6 +679,9 @@ dependencies = [
  "diffuse-scene",
  "diffuse-script",
  "diffuse-semantic",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
