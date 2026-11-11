@@ -75,6 +75,12 @@ impl ContributionTool {
         })
     }
 
+    /// Swift's default `environment: ProcessInfo.processInfo.environment`.
+    pub fn locate_with_process_environment(command: &str) -> Option<ContributionTool> {
+        let environment: BTreeMap<String, String> = std::env::vars().collect();
+        Self::locate(command, &environment)
+    }
+
     /// The editor's values for the variables a plugin's process permission
     /// allows; PATH is the search path the tool was found on.
     pub fn environment_for_keys(&self, keys: &[String]) -> BTreeMap<String, String> {

@@ -874,7 +874,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/host.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Languages.swift",
@@ -896,7 +896,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/runtime_access.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Steps.swift",
@@ -907,7 +907,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/steps.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Themes/EditorThemeTokens.swift",
@@ -2655,7 +2655,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tasks/catalog.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Tasks/Results.swift",
@@ -2688,7 +2688,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/version_control/backend.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/VersionControl/Model.swift",
@@ -2699,7 +2699,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/version_control/model.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/VersionControl/Operations.swift",
@@ -2710,7 +2710,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/version_control/operations.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/VersionControl/Providers.swift",
@@ -2721,7 +2721,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/version_control/providers.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/VersionControl/Tools.swift",
