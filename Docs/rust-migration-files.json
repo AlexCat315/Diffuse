@@ -2446,7 +2446,7 @@
         "crates/diffuse-editor-core/src/scripting/toolchain/resolution.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/State/Assistant/EditorAssistantState.swift",
