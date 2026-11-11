@@ -1138,7 +1138,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editing/editor_transform_snapping.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Editing/Viewport/EditorViewportFrameDrive.swift",
