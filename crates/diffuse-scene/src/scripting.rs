@@ -228,6 +228,14 @@ impl<'a> RuntimeScriptPhaseContext<'a> {
         self.world.remove_component::<C>(entity)
     }
 
+    /// Whether local writes are still waiting for propagation. Unlike a
+    /// world-space read this never flushes, which lets a script batch several
+    /// local edits before one derived read.
+    #[inline]
+    pub fn hierarchy_needs_propagation(&self) -> bool {
+        self.world.hierarchy_needs_propagation()
+    }
+
     #[inline]
     pub fn local_transform(&self, entity: EntityID) -> Option<LocalTransform> {
         self.world.local_transform(entity)

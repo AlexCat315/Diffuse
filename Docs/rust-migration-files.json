@@ -12979,7 +12979,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/script_transform_batch_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/SoftBodyTests.swift",
