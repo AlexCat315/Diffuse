@@ -3218,7 +3218,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/developer_tools/trace/developer_trace_queries.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Documents/Comparison.swift",
