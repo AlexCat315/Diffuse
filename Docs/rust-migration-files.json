@@ -1381,7 +1381,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/rendering/hud/in_game_ui_host.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Rendering/HUD/Renderer.swift",
@@ -1392,7 +1392,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/rendering/hud/renderer.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Rendering/HUD/ScriptCanvas.swift",
@@ -1403,7 +1403,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/rendering/hud/script_canvas.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Rendering/HUD/Snapshots.swift",
@@ -1414,7 +1414,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/rendering/hud/snapshots.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Rendering/HUD/ViewGraph.swift",
@@ -1425,7 +1425,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/rendering/hud/view_graph.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Rendering/Viewport/ViewportHost.swift",

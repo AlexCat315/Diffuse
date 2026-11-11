@@ -78,7 +78,7 @@ pub trait InGameUIProviding: Send + Sync {
         packet: &RenderPacket,
         snapshot: &SceneRuntimeSnapshot,
         target: NativeInGameUITarget,
-    ) -> InGameUIRecordingOutcome;
+    ) -> Result<InGameUIRecordingOutcome, InGameUIRecordingOutcomeError>;
 }
 
 /// The recorded commands plus an optional acknowledgement token. Swift hands

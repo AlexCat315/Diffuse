@@ -1061,6 +1061,15 @@ impl NativeRenderer {
                 cove_graphics::rhi::TextureFormat::Bgra8Unorm,
             ),
         );
+        let outcome = match outcome {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                // Keep the partially recorded buffer so the caller can still
+                // finish the frame cleanly before surfacing the error.
+                *commands = error.commands;
+                return Err(error.error);
+            }
+        };
         *commands = outcome.commands;
         Ok(outcome.recording)
     }
