@@ -363,11 +363,14 @@ fn file_system_identity(url: &Path) -> Option<String> {
     // the stable `std` metadata extension does not expose on Windows.
     let file = std::fs::File::open(url).ok()?;
     let mut information = std::mem::MaybeUninit::<ByHandleFileInformation>::uninit();
+    // SAFETY: the handle stays open for the call and the out-parameter points
+    // at writable stack storage sized for `ByHandleFileInformation`.
     let success =
         unsafe { GetFileInformationByHandle(file.as_raw_handle(), information.as_mut_ptr()) };
     if success == 0 {
         return None;
     }
+    // SAFETY: a non-zero result means the call initialized every field.
     let information = unsafe { information.assume_init() };
     let file_index =
         (u64::from(information.file_index_high) << 32) | u64::from(information.file_index_low);

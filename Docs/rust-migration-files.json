@@ -1436,7 +1436,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/rendering/viewport/viewport_host.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/AssetReferences.swift",
