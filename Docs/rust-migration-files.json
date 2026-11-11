@@ -2041,7 +2041,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scripting/assets/script_asset_registry.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Assets/ScriptDirectoryMonitor.swift",
@@ -2052,7 +2052,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scripting/assets/script_directory_monitor.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Assets/ScriptWorkspaceModel.swift",
