@@ -2410,7 +2410,7 @@
         "crates/diffuse-editor-core/src/scripting/toolchain/editing_preferences.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Toolchain/Installation.swift",
@@ -2434,7 +2434,7 @@
         "crates/diffuse-editor-core/src/scripting/toolchain/preferences.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Toolchain/Resolution.swift",
@@ -2666,7 +2666,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tasks/results.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Tasks/Runner.swift",
