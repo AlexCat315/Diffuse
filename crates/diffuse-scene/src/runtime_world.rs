@@ -507,8 +507,10 @@ pub struct RuntimeWorld {
 }
 
 impl Default for RuntimeWorld {
+    /// Swift's `init(componentRegistry:)` defaults to `.builtIn`, so a default
+    /// world knows every built-in schema and installs their required components.
     fn default() -> Self {
-        RuntimeWorld::new(ComponentRegistry::new())
+        RuntimeWorld::new(ComponentRegistry::built_in())
     }
 }
 
