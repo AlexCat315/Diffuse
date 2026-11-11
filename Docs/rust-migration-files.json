@@ -2362,7 +2362,7 @@
         "crates/diffuse-editor-core/src/scripting/toolchain/activation.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Toolchain/Activity.swift",
@@ -2374,7 +2374,7 @@
         "crates/diffuse-editor-core/src/scripting/toolchain/activity.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Toolchain/AnalysisEnvironment.swift",
@@ -2422,7 +2422,7 @@
         "crates/diffuse-editor-core/src/scripting/toolchain/installation.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Toolchain/Preferences.swift",
