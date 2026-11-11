@@ -973,7 +973,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/workbench/contributed.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Workbench/Placements.swift",
@@ -984,7 +984,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/workbench/placements.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Workbench/Surfaces.swift",
