@@ -246,7 +246,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/plugins/editor_plugin_host_locator.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Plugins/EditorPluginManagementState.swift",
@@ -257,7 +257,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/plugins/editor_plugin_management_state.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Tools/Access.swift",
@@ -268,7 +268,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/tools/access.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Tools/Audit.swift",
@@ -279,7 +279,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/tools/audit.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/AI/AIRequests.swift",
@@ -863,7 +863,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/categories.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Host.swift",
