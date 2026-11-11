@@ -1744,7 +1744,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/support/editor_scene_transform_math.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Transactions.swift",
@@ -1964,7 +1964,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/manifest/physics/collider_inspector.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Manifest/Settings.swift",
