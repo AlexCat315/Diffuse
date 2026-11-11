@@ -921,9 +921,12 @@ pub fn detect_triggers(
     if frame.physics_settings.simulation_mode == PhysicsSimulationMode::Off {
         // An edit/query-only world never steps the backend, so it cannot receive
         // contact callbacks. Preserve trigger previews through the query scene.
-        // `stats()` must be read before the mutable borrow the backend hands out.
-        let body_count = state.physics_query_scene.stats().body_count;
+        // Synchronize first: the event budget must cover the bodies of *this*
+        // frame. Reading the count before the sync left the first frame with a
+        // zero budget, so an overlap that existed from the start never reported
+        // its enter event.
         let mut backend = state.physics_query_scene.synchronize(world);
+        let body_count = state.physics_query_scene.stats().body_count;
         let max_events = body_count * body_count.max(1) * 3;
         let trigger_frame = backend.detect_trigger_frame(max_events);
         state.physics_event_frame = PhysicsEventFrameResource::new(

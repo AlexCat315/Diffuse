@@ -13012,7 +13012,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/trigger_detection_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/VehicleAcceptanceTests.swift",
