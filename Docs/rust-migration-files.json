@@ -918,7 +918,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/themes/editor_theme_tokens.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Themes/ThemeCatalog.swift",
@@ -929,7 +929,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/themes/theme_catalog.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Themes/ThemeResource.swift",
@@ -940,7 +940,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/themes/theme_resource.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Themes/TokenMaps.swift",
@@ -951,7 +951,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/themes/token_maps.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Tool.swift",
