@@ -2111,7 +2111,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scripting/dynamic/project_script_catalog.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Dynamic/ScriptProjectTrust.swift",
@@ -2242,7 +2242,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/script_language_models.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/ScriptLanguagePosition.swift",
