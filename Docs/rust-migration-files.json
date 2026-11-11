@@ -1116,7 +1116,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editing/editor_gizmo_controller.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Editing/EditorSelectionReducer.swift",
@@ -1171,7 +1171,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editing/viewport/editor_viewport_projection.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Editing/Viewport/EditorViewportRenderGate.swift",
