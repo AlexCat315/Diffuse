@@ -132,6 +132,9 @@ Editor/.build/
 # CMake-produced third-party artifacts (per-package, built locally)
 Engine/vendor/
 Engine/Sources/PluginRuntime/Resources/bun/
+# Staged by `cargo xtask plugins stage` / `prepare`
+crates/diffuse-plugin/Resources/bun/
+crates/diffuse-plugin/Resources/bun-runner.js
 
 *.o
 

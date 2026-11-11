@@ -5,8 +5,10 @@
 //! `.coveplugin` directory built in the temp directory, mirroring the loader
 //! fixture used by `diffuse-plugin`'s `plugin_manager_tests`.
 //!
-//! `prepare` success paths need a real Bun executable (`BunSession::new`), so
-//! only its pre-Bun rejection branches are covered here.
+//! `prepare`'s success paths run the Bun runtime staged by
+//! `cargo xtask plugins prepare`; those tests skip (rather than fail) when the
+//! staged artifacts are absent, so a clean checkout without a prepare still
+//! passes.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -15,12 +17,15 @@ use std::sync::{Arc, Mutex};
 use diffuse_capability::capability_contract::CapabilityAccess;
 use diffuse_capability::capability_registry::CapabilityRegistry;
 use diffuse_capability::support::swift_date::SwiftDate;
+use diffuse_plugin::PluginError;
 use diffuse_plugin::Uuid;
 use diffuse_plugin::base64_data::Data;
-use diffuse_plugin::contract::plugin_manifest::{CovePluginManifest, PluginResourceLimits};
+use diffuse_plugin::contract::plugin_manifest::{
+    CovePluginManifest, PluginImportPermission, PluginResourceLimits,
+};
 use diffuse_plugin::contract::plugin_package::PluginPackageLoader;
 use diffuse_plugin::contribution::registry::ContributionPointRegistry;
-use diffuse_plugin::host::bun_runtime::BunPluginRuntime;
+use diffuse_plugin::host::bun_runtime::{BunPluginRuntime, BunRuntimeError, PluginHostServiceCall};
 use diffuse_plugin::host::plugin_host_rpc::{
     PluginHostFrameCodec, PluginHostMethod, PluginHostRequest, PluginHostResponse,
 };
@@ -48,6 +53,12 @@ fn temporary(label: &str) -> PathBuf {
 
 /// Minimal runtime package: `plugin.json`, `plugin.js` and `capabilities.json`.
 fn package(root: &Path) -> PathBuf {
+    runtime_package(root, Vec::new(), "export default { inspect: () => ({}) }")
+}
+
+/// Same layout, but with a `plugin.js` the Bun runner accepts: `default.capabilities`
+/// keyed by the contract's entry names.
+fn runtime_package(root: &Path, imports: Vec<PluginImportPermission>, code: &str) -> PathBuf {
     let url = root.join(format!("{PLUGIN_ID}.coveplugin"));
     std::fs::create_dir_all(&url).expect("package directory");
     let mut manifest = CovePluginManifest::new(
@@ -56,7 +67,7 @@ fn package(root: &Path) -> PathBuf {
         "Fixture",
         "Fixture",
         CapabilityAccess::Read,
-        Vec::new(),
+        imports,
         Vec::new(),
         Vec::new(),
         Default::default(),
@@ -68,13 +79,30 @@ fn package(root: &Path) -> PathBuf {
         serde_json::to_vec(&manifest).expect("manifest encodes"),
     )
     .expect("writes manifest");
-    std::fs::write(
-        url.join("plugin.js"),
-        "export default { inspect: () => ({}) }",
-    )
-    .expect("writes component");
+    std::fs::write(url.join("plugin.js"), code).expect("writes component");
     std::fs::write(url.join("capabilities.json"), CONTRACT).expect("writes contract");
     url
+}
+
+/// True when `cargo xtask plugins prepare` staged the Bun executable and runner.
+fn runtime_ready() -> bool {
+    let resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("../diffuse-plugin/Resources");
+    let executable = if cfg!(windows) {
+        "bun/bun.exe"
+    } else {
+        "bun/bun"
+    };
+    resources.join(executable).is_file() && resources.join("bun-runner.js").is_file()
+}
+
+/// Skips (with an explanation) instead of failing on a checkout that has not run
+/// `cargo xtask plugins prepare`.
+fn require_runtime() -> bool {
+    if runtime_ready() {
+        return true;
+    }
+    eprintln!("skipping: run `cargo xtask plugins prepare` to stage Bun");
+    false
 }
 
 fn loader() -> PluginPackageLoader {
@@ -643,6 +671,134 @@ fn unload_ignores_unknown_package() {
     assert!(response.error.is_none());
     assert_eq!(host.loaded.len(), 1);
     assert_eq!(entries(&staging), 1);
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+/// `runner.ts` requires `default.capabilities` keyed by the contract entries, and
+/// validates the input against the per-entry `input` schema before `run`.
+const INSPECT_CODE: &str = r#"export default {
+  capabilities: {
+    inspect: {
+      input: { record: { enabled: "bool" } },
+      run(input) { return { ok: input.enabled } }
+    }
+  }
+};"#;
+
+// @Test("prepare runs the staged Bun runtime and reuses its session")
+#[test]
+fn prepare_invokes_the_staged_bun_runtime() {
+    if !require_runtime() {
+        return;
+    }
+    let staging = temporary("prepare-bun-staging");
+    let root = temporary("prepare-bun-source");
+    let url = runtime_package(&root, Vec::new(), INSPECT_CODE);
+    let mut host = host(&staging);
+    let authorization = load(&mut host, &url);
+
+    let response = host.respond(&prepare_request(
+        &url,
+        "fixture.minimal.inspect",
+        br#"{"enabled":true}"#,
+        Some(authorization.clone()),
+    ));
+    assert!(response.ok, "prepare rejected: {:?}", response.error);
+    assert_eq!(payload(&response), serde_json::json!({"ok": true}));
+
+    // The second invocation reuses the Bun session created by the first.
+    let response = host.respond(&prepare_request(
+        &url,
+        "fixture.minimal.inspect",
+        br#"{"enabled":false}"#,
+        Some(authorization),
+    ));
+    assert!(response.ok, "prepare rejected: {:?}", response.error);
+    assert_eq!(payload(&response), serde_json::json!({"ok": false}));
+
+    let response = host.respond(&request(PluginHostMethod::Unload, &url));
+    assert!(response.ok);
+    assert!(host.loaded.is_empty());
+    assert_eq!(entries(&staging), 0);
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&staging);
+}
+
+/// Invokes `context.query` with the granted editor permission.
+const HOST_CALL_CODE: &str = r#"export default {
+  capabilities: {
+    inspect: {
+      input: { record: { enabled: "bool" } },
+      async run(input, context) {
+        const reply = await context.query("diffuse:editor/host", { ping: input.enabled });
+        return { host: reply };
+      }
+    }
+  }
+};"#;
+
+// @Test("host calls round-trip through the Bun runner and surface host rejections")
+#[test]
+fn prepare_round_trips_host_calls() {
+    if !require_runtime() {
+        return;
+    }
+    let staging = temporary("host-call-staging");
+    let root = temporary("host-call-source");
+    let url = runtime_package(&root, vec![PluginImportPermission::Editor], HOST_CALL_CODE);
+    let mut host = host(&staging);
+    let authorization = load(&mut host, &url);
+
+    let seen: Arc<Mutex<Vec<(String, Vec<u8>)>>> = Arc::new(Mutex::new(Vec::new()));
+    let observed = Arc::clone(&seen);
+    host.runtime.host_call = Some(Box::new(move |call: PluginHostServiceCall| {
+        observed
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .push((call.permission, call.request));
+        Ok(br#"{"pong":true}"#.to_vec())
+    }));
+
+    let response = host.respond(&prepare_request(
+        &url,
+        "fixture.minimal.inspect",
+        br#"{"enabled":true}"#,
+        Some(authorization.clone()),
+    ));
+    assert!(response.ok, "prepare rejected: {:?}", response.error);
+    assert_eq!(
+        payload(&response),
+        serde_json::json!({"host": {"pong": true}})
+    );
+    let seen = seen.lock().unwrap_or_else(|error| error.into_inner());
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].0, "diffuse:editor/host");
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&seen[0].1).expect("host request JSON"),
+        serde_json::json!({"ping": true})
+    );
+    drop(seen);
+
+    // A rejected host call reaches the caller as the runtime's rejection.
+    host.runtime.host_call = Some(Box::new(|_| {
+        Err(PluginError::from(BunRuntimeError::Rejected(
+            "host denied the call".to_string(),
+        )))
+    }));
+    let response = host.respond(&prepare_request(
+        &url,
+        "fixture.minimal.inspect",
+        br#"{"enabled":true}"#,
+        Some(authorization),
+    ));
+    assert!(!response.ok);
+    // The runner relays the host closure's message, and the runtime prefixes its
+    // own rejection, so both prefixes stack.
+    assert_eq!(
+        response.error.as_deref(),
+        Some("Bun plugin: Bun plugin: host denied the call")
+    );
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&staging);
 }

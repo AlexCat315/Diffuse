@@ -13503,7 +13503,7 @@
       "rust": [
         "xtask/src/build/plugin_staging/archive.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Tools/Developer/Sources/Build/PluginStaging/Arguments.swift",
@@ -13514,7 +13514,7 @@
       "rust": [
         "xtask/src/build/plugin_staging/arguments.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Tools/Developer/Sources/Build/PluginStaging/BunStaging.swift",
@@ -13525,7 +13525,7 @@
       "rust": [
         "xtask/src/build/plugin_staging/bun_staging.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Arguments.swift",
@@ -14877,10 +14877,9 @@
       "kind": "test",
       "crate": "xtask",
       "rust": [
-        "xtask/src/tests/plugin_staging/plugin_staging_tests.rs"
+        "xtask/src/build/plugin_staging/bun_staging.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "tested"
     },
     {
       "source": "Tools/Developer/Tests/RegressionReportTests/RegressionReportTests.swift",

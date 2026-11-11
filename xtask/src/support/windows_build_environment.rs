@@ -7,8 +7,8 @@
 
 #[cfg(windows)]
 mod imp {
-    use super::shell;
-    use super::terminal::ToolError;
+    use crate::support::shell;
+    use crate::support::terminal::ToolError;
     use std::collections::BTreeMap;
     use std::path::{Path, PathBuf};
 

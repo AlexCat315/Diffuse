@@ -27,7 +27,7 @@ use crate::uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum BunRuntimeError {
-    #[error("Bun runtime is missing. Run cove studio plugins prepare.")]
+    #[error("Bun runtime is missing. Run `cargo xtask plugins prepare`.")]
     Unavailable,
     #[error("Bun plugin: {0}")]
     Rejected(String),

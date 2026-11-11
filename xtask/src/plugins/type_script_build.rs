@@ -17,11 +17,11 @@ impl PluginBuild {
         let name = if cfg!(windows) { "bun.exe" } else { "bun" };
         let bun = self
             .root
-            .join("Engine/Sources/PluginRuntime/Resources/bun")
+            .join("crates/diffuse-plugin/Resources/bun")
             .join(name);
         if !is_executable(&bun) {
             return Err(ToolError::message(
-                "Bun runtime is missing from Engine/Sources/PluginRuntime/Resources/bun",
+                "Bun runtime is missing from crates/diffuse-plugin/Resources/bun",
             ));
         }
         let destination = self.output.clone().unwrap_or_else(|| {
@@ -84,7 +84,7 @@ mod tests {
         let error = build.run().unwrap_err();
         assert_eq!(
             error.to_string(),
-            "Bun runtime is missing from Engine/Sources/PluginRuntime/Resources/bun"
+            "Bun runtime is missing from crates/diffuse-plugin/Resources/bun"
         );
     }
 

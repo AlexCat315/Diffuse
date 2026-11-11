@@ -9,6 +9,9 @@
 mod build;
 mod plugins;
 mod support;
+// Swift compiles RuntimeValidation only where `#if !os(Windows)` holds; the
+// command reports "requires a macOS or Linux host" on Windows instead.
+#[cfg(not(windows))]
 mod validation;
 
 pub mod json_format;
@@ -16,6 +19,7 @@ pub mod json_format;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use crate::build::plugin_staging::bun_staging::PluginStaging;
 use crate::plugins::type_script_build::PluginBuild;
 use crate::support::repository;
 
@@ -30,6 +34,7 @@ fn main() -> ExitCode {
         .and_then(std::ffi::OsStr::to_str)
     {
         Some("plugin-build") => plugin_build(),
+        Some("plugins") => plugins(),
         // `cove_package::main()` calls `Cli::parse()` on the process argv, so
         // the forwarded branch must leave argv untouched.
         _ => cove_package::main(),
@@ -64,6 +69,17 @@ fn plugin_build() -> ExitCode {
         output,
     };
     match build.run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => fail(&error.to_string()),
+    }
+}
+
+fn plugins() -> ExitCode {
+    let arguments: Vec<String> = std::env::args_os()
+        .skip(2)
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .collect();
+    match PluginStaging::run(&arguments) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => fail(&error.to_string()),
     }
