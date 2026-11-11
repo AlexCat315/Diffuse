@@ -1061,7 +1061,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/diagnostics/particles/authoring.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Diagnostics/Particles/Runtime.swift",
@@ -1072,7 +1072,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/diagnostics/particles/runtime.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Diagnostics/Particles/Signals.swift",
@@ -1083,7 +1083,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/diagnostics/particles/signals.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Diagnostics/Rendering/Passes.swift",
