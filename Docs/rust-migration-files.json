@@ -1127,7 +1127,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editing/editor_selection_reducer.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Editing/EditorTransformSnapping.swift",
@@ -1149,7 +1149,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editing/viewport/editor_viewport_frame_drive.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Editing/Viewport/EditorViewportInputController.swift",
@@ -1182,7 +1182,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editing/viewport/editor_viewport_render_gate.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Editing/Viewport/EditorViewportResolution.swift",
@@ -1193,7 +1193,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editing/viewport/editor_viewport_resolution.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Editing/Viewport/EditorViewportSnapSettings.swift",
