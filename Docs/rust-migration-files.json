@@ -3185,7 +3185,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/developer_tools/trace/developer_trace_builder.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/DeveloperTools/Trace/DeveloperTraceMonitors.swift",
