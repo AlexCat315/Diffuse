@@ -852,7 +852,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/agents.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Categories.swift",
@@ -885,7 +885,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/languages.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/RuntimeAccess.swift",
@@ -2218,7 +2218,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/inheritance_clause.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/ScriptLanguageLifecycle.swift",

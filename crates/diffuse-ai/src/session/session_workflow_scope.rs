@@ -66,6 +66,26 @@ impl SessionContextSource {
         SessionContextSource::Workflow,
         SessionContextSource::Assets,
     ];
+
+    /// Swift's `String` raw value.
+    pub const fn raw_value(self) -> &'static str {
+        match self {
+            SessionContextSource::Scene => "scene",
+            SessionContextSource::Selection => "selection",
+            SessionContextSource::Edits => "edits",
+            SessionContextSource::Memory => "memory",
+            SessionContextSource::Transactions => "transactions",
+            SessionContextSource::Workflow => "workflow",
+            SessionContextSource::Assets => "assets",
+        }
+    }
+
+    /// Swift's `init?(rawValue:)`.
+    pub fn from_raw_value(value: &str) -> Option<SessionContextSource> {
+        Self::ALL
+            .into_iter()
+            .find(|source| source.raw_value() == value)
+    }
 }
 
 /// Text from outside the session, such as a plugin's context, sent with the request.
