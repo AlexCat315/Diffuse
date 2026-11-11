@@ -191,7 +191,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/chat/editor_ai_settings.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Chat/EditorAgentTaskService.swift",
@@ -499,7 +499,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/bundled.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/Catalogs.swift",
@@ -841,7 +841,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/ai_providers.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Agents.swift",
@@ -1215,7 +1215,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/editor_core_resource_bundle.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Geometry/EditorGeometryAuthoring.swift",
