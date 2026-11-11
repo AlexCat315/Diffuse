@@ -38,6 +38,18 @@ pub enum DeveloperDiagnosticScope {
     State,
 }
 
+impl DeveloperDiagnosticScope {
+    pub const fn raw_value(self) -> &'static str {
+        match self {
+            DeveloperDiagnosticScope::Frame => "Frame",
+            DeveloperDiagnosticScope::Render => "Render",
+            DeveloperDiagnosticScope::Particles => "Particles",
+            DeveloperDiagnosticScope::Console => "Console",
+            DeveloperDiagnosticScope::State => "State",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeveloperDiagnosticTarget {

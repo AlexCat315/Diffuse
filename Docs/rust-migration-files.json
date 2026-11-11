@@ -1039,7 +1039,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/diagnostics/issues/assessment.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Diagnostics/Issues/DiagnosticIssue.swift",
@@ -1094,7 +1094,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/diagnostics/rendering/passes.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Diagnostics/Session.swift",
