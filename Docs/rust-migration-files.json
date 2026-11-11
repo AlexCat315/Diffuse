@@ -1359,7 +1359,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/projects/editor_scratch_workspace.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Rendering/HUD/AtlasDelivery.swift",
@@ -2122,7 +2122,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scripting/dynamic/script_project_trust.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/ScriptLanguageSupport.swift",
