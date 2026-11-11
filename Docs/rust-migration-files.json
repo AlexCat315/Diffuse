@@ -1469,7 +1469,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/editor_scene_adapter.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/EntityQueries.swift",
@@ -1502,7 +1502,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/history.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Inspector/Animation.swift",
@@ -1678,7 +1678,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/particles/feedback.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Ragdoll.swift",
@@ -1810,7 +1810,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/history/editor_scene_edit_history.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/Choices/EmitterChoices.swift",
@@ -1876,7 +1876,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/rendering/registration.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Inspector/Rendering/Registrations/AnimationGraph.swift",
@@ -1931,7 +1931,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/inspector/rendering/renderers.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Manifest/EditorSceneManifest.swift",
