@@ -24,6 +24,18 @@ pub enum DeveloperDiagnosticSeverity {
     Critical,
 }
 
+impl DeveloperDiagnosticSeverity {
+    /// Swift's `rawValue` — the persisted case name, also shown in badges.
+    pub const fn raw_value(self) -> &'static str {
+        match self {
+            DeveloperDiagnosticSeverity::Nominal => "Nominal",
+            DeveloperDiagnosticSeverity::Info => "Info",
+            DeveloperDiagnosticSeverity::Warning => "Warning",
+            DeveloperDiagnosticSeverity::Critical => "Critical",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeveloperDiagnosticScope {
     #[serde(rename = "Frame")]

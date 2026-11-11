@@ -22,12 +22,30 @@ impl EditorVisualTheme {
 pub struct EditorCodePalette;
 
 impl EditorCodePalette {
-    pub const BACKGROUND: Color = Color::from_rgba8(0x17, 0x1C, 0x1B, 0xFF);
-    pub const GUTTER: Color = Color::from_rgba8(0x11, 0x15, 0x15, 0xFF);
-    pub const HEADER: Color = Color::from_rgba8(0x1D, 0x23, 0x21, 0xFF);
-    pub const SELECTED_TAB: Color = Color::from_rgba8(0x33, 0x3A, 0x37, 0xFF);
-    pub const FOREGROUND: Color = Color::from_rgba8(0xEC, 0xEF, 0xED, 0xFF);
-    pub const MUTED: Color = Color::from_rgba8(0x8B, 0x94, 0x8F, 0xFF);
-    pub const LINE_NUMBER: Color = Color::from_rgba8(0x71, 0x79, 0x76, 0xFF);
-    pub const ACCENT: Color = Color::from_rgba8(0x5F, 0xAF, 0x82, 0xFF);
+    // `Color::from_rgba8` is not `const`, so these stay functions rather than
+    // `const` items; callers see the same values.
+    pub fn background() -> Color {
+        Color::from_rgba8(0x17, 0x1C, 0x1B, 0xFF)
+    }
+    pub fn gutter() -> Color {
+        Color::from_rgba8(0x11, 0x15, 0x15, 0xFF)
+    }
+    pub fn header() -> Color {
+        Color::from_rgba8(0x1D, 0x23, 0x21, 0xFF)
+    }
+    pub fn selected_tab() -> Color {
+        Color::from_rgba8(0x33, 0x3A, 0x37, 0xFF)
+    }
+    pub fn foreground() -> Color {
+        Color::from_rgba8(0xEC, 0xEF, 0xED, 0xFF)
+    }
+    pub fn muted() -> Color {
+        Color::from_rgba8(0x8B, 0x94, 0x8F, 0xFF)
+    }
+    pub fn line_number() -> Color {
+        Color::from_rgba8(0x71, 0x79, 0x76, 0xFF)
+    }
+    pub fn accent() -> Color {
+        Color::from_rgba8(0x5F, 0xAF, 0x82, 0xFF)
+    }
 }

@@ -29,7 +29,7 @@ use super::super::shared::developer_diagnostic_colors::{
 };
 use super::developer_trace_builder::developer_trace_track;
 
-fn developer_selected_trace_event(
+pub fn developer_selected_trace_event(
     trace: &DeveloperTraceSnapshot,
     selected_event_id: Option<&str>,
 ) -> Option<DeveloperTraceEvent> {
@@ -41,7 +41,7 @@ fn developer_selected_trace_event(
         .cloned()
 }
 
-fn developer_selected_trace_sample(
+pub fn developer_selected_trace_sample(
     trace: &DeveloperTraceSnapshot,
     selected_sample_index: Option<u64>,
     selected_event: Option<&DeveloperTraceEvent>,
@@ -639,7 +639,7 @@ fn developer_trace_ruler_label(
     offset: usize,
     count: usize,
 ) -> String {
-    if offset == 0 || offset + 1 == count || offset % 10 == 0 {
+    if offset == 0 || offset + 1 == count || offset.is_multiple_of(10) {
         sample.sample_index.to_string()
     } else {
         "|".to_string()

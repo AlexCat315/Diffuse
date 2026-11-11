@@ -3,7 +3,7 @@
 //! Resolves a localized string from the EditorUI module bundle.
 
 use cove_ui_compose::i18n::LocalizedStringKey;
-use diffuse_editor_core::state::editor_state::EditorLocalizationPreferences;
+use diffuse_editor_core::localization::EditorLocalizationPreferences;
 
 use crate::resources_support::EditorAppResourceBundle;
 
