@@ -400,7 +400,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/bridge/mcp_async_bridge.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Bridge/MCPIntegration.swift",
