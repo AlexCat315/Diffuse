@@ -7349,7 +7349,7 @@
       "rust": [
         "crates/diffuse-audio/src/backends/sdl3_audio_backend.rs"
       ],
-      "status": "tested"
+      "status": "pending"
     },
     {
       "source": "Engine/Sources/AudioRuntime/Backends/SilentAudioBackend.swift",
@@ -7371,7 +7371,7 @@
       "rust": [
         "crates/diffuse-audio/src/playback/media_player.rs"
       ],
-      "status": "tested"
+      "status": "pending"
     },
     {
       "source": "Engine/Sources/CapabilityRuntime/BuiltInCapabilityCatalog.swift",
@@ -9115,7 +9115,7 @@
       "rust": [
         "crates/diffuse-plugin/src/lifecycle/runtime_activation.rs"
       ],
-      "status": "tested"
+      "status": "pending"
     },
     {
       "source": "Engine/Sources/PluginRuntime/Lifecycle/Status.swift",
@@ -11967,7 +11967,7 @@
       "rust": [
         "crates/diffuse-audio/src/tests/audio_runtime/media_playback_tests.rs"
       ],
-      "status": "tested"
+      "status": "pending"
     },
     {
       "source": "Engine/Tests/CapabilityRuntimeTests/CapabilityRuntimeTests.swift",
@@ -12583,7 +12583,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/support/device.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Engine/Tests/ObservationBusTests/ObservationBusTests.swift",
@@ -13764,7 +13764,7 @@
       "rust": [
         "xtask/src/main.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/CoveDev/Export/AndroidExport.swift",
@@ -13799,7 +13799,7 @@
       "rust": [
         "xtask/src/plugins/type_script_build.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Infrastructure/ImageCodec/DecodedImage.swift",
@@ -14674,7 +14674,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/async_bridge.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/Box.swift",
@@ -14685,7 +14685,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/box_.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/BuildProducts.swift",
@@ -14708,7 +14708,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/check.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/ChildProcess.swift",
@@ -14719,7 +14719,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/child_process.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/Flags.swift",
@@ -14730,7 +14730,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/flags.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/Glob.swift",
@@ -14741,7 +14741,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/glob.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/JSON.swift",
@@ -14752,7 +14752,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/json.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/POSIX.swift",
@@ -14763,7 +14763,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/posix.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/Subprocess.swift",
@@ -14774,7 +14774,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/subprocess.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/TCP.swift",
@@ -14785,7 +14785,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/tcp.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/Temp.swift",
@@ -14796,7 +14796,7 @@
       "rust": [
         "xtask/src/validation/runtime/support/temp.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Tools/Developer/Tests/BoundaryTests/ManifestTests.swift",
