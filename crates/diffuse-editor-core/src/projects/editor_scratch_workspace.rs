@@ -11,7 +11,9 @@
 //! It is deliberately never written to the saved project list, so the next
 //! launch restores the user's real projects instead of reopening this one.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
+
+use super::standardized_path;
 
 pub struct EditorScratchWorkspace;
 
@@ -59,32 +61,6 @@ fn remove_stale_descriptor(directory: &Path) {
         return;
     }
     let _ = std::fs::remove_file(&descriptor);
-}
-
-/// Canonical form when the path exists, otherwise an absolute lexically
-/// normalized path — matching `standardizedFileURL`.
-fn standardized_path(path: &Path) -> PathBuf {
-    if let Ok(canonical) = std::fs::canonicalize(path) {
-        return canonical;
-    }
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .map(|cwd| cwd.join(path))
-            .unwrap_or_else(|_| path.to_path_buf())
-    };
-    let mut normalized = PathBuf::new();
-    for component in absolute.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            other => normalized.push(other.as_os_str()),
-        }
-    }
-    normalized
 }
 
 /// `FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]`.
