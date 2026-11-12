@@ -160,6 +160,7 @@ fn parse_backend_name(raw_name: &str) -> Result<GraphicsApi, EditorAppLaunchErro
     match raw_name.to_ascii_lowercase().as_str() {
         "dx12" => Ok(GraphicsApi::Dx12),
         "metal" => Ok(GraphicsApi::Metal),
+        "webgpu" => Ok(GraphicsApi::WebGpu),
         "vulkan" => Ok(GraphicsApi::Vulkan),
         _ => Err(EditorAppLaunchError::InvalidBackendName(
             raw_name.to_string(),

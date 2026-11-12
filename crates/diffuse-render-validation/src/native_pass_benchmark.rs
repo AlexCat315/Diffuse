@@ -316,6 +316,7 @@ fn api_name(api: GraphicsApi) -> &'static str {
         GraphicsApi::Metal => "metal",
         GraphicsApi::Vulkan => "vulkan",
         GraphicsApi::Dx12 => "dx12",
+        GraphicsApi::WebGpu => "webgpu",
     }
 }
 struct PassBenchmarkOptions {

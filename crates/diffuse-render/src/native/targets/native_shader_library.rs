@@ -80,6 +80,7 @@ impl NativeShaderLibrary {
         match api {
             GraphicsApi::Metal => "metal",
             GraphicsApi::Dx12 => "dxil",
+            GraphicsApi::WebGpu => "wgsl",
             GraphicsApi::Vulkan => {
                 // Swift's `#if os(Android)` branch.
                 if cfg!(target_os = "android") {

@@ -4078,7 +4078,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/viewport/viewport_navigation_controls.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Viewport/ViewportPanel.swift",
