@@ -183,13 +183,10 @@ impl JobSystem {
             return vec![0..count];
         }
 
-        let target_chunk_count = self.worker_count.min(
-            (count + resolved_minimum - 1)
-                .div_ceil(resolved_minimum)
-                .max(1),
-        );
-        let chunk_size =
-            resolved_minimum.max((count + target_chunk_count - 1).div_ceil(target_chunk_count));
+        let target_chunk_count = self
+            .worker_count
+            .min(count.div_ceil(resolved_minimum).max(1));
+        let chunk_size = resolved_minimum.max(count.div_ceil(target_chunk_count));
 
         let mut ranges = Vec::with_capacity(target_chunk_count);
         let mut start = 0;

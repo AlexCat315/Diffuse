@@ -13001,7 +13001,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/spatial_query_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/TriggerDetectionTests.swift",
