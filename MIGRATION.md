@@ -1142,6 +1142,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 325 | diffuse-android（门禁修复） | — | — | 批次 324 误将依赖 serde 的 `Content/Game.swift` 草稿提交进 `diffuse-android`（该 crate 尚无 serde 直接依赖，§10 等待用户确认）；本批将其回退为说明性占位并保持 `pending`，`cargo check -p diffuse-android --all-targets`、clippy、rustfmt 恢复通过。全仓 `cargo check --workspace --all-targets` 仍被既有 `diffuse-exr` OpenEXR/OCIO 构建环境缺件阻断（与本次改动无关，§10 已记录） |
 | 2026-11-13 | 批次 326 | diffuse-editor-core（语言服务生命周期） | 1 | 26 | `SourceKitLSP/Language/ScriptLanguageLifecycle.swift` → `scripting/rust_analyzer/language/script_language_lifecycle.rs`：服务代次 UUID、连接 ID、状态、恢复次数/重试线程句柄、就绪时间、指标与文件监视线程句柄；`ScriptLanguageServiceUpdate` 修订/状态；Swift 定义于 `ScriptWorkspaceModel` 的 `ScriptLanguageServiceState` 按共享模型放入 `script_language_models.rs`（工作区文件仍待其类主体迁移）；clippy（本批零告警）、rustfmt、`cargo check -p diffuse-editor-core --lib` 通过；1 行标 `written` |
 | 2026-11-13 | 批次 327 | 清单（SwiftPM manifests） | 8 | 672 | `Package.swift`、`DiffuseMCP/`、`Editor/`、`Editor/Documents/`、`Engine/`、`Engine/Media/`、`Platforms/Android/`、`Tools/Developer/` 八个 SwiftPM 清单由 workspace `Cargo.toml`（§2 crate map）承接，Rust 侧无同构文件；按既有先例标 `removed` 并写明理由；`inventory.py --check` 通过 |
+| 2026-11-13 | 批次 328 | diffuse-editor-core（插件目录访问器） | 1 | 19 | `Application/Plugins/Catalogs.swift` → `application/plugins/catalogs.rs`：语言/提供者/智能体目录读取、智能体启用判定、主题快照与按明暗解析当前主题、已启用插件清单；clippy（本批零告警）、rustfmt、`cargo check -p diffuse-editor-core --lib` 通过；1 行标 `written` |
 
 
 ## 10. 已知问题与需要用户确认的事项
