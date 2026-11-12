@@ -687,7 +687,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/service_jobs.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/Toolchain.swift",
