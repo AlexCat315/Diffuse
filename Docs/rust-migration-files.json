@@ -5574,7 +5574,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/inspector/physics_forms.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Inspector/Renderers.swift",
