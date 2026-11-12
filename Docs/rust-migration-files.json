@@ -12374,7 +12374,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_animated_mesh_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeBindingSetCacheTests.swift",
