@@ -4700,7 +4700,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/ai/surface.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorUI/ai/Thread.swift",
