@@ -1144,6 +1144,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 327 | 清单（SwiftPM manifests） | 8 | 672 | `Package.swift`、`DiffuseMCP/`、`Editor/`、`Editor/Documents/`、`Engine/`、`Engine/Media/`、`Platforms/Android/`、`Tools/Developer/` 八个 SwiftPM 清单由 workspace `Cargo.toml`（§2 crate map）承接，Rust 侧无同构文件；按既有先例标 `removed` 并写明理由；`inventory.py --check` 通过 |
 | 2026-11-13 | 批次 328 | diffuse-editor-core（插件目录访问器） | 1 | 19 | `Application/Plugins/Catalogs.swift` → `application/plugins/catalogs.rs`：语言/提供者/智能体目录读取、智能体启用判定、主题快照与按明暗解析当前主题、已启用插件清单；clippy（本批零告警）、rustfmt、`cargo check -p diffuse-editor-core --lib` 通过；1 行标 `written` |
 | 2026-11-13 | 批次 329 | diffuse-editor-ui（组件卡片菜单） | 1 | 35 | `Panels/Inspector/ComponentMenu.swift` → `panels/inspector/component_menu.rs`：弹出菜单承载 Reset/Remove（危险项），触发图标 24×24 带无障碍标签；操作失败时按严重级别写入控制台并附组件标题；多选实体集合走 `reset_component`/`remove_component_from_selection`；clippy（本批零告警）、rustfmt、`cargo check -p diffuse-editor-ui --lib` 通过；1 行标 `written` |
+| 2026-11-13 | 批次 330 | diffuse-editor-ui（组件菜单告警清理） | — | — | 批次 329 的 `component_menu.rs` 去掉未使用的 `SemanticStyleViewExt` 与对 `Signal<bool>` 的多余 `clone`；`cargo clippy -p diffuse-editor-ui --all-targets` 本文件零告警，`cargo test -p diffuse-editor-ui --lib` 50/50 通过 |
 
 
 ## 10. 已知问题与需要用户确认的事项

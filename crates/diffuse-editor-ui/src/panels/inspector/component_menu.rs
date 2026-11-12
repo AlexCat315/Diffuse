@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use cove_ui_compose::modifiers::interaction::AccessibilityExt;
-use cove_ui_compose::prelude::{LayoutFrameExt, SemanticStyleViewExt};
+use cove_ui_compose::prelude::LayoutFrameExt;
 use cove_ui_compose::primitives::media::Icon;
 use cove_ui_compose::primitives::media::ui_icon_catalog;
 use cove_ui_compose::primitives::overlays::Popover;
@@ -71,15 +71,9 @@ impl View for InspectorComponentMenu {
             ),
         ])
         .width(200.0)
-        .on_item_activated({
-            let is_presented = is_presented.clone();
-            move || is_presented.set(false)
-        });
+        .on_item_activated(move || is_presented.set(false));
         let binding = cove_ui_compose::scene_core::Binding::new(
-            {
-                let is_presented = is_presented.clone();
-                move || is_presented.get()
-            },
+            move || is_presented.get(),
             move |value| is_presented.set(value),
         );
         AnyView::new(
