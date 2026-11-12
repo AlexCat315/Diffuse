@@ -181,6 +181,10 @@ impl ScriptCanvasView {
 }
 
 impl View for ScriptCanvasView {
+    fn dynamic_properties(&self) -> Vec<cove_ui_compose::DynamicField> {
+        vec![self.canvas.dynamic_field("canvas")]
+    }
+
     fn body(&self, _scope: &Scope) -> AnyView {
         let children = self
             .canvas
