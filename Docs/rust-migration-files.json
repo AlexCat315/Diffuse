@@ -4918,7 +4918,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/file_icon_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/InspectorFieldControlsTests.swift",
