@@ -19,6 +19,7 @@ fn prepared_renderer_renders_initial_settings() {
     if std::env::var_os("COVE_RESOURCE_PATH").is_none() {
         return;
     }
+    let _serial = crate::tests::native_renderer::support::lock_serial();
     let Some(device) = device::make_for(device::platform_api(), false).expect("device") else {
         return;
     };

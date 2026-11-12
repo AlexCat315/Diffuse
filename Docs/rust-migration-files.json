@@ -12407,7 +12407,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_empty_geometry_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeFXAACompositionTests.swift",
@@ -12473,7 +12473,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_loop_cut_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeOpaqueTests.swift",

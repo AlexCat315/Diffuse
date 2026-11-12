@@ -26,6 +26,7 @@ fn varying_instance_count_reuses_binding_sets() {
     if std::env::var_os("COVE_RESOURCE_PATH").is_none() {
         return;
     }
+    let _serial = crate::tests::native_renderer::support::lock_serial();
     let frames_in_flight = 3;
     let cube = BuiltinMesh::cube(Some(Float3::splat(1.0)));
     AssetRegistry::shared().register_for_testing(cube, 77);

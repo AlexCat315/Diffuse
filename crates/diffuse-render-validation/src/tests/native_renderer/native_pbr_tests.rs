@@ -40,6 +40,7 @@ fn pbr_shadow_hdr_parity() {
     if std::env::var_os("COVE_RESOURCE_PATH").is_none() {
         return;
     }
+    let _serial = crate::tests::native_renderer::support::lock_serial();
     let api = device::validation_api();
     let Some(device) = device::make_for(api, false).expect("device") else {
         return;

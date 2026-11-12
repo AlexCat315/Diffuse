@@ -23,6 +23,7 @@ fn fxaa_without_pbr_renders_and_changes_pixels() {
     if std::env::var_os("COVE_RESOURCE_PATH").is_none() {
         return;
     }
+    let _serial = crate::tests::native_renderer::support::lock_serial();
     let cube = BuiltinMesh::cube(Some(Float3::splat(1.0)));
     AssetRegistry::shared().register_for_testing(cube, 88);
     let Some(device) = device::make_for(device::validation_api(), false).expect("device") else {
