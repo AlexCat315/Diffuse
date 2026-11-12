@@ -4331,7 +4331,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/settings/components.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Settings/General.swift",
