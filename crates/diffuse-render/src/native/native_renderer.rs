@@ -318,6 +318,16 @@ impl NativeRenderer {
             .clone()
     }
 
+    /// Swift's `lastFrameUsedOpaqueCache`: whether the frame served the lit
+    /// opaque image from the cached snapshot.
+    pub fn last_frame_used_opaque_cache(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .frame_state
+            .cache_hit()
+    }
+
     pub fn current_viewport_surface_state(&self) -> ViewportSurfaceState {
         self.viewport_publication
             .lock()

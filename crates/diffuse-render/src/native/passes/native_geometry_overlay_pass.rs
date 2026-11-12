@@ -4,10 +4,11 @@
 use std::sync::Arc;
 
 use cove_graphics::rhi::{
-    ColorAttachmentDescriptor, CommandBuffer, CompareOp, CullMode, DepthStencilState, Device,
-    GraphicsPipeline, PipelineLayoutDescriptor, RenderColorTarget, RenderDepthTarget,
-    RenderPassDescriptor, RhiResult, ScissorRect, Texture, VertexAttribute, VertexBufferLayout,
-    VertexFormat, VertexInputRate, VertexLayoutDescriptor, Viewport,
+    ColorAttachmentDescriptor, ColorLoadAction, CommandBuffer, CompareOp, CullMode,
+    DepthLoadAction, DepthStencilState, Device, GraphicsPipeline, PipelineLayoutDescriptor,
+    RenderColorTarget, RenderDepthTarget, RenderPassDescriptor, RhiResult, ScissorRect, Texture,
+    VertexAttribute, VertexBufferLayout, VertexFormat, VertexInputRate, VertexLayoutDescriptor,
+    Viewport,
 };
 
 use crate::core::frame::render_camera_matrices::RenderCameraMatrices;
@@ -136,9 +137,14 @@ impl NativeGeometryOverlayPass {
             } else {
                 self.visible
             };
+            // Swift loads both attachments: the overlay composites into the
+            // resolved scene color and clips against the scene depth.
             commands.render_pass(
-                RenderPassDescriptor::new(vec![RenderColorTarget::new(color)])
-                    .with_depth(RenderDepthTarget::new(depth)),
+                RenderPassDescriptor::new(vec![RenderColorTarget {
+                    load_action: ColorLoadAction::Load,
+                    ..RenderColorTarget::new(color)
+                }])
+                .with_depth(RenderDepthTarget::new(depth).with_load_action(DepthLoadAction::Load)),
                 |pass| {
                     pass.set_pipeline(pipeline);
                     pass.set_viewport(Viewport::new(

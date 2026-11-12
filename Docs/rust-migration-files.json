@@ -12429,7 +12429,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_geometry_overlay_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeGeometryTests.swift",
