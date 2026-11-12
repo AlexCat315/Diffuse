@@ -2613,3 +2613,78 @@ fn viewport_framing_handles_parented_camera() {
     assert_eq!(adapter.manifest(), manifest_before);
     let _ = parent;
 }
+
+/// Editor scene adapter exposes a supported particle GPU simulation plan.
+#[test]
+fn editor_scene_adapter_exposes_selected_particle_gpu_plan() {
+    use diffuse_math::simd::simd_compat::Float3;
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::emitter::particle_emitter_settings::ParticleEmitterSettings;
+    use diffuse_scene::particles::particle_gpu_simulation_plan::ParticleGPUSimulationPlanStatus;
+    use diffuse_scene::particles::particle_types::ParticleSimulationBackend;
+
+    let adapter = preview_adapter();
+    let mut settings = ParticleEmitterSettings::default();
+    settings.emission.emission_rate = 10.0;
+    settings.emission.max_particles = 128;
+    settings.appearance.lifetime = 1.0;
+    settings.forces.gravity = Float3::ZERO;
+    settings.emission.distance_emission_rate = 4.0;
+    settings.gpu_simulation.simulation_backend = ParticleSimulationBackend::GpuRequired;
+    settings.gpu_simulation.workgroup_size = 32;
+    let raw_id = adapter.with_scene_mut(|scene| {
+        let entity = scene.create_entity();
+        scene.set_component(ParticleEmitter::new(settings), entity);
+        entity.raw_value()
+    });
+
+    let plan = adapter
+        .current_particle_gpu_simulation_plan(Some(raw_id))
+        .expect("gpu plan");
+    assert_eq!(plan.status, ParticleGPUSimulationPlanStatus::Supported);
+    assert_eq!(plan.dispatch_workgroups, 4);
+    assert_eq!(plan.workgroup_size, 32);
+    assert!(plan.unsupported_reasons.is_empty());
+    assert!(adapter.current_particle_gpu_simulation_plan(None).is_none());
+
+    let issues = adapter.current_particle_module_validation_issues(Some(raw_id));
+    assert!(!issues.iter().any(|issue| {
+        issue.module_id == "gpuSimulation" && issue.code == "gpuRequiredButUnsupported"
+    }));
+    assert!(
+        adapter
+            .current_particle_module_validation_issues(None)
+            .is_empty()
+    );
+}
+
+/// Editor scene adapter exposes particle module topology diagnostics.
+#[test]
+fn editor_scene_adapter_exposes_particle_module_topology_diagnostics() {
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+
+    let adapter = preview_adapter();
+    let emitter = ParticleEmitter::default();
+    let mut stack = emitter.module_stack();
+    let renderer = stack
+        .modules
+        .iter()
+        .find(|module| module.id == "renderer")
+        .cloned()
+        .expect("renderer module");
+    stack.modules.push(renderer);
+    let mut emitter = emitter;
+    emitter.authored_module_stack = Some(stack);
+    let raw_id = adapter.with_scene_mut(|scene| {
+        let entity = scene.create_entity();
+        scene.set_component(emitter, entity);
+        entity.raw_value()
+    });
+
+    let issues = adapter.current_particle_module_validation_issues(Some(raw_id));
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.module_id == "renderer" && issue.code == "duplicateModule")
+    );
+}
