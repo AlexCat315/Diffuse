@@ -3813,7 +3813,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/semantic/symbol_icon.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/ScriptEditor/SourceEditor.swift",
@@ -3946,7 +3946,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/tasks/project_contents.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Tasks/Runner.swift",
