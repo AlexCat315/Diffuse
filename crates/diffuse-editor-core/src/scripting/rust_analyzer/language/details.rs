@@ -108,3 +108,28 @@ impl ScriptLanguageServiceDetails {
         }
     }
 }
+
+/// Methods whose non-empty replies prove semantic analysis is available:
+/// syntax-only results (formatting, code actions, empty completion/symbols) do
+/// not count.
+pub enum ScriptLanguageSemanticEvidence {}
+
+impl ScriptLanguageSemanticEvidence {
+    pub fn confirms_analysis(method: &str, payload: Option<&[u8]>) -> bool {
+        use super::assistance_replies::ScriptAssistanceReplies;
+        use super::script_language_protocol::ScriptLanguageReplies;
+        match method {
+            "textDocument/hover" => {
+                ScriptLanguageReplies::parse_hover(payload).is_some_and(|result| !result.is_empty())
+            }
+            "textDocument/completion" => !ScriptLanguageReplies::parse_completion(payload)
+                .items
+                .is_empty(),
+            "textDocument/definition" | "textDocument/references" => {
+                !ScriptLanguageReplies::parse_definition(payload).is_empty()
+            }
+            "textDocument/signatureHelp" => ScriptAssistanceReplies::signatures(payload).is_some(),
+            _ => false,
+        }
+    }
+}
