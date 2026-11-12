@@ -5585,7 +5585,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/inspector/renderers.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/MeshEditingTests.swift",
