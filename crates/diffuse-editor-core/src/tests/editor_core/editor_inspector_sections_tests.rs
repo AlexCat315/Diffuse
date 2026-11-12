@@ -1411,3 +1411,615 @@ fn particle_module_stack_binding_writes_single_module_default_reset() {
     assert!(reset_renderer.is_expanded);
     assert!(!reset_stack.module_settings_differ_from_default("renderer"));
 }
+
+/// Particle module stack binding writes inline module settings.
+#[test]
+fn particle_module_stack_binding_writes_inline_module_settings() {
+    use diffuse_math::simd::simd_compat::{Float3, Float4};
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::particle_curve::{ParticleCurve, ParticleCurveKeyframe};
+    use diffuse_scene::particles::particle_events::ParticleSubEmitter;
+    use diffuse_scene::particles::particle_modules::ParticleEmitterModuleSettings;
+    use diffuse_scene::particles::particle_types::{
+        ParticleBlendMode, ParticleCollisionMode, ParticleEmissionShape, ParticleForceMode,
+        ParticleRenderAlignment, ParticleRenderBoundsMode, ParticleRenderMode,
+        ParticleSimulationBackend, ParticleSimulationSpace, ParticleSortMode,
+        ParticleSubEmitterTrigger, ParticleTextureSheetPlaybackMode, ParticleVectorFieldMode,
+    };
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    assert!(adapter.add_component("particleEmitter", id));
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(id);
+
+    let Some(EditorInspectorFieldValue::ParticleModuleStack(binding)) =
+        field(&adapter, id, "particle-emitter", "particle-module-stack")
+    else {
+        panic!("expected particle module stack field");
+    };
+    let mut stack = binding.get();
+    let emission_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "emission")
+        .expect("emission module");
+    stack.modules[emission_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::Emission(module) =
+        &mut stack.modules[emission_index].settings
+    {
+        module.emission_rate = 77.0;
+        module.max_particles = 512;
+        module.max_spawned_particles_per_frame = 96;
+        module.simulation_speed = 1.75;
+        module.distance_emission_rate = 9.0;
+        module.emission_rate_curve = ParticleCurve::EaseInOut;
+        module.distance_emission_rate_curve = ParticleCurve::Keyframes(vec![
+            ParticleCurveKeyframe::new(0.0, 0.25),
+            ParticleCurveKeyframe::new(1.0, 1.5),
+        ]);
+        module.burst_interval = 0.25;
+        module.seed = 123_456_789;
+    } else {
+        panic!("expected emission module settings");
+    }
+
+    let shape_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "shape")
+        .expect("shape module");
+    stack.modules[shape_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::Shape(module) = &mut stack.modules[shape_index].settings {
+        module.emission_shape = ParticleEmissionShape::Cone;
+        module.origin_offset = Float3::new(0.5, 1.5, -2.5);
+        module.spawn_radius = 2.25;
+        module.box_half_extents = Float3::new(4.0, 5.0, 6.0);
+        module.cone_radius = 3.5;
+        module.cone_height = 7.0;
+    } else {
+        panic!("expected shape module settings");
+    }
+
+    let forces_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "forces")
+        .expect("forces module");
+    stack.modules[forces_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::Forces(module) = &mut stack.modules[forces_index].settings
+    {
+        module.force_mode = ParticleForceMode::Radial;
+        module.vector_field_mode = ParticleVectorFieldMode::Curl;
+        module.gravity = Float3::new(1.0, -4.0, 2.0);
+        module.noise_strength = 2.5;
+        module.noise_scale = 1.75;
+        module.noise_speed = 0.6;
+        module.force_center = Float3::new(3.0, 4.0, 5.0);
+        module.force_radius = 11.0;
+        module.force_falloff = 1.5;
+        module.vector_field_strength = 8.5;
+        module.vector_field_scale = 3.0;
+        module.vector_field_scroll_speed = 0.75;
+    } else {
+        panic!("expected forces module settings");
+    }
+
+    let velocity_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "velocity")
+        .expect("velocity module");
+    stack.modules[velocity_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::Velocity(module) =
+        &mut stack.modules[velocity_index].settings
+    {
+        module.start_velocity = Float3::new(1.0, 2.0, 3.0);
+        module.velocity_randomness = Float3::new(0.25, 0.5, 0.75);
+        module.velocity_inheritance = 0.4;
+    } else {
+        panic!("expected velocity module settings");
+    }
+
+    let collision_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "collision")
+        .expect("collision module");
+    stack.modules[collision_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::Collision(module) =
+        &mut stack.modules[collision_index].settings
+    {
+        module.collision_mode = ParticleCollisionMode::WorldPlane;
+        module.collision_plane_y = -2.0;
+        module.collision_restitution = 0.8;
+        module.collision_damping = 0.35;
+    } else {
+        panic!("expected collision module settings");
+    }
+    let appearance_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "appearance")
+        .expect("appearance module");
+    stack.modules[appearance_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::Appearance(module) =
+        &mut stack.modules[appearance_index].settings
+    {
+        module.blend_mode = ParticleBlendMode::Additive;
+        module.lifetime = 2.5;
+        module.lifetime_randomness = 0.4;
+        module.start_size = 1.2;
+        module.end_size = 0.3;
+        module.size_randomness = 0.25;
+        module.size_curve = ParticleCurve::EaseOut;
+        module.start_color = Float4::new(0.9, 0.25, 0.1, 0.8);
+        module.end_color = Float4::new(0.1, 0.35, 1.0, 0.2);
+        module.color_curve = ParticleCurve::Keyframes(vec![
+            ParticleCurveKeyframe::new(0.0, 0.0),
+            ParticleCurveKeyframe::new(0.65, 0.9),
+            ParticleCurveKeyframe::new(1.0, 1.0),
+        ]);
+        module.start_rotation = 15.0;
+        module.rotation_randomness = 45.0;
+        module.angular_velocity = 120.0;
+        module.angular_velocity_randomness = 30.0;
+    } else {
+        panic!("expected appearance module settings");
+    }
+
+    let texture_sheet_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "textureSheet")
+        .expect("texture sheet module");
+    stack.modules[texture_sheet_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::TextureSheet(module) =
+        &mut stack.modules[texture_sheet_index].settings
+    {
+        module.playback_mode = ParticleTextureSheetPlaybackMode::Loop;
+        module.frame_rate = 24.0;
+        module.columns = 4;
+        module.rows = 2;
+        module.frame_count = 8;
+        module.start_frame = 2;
+        module.frame_randomness = 3;
+    } else {
+        panic!("expected texture sheet module settings");
+    }
+
+    let renderer_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "renderer")
+        .expect("renderer module");
+    stack.modules[renderer_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::Renderer(module) =
+        &mut stack.modules[renderer_index].settings
+    {
+        module.render_mode = ParticleRenderMode::Ribbon;
+        module.sort_mode = ParticleSortMode::OldestFirst;
+        module.render_sort_priority = 12;
+        module.render_alignment = ParticleRenderAlignment::Velocity;
+        module.render_bounds_mode = ParticleRenderBoundsMode::Manual;
+        module.max_render_distance = 123.0;
+        module.render_distance_fade_range = 9.0;
+        module.render_lod_start_distance = 30.0;
+        module.render_lod_end_distance = 120.0;
+        module.render_lod_min_particle_scale = 0.35;
+        module.render_bounds_radius = 42.0;
+        module.velocity_stretch_scale = 0.5;
+        module.velocity_stretch_max = 9.0;
+    } else {
+        panic!("expected renderer module settings");
+    }
+
+    let trails_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "trails")
+        .expect("trails module");
+    stack.modules[trails_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::Trails(module) = &mut stack.modules[trails_index].settings
+    {
+        module.trail_length = 1.25;
+        module.trail_segments = 7;
+        module.trail_end_alpha_scale = 0.3;
+        module.ribbon_width_scale = 1.6;
+        module.ribbon_tail_width_scale = 0.2;
+        module.ribbon_tail_alpha_scale = 0.4;
+        module.ribbon_max_segment_length = 5.0;
+        module.ribbon_join_overlap_scale = 0.15;
+        module.ribbon_smoothing_segments = 4;
+        module.ribbon_texture_tiling = 4.0;
+        module.ribbon_texture_offset = 0.75;
+        module.trail_end_size_scale = 0.45;
+    } else {
+        panic!("expected trails module settings");
+    }
+
+    let sub_emitters_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "subEmitters")
+        .expect("sub emitters module");
+    stack.modules[sub_emitters_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::SubEmitters(module) =
+        &mut stack.modules[sub_emitters_index].settings
+    {
+        module.legacy_trigger = ParticleSubEmitterTrigger::Collision;
+        module.legacy_burst_count = 3;
+        module.legacy_probability = 0.6;
+        module.legacy_max_depth = 2;
+        module.legacy_inherit_velocity = 0.25;
+        module.legacy_lifetime = 1.75;
+        module.rules = vec![ParticleSubEmitter::new(
+            ParticleSubEmitterTrigger::Death,
+            5,
+            0.75,
+            3,
+            0.5,
+            0.9,
+            Float3::new(0.0, 2.0, 0.0),
+            Float3::new(0.1, 0.2, 0.3),
+            0.4,
+            0.1,
+            Float4::new(1.0, 0.5, 0.25, 1.0),
+            Float4::new(1.0, 0.1, 0.0, 0.0),
+        )];
+    } else {
+        panic!("expected sub emitters module settings");
+    }
+
+    let gpu_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "gpuSimulation")
+        .expect("gpu simulation module");
+    stack.modules[gpu_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::GpuSimulation(module) =
+        &mut stack.modules[gpu_index].settings
+    {
+        module.simulation_space = ParticleSimulationSpace::World;
+        module.simulation_backend = ParticleSimulationBackend::GpuIfSupported;
+        module.workgroup_size = 96;
+    } else {
+        panic!("expected gpu simulation module settings");
+    }
+
+    binding.set(stack);
+    let emitter = adapter
+        .scene()
+        .component::<ParticleEmitter>(entity)
+        .expect("emitter");
+    assert_eq!(emitter.settings.emission.emission_rate, 77.0);
+    assert_eq!(emitter.settings.emission.max_particles, 512);
+    assert_eq!(
+        emitter.settings.emission.max_spawned_particles_per_frame,
+        96
+    );
+    assert_eq!(emitter.settings.emission.simulation_speed, 1.75);
+    assert_eq!(emitter.settings.emission.distance_emission_rate, 9.0);
+    assert_eq!(
+        emitter.settings.emission.emission_rate_curve,
+        ParticleCurve::EaseInOut
+    );
+    assert_eq!(
+        emitter.settings.emission.distance_emission_rate_curve,
+        ParticleCurve::Keyframes(vec![
+            ParticleCurveKeyframe::new(0.0, 0.25),
+            ParticleCurveKeyframe::new(1.0, 1.5),
+        ])
+    );
+    assert_eq!(emitter.settings.emission.burst_interval, 0.25);
+    assert_eq!(emitter.settings.emission.seed, 123_456_789);
+    assert_eq!(
+        emitter.settings.shape.emission_shape,
+        ParticleEmissionShape::Cone
+    );
+    assert_eq!(
+        emitter.settings.shape.origin_offset,
+        Float3::new(0.5, 1.5, -2.5)
+    );
+    assert_eq!(emitter.settings.shape.spawn_radius, 2.25);
+    assert_eq!(
+        emitter.settings.shape.box_half_extents,
+        Float3::new(4.0, 5.0, 6.0)
+    );
+    assert_eq!(emitter.settings.shape.cone_radius, 3.5);
+    assert_eq!(emitter.settings.shape.cone_height, 7.0);
+    assert_eq!(
+        emitter.settings.forces.force_mode,
+        ParticleForceMode::Radial
+    );
+    assert_eq!(
+        emitter.settings.forces.vector_field_mode,
+        ParticleVectorFieldMode::Curl
+    );
+    assert_eq!(emitter.settings.forces.gravity, Float3::new(1.0, -4.0, 2.0));
+    assert_eq!(emitter.settings.forces.noise_strength, 2.5);
+    assert_eq!(emitter.settings.forces.noise_scale, 1.75);
+    assert_eq!(emitter.settings.forces.noise_speed, 0.6);
+    assert_eq!(
+        emitter.settings.forces.force_center,
+        Float3::new(3.0, 4.0, 5.0)
+    );
+    assert_eq!(emitter.settings.forces.force_radius, 11.0);
+    assert_eq!(emitter.settings.forces.force_falloff, 1.5);
+    assert_eq!(emitter.settings.forces.vector_field_strength, 8.5);
+    assert_eq!(emitter.settings.forces.vector_field_scale, 3.0);
+    assert_eq!(emitter.settings.forces.vector_field_scroll_speed, 0.75);
+    assert_eq!(
+        emitter.settings.velocity.start_velocity,
+        Float3::new(1.0, 2.0, 3.0)
+    );
+    assert_eq!(
+        emitter.settings.velocity.velocity_randomness,
+        Float3::new(0.25, 0.5, 0.75)
+    );
+    assert_eq!(emitter.settings.velocity.velocity_inheritance, 0.4);
+    assert_eq!(
+        emitter.settings.collision.collision_mode,
+        ParticleCollisionMode::WorldPlane
+    );
+    assert_eq!(emitter.settings.collision.collision_plane_y, -2.0);
+    assert_eq!(emitter.settings.collision.collision_restitution, 0.8);
+    assert_eq!(emitter.settings.collision.collision_damping, 0.35);
+    assert_eq!(
+        emitter.settings.appearance.blend_mode,
+        ParticleBlendMode::Additive
+    );
+    assert_eq!(emitter.settings.appearance.lifetime, 2.5);
+    assert_eq!(emitter.settings.appearance.lifetime_randomness, 0.4);
+    assert_eq!(emitter.settings.appearance.start_size, 1.2);
+    assert_eq!(emitter.settings.appearance.end_size, 0.3);
+    assert_eq!(emitter.settings.appearance.size_randomness, 0.25);
+    assert_eq!(
+        emitter.settings.appearance.size_curve,
+        ParticleCurve::EaseOut
+    );
+    assert_eq!(
+        emitter.settings.appearance.start_color,
+        Float4::new(0.9, 0.25, 0.1, 0.8)
+    );
+    assert_eq!(
+        emitter.settings.appearance.end_color,
+        Float4::new(0.1, 0.35, 1.0, 0.2)
+    );
+    assert_eq!(
+        emitter.settings.appearance.color_curve,
+        ParticleCurve::Keyframes(vec![
+            ParticleCurveKeyframe::new(0.0, 0.0),
+            ParticleCurveKeyframe::new(0.65, 0.9),
+            ParticleCurveKeyframe::new(1.0, 1.0),
+        ])
+    );
+    assert_eq!(emitter.settings.appearance.start_rotation, 15.0);
+    assert_eq!(emitter.settings.appearance.rotation_randomness, 45.0);
+    assert_eq!(emitter.settings.appearance.angular_velocity, 120.0);
+    assert_eq!(
+        emitter.settings.appearance.angular_velocity_randomness,
+        30.0
+    );
+    assert_eq!(
+        emitter.settings.texture_sheet.playback_mode,
+        ParticleTextureSheetPlaybackMode::Loop
+    );
+    assert_eq!(emitter.settings.texture_sheet.frame_rate, 24.0);
+    assert_eq!(emitter.settings.texture_sheet.columns, 4);
+    assert_eq!(emitter.settings.texture_sheet.rows, 2);
+    assert_eq!(emitter.settings.texture_sheet.frame_count, 8);
+    assert_eq!(emitter.settings.texture_sheet.start_frame, 2);
+    assert_eq!(emitter.settings.texture_sheet.frame_randomness, 3);
+    assert_eq!(
+        emitter.settings.renderer.render_mode,
+        ParticleRenderMode::Ribbon
+    );
+    assert_eq!(
+        emitter.settings.renderer.sort_mode,
+        ParticleSortMode::OldestFirst
+    );
+    assert_eq!(emitter.settings.renderer.render_sort_priority, 12);
+    assert_eq!(
+        emitter.settings.renderer.render_alignment,
+        ParticleRenderAlignment::Velocity
+    );
+    assert_eq!(
+        emitter.settings.renderer.render_bounds_mode,
+        ParticleRenderBoundsMode::Manual
+    );
+    assert_eq!(emitter.settings.renderer.max_render_distance, 123.0);
+    assert_eq!(emitter.settings.renderer.render_distance_fade_range, 9.0);
+    assert_eq!(emitter.settings.renderer.render_lod_start_distance, 30.0);
+    assert_eq!(emitter.settings.renderer.render_lod_end_distance, 120.0);
+    assert_eq!(
+        emitter.settings.renderer.render_lod_min_particle_scale,
+        0.35
+    );
+    assert_eq!(emitter.settings.renderer.render_bounds_radius, 42.0);
+    assert_eq!(emitter.settings.renderer.velocity_stretch_scale, 0.5);
+    assert_eq!(emitter.settings.renderer.velocity_stretch_max, 9.0);
+    assert_eq!(emitter.settings.trails.trail_length, 1.25);
+    assert_eq!(emitter.settings.trails.trail_segments, 7);
+    assert_eq!(emitter.settings.trails.trail_end_alpha_scale, 0.3);
+    assert_eq!(emitter.settings.trails.trail_end_size_scale, 0.45);
+    assert_eq!(emitter.settings.trails.ribbon_width_scale, 1.6);
+    assert_eq!(emitter.settings.trails.ribbon_tail_width_scale, 0.2);
+    assert_eq!(emitter.settings.trails.ribbon_tail_alpha_scale, 0.4);
+    assert_eq!(emitter.settings.trails.ribbon_max_segment_length, 5.0);
+    assert_eq!(emitter.settings.trails.ribbon_join_overlap_scale, 0.15);
+    assert_eq!(emitter.settings.trails.ribbon_smoothing_segments, 4);
+    assert_eq!(emitter.settings.trails.ribbon_texture_tiling, 4.0);
+    assert_eq!(emitter.settings.trails.ribbon_texture_offset, 0.75);
+    assert_eq!(
+        emitter.settings.sub_emitters.legacy_trigger,
+        ParticleSubEmitterTrigger::Collision
+    );
+    assert_eq!(emitter.settings.sub_emitters.legacy_burst_count, 3);
+    assert_eq!(emitter.settings.sub_emitters.legacy_probability, 0.6);
+    assert_eq!(emitter.settings.sub_emitters.legacy_max_depth, 2);
+    assert_eq!(emitter.settings.sub_emitters.legacy_inherit_velocity, 0.25);
+    assert_eq!(emitter.settings.sub_emitters.legacy_lifetime, 1.75);
+    assert_eq!(
+        emitter.settings.sub_emitters.rules,
+        vec![ParticleSubEmitter::new(
+            ParticleSubEmitterTrigger::Death,
+            5,
+            0.75,
+            3,
+            0.5,
+            0.9,
+            Float3::new(0.0, 2.0, 0.0),
+            Float3::new(0.1, 0.2, 0.3),
+            0.4,
+            0.1,
+            Float4::new(1.0, 0.5, 0.25, 1.0),
+            Float4::new(1.0, 0.1, 0.0, 0.0),
+        )]
+    );
+    assert_eq!(
+        emitter.settings.gpu_simulation.simulation_space,
+        ParticleSimulationSpace::World
+    );
+    assert_eq!(
+        emitter.settings.gpu_simulation.simulation_backend,
+        ParticleSimulationBackend::GpuIfSupported
+    );
+    assert_eq!(emitter.settings.gpu_simulation.workgroup_size, 96);
+
+    let stored_stack = emitter.module_stack();
+    for module_id in [
+        "emission",
+        "shape",
+        "forces",
+        "velocity",
+        "collision",
+        "appearance",
+        "textureSheet",
+        "renderer",
+        "trails",
+        "subEmitters",
+        "gpuSimulation",
+    ] {
+        assert_eq!(
+            stored_stack
+                .modules
+                .iter()
+                .find(|module| module.id == module_id)
+                .map(|module| module.is_expanded),
+            Some(true),
+            "{module_id}"
+        );
+    }
+}
+
+/// Particle scalability bindings write scene resources.
+#[test]
+fn particle_scalability_bindings() {
+    use diffuse_scene::particles::particle_scalability::{
+        ParticleScalabilityPolicyResource, ParticleScalabilityResource,
+    };
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: emission_scale,
+        ..
+    }) = field(
+        &adapter,
+        id,
+        "particle-scalability",
+        "particle-scale-emission",
+    )
+    else {
+        panic!("expected emission scale field");
+    };
+    emission_scale.set(0.5);
+    assert_eq!(
+        adapter
+            .scene()
+            .resource::<ParticleScalabilityResource>()
+            .map(|resource| resource.emission_scale),
+        Some(0.5)
+    );
+
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: live_cap_scale,
+        ..
+    }) = field(
+        &adapter,
+        id,
+        "particle-scalability",
+        "particle-scale-live-cap",
+    )
+    else {
+        panic!("expected live cap scale field");
+    };
+    live_cap_scale.set(0.25);
+    assert_eq!(
+        adapter
+            .scene()
+            .resource::<ParticleScalabilityResource>()
+            .map(|resource| resource.max_live_particle_scale),
+        Some(0.25)
+    );
+
+    let Some(EditorInspectorFieldValue::Bool(enabled)) = field(
+        &adapter,
+        id,
+        "particle-scalability",
+        "particle-policy-enabled",
+    ) else {
+        panic!("expected policy enabled field");
+    };
+    enabled.set(true);
+    assert_eq!(
+        adapter
+            .scene()
+            .resource::<ParticleScalabilityPolicyResource>()
+            .map(|resource| resource.is_enabled),
+        Some(true)
+    );
+
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: target_live,
+        ..
+    }) = field(
+        &adapter,
+        id,
+        "particle-scalability",
+        "particle-policy-target-live",
+    )
+    else {
+        panic!("expected target live field");
+    };
+    target_live.set(12_345.0);
+    assert_eq!(
+        adapter
+            .scene()
+            .resource::<ParticleScalabilityPolicyResource>()
+            .map(|resource| resource.target_live_particles),
+        Some(12_345)
+    );
+
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: minimum_scale,
+        ..
+    }) = field(
+        &adapter,
+        id,
+        "particle-scalability",
+        "particle-policy-min-scale",
+    )
+    else {
+        panic!("expected minimum scale field");
+    };
+    minimum_scale.set(1.5);
+    assert_eq!(
+        adapter
+            .scene()
+            .resource::<ParticleScalabilityPolicyResource>()
+            .map(|resource| resource.minimum_scale),
+        Some(1.0)
+    );
+}

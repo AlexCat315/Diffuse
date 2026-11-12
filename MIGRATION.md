@@ -1118,6 +1118,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 300 | diffuse-editor-core（检查器车辆/破坏/碰撞体测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 再迁 4 例：车辆启用/引擎/离合器与 tracked/motorcycle 控制器切换、破坏阈值与运行时只读状态、碰撞体中心/层掩码、复合碰撞体变换与 JSON 形状编辑；`editor_inspector_sections_tests.rs` 13/13 通过；clippy/rustfmt 通过；该 Swift 文件仍 pending（余 13 例） |
 | 2026-11-13 | 批次 301 | diffuse-editor-core（检查器关节/软体测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 再迁 3 例：typed physics joint（端点候选排序/自排除、hinge 轴/限位/马达/弹簧、切 SixDOF 后字段对齐）、soft-body+cloth 模拟/拓扑/固定点、表面软体资源/四面体/固定点；`editor_inspector_sections_tests.rs` 16/16 通过；clippy（本批零告警）、rustfmt 通过；该 Swift 文件仍 pending（余 10 个粒子用例） |
 | 2026-11-13 | 批次 302 | diffuse-editor-core（粒子模块栈检查器测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 再迁 5 例：粒子分区出现、模块栈版本/ID 顺序、禁用模块重力编辑不丢作者状态、模块重排/整体重置、单模块默认重置与展开状态；`editor_inspector_sections_tests.rs` 21/21 通过；clippy（本批零告警）、rustfmt 通过；该 Swift 文件仍 pending（余 5 个粒子用例） |
+| 2026-11-13 | 批次 303 | diffuse-editor-core（粒子内联设置/缩放测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 再迁 2 例：模块栈内联写入 11 个模块的全部字段并核对展开状态、粒子缩放/策略资源绑定（含 1.5→1 钳制）；`editor_inspector_sections_tests.rs` 23/23 通过；clippy（本批零告警）、rustfmt 通过；该 Swift 文件仍 pending（余 2 个标量/重力颜色大批次用例） |
 
 ## 10. 已知问题与需要用户确认的事项
 
