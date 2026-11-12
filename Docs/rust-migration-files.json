@@ -995,7 +995,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/workbench/surfaces.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Contributions/Workbench/ViewSession.swift",
