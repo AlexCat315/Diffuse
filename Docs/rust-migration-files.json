@@ -5508,7 +5508,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_viewport_surface_picking_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/GeometryAuthoringTests.swift",
