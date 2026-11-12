@@ -12077,7 +12077,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/portable_png.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Core/DeformableMeshUploadTests.swift",
@@ -12176,7 +12176,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/registries/mesh_texture_registry_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Shaders/ShaderCatalogTests.swift",
