@@ -558,3 +558,194 @@ fn physics_debug_overlay() {
     assert_eq!(bounded.lines.len(), 10);
     assert!(bounded.contacts.is_empty());
 }
+
+/// Spawning an imported mesh attaches registered mesh collider bounds.
+#[test]
+fn spawning_imported_mesh_attaches_registered_mesh_collider_bounds() {
+    use diffuse_assets::asset_registry::ImportableAssetKind;
+    use diffuse_math::simd::simd_compat::Float3;
+    use diffuse_render::registries::mesh_bounds_registry::MeshBoundsRegistry;
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+    use diffuse_scene::physics::collider::{Collider, ColliderShape};
+    use diffuse_scene::physics::queries::spatial_queries::{
+        MeshColliderBoundsResource, SceneRaycastQuery,
+    };
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    use crate::assets::asset_catalog::EditorAsset;
+    use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
+    use crate::scene::inspector::rendering::renderers::EditorInspectorRendererRegistry;
+
+    MeshBoundsRegistry::clear_all();
+    let local_min = Float3::new(-2.0, -1.0, -0.25);
+    let local_max = Float3::new(2.0, 1.0, 0.25);
+    MeshBoundsRegistry::register_min_max(42, local_min, local_max);
+
+    let adapter = EditorSceneAdapter::new(
+        false,
+        ComponentRegistry::built_in(),
+        EditorInspectorRendererRegistry::new(),
+    );
+    adapter.set_scene(SceneRuntime::new(ComponentRegistry::built_in()));
+    let asset = EditorAsset::new(
+        "wide-mesh",
+        "Wide Mesh",
+        "Meshes/Wide.obj",
+        "/tmp/Meshes/Wide.obj",
+        ImportableAssetKind::Obj,
+        42,
+    );
+    let raw_id = adapter
+        .spawn_entity_from_asset(&asset, Float3::new(10.0, 0.0, 0.0))
+        .expect("imported mesh spawn");
+    let scene = adapter.scene();
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(raw_id);
+    let collider = scene.component::<Collider>(entity).expect("mesh collider");
+    match collider.shape() {
+        ColliderShape::Mesh {
+            resource_id,
+            center,
+        } => {
+            assert_eq!(resource_id.as_deref(), Some("meshIndex:42"));
+            assert_eq!(center, Float3::ZERO);
+        }
+        other => panic!("expected imported mesh collider shape, got {other:?}"),
+    }
+    let resource = scene
+        .resource::<MeshColliderBoundsResource>()
+        .expect("mesh collider bounds");
+    let bounds = resource
+        .bounds_for(Some("meshIndex:42"))
+        .expect("registered bounds");
+    assert_eq!(bounds.min, local_min);
+    assert_eq!(bounds.max, local_max);
+
+    let hit = adapter.with_scene_mut(|scene| {
+        scene.raycast_scene(SceneRaycastQuery {
+            origin: Float3::new(6.0, 0.0, 0.0),
+            direction: Float3::new(1.0, 0.0, 0.0),
+            max_distance: 100.0,
+            include_triggers: true,
+        })
+    });
+    assert_eq!(hit.as_ref().map(|hit| hit.entity), Some(entity));
+    assert_eq!(hit.map(|hit| hit.distance), Some(2.0));
+    MeshBoundsRegistry::clear_all();
+}
+
+/// Imported entity setup is a single undo step.
+#[test]
+fn imported_entity_setup_is_a_single_undo_step() {
+    use diffuse_assets::asset_registry::ImportableAssetKind;
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+
+    use crate::assets::asset_catalog::EditorAsset;
+    use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
+    use crate::scene::inspector::rendering::renderers::EditorInspectorRendererRegistry;
+
+    let adapter = EditorSceneAdapter::new(
+        false,
+        ComponentRegistry::built_in(),
+        EditorInspectorRendererRegistry::new(),
+    );
+    let original_count = adapter.entity_count();
+    let asset = EditorAsset::new(
+        "models/crate.glb",
+        "Crate",
+        "models/crate.glb",
+        "/tmp/crate.glb",
+        ImportableAssetKind::Glb,
+        2,
+    );
+    assert!(adapter.spawn_entity_from_asset_default(&asset).is_some());
+    assert_eq!(adapter.entity_count(), original_count + 1);
+
+    assert!(adapter.undo_edit());
+    assert_eq!(adapter.entity_count(), original_count);
+    assert!(!adapter.can_undo_edit());
+}
+
+/// Grouped multi-asset spawn arranges and undoes the selection as one step.
+#[test]
+fn grouped_multi_asset_spawn_undo() {
+    use diffuse_assets::asset_registry::ImportableAssetKind;
+    use diffuse_math::simd::simd_compat::simd_distance;
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+
+    use crate::assets::asset_catalog::EditorAsset;
+    use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
+    use crate::scene::inspector::rendering::renderers::EditorInspectorRendererRegistry;
+
+    let adapter = EditorSceneAdapter::new(
+        false,
+        ComponentRegistry::built_in(),
+        EditorInspectorRendererRegistry::new(),
+    );
+    let original_count = adapter.entity_count();
+    let assets = [
+        EditorAsset::new(
+            "models/crate.glb",
+            "Crate",
+            "models/crate.glb",
+            "/tmp/crate.glb",
+            ImportableAssetKind::Glb,
+            2,
+        ),
+        EditorAsset::new(
+            "models/barrel.obj",
+            "Barrel",
+            "models/barrel.obj",
+            "/tmp/barrel.obj",
+            ImportableAssetKind::Obj,
+            3,
+        ),
+        EditorAsset::new(
+            "models/rock.glb",
+            "Rock",
+            "models/rock.glb",
+            "/tmp/rock.glb",
+            ImportableAssetKind::Glb,
+            4,
+        ),
+    ];
+    let entity_ids = adapter
+        .spawn_entities_from_assets_default(&assets)
+        .expect("spawn group");
+    assert_eq!(entity_ids.len(), assets.len());
+    assert_eq!(adapter.entity_count(), original_count + assets.len());
+    let positions: Vec<_> = entity_ids
+        .iter()
+        .filter_map(|entity_id| adapter.entity_local_translation(*entity_id))
+        .collect();
+    assert_eq!(positions.len(), assets.len());
+    assert!(simd_distance(positions[0], positions[1]) > 0.5);
+    assert!(simd_distance(positions[1], positions[2]) > 0.5);
+    assert!(adapter.can_undo_edit());
+
+    assert!(adapter.undo_edit());
+    assert_eq!(adapter.entity_count(), original_count);
+    assert!(!adapter.can_undo_edit());
+
+    let wood = EditorAsset::new(
+        "textures/wood.png",
+        "Wood",
+        "textures/wood.png",
+        "/tmp/wood.png",
+        ImportableAssetKind::Png,
+        0,
+    );
+    assert!(
+        adapter
+            .spawn_entities_from_assets_default(&[assets[0].clone(), wood])
+            .is_none()
+    );
+    assert_eq!(adapter.entity_count(), original_count);
+    adapter.set_authoring_enabled(false);
+    assert!(
+        adapter
+            .spawn_entities_from_assets_default(&assets)
+            .is_none()
+    );
+    assert_eq!(adapter.entity_count(), original_count);
+    assert!(!adapter.can_undo_edit());
+}
