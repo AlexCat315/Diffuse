@@ -303,6 +303,13 @@ impl IntentRuntimeCoordinator {
         ))
     }
 
+    /// Swift exposed `undoStack` directly; the Rust stack lives behind a mutex,
+    /// so callers read its depths through this accessor.
+    pub fn undo_stack_depths(&self) -> (usize, usize) {
+        let stack = self.undo_history();
+        (stack.undo_depth(), stack.redo_depth())
+    }
+
     pub fn undo(&self, context: &mut TransactionExecutionContext) -> bool {
         let Some(current) = context.scene_runtime.as_ref() else {
             return false;

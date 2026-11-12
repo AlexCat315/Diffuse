@@ -12352,7 +12352,7 @@
       "rust": [
         "crates/diffuse-intent/src/tests/intent_runtime/intent_runtime_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/IntentRuntimeTests/TransactionVerificationTests.swift",

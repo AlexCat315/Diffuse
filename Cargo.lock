@@ -250,7 +250,6 @@ dependencies = [
  "cove-logging",
  "cove-media",
  "cove-platform",
- "cove-runtime",
  "cove-text",
  "cove-ui-addons",
  "cove-ui-compose",
