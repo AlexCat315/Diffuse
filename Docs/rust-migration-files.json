@@ -5850,7 +5850,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/rendering/viewport_host_scale_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/BundledSwiftSupportTests.swift",
