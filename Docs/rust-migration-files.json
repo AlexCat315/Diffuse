@@ -2876,7 +2876,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/hud/battle_hud_model.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/HUD/InGameBattleHUDView.swift",
@@ -4166,7 +4166,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/root/chrome/editor_presentation_boundary.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Root/Chrome/EditorVisualTheme.swift",
@@ -4464,7 +4464,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/shell/appearance.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Shell/CanvasChrome.swift",
