@@ -4788,7 +4788,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/player_install_validator.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/AssetImportFileCopierTests.swift",
@@ -6539,7 +6539,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/tests/game_runtime/player_install_validator_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/ScriptSystemTests/DynamicScriptBuildCoordinatorTests.swift",
