@@ -7823,7 +7823,8 @@
         "crates/diffuse-engine/src/scripting/syntax/tree_sitter_bridge.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: D1 rewrite needs a vendored tree-sitter-rust grammar plus hand-written api.h FFI; no tree-sitter-rust crate/vendored source in the workspace (see MIGRATION.md §9 batch 86 and §10)"
     },
     {
       "source": "Engine/Sources/EngineCore/SimulationThread.swift",
