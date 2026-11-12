@@ -3835,7 +3835,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/syntax/color_cache.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/ScriptEditor/Syntax/Syntax.swift",
@@ -3846,7 +3846,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/syntax/syntax.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/ScriptEditor/Syntax/SyntaxSession.swift",
@@ -4984,7 +4984,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/script_editor/color_cache_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/ScriptEditor/LSPUIRenderingTests.swift",
