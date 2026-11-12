@@ -13200,7 +13200,7 @@
         "crates/diffuse-script/src/tests/script_runtime/script_compiler_tests.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/SemanticPipelineTests/SemanticPipelineTests.swift",
