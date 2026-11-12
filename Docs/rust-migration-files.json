@@ -12143,7 +12143,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/core/scene_light_uniform_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Registries/MeshBoundsRegistryTests.swift",
