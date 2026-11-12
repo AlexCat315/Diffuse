@@ -1088,6 +1088,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 270 | diffuse-editor-core（表面拾取测试） | 1 | 78 | `EditorViewportSurfacePickingTests.swift` → `editor_viewport_surface_picking_tests.rs`（3 例：材质/LOD 存读、三角形空白角落不选中、旋转负缩放距离排序）；`cargo test -p diffuse-editor-core --lib editor_viewport_surface_picking_tests` 3/3 通过；clippy/rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 | 2026-11-13 | 批次 271 | diffuse-editor-core（视口分辨率/投影/渲染门测试） | 3 | 561 | `EditorViewportResolutionTests.swift` → 7 例、`EditorViewportProjectionTests.swift` → 12 例、`EditorViewportRenderGateTests.swift` → 8 例，均写入既有占位测试模块；`cargo test -p diffuse-editor-core --lib` 合计 27 例通过（全库 87/87）；clippy/rustfmt、`inventory.py --check` 通过；3 行标 `tested` |
 | 2026-11-13 | 批次 272 | diffuse-editor-core（reducer/组件编辑测试） | 2 | 315 | `EditorReducerTests.swift` → 10 例、`EditorComponentEditingTests.swift` → 10 例；`cargo test -p diffuse-editor-core --lib` 对应模块 20/20 通过；clippy/rustfmt、`inventory.py --check` 通过；2 行标 `tested` |
+| 2026-11-13 | 批次 273 | diffuse-editor-core（EditorStore 测试） | 1 | 277 | `EditorStoreTests.swift` → `editor_store_tests.rs`（16 例：瞬态工作台状态、编译诊断行列、未解析绑定定位、订阅/版本、恢复脏状态、控制台、选择修饰键编解码、分组默认值、物理调试选项、能力设置、帧统计与诊断历史上限/瞬态）；`cargo test -p diffuse-editor-core --lib editor_store_tests` 16/16 通过；clippy/rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 
 ## 10. 已知问题与需要用户确认的事项
 
