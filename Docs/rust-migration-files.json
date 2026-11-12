@@ -12341,7 +12341,7 @@
       "rust": [
         "crates/diffuse-intent/src/tests/intent_runtime/component_transaction_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/IntentRuntimeTests/IntentRuntimeTests.swift",
