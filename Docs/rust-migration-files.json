@@ -5773,7 +5773,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/rendering/native_in_game_ui_integration_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Rendering/NativeInGameUILifecycleTests.swift",
