@@ -1111,6 +1111,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 293 | diffuse-editor-core（注册组件测试完成） | 1 | 218 | `EditorComponentRegistryTests.swift` 余下 3 例迁入 `editor_component_registry_tests.rs`：相机/灯光模板默认值与单步撤销、贡献组件默认值 + 缺失 `localTransform` 由加载补齐、manifest/prefab 组件值一致并重映射 Constraint/Ragdoll/Script 引用；6/6 通过；clippy/rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 | 2026-11-13 | 批次 294 | diffuse-editor-core（父级相机取景测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 1 例：父级游戏相机不干扰编辑器取景、取景目标/眼位与 `EditorViewportFraming` 一致且清单不变；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 53/53 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 295 | diffuse-editor-core（粒子 GPU 计划/模块诊断测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 2 例：GPU Required 计划的 workgroup/dispatch/状态与无实体时为空、重复 renderer 模块的 `duplicateModule` 诊断；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 55/55 通过；clippy/rustfmt 通过；清单无状态变化 |
+| 2026-11-13 | 批次 296 | diffuse-editor-core（粒子模块覆盖测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 1 例：把覆盖用 emitter 的 moduleStack 写入组件文档后解码，验证 emission/collision/textureSheet/gpuSimulation 设置全部生效；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 56/56 通过；clippy/rustfmt 通过；清单无状态变化 |
 
 ## 10. 已知问题与需要用户确认的事项
 

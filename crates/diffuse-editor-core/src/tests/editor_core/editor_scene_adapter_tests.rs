@@ -2688,3 +2688,93 @@ fn editor_scene_adapter_exposes_particle_module_topology_diagnostics() {
             .any(|issue| issue.module_id == "renderer" && issue.code == "duplicateModule")
     );
 }
+
+/// Particle emitter manifest applies authored module settings.
+#[test]
+fn particle_emitter_manifest_applies_module_stack() {
+    use std::collections::BTreeMap;
+
+    use diffuse_scene::components::core::registry::{
+        ComponentDecodeContext, ComponentEncodeContext, ComponentRegistry,
+    };
+    use diffuse_scene::components::core::value::{ComponentValue, ManifestComponent};
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::emitter::particle_emitter_settings::ParticleEmitterSettings;
+    use diffuse_scene::particles::particle_types::ParticleTextureSheetPlaybackMode;
+    use diffuse_scene::scene_runtime::SceneRuntime;
+    use diffuse_scene::serialization::scene_serializer::SceneSerializer;
+    use diffuse_script::interop::component_registry_script_codec::ComponentRegistryScriptCodec;
+
+    let mut registry = ComponentRegistry::built_in();
+    registry.register_default_script_codec();
+    let mut scene = SceneRuntime::new(registry);
+    let entity = scene.create_entity();
+    let mut settings = ParticleEmitterSettings::default();
+    settings.emission.emission_rate = 1.0;
+    settings.emission.max_particles = 4;
+    settings.texture_sheet.columns = 1;
+    settings.texture_sheet.rows = 1;
+    settings.texture_sheet.playback_mode = ParticleTextureSheetPlaybackMode::Automatic;
+    scene.set_component(ParticleEmitter::new(settings), entity);
+
+    let mut overriding_settings = ParticleEmitterSettings::default();
+    overriding_settings.emission.emission_rate = 42.0;
+    overriding_settings.emission.max_particles = 256;
+    overriding_settings.gpu_simulation.workgroup_size = 128;
+    overriding_settings.collision.collision_restitution = 0.8;
+    overriding_settings.texture_sheet.columns = 4;
+    overriding_settings.texture_sheet.rows = 2;
+    overriding_settings.texture_sheet.frame_count = 7;
+    overriding_settings.texture_sheet.playback_mode = ParticleTextureSheetPlaybackMode::SingleFrame;
+    overriding_settings.texture_sheet.start_frame = 3;
+    overriding_settings.texture_sheet.frame_randomness = 2;
+    let overriding_emitter = ParticleEmitter::new(overriding_settings);
+
+    let mut encode_context = ComponentEncodeContext::new(BTreeMap::new());
+    let mut components =
+        SceneSerializer::component_document(scene.world(), entity, &mut encode_context);
+    let index = components
+        .iter()
+        .position(|component| component.type_id == "particleEmitter")
+        .expect("particle component");
+    let ComponentValue::Object(mut particle) = components[index].value.clone() else {
+        panic!("expected particle emitter object");
+    };
+    particle.insert(
+        "moduleStack".to_string(),
+        ComponentValue::from_json_value(
+            &serde_json::to_value(overriding_emitter.module_stack()).expect("module stack"),
+        ),
+    );
+    components[index] = ManifestComponent::new("particleEmitter", ComponentValue::Object(particle));
+
+    let data = serde_json::to_vec(&components).expect("encode");
+    let decoded: Vec<ManifestComponent> = serde_json::from_slice(&data).expect("decode");
+    let mut restored_registry = ComponentRegistry::built_in();
+    restored_registry.register_default_script_codec();
+    let mut restored_scene = SceneRuntime::new(restored_registry);
+    let restored_entity = restored_scene.create_entity();
+    let mut decode_context = ComponentDecodeContext::new(BTreeMap::new());
+    SceneSerializer::apply_component_document(
+        restored_scene.world_mut(),
+        restored_entity,
+        &decoded,
+        &mut decode_context,
+    );
+    let emitter = restored_scene
+        .component::<ParticleEmitter>(restored_entity)
+        .expect("emitter");
+    assert_eq!(emitter.settings.emission.emission_rate, 42.0);
+    assert_eq!(emitter.settings.emission.max_particles, 256);
+    assert_eq!(emitter.settings.collision.collision_restitution, 0.8);
+    assert_eq!(emitter.settings.texture_sheet.columns, 4);
+    assert_eq!(emitter.settings.texture_sheet.rows, 2);
+    assert_eq!(emitter.settings.texture_sheet.frame_count, 7);
+    assert_eq!(
+        emitter.settings.texture_sheet.playback_mode,
+        ParticleTextureSheetPlaybackMode::SingleFrame
+    );
+    assert_eq!(emitter.settings.texture_sheet.start_frame, 3);
+    assert_eq!(emitter.settings.texture_sheet.frame_randomness, 2);
+    assert_eq!(emitter.settings.gpu_simulation.workgroup_size, 128);
+}
