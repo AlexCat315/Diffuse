@@ -6462,7 +6462,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/bin/language_server_fixture.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Tests/GameRuntimeTests/CrystalRushGameplayTests.swift",
