@@ -12154,7 +12154,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/registries/mesh_bounds_registry_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Registries/MeshMaterialRegistryTests.swift",
@@ -12165,7 +12165,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/registries/mesh_material_registry_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Registries/MeshTextureRegistryTests.swift",
