@@ -107,3 +107,56 @@ impl Drop for EditorLogCapture {
         self.stop();
     }
 }
+
+/// The subscriptions one editor session owns. Held by `EditorApplication`;
+/// the console writer lives here so it starts before the first tick.
+pub struct EditorSubscriptions {
+    events: Mutex<Option<cove_runtime::SubscriptionToken>>,
+    settings: Mutex<Option<crate::state::editor_store::SubscriptionToken>>,
+    pub console: EditorLogCapture,
+    pub renderer_preparation:
+        crate::application::viewport::renderer_preparation::EditorRendererPreparation,
+}
+
+impl Default for EditorSubscriptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EditorSubscriptions {
+    pub fn new() -> Self {
+        EditorSubscriptions {
+            events: Mutex::new(None),
+            settings: Mutex::new(None),
+            console: EditorLogCapture::new(),
+            renderer_preparation:
+                crate::application::viewport::renderer_preparation::EditorRendererPreparation::new(),
+        }
+    }
+
+    pub fn events(&self) -> Option<cove_runtime::SubscriptionToken> {
+        *lock(&self.events)
+    }
+
+    pub fn set_events(&self, token: Option<cove_runtime::SubscriptionToken>) {
+        *lock(&self.events) = token;
+    }
+
+    pub fn settings(&self) -> Option<crate::state::editor_store::SubscriptionToken> {
+        *lock(&self.settings)
+    }
+
+    pub fn set_settings(&self, token: Option<crate::state::editor_store::SubscriptionToken>) {
+        *lock(&self.settings) = token;
+    }
+
+    /// Drops both subscriptions and stops log capture.
+    pub fn stop(&self, store: &crate::state::editor_store::EditorStore) {
+        if let Some(token) = lock(&self.settings).take() {
+            store.unsubscribe(token);
+        }
+        *lock(&self.events) = None;
+        self.console.stop();
+    }
+}

@@ -433,7 +433,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/diagnostics/subscriptions.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Editing/UndoRedo.swift",
