@@ -1102,6 +1102,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 284 | diffuse-editor-core（GameSave/清单版本测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 3 例（当前清单 schema 版本、`GameSaveDocument` 写读往返、缺失文件返回 nil）；往返比较以序列化后的清单为基准，避免 f32→f64 文本表示导致等价场景不等；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 35/35 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 285 | diffuse-editor-core（可渲染场景契约测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 1 例：`renderMesh`/`renderMaterial` 组件经清单编码后字段与加载还原逐项校验；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 36/36 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 286 | diffuse-editor-core（清单恢复与物理设置测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 4 例：预览层级/运行时组件恢复、刚体 CCD 与累积冲量、物理后端/碰撞步/容量设置、旧 `jolt` 设置迁移到 `natsel` 且不保留旧字段；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 40/40 通过；clippy/rustfmt 通过；清单无状态变化 |
+| 2026-11-13 | 批次 287 | diffuse-editor-core（粒子缩放/相机宽高比测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 2 例：粒子缩放与策略设置清单往返、相机 `aspectRatio` 清单/加载往返；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 42/42 通过；clippy/rustfmt 通过；清单无状态变化 |
 
 ## 10. 已知问题与需要用户确认的事项
 

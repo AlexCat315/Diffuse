@@ -1867,3 +1867,124 @@ fn legacy_physics_settings_migrate() {
     assert_eq!(object["backendKind"], "natsel");
     assert!(object.get("jolt").is_none());
 }
+
+/// Scene manifest round-trips particle scalability settings.
+#[test]
+fn scene_manifest_round_trips_particle_scalability_settings() {
+    use diffuse_scene::particles::particle_scalability::{
+        ParticleScalabilityPolicyResource, ParticleScalabilityResource,
+    };
+
+    let source = preview_adapter();
+    source.with_scene_mut(|scene| {
+        scene.set_resource(ParticleScalabilityResource::new(0.4, 0.5, 0.6, 0.7));
+        scene.set_resource(ParticleScalabilityPolicyResource::new(
+            true, 128, 32, 0.35, 0.25, 0.1,
+        ));
+    });
+
+    let manifest = source.manifest_for_selection(source.default_selection_id());
+    let scalability = manifest.particle_scalability.as_ref().expect("scalability");
+    assert_eq!(scalability.emission_scale, 0.4);
+    assert_eq!(scalability.burst_scale, 0.5);
+    assert_eq!(scalability.distance_emission_scale, 0.6);
+    assert_eq!(scalability.max_live_particle_scale, 0.7);
+    let policy = manifest
+        .particle_scalability_policy
+        .as_ref()
+        .expect("policy");
+    assert!(policy.is_enabled);
+    assert_eq!(policy.target_live_particles, 128);
+    assert_eq!(policy.target_spawned_particles_per_frame, 32);
+    assert_eq!(policy.minimum_scale, 0.35);
+    assert_eq!(policy.pressure_step, 0.25);
+    assert_eq!(policy.recovery_step, 0.1);
+
+    let data = serde_json::to_vec(&manifest).expect("encode");
+    let decoded: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let restored = preview_adapter();
+    let _ = restored.load(&decoded);
+    let scene = restored.scene();
+    let settings = scene
+        .resource::<ParticleScalabilityResource>()
+        .expect("scalability");
+    assert_eq!(settings.emission_scale, 0.4);
+    assert_eq!(settings.burst_scale, 0.5);
+    assert_eq!(settings.distance_emission_scale, 0.6);
+    assert_eq!(settings.max_live_particle_scale, 0.7);
+    let policy = scene
+        .resource::<ParticleScalabilityPolicyResource>()
+        .expect("policy");
+    assert!(policy.is_enabled);
+    assert_eq!(policy.target_live_particles, 128);
+    assert_eq!(policy.target_spawned_particles_per_frame, 32);
+    assert_eq!(policy.minimum_scale, 0.35);
+    assert_eq!(policy.pressure_step, 0.25);
+    assert_eq!(policy.recovery_step, 0.1);
+}
+
+/// Scene manifest round-trips camera aspect ratio.
+#[test]
+fn scene_manifest_round_trips_camera_aspect_ratio() {
+    use diffuse_scene::components::core::value::{ComponentValue, manifest_value_for};
+    use diffuse_scene::rendering::render_extraction::CameraComponent;
+
+    use crate::scene::manifest::node::EditorSceneManifestNode;
+
+    fn find_node(nodes: &[EditorSceneManifestNode], id: u64) -> Option<&EditorSceneManifestNode> {
+        for node in nodes {
+            if node.id == id {
+                return Some(node);
+            }
+            if let Some(found) = find_node(&node.children, id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    let source = preview_adapter();
+    let camera_node = source
+        .roots()
+        .into_iter()
+        .find(|node| node.name == "Main Camera")
+        .expect("preview camera");
+    let camera_id = diffuse_scene::entity_id::EntityID::from_raw_value(camera_node.id);
+    source.with_scene_mut(|scene| {
+        scene.update_component::<CameraComponent>(camera_id, |camera| {
+            camera.aspect_ratio = 1.777;
+        });
+    });
+
+    let manifest = source.manifest_for_selection(Some(camera_node.id));
+    let camera_doc = find_node(&manifest.roots, camera_node.id)
+        .and_then(|node| manifest_value_for(&node.components, "camera"))
+        .and_then(ComponentValue::object_value)
+        .expect("camera document");
+    assert_eq!(
+        camera_doc.get("aspectRatio"),
+        Some(&ComponentValue::Number(f64::from(1.777f32)))
+    );
+
+    let data = serde_json::to_vec(&manifest).expect("encode");
+    let decoded: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let restored = preview_adapter();
+    let _ = restored.load(&decoded);
+    let restored_id = restored
+        .roots()
+        .into_iter()
+        .find(|node| node.name == "Main Camera")
+        .expect("restored camera")
+        .id;
+    assert_eq!(
+        restored
+            .scene()
+            .component::<CameraComponent>(diffuse_scene::entity_id::EntityID::from_raw_value(
+                restored_id
+            ))
+            .map(|camera| camera.aspect_ratio),
+        Some(1.777)
+    );
+}
