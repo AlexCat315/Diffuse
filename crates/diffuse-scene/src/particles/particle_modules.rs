@@ -16,9 +16,9 @@ use crate::particles::particle_gpu_simulation_plan::{
 };
 use crate::particles::particle_types::{
     ParticleBlendMode, ParticleCollisionMode, ParticleEmissionShape, ParticleForceMode,
-    ParticleRenderAlignment, ParticleRenderBoundsMode, ParticleRenderMode, ParticleSimulationBackend,
-    ParticleSimulationSpace, ParticleSortMode, ParticleSubEmitterTrigger,
-    ParticleTextureSheetPlaybackMode, ParticleVectorFieldMode,
+    ParticleRenderAlignment, ParticleRenderBoundsMode, ParticleRenderMode,
+    ParticleSimulationBackend, ParticleSimulationSpace, ParticleSortMode,
+    ParticleSubEmitterTrigger, ParticleTextureSheetPlaybackMode, ParticleVectorFieldMode,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -120,8 +120,9 @@ impl Serialize for ParticleModuleIssueSeverity {
 impl<'de> Deserialize<'de> for ParticleModuleIssueSeverity {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = String::deserialize(deserializer)?;
-        ParticleModuleIssueSeverity::from_raw_value(&value)
-            .ok_or_else(|| serde::de::Error::custom(format!("Unknown module issue severity: {value}")))
+        ParticleModuleIssueSeverity::from_raw_value(&value).ok_or_else(|| {
+            serde::de::Error::custom(format!("Unknown module issue severity: {value}"))
+        })
     }
 }
 
@@ -232,9 +233,7 @@ impl ParticleModuleStack {
                     "Appearance",
                     true,
                     false,
-                    ParticleEmitterModuleSettings::Appearance(
-                        emitter.settings.appearance.clone(),
-                    ),
+                    ParticleEmitterModuleSettings::Appearance(emitter.settings.appearance.clone()),
                 ),
                 ParticleEmitterModule::new(
                     "textureSheet",
@@ -353,14 +352,8 @@ impl ParticleModuleStack {
             .map(|(index, id)| (*id, index))
             .collect();
         self.modules.sort_by(|lhs, rhs| {
-            let lhs_order = order
-                .get(lhs.id.as_str())
-                .copied()
-                .unwrap_or(usize::MAX);
-            let rhs_order = order
-                .get(rhs.id.as_str())
-                .copied()
-                .unwrap_or(usize::MAX);
+            let lhs_order = order.get(lhs.id.as_str()).copied().unwrap_or(usize::MAX);
+            let rhs_order = order.get(rhs.id.as_str()).copied().unwrap_or(usize::MAX);
             if lhs_order != rhs_order {
                 return lhs_order.cmp(&rhs_order);
             }
@@ -373,7 +366,11 @@ impl ParticleModuleStack {
     }
 
     pub fn reset_module_settings(&mut self, module_id: &str) {
-        let Some(index) = self.modules.iter().position(|module| module.id == module_id) else {
+        let Some(index) = self
+            .modules
+            .iter()
+            .position(|module| module.id == module_id)
+        else {
             return;
         };
         let Some(mut default_module) = Self::default_module(module_id) else {
@@ -1251,7 +1248,8 @@ impl ParticleModuleStack {
     }
 
     fn repair_module_topology(&mut self) {
-        let default_modules = ParticleModuleStack::from_emitter(&ParticleEmitter::default()).modules;
+        let default_modules =
+            ParticleModuleStack::from_emitter(&ParticleEmitter::default()).modules;
         let defaults_by_id: HashMap<&str, &ParticleEmitterModule> = default_modules
             .iter()
             .map(|module| (module.id.as_str(), module))
@@ -1327,8 +1325,10 @@ impl ParticleEmitterModuleSettings {
                 settings.max_particles = settings.max_particles.max(1);
                 settings.max_spawned_particles_per_frame =
                     settings.max_spawned_particles_per_frame.max(0);
-                settings.max_rendered_particles =
-                    settings.max_rendered_particles.min(settings.max_particles).max(0);
+                settings.max_rendered_particles = settings
+                    .max_rendered_particles
+                    .min(settings.max_particles)
+                    .max(0);
                 settings.prewarm_time = settings.prewarm_time.max(0.0);
                 if settings.prewarm_time > 0.0 {
                     settings.prewarm_step = settings.prewarm_step.max(1.0 / 240.0);
@@ -1358,13 +1358,13 @@ impl ParticleEmitterModuleSettings {
                 settings.force_radius = settings.force_radius.max(0.0);
                 settings.force_falloff = settings.force_falloff.max(0.0);
                 settings.vector_field_scale = settings.vector_field_scale.max(0.0001);
-                settings.vector_field_scroll_speed =
-                    settings.vector_field_scroll_speed.max(0.0);
+                settings.vector_field_scroll_speed = settings.vector_field_scroll_speed.max(0.0);
             }
             ParticleEmitterModuleSettings::Collision(settings) => {
                 settings.collision_restitution =
                     simd_clamp_scalar(settings.collision_restitution, 0.0, 1.0);
-                settings.collision_damping = simd_clamp_scalar(settings.collision_damping, 0.0, 1.0);
+                settings.collision_damping =
+                    simd_clamp_scalar(settings.collision_damping, 0.0, 1.0);
             }
             ParticleEmitterModuleSettings::Appearance(settings) => {
                 settings.lifetime = settings.lifetime.max(0.0001);
@@ -1389,8 +1389,7 @@ impl ParticleEmitterModuleSettings {
                 settings.velocity_stretch_scale = settings.velocity_stretch_scale.max(0.0);
                 settings.velocity_stretch_max = settings.velocity_stretch_max.max(1.0);
                 settings.max_render_distance = settings.max_render_distance.max(0.0);
-                settings.render_distance_fade_range =
-                    settings.render_distance_fade_range.max(0.0);
+                settings.render_distance_fade_range = settings.render_distance_fade_range.max(0.0);
                 if settings.max_render_distance > 0.0 {
                     settings.render_distance_fade_range = settings
                         .render_distance_fade_range
@@ -1432,13 +1431,12 @@ impl ParticleEmitterModuleSettings {
                     simd_clamp_scalar(settings.trail_end_alpha_scale, 0.0, 1.0);
             }
             ParticleEmitterModuleSettings::SubEmitters(settings) => {
-                settings.legacy_burst_count = if settings.legacy_trigger
-                    == ParticleSubEmitterTrigger::None
-                {
-                    settings.legacy_burst_count.max(0)
-                } else {
-                    settings.legacy_burst_count.max(1)
-                };
+                settings.legacy_burst_count =
+                    if settings.legacy_trigger == ParticleSubEmitterTrigger::None {
+                        settings.legacy_burst_count.max(0)
+                    } else {
+                        settings.legacy_burst_count.max(1)
+                    };
                 settings.legacy_probability =
                     simd_clamp_scalar(settings.legacy_probability, 0.0, 1.0);
                 settings.legacy_max_depth = settings.legacy_max_depth.max(0);
@@ -1460,11 +1458,7 @@ impl ParticleEmitterModuleSettings {
 fn repaired_sub_emitter(rule: &ParticleSubEmitter) -> ParticleSubEmitter {
     ParticleSubEmitter::new(
         rule.trigger,
-        if rule.trigger == ParticleSubEmitterTrigger::None {
-            rule.burst_count.max(0)
-        } else {
-            rule.burst_count.max(1)
-        },
+        rule.burst_count,
         simd_clamp_scalar(rule.probability, 0.0, 1.0),
         rule.max_depth.max(0),
         rule.inherit_velocity.max(0.0),
@@ -1512,7 +1506,10 @@ fn issue(
     ParticleModuleIssue::new(module_id, severity, code, message)
 }
 
-fn validate_emission(settings: &ParticleEmissionModule, module_id: &str) -> Vec<ParticleModuleIssue> {
+fn validate_emission(
+    settings: &ParticleEmissionModule,
+    module_id: &str,
+) -> Vec<ParticleModuleIssue> {
     let mut issues: Vec<ParticleModuleIssue> = Vec::new();
     if settings.max_particles <= 0 {
         issues.push(issue(
@@ -1603,7 +1600,10 @@ fn validate_shape(settings: &ParticleShapeModule, module_id: &str) -> Vec<Partic
     }
 }
 
-fn validate_velocity(settings: &ParticleVelocityModule, module_id: &str) -> Vec<ParticleModuleIssue> {
+fn validate_velocity(
+    settings: &ParticleVelocityModule,
+    module_id: &str,
+) -> Vec<ParticleModuleIssue> {
     if settings.velocity_inheritance < 0.0 {
         vec![issue(
             module_id,
@@ -1785,7 +1785,8 @@ fn validate_renderer(
             "LOD distances should not be negative.",
         ));
     }
-    if settings.render_lod_min_particle_scale < 0.0 || settings.render_lod_min_particle_scale > 1.0 {
+    if settings.render_lod_min_particle_scale < 0.0 || settings.render_lod_min_particle_scale > 1.0
+    {
         issues.push(issue(
             module_id,
             ParticleModuleIssueSeverity::Warning,

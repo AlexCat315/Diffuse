@@ -2023,3 +2023,1190 @@ fn particle_scalability_bindings() {
         Some(1.0)
     );
 }
+
+/// Particle gravity vector and color bindings write back.
+#[test]
+fn particle_gravity_vector_and_color_bindings() {
+    use cove_ui_compose::scene_core::Color;
+    use diffuse_math::simd::simd_compat::{Float3, Float4};
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    assert!(adapter.add_component("particleEmitter", id));
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(id);
+
+    let Some(EditorInspectorFieldValue::Vector3 {
+        x: gx,
+        y: gy,
+        z: gz,
+    }) = field(&adapter, id, "particle-emitter", "particle-gravity")
+    else {
+        panic!("expected gravity vector");
+    };
+    gx.set(1.0);
+    gy.set(-20.0);
+    gz.set(3.0);
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.forces.gravity),
+        Some(Float3::new(1.0, -20.0, 3.0))
+    );
+
+    let Some(EditorInspectorFieldValue::Vector3 {
+        x: bx,
+        y: by,
+        z: bz,
+    }) = field(&adapter, id, "particle-emitter", "particle-box-extents")
+    else {
+        panic!("expected box extents vector");
+    };
+    bx.set(2.0);
+    by.set(3.0);
+    bz.set(4.0);
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.shape.box_half_extents),
+        Some(Float3::new(2.0, 3.0, 4.0))
+    );
+
+    let Some(EditorInspectorFieldValue::Vector3 {
+        x: fcx,
+        y: fcy,
+        z: fcz,
+    }) = field(&adapter, id, "particle-emitter", "particle-force-center")
+    else {
+        panic!("expected force center vector");
+    };
+    fcx.set(1.0);
+    fcy.set(2.0);
+    fcz.set(3.0);
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.forces.force_center),
+        Some(Float3::new(1.0, 2.0, 3.0))
+    );
+
+    let Some(EditorInspectorFieldValue::Vector3 {
+        x: fax,
+        y: fay,
+        z: faz,
+    }) = field(&adapter, id, "particle-emitter", "particle-force-axis")
+    else {
+        panic!("expected force axis vector");
+    };
+    fax.set(0.0);
+    fay.set(1.0);
+    faz.set(0.0);
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.forces.force_axis),
+        Some(Float3::new(0.0, 1.0, 0.0))
+    );
+
+    let Some(EditorInspectorFieldValue::Vector3 {
+        x: svx,
+        y: svy,
+        z: svz,
+    }) = field(
+        &adapter,
+        id,
+        "particle-emitter",
+        "particle-sub-emitter-velocity",
+    )
+    else {
+        panic!("expected sub-emitter velocity vector");
+    };
+    svx.set(1.0);
+    svy.set(2.0);
+    svz.set(3.0);
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.sub_emitters.legacy_start_velocity),
+        Some(Float3::new(1.0, 2.0, 3.0))
+    );
+
+    let Some(EditorInspectorFieldValue::Vector3 {
+        x: srx,
+        y: sry,
+        z: srz,
+    }) = field(
+        &adapter,
+        id,
+        "particle-emitter",
+        "particle-sub-emitter-velocity-random",
+    )
+    else {
+        panic!("expected sub-emitter velocity random vector");
+    };
+    srx.set(0.1);
+    sry.set(0.2);
+    srz.set(0.3);
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.sub_emitters.legacy_velocity_randomness),
+        Some(Float3::new(0.1, 0.2, 0.3))
+    );
+
+    let Some(EditorInspectorFieldValue::Color(sub_start)) = field(
+        &adapter,
+        id,
+        "particle-emitter",
+        "particle-sub-emitter-start-color",
+    ) else {
+        panic!("expected sub-emitter start color");
+    };
+    sub_start.set(Color {
+        r: 1.0,
+        g: 0.5,
+        b: 0.0,
+        a: 1.0,
+    });
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.sub_emitters.legacy_start_color),
+        Some(Float4::new(1.0, 0.5, 0.0, 1.0))
+    );
+
+    let Some(EditorInspectorFieldValue::Color(sub_end)) = field(
+        &adapter,
+        id,
+        "particle-emitter",
+        "particle-sub-emitter-end-color",
+    ) else {
+        panic!("expected sub-emitter end color");
+    };
+    sub_end.set(Color {
+        r: 1.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    });
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.sub_emitters.legacy_end_color),
+        Some(Float4::new(1.0, 0.0, 0.0, 0.0))
+    );
+
+    let Some(EditorInspectorFieldValue::Color(start)) =
+        field(&adapter, id, "particle-emitter", "particle-start-color")
+    else {
+        panic!("expected start color");
+    };
+    start.set(Color {
+        r: 1.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    });
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.appearance.start_color),
+        Some(Float4::new(1.0, 0.0, 0.0, 1.0))
+    );
+}
+
+/// Particle scalar and bool bindings write back.
+#[test]
+fn particle_scalar_bindings() {
+    use diffuse_math::simd::simd_compat::{Float3, Float4};
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::particle_curve::{ParticleCurve, ParticleCurveKeyframe};
+    use diffuse_scene::particles::particle_events::ParticleSubEmitter;
+    use diffuse_scene::particles::particle_types::{
+        ParticleBlendMode, ParticleCollisionMode, ParticleEmissionShape, ParticleForceMode,
+        ParticleRenderAlignment, ParticleRenderBoundsMode, ParticleSimulationBackend,
+        ParticleSimulationSpace, ParticleSubEmitterTrigger, ParticleTextureSheetPlaybackMode,
+        ParticleVectorFieldMode,
+    };
+
+    use crate::scene::inspector::enum_options::EditorInspectorEnumOption;
+
+    fn emitter(
+        adapter: &EditorSceneAdapter,
+        entity: diffuse_scene::entity_id::EntityID,
+    ) -> ParticleEmitter {
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .expect("particle emitter")
+    }
+
+    fn set_number(adapter: &EditorSceneAdapter, id: u64, field_id: &str, value: f32) -> bool {
+        match field(adapter, id, "particle-emitter", field_id) {
+            Some(EditorInspectorFieldValue::ConstrainedNumber { binding, .. }) => {
+                binding.set(value);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_bool(adapter: &EditorSceneAdapter, id: u64, field_id: &str, value: bool) -> bool {
+        match field(adapter, id, "particle-emitter", field_id) {
+            Some(EditorInspectorFieldValue::Bool(binding)) => {
+                binding.set(value);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_option(adapter: &EditorSceneAdapter, id: u64, field_id: &str, value: String) -> bool {
+        match field(adapter, id, "particle-emitter", field_id) {
+            Some(EditorInspectorFieldValue::StringOptions { binding, .. }) => {
+                binding.set(value);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_curve(
+        adapter: &EditorSceneAdapter,
+        id: u64,
+        field_id: &str,
+        value: ParticleCurve,
+    ) -> bool {
+        match field(adapter, id, "particle-emitter", field_id) {
+            Some(EditorInspectorFieldValue::ParticleCurve(binding)) => {
+                binding.set(value);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_vector3(
+        adapter: &EditorSceneAdapter,
+        id: u64,
+        field_id: &str,
+        value: (f32, f32, f32),
+    ) -> bool {
+        match field(adapter, id, "particle-emitter", field_id) {
+            Some(EditorInspectorFieldValue::Vector3 { x, y, z }) => {
+                x.set(value.0);
+                y.set(value.1);
+                z.set(value.2);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_sub_emitters(
+        adapter: &EditorSceneAdapter,
+        id: u64,
+        value: Vec<ParticleSubEmitter>,
+    ) -> bool {
+        match field(adapter, id, "particle-emitter", "particle-sub-emitters") {
+            Some(EditorInspectorFieldValue::ParticleSubEmitters(binding)) => {
+                binding.set(value);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    assert!(adapter.add_component("particleEmitter", id));
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(id);
+
+    // Group 1: emission core.
+    assert!(set_number(&adapter, id, "particle-rate", 42.0));
+    assert_eq!(
+        emitter(&adapter, entity).settings.emission.emission_rate,
+        42.0
+    );
+    assert!(set_curve(
+        &adapter,
+        id,
+        "particle-rate-curve",
+        ParticleCurve::Constant(1.5)
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .emission
+            .emission_rate_curve,
+        ParticleCurve::Constant(1.5)
+    );
+    assert!(set_number(&adapter, id, "particle-duration", 2.5));
+    assert_eq!(emitter(&adapter, entity).settings.emission.duration, 2.5);
+    assert!(set_number(&adapter, id, "particle-simulation-speed", 0.25));
+    assert_eq!(
+        emitter(&adapter, entity).settings.emission.simulation_speed,
+        0.25
+    );
+    assert!(set_number(&adapter, id, "particle-prewarm-time", 1.25));
+    assert_eq!(
+        emitter(&adapter, entity).settings.emission.prewarm_time,
+        1.25
+    );
+    assert!(set_number(&adapter, id, "particle-prewarm-step", 0.05));
+    assert_eq!(
+        emitter(&adapter, entity).settings.emission.prewarm_step,
+        0.05
+    );
+    assert!(set_number(&adapter, id, "particle-max", 128.0));
+    assert_eq!(
+        emitter(&adapter, entity).settings.emission.max_particles,
+        128
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-max-spawned-per-frame",
+        48.0
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .emission
+            .max_spawned_particles_per_frame,
+        48
+    );
+    assert!(set_number(&adapter, id, "particle-max-rendered", 64.0));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .emission
+            .max_rendered_particles,
+        64
+    );
+    assert!(set_number(&adapter, id, "particle-burst-count", 4.8));
+    assert_eq!(emitter(&adapter, entity).settings.emission.burst_count, 5);
+    assert!(set_number(&adapter, id, "particle-burst-interval", 0.25));
+    assert_eq!(
+        emitter(&adapter, entity).settings.emission.burst_interval,
+        0.25
+    );
+
+    // Group 2: distance emission and legacy sub-emitter scalars.
+    assert!(set_number(&adapter, id, "particle-distance-rate", 12.0));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .emission
+            .distance_emission_rate,
+        12.0
+    );
+    let distance_curve = ParticleCurve::Keyframes(vec![
+        ParticleCurveKeyframe::new(0.0, 0.0),
+        ParticleCurveKeyframe::new(1.0, 2.0),
+    ]);
+    assert!(set_curve(
+        &adapter,
+        id,
+        "particle-distance-rate-curve",
+        distance_curve.clone()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .emission
+            .distance_emission_rate_curve,
+        distance_curve
+    );
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-sub-emitter-trigger",
+        ParticleSubEmitterTrigger::Collision.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .sub_emitters
+            .legacy_trigger,
+        ParticleSubEmitterTrigger::Collision
+    );
+    assert!(set_number(&adapter, id, "particle-sub-emitter-burst", 3.8));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .sub_emitters
+            .legacy_burst_count,
+        4
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-sub-emitter-probability",
+        0.75
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .sub_emitters
+            .legacy_probability,
+        0.75
+    );
+    assert!(set_number(&adapter, id, "particle-sub-emitter-depth", 2.2));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .sub_emitters
+            .legacy_max_depth,
+        2
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-sub-emitter-inherit",
+        0.45
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .sub_emitters
+            .legacy_inherit_velocity,
+        0.45
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-sub-emitter-lifetime",
+        0.6
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .sub_emitters
+            .legacy_lifetime,
+        0.6
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-sub-emitter-start-size",
+        0.2
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .sub_emitters
+            .legacy_start_size,
+        0.2
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-sub-emitter-end-size",
+        0.05
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .sub_emitters
+            .legacy_end_size,
+        0.05
+    );
+    // Group 3: sub-emitter rules preserve list editing and clamping.
+    let sub_emitter_field = field(&adapter, id, "particle-emitter", "particle-sub-emitters");
+    assert!(matches!(
+        sub_emitter_field,
+        Some(EditorInspectorFieldValue::ParticleSubEmitters(_))
+    ));
+    if let Some(EditorInspectorFieldValue::ParticleSubEmitters(binding)) = sub_emitter_field {
+        assert!(binding.get().is_empty());
+    }
+    let authored_rules = vec![
+        ParticleSubEmitter::new(
+            ParticleSubEmitterTrigger::Death,
+            4,
+            0.5,
+            1,
+            0.25,
+            0.4,
+            Float3::new(0.0, 1.0, 0.0),
+            Float3::new(0.1, 0.2, 0.3),
+            0.3,
+            0.1,
+            Float4::new(1.0, 0.5, 0.25, 1.0),
+            Float4::new(1.0, 0.2, 0.1, 0.0),
+        ),
+        ParticleSubEmitter::new(
+            ParticleSubEmitterTrigger::Collision,
+            2,
+            1.0,
+            2,
+            0.0,
+            0.2,
+            Float3::new(1.0, 0.0, 0.0),
+            Float3::ZERO,
+            0.2,
+            0.0,
+            Float4::new(0.2, 0.4, 1.0, 1.0),
+            Float4::new(0.2, 0.4, 1.0, 0.0),
+        ),
+    ];
+    assert!(set_sub_emitters(&adapter, id, authored_rules.clone()));
+    let rules = emitter(&adapter, entity).settings.sub_emitters.rules;
+    assert_eq!(rules.len(), 2);
+    assert_eq!(rules[0].trigger, ParticleSubEmitterTrigger::Death);
+    assert_eq!(rules[1].trigger, ParticleSubEmitterTrigger::Collision);
+
+    let mut edited = authored_rules;
+    edited[0].burst_count = -3;
+    edited[0].probability = 2.0;
+    edited[0].max_depth = -1;
+    edited[0].inherit_velocity = -0.25;
+    edited[0].lifetime = -2.0;
+    edited[0].start_size = -1.0;
+    edited[0].end_size = -1.0;
+    edited.pop();
+    assert!(set_sub_emitters(&adapter, id, edited));
+    let stored = emitter(&adapter, entity).settings.sub_emitters.rules;
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].burst_count, 0);
+    assert_eq!(stored[0].probability, 1.0);
+    assert_eq!(stored[0].max_depth, 0);
+    assert_eq!(stored[0].inherit_velocity, 0.0);
+    assert_eq!(stored[0].lifetime, 0.0001);
+    assert_eq!(stored[0].start_size, 0.0);
+    assert_eq!(stored[0].end_size, 0.0);
+    assert!(set_sub_emitters(&adapter, id, Vec::new()));
+    assert!(
+        emitter(&adapter, entity)
+            .settings
+            .sub_emitters
+            .rules
+            .is_empty()
+    );
+
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-texture-sheet-columns",
+        4.0
+    ));
+    assert_eq!(emitter(&adapter, entity).settings.texture_sheet.columns, 4);
+
+    // Group 4: texture sheet, trails and emission toggle.
+    assert!(set_number(&adapter, id, "particle-texture-sheet-rows", 2.0));
+    assert_eq!(emitter(&adapter, entity).settings.texture_sheet.rows, 2);
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-texture-sheet-frames",
+        7.2
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.texture_sheet.frame_count,
+        7
+    );
+    assert!(set_number(&adapter, id, "particle-texture-sheet-fps", 12.0));
+    assert_eq!(
+        emitter(&adapter, entity).settings.texture_sheet.frame_rate,
+        12.0
+    );
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-texture-sheet-playback",
+        ParticleTextureSheetPlaybackMode::Loop.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .texture_sheet
+            .playback_mode,
+        ParticleTextureSheetPlaybackMode::Loop
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-texture-sheet-start-frame",
+        3.2
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.texture_sheet.start_frame,
+        3
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-texture-sheet-random",
+        2.9
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .texture_sheet
+            .frame_randomness,
+        3
+    );
+    assert!(set_number(&adapter, id, "particle-trail-length", 0.75));
+    assert_eq!(emitter(&adapter, entity).settings.trails.trail_length, 0.75);
+    assert!(set_number(&adapter, id, "particle-trail-segments", 6.2));
+    assert_eq!(emitter(&adapter, entity).settings.trails.trail_segments, 6);
+    assert!(set_number(&adapter, id, "particle-trail-end-size", 0.35));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .trails
+            .trail_end_size_scale,
+        0.35
+    );
+    assert!(set_number(&adapter, id, "particle-trail-end-alpha", 0.2));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .trails
+            .trail_end_alpha_scale,
+        0.2
+    );
+    assert!(set_bool(&adapter, id, "particle-emitting", false));
+    assert!(!emitter(&adapter, entity).settings.emission.is_emitting);
+    // Group 5: shape, collision, simulation and force scalars.
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-shape",
+        ParticleEmissionShape::Cone.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.shape.emission_shape,
+        ParticleEmissionShape::Cone
+    );
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-collision-mode",
+        ParticleCollisionMode::WorldPlane.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.collision.collision_mode,
+        ParticleCollisionMode::WorldPlane
+    );
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-simulation-space",
+        ParticleSimulationSpace::World.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .gpu_simulation
+            .simulation_space,
+        ParticleSimulationSpace::World
+    );
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-simulation-backend",
+        ParticleSimulationBackend::GpuRequired.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .gpu_simulation
+            .simulation_backend,
+        ParticleSimulationBackend::GpuRequired
+    );
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: workgroup_size,
+        min: Some(minimum),
+        max: Some(maximum),
+        ..
+    }) = field(
+        &adapter,
+        id,
+        "particle-emitter",
+        "particle-gpu-workgroup-size",
+    )
+    else {
+        panic!("missing GPU workgroup field");
+    };
+    assert_eq!(minimum, 1.0);
+    assert_eq!(
+        maximum,
+        diffuse_scene::particles::particle_gpu_simulation_plan::ParticleGPUSimulationPlan::MAXIMUM_WORKGROUP_SIZE
+            as f32
+    );
+    workgroup_size.set(128.0);
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .gpu_simulation
+            .workgroup_size,
+        128
+    );
+    let Some(EditorInspectorFieldValue::ReadOnly(gpu_status)) =
+        field(&adapter, id, "particle-emitter", "particle-gpu-status")
+    else {
+        panic!("missing GPU status field");
+    };
+    assert_eq!(gpu_status, "Supported (1x128)");
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-collision-restitution",
+        0.7
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .collision
+            .collision_restitution,
+        0.7
+    );
+    assert!(set_number(&adapter, id, "particle-noise-strength", 1.5));
+    assert_eq!(
+        emitter(&adapter, entity).settings.forces.noise_strength,
+        1.5
+    );
+    assert!(set_number(&adapter, id, "particle-noise-scale", 2.5));
+    assert_eq!(emitter(&adapter, entity).settings.forces.noise_scale, 2.5);
+    assert!(set_number(&adapter, id, "particle-noise-speed", 0.75));
+    assert_eq!(emitter(&adapter, entity).settings.forces.noise_speed, 0.75);
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-force-mode",
+        ParticleForceMode::Vortex.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.forces.force_mode,
+        ParticleForceMode::Vortex
+    );
+
+    // Group 6: force field and size curve.
+    assert!(set_number(&adapter, id, "particle-force-radius", 12.0));
+    assert_eq!(emitter(&adapter, entity).settings.forces.force_radius, 12.0);
+    assert!(set_number(&adapter, id, "particle-force-strength", -3.5));
+    assert_eq!(
+        emitter(&adapter, entity).settings.forces.force_strength,
+        -3.5
+    );
+    assert!(set_number(&adapter, id, "particle-force-falloff", 2.5));
+    assert_eq!(emitter(&adapter, entity).settings.forces.force_falloff, 2.5);
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-vector-field-mode",
+        ParticleVectorFieldMode::Curl.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.forces.vector_field_mode,
+        ParticleVectorFieldMode::Curl
+    );
+    assert!(set_vector3(
+        &adapter,
+        id,
+        "particle-vector-field-direction",
+        (0.0, 0.0, 1.0)
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .forces
+            .vector_field_direction,
+        Float3::new(0.0, 0.0, 1.0)
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-vector-field-strength",
+        6.5
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .forces
+            .vector_field_strength,
+        6.5
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-vector-field-scale",
+        2.25
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.forces.vector_field_scale,
+        2.25
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-vector-field-scroll",
+        0.5
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .forces
+            .vector_field_scroll_speed,
+        0.5
+    );
+    let size_curve = ParticleCurve::Keyframes(vec![
+        ParticleCurveKeyframe::new(0.0, 0.0),
+        ParticleCurveKeyframe::new(1.0, 1.0),
+    ]);
+    assert!(set_curve(
+        &adapter,
+        id,
+        "particle-size-curve",
+        size_curve.clone()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.appearance.size_curve,
+        size_curve
+    );
+
+    // Group 7: appearance and renderer scalars.
+    assert!(set_number(&adapter, id, "particle-size-randomness", 0.3));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .appearance
+            .size_randomness,
+        0.3
+    );
+    assert!(set_number(&adapter, id, "particle-rotation", 0.4));
+    assert_eq!(
+        emitter(&adapter, entity).settings.appearance.start_rotation,
+        0.4
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-rotation-randomness",
+        0.2
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .appearance
+            .rotation_randomness,
+        0.2
+    );
+    assert!(set_number(&adapter, id, "particle-angular-velocity", 1.5));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .appearance
+            .angular_velocity,
+        1.5
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-angular-velocity-randomness",
+        0.75
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .appearance
+            .angular_velocity_randomness,
+        0.75
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-velocity-inheritance",
+        0.4
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .velocity
+            .velocity_inheritance,
+        0.4
+    );
+    assert!(set_curve(
+        &adapter,
+        id,
+        "particle-color-curve",
+        ParticleCurve::EaseOut
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.appearance.color_curve,
+        ParticleCurve::EaseOut
+    );
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-blend-mode",
+        ParticleBlendMode::Additive.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.appearance.blend_mode,
+        ParticleBlendMode::Additive
+    );
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-render-alignment",
+        ParticleRenderAlignment::Velocity.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity).settings.renderer.render_alignment,
+        ParticleRenderAlignment::Velocity
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-velocity-stretch-scale",
+        0.5
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .renderer
+            .velocity_stretch_scale,
+        0.5
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-velocity-stretch-max",
+        6.0
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .renderer
+            .velocity_stretch_max,
+        6.0
+    );
+
+    // Group 8: render distance, bounds and texture asset.
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-max-render-distance",
+        120.0
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .renderer
+            .max_render_distance,
+        120.0
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-render-distance-fade",
+        24.0
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .renderer
+            .render_distance_fade_range,
+        24.0
+    );
+    assert!(set_number(&adapter, id, "particle-render-lod-start", 40.0));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .renderer
+            .render_lod_start_distance,
+        40.0
+    );
+    assert!(set_number(&adapter, id, "particle-render-lod-end", 120.0));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .renderer
+            .render_lod_end_distance,
+        120.0
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-render-lod-min-scale",
+        0.3
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .renderer
+            .render_lod_min_particle_scale,
+        0.3
+    );
+    assert!(set_option(
+        &adapter,
+        id,
+        "particle-render-bounds-mode",
+        ParticleRenderBoundsMode::Automatic.inspector_option_id()
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .renderer
+            .render_bounds_mode,
+        ParticleRenderBoundsMode::Automatic
+    );
+    assert!(set_number(
+        &adapter,
+        id,
+        "particle-render-bounds-radius",
+        48.0
+    ));
+    assert_eq!(
+        emitter(&adapter, entity)
+            .settings
+            .renderer
+            .render_bounds_radius,
+        48.0
+    );
+    let Some(EditorInspectorFieldValue::ReadOnly(estimate)) = field(
+        &adapter,
+        id,
+        "particle-emitter",
+        "particle-render-bounds-estimate",
+    ) else {
+        panic!("missing render bounds estimate field");
+    };
+    assert!(!estimate.is_empty());
+
+    let Some(EditorInspectorFieldValue::Asset {
+        binding: texture_asset,
+        accepted_kinds,
+        ..
+    }) = field(&adapter, id, "particle-emitter", "particle-texture")
+    else {
+        panic!("missing particle texture asset field");
+    };
+    assert_eq!(
+        accepted_kinds,
+        std::collections::BTreeSet::from(["Texture".to_string()])
+    );
+    texture_asset.set(Some(
+        crate::scene::editor_inspector_schema::EditorInspectorAssetRef::with_options(
+            "Assets/Textures/smoke.png",
+            "smoke",
+            Some("/tmp/particle-smoke.png".to_string()),
+            "Texture",
+            None,
+        ),
+    ));
+    let settings = emitter(&adapter, entity).settings;
+    assert_eq!(
+        settings.texture_sheet.texture_asset_id.as_deref(),
+        Some("Assets/Textures/smoke.png")
+    );
+    assert_eq!(
+        settings.texture_sheet.texture_path.as_deref(),
+        Some("/tmp/particle-smoke.png")
+    );
+    texture_asset.set(None);
+    let settings = emitter(&adapter, entity).settings;
+    assert!(settings.texture_sheet.texture_asset_id.is_none());
+    assert!(settings.texture_sheet.texture_path.is_none());
+}
+
+/// Script component exposes catalog selection and binding actions.
+#[test]
+fn script_catalog_inspector() {
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+    use diffuse_script::core::script_component::ScriptComponent;
+
+    use crate::scripting::dynamic::project_script_catalog::ProjectScriptCatalog;
+
+    let adapter = EditorSceneAdapter::new(
+        false,
+        ComponentRegistry::built_in(),
+        EditorInspectorRendererRegistry::built_in(),
+    );
+    adapter.apply_project_script_catalog(&ProjectScriptCatalog::built_in());
+    let id = make_entity(&adapter);
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(id);
+    assert!(adapter.add_component("script", id));
+
+    let Some(EditorInspectorFieldValue::StringOptions {
+        binding: identifier,
+        options,
+    }) = field(&adapter, id, "scripts", "script-0-identifier")
+    else {
+        panic!("expected script catalog selector");
+    };
+    assert_eq!(identifier.get(), "cove.rotator");
+    assert!(
+        options
+            .iter()
+            .any(|option| option.value == "cove.character-controller")
+    );
+
+    adapter.register_dynamic_script_option("scripts.player-movement", "PlayerMovement", &[]);
+    let Some(EditorInspectorFieldValue::StringOptions {
+        options: updated_options,
+        ..
+    }) = field(&adapter, id, "scripts", "script-0-identifier")
+    else {
+        panic!("expected updated catalog selector");
+    };
+    assert!(updated_options.iter().any(|option| {
+        option.value == "scripts.player-movement" && option.label == "PlayerMovement · Swift"
+    }));
+
+    identifier.set("cove.mover".to_string());
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ScriptComponent>(entity)
+            .and_then(|component| component
+                .bindings
+                .first()
+                .and_then(|binding| binding.identifier.clone())),
+        Some("cove.mover".to_string())
+    );
+
+    let Some(EditorInspectorFieldValue::Action { action: add, .. }) =
+        field(&adapter, id, "scripts", "script-add")
+    else {
+        panic!("expected add script action");
+    };
+    add();
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ScriptComponent>(entity)
+            .map(|component| component.bindings.len()),
+        Some(2)
+    );
+
+    let Some(EditorInspectorFieldValue::Action {
+        is_destructive,
+        action: remove,
+        ..
+    }) = field(&adapter, id, "scripts", "script-1-remove")
+    else {
+        panic!("expected remove script action");
+    };
+    assert!(is_destructive);
+    remove();
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ScriptComponent>(entity)
+            .map(|component| component.bindings.len()),
+        Some(1)
+    );
+}

@@ -1119,6 +1119,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 301 | diffuse-editor-core（检查器关节/软体测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 再迁 3 例：typed physics joint（端点候选排序/自排除、hinge 轴/限位/马达/弹簧、切 SixDOF 后字段对齐）、soft-body+cloth 模拟/拓扑/固定点、表面软体资源/四面体/固定点；`editor_inspector_sections_tests.rs` 16/16 通过；clippy（本批零告警）、rustfmt 通过；该 Swift 文件仍 pending（余 10 个粒子用例） |
 | 2026-11-13 | 批次 302 | diffuse-editor-core（粒子模块栈检查器测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 再迁 5 例：粒子分区出现、模块栈版本/ID 顺序、禁用模块重力编辑不丢作者状态、模块重排/整体重置、单模块默认重置与展开状态；`editor_inspector_sections_tests.rs` 21/21 通过；clippy（本批零告警）、rustfmt 通过；该 Swift 文件仍 pending（余 5 个粒子用例） |
 | 2026-11-13 | 批次 303 | diffuse-editor-core（粒子内联设置/缩放测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 再迁 2 例：模块栈内联写入 11 个模块的全部字段并核对展开状态、粒子缩放/策略资源绑定（含 1.5→1 钳制）；`editor_inspector_sections_tests.rs` 23/23 通过；clippy（本批零告警）、rustfmt 通过；该 Swift 文件仍 pending（余 2 个标量/重力颜色大批次用例） |
+| 2026-11-13 | 批次 304 | diffuse-editor-core（检查器测试完成 + 子发射器归一化修复） | 1 | 1937 | `EditorInspectorSectionsTests.swift` 其余用例全部迁完（脚本目录选择/动态注册/增删动作、粒子标量 8 组、重力/颜色、纹理资源），26/26 通过；修复 `diffuse-scene` 的 `repaired_sub_emitter`：不再强制非 None 触发器的 `burstCount` 至少为 1，与 Swift `normalize()` 一致，否则合法的 burstCount=0 规则会被改写并导致事务拒绝；`cargo test -p diffuse-editor-core --lib` 238/238、`diffuse-scene` 745/745 通过；clippy（本批零告警）、rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 
 ## 10. 已知问题与需要用户确认的事项
 
