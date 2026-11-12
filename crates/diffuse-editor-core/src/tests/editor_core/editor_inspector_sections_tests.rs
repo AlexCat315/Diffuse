@@ -1150,3 +1150,264 @@ fn soft_body_mesh_bindings() {
             .any(|schema| schema.type_id == "cloth")
     );
 }
+
+/// Particle emitter section appears with the component.
+#[test]
+fn particle_section_presence() {
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    assert!(!has_section(&adapter, id, "particle-emitter"));
+    assert!(has_section(&adapter, id, "particle-scalability"));
+    assert!(adapter.add_component("particleEmitter", id));
+    assert!(has_section(&adapter, id, "particle-emitter"));
+}
+
+/// Particle inspector exposes the module stack.
+#[test]
+fn particle_module_stack_field() {
+    use diffuse_scene::particles::particle_modules::ParticleModuleStack;
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    assert!(adapter.add_component("particleEmitter", id));
+    let Some(EditorInspectorFieldValue::ParticleModuleStack(binding)) =
+        field(&adapter, id, "particle-emitter", "particle-module-stack")
+    else {
+        panic!("expected particle module stack field");
+    };
+    let stack = binding.get();
+    assert_eq!(stack.version, ParticleModuleStack::CURRENT_VERSION);
+    let ids: Vec<String> = stack
+        .modules
+        .iter()
+        .map(|module| module.id.clone())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "emission",
+            "shape",
+            "velocity",
+            "forces",
+            "collision",
+            "appearance",
+            "textureSheet",
+            "renderer",
+            "trails",
+            "subEmitters",
+            "gpuSimulation"
+        ]
+    );
+}
+
+/// Particle module stack binding preserves disabled module authoring state.
+#[test]
+fn particle_module_stack_binding_preserves_disabled_module_authoring_state() {
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::particle_modules::ParticleEmitterModuleSettings;
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    assert!(adapter.add_component("particleEmitter", id));
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(id);
+
+    let Some(EditorInspectorFieldValue::ParticleModuleStack(binding)) =
+        field(&adapter, id, "particle-emitter", "particle-module-stack")
+    else {
+        panic!("expected particle module stack field");
+    };
+    let mut stack = binding.get();
+    let forces_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "forces")
+        .expect("forces module");
+    stack.modules[forces_index].is_enabled = false;
+    if let ParticleEmitterModuleSettings::Forces(mut settings) =
+        stack.modules[forces_index].settings.clone()
+    {
+        settings.gravity.y = -7.0;
+        stack.modules[forces_index].settings = ParticleEmitterModuleSettings::Forces(settings);
+    } else {
+        panic!("expected forces module settings");
+    }
+    binding.set(stack);
+
+    let stored_stack = adapter
+        .scene()
+        .component::<ParticleEmitter>(entity)
+        .expect("emitter")
+        .module_stack();
+    let forces = stored_stack
+        .modules
+        .iter()
+        .find(|module| module.id == "forces")
+        .expect("forces module");
+    assert!(!forces.is_enabled);
+    let ParticleEmitterModuleSettings::Forces(settings) = &forces.settings else {
+        panic!("expected forces module settings");
+    };
+    assert_eq!(settings.gravity.y, -7.0);
+
+    let Some(EditorInspectorFieldValue::Vector3 { y: gravity_y, .. }) =
+        field(&adapter, id, "particle-emitter", "particle-gravity")
+    else {
+        panic!("missing gravity field");
+    };
+    gravity_y.set(-3.0);
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.forces.gravity.y),
+        Some(-3.0)
+    );
+    let rebased_stack = adapter
+        .scene()
+        .component::<ParticleEmitter>(entity)
+        .expect("emitter")
+        .module_stack();
+    let rebased_forces = rebased_stack
+        .modules
+        .iter()
+        .find(|module| module.id == "forces")
+        .expect("forces module");
+    assert!(!rebased_forces.is_enabled);
+    let ParticleEmitterModuleSettings::Forces(settings) = &rebased_forces.settings else {
+        panic!("expected forces module settings");
+    };
+    assert_eq!(settings.gravity.y, -7.0);
+}
+
+/// Particle module stack binding writes order and reset state.
+#[test]
+fn particle_module_stack_binding_writes_order_and_reset_state() {
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::particle_modules::ParticleModuleStack;
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    assert!(adapter.add_component("particleEmitter", id));
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(id);
+
+    let Some(EditorInspectorFieldValue::ParticleModuleStack(binding)) =
+        field(&adapter, id, "particle-emitter", "particle-module-stack")
+    else {
+        panic!("expected particle module stack field");
+    };
+    let mut moved = binding.get();
+    let renderer_index = moved
+        .modules
+        .iter()
+        .position(|module| module.id == "renderer")
+        .expect("renderer module");
+    moved.move_module(renderer_index, 0);
+    moved.modules[0].is_enabled = false;
+    binding.set(moved);
+
+    let mut stored = adapter
+        .scene()
+        .component::<ParticleEmitter>(entity)
+        .expect("emitter")
+        .module_stack();
+    assert_eq!(
+        stored.modules.first().map(|module| module.id.as_str()),
+        Some("renderer")
+    );
+    assert_eq!(
+        stored.modules.first().map(|module| module.is_enabled),
+        Some(false)
+    );
+    stored.reset_authoring_state();
+    binding.set(stored);
+
+    let reset = adapter
+        .scene()
+        .component::<ParticleEmitter>(entity)
+        .expect("emitter")
+        .module_stack();
+    let ids: Vec<String> = reset
+        .modules
+        .iter()
+        .map(|module| module.id.clone())
+        .collect();
+    assert_eq!(ids, ParticleModuleStack::DEFAULT_MODULE_IDS);
+    assert!(reset.modules.iter().all(|module| module.is_enabled));
+    assert!(reset.modules.iter().all(|module| !module.is_expanded));
+}
+
+/// Particle module stack binding writes single module default reset.
+#[test]
+fn particle_module_stack_binding_writes_single_module_default_reset() {
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::particle_modules::ParticleEmitterModuleSettings;
+    use diffuse_scene::particles::particle_types::{ParticleRenderBoundsMode, ParticleRenderMode};
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    assert!(adapter.add_component("particleEmitter", id));
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(id);
+
+    let Some(EditorInspectorFieldValue::ParticleModuleStack(binding)) =
+        field(&adapter, id, "particle-emitter", "particle-module-stack")
+    else {
+        panic!("expected particle module stack field");
+    };
+    let mut stack = binding.get();
+    let renderer_index = stack
+        .modules
+        .iter()
+        .position(|module| module.id == "renderer")
+        .expect("renderer module");
+    stack.modules[renderer_index].is_expanded = true;
+    if let ParticleEmitterModuleSettings::Renderer(mut module) =
+        stack.modules[renderer_index].settings.clone()
+    {
+        module.render_mode = ParticleRenderMode::Ribbon;
+        module.render_sort_priority = 9;
+        module.render_bounds_mode = ParticleRenderBoundsMode::Manual;
+        module.render_bounds_radius = 12.0;
+        stack.modules[renderer_index].settings = ParticleEmitterModuleSettings::Renderer(module);
+    } else {
+        panic!("expected renderer module settings");
+    }
+    binding.set(stack);
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<ParticleEmitter>(entity)
+            .map(|emitter| emitter.settings.renderer.render_mode),
+        Some(ParticleRenderMode::Ribbon)
+    );
+
+    let mut stored = adapter
+        .scene()
+        .component::<ParticleEmitter>(entity)
+        .expect("emitter")
+        .module_stack();
+    assert!(stored.module_settings_differ_from_default("renderer"));
+    stored.reset_module_settings("renderer");
+    binding.set(stored);
+
+    let reset_emitter = adapter
+        .scene()
+        .component::<ParticleEmitter>(entity)
+        .expect("emitter");
+    let reset_stack = reset_emitter.module_stack();
+    let reset_renderer = reset_stack
+        .modules
+        .iter()
+        .find(|module| module.id == "renderer")
+        .expect("renderer module");
+    assert_eq!(
+        reset_emitter.settings.renderer.render_mode,
+        ParticleRenderMode::Billboard
+    );
+    assert_eq!(reset_emitter.settings.renderer.render_sort_priority, 0);
+    assert_eq!(
+        reset_emitter.settings.renderer.render_bounds_mode,
+        ParticleRenderBoundsMode::Disabled
+    );
+    assert!(reset_renderer.is_expanded);
+    assert!(!reset_stack.module_settings_differ_from_default("renderer"));
+}
