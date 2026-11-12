@@ -748,3 +748,128 @@ fn intent_transaction_builder_builds_scene_transactions() {
         )]
     );
 }
+
+fn ambiguity_context(
+    requires_target: bool,
+    is_destructive: bool,
+    required_arguments: &[&str],
+) -> crate::invocation::ambiguity_scorer::AmbiguityScoringContext {
+    crate::invocation::ambiguity_scorer::AmbiguityScoringContext {
+        candidate_entity_ids: Vec::new(),
+        selected_entity_id: None,
+        requires_target,
+        is_verb_destructive: is_destructive,
+        required_argument_names: required_arguments
+            .iter()
+            .map(|name| name.to_string())
+            .collect(),
+    }
+}
+
+/// `AmbiguityScorer` treats fully specified human intents as clear.
+#[test]
+fn ambiguity_scorer_treats_fully_specified_human_intents_as_clear() {
+    let intent = IntentIR {
+        target_object_ids: vec!["scene:42".to_string()],
+        arguments: [(
+            "name".to_string(),
+            IntentArgumentValue::String("Boss".to_string()),
+        )]
+        .into_iter()
+        .collect(),
+        ..IntentIR::new(
+            "scene.set_name",
+            "Rename selected entity",
+            IntentSource::Human,
+        )
+    };
+    let score = crate::invocation::ambiguity_scorer::AmbiguityScorer::default()
+        .score(&intent, &ambiguity_context(true, false, &["name"]));
+
+    assert_eq!(score.score, 0.0);
+    assert_eq!(
+        score.level,
+        crate::invocation::ambiguity_scorer::AmbiguityLevel::Clear
+    );
+    assert!(score.signals.is_empty());
+}
+
+/// `AmbiguityScorer` does not require a target for spawn capabilities.
+#[test]
+fn ambiguity_scorer_does_not_require_target_for_spawn_capabilities() {
+    let intent = IntentIR::new("scene.spawn_entity", "Spawn entity", IntentSource::Human);
+    let score = crate::invocation::ambiguity_scorer::AmbiguityScorer::default()
+        .score(&intent, &ambiguity_context(false, false, &[]));
+
+    assert_eq!(score.score, 0.0);
+    assert_eq!(
+        score.level,
+        crate::invocation::ambiguity_scorer::AmbiguityLevel::Clear
+    );
+}
+
+/// `AmbiguityScorer` raises high ambiguity for underspecified AI target edits.
+#[test]
+fn ambiguity_scorer_raises_high_for_underspecified_ai_target_edits() {
+    let intent = IntentIR {
+        confidence: 0.4,
+        ..IntentIR::new("scene.set_name", "Rename it", IntentSource::Ai)
+    };
+    let score = crate::invocation::ambiguity_scorer::AmbiguityScorer::default()
+        .score(&intent, &ambiguity_context(true, false, &["name"]));
+    let kinds: std::collections::BTreeSet<_> =
+        score.signals.iter().map(|signal| signal.kind).collect();
+
+    use crate::invocation::ambiguity_scorer::AmbiguitySignalKind;
+    assert_eq!(
+        score.level,
+        crate::invocation::ambiguity_scorer::AmbiguityLevel::High
+    );
+    assert!(kinds.contains(&AmbiguitySignalKind::AiLowConfidence));
+    assert!(kinds.contains(&AmbiguitySignalKind::NoTarget));
+    assert!(kinds.contains(&AmbiguitySignalKind::MissingRequiredArgument));
+    assert!(kinds.contains(&AmbiguitySignalKind::NoEvidence));
+}
+
+/// `AmbiguityScorer` builds destructive confirmation questions.
+#[test]
+fn ambiguity_scorer_builds_destructive_confirmation_questions() {
+    let intent = IntentIR {
+        id: "delete-42".to_string(),
+        target_object_ids: vec!["scene:42".to_string()],
+        ..IntentIR::new(
+            "scene.delete_entity",
+            "Delete selected entity",
+            IntentSource::Human,
+        )
+    };
+    let scorer = crate::invocation::ambiguity_scorer::AmbiguityScorer::default();
+    let score = scorer.score(&intent, &ambiguity_context(true, true, &[]));
+
+    let question = scorer
+        .make_question(
+            &intent,
+            &score,
+            vec![
+                crate::invocation::capability_invocation::ConfirmationOption::new(
+                    "confirm", "Apply",
+                ),
+            ],
+        )
+        .expect("question");
+
+    assert_eq!(
+        score.level,
+        crate::invocation::ambiguity_scorer::AmbiguityLevel::Low
+    );
+    assert_eq!(question.id, "ambiguity:delete-42");
+    assert_eq!(
+        question.kind,
+        crate::invocation::capability_invocation::ConfirmationQuestionKind::ApproveDestructive
+    );
+    assert_eq!(
+        question.severity,
+        crate::invocation::capability_invocation::ConfirmationSeverity::Destructive
+    );
+    assert_eq!(question.ambiguity_score, score.score);
+}
