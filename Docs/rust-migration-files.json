@@ -4797,7 +4797,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/asset_import_file_copier_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/CommandCatalogTests.swift",
