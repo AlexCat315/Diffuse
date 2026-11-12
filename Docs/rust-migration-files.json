@@ -12363,7 +12363,7 @@
       "rust": [
         "crates/diffuse-intent/src/tests/intent_runtime/transaction_verification_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeAnimatedMeshTests.swift",

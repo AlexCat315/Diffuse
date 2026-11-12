@@ -313,7 +313,7 @@ impl CapabilityInvocationRecord {
 /// A host-owned, deterministic check evaluated after all operations are applied.
 ///
 /// A failed assertion aborts the transaction and restores the in-memory snapshots.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum TransactionVerificationAssertion {
     EntityExists(u64),
     EntityIsAbsent(u64),
