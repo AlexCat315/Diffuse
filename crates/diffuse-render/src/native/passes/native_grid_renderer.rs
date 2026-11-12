@@ -13,7 +13,7 @@ use cove_graphics::rhi::{
 use cove_logging::{Level, LogEvent};
 
 use crate::core::frame::render_frame_plan::RenderPassKind;
-use crate::core::frame::render_packet::{RenderDrawableSize, RenderPacket};
+use crate::core::frame::render_packet::{RenderDrawableSize, RenderPacket, RenderPacketConsumer};
 use crate::core::render_stats::RenderFrameStats;
 use crate::native::passes::native_editor_grid_pass::NativeEditorGridPass;
 use crate::native::targets::native_render_targets::NativeRenderTargets;
@@ -96,6 +96,13 @@ impl NativeGridRenderer {
 
     pub fn current_frame_stats(&self) -> RenderFrameStats {
         self.last_frame_stats
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    pub fn last_error(&self) -> Option<String> {
+        self.last_error
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
@@ -258,5 +265,23 @@ impl NativeGridRenderer {
             NativeRenderTargets::make(&self.device, size, self.window_target.is_none(), false)?;
         *guard = Some(replacement);
         Ok(())
+    }
+}
+
+impl RenderPacketConsumer for NativeGridRenderer {
+    fn initialize(&mut self) {
+        NativeGridRenderer::initialize(self);
+    }
+
+    fn render(&mut self, packet: &RenderPacket) {
+        NativeGridRenderer::render(self, packet);
+    }
+
+    fn current_frame_stats(&self) -> RenderFrameStats {
+        NativeGridRenderer::current_frame_stats(self)
+    }
+
+    fn current_viewport_surface_state(&self) -> ViewportSurfaceState {
+        NativeGridRenderer::current_viewport_surface_state(self)
     }
 }

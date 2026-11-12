@@ -12209,7 +12209,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_thread_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/SimulationThreadTests.swift",

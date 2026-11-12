@@ -310,6 +310,14 @@ impl NativeRenderer {
             .clone()
     }
 
+    pub fn last_error(&self) -> Option<String> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .last_error
+            .clone()
+    }
+
     pub fn current_viewport_surface_state(&self) -> ViewportSurfaceState {
         self.viewport_publication
             .lock()
