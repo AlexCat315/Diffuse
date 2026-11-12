@@ -1689,7 +1689,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/adapter/ragdoll.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorCore/Scene/Adapter/Scripts.swift",
