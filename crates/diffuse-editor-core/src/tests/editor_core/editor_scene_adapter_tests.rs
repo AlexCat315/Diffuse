@@ -2562,3 +2562,54 @@ fn scene_manifest_round_trips_vehicle_controllers() {
         );
     }
 }
+
+/// Viewport framing preserves a parented game camera and frames through the editor camera.
+#[test]
+fn viewport_framing_handles_parented_camera() {
+    use diffuse_math::simd::simd_compat::{Float3, simd_distance};
+    use diffuse_scene::runtime_world::LocalTransform;
+
+    use crate::editing::viewport::editor_viewport_projection::EditorViewportFraming;
+
+    let adapter = preview_adapter();
+    adapter.set_editor_viewport_camera_enabled(true);
+    let camera_node = adapter
+        .roots()
+        .into_iter()
+        .find(|node| node.name == "Main Camera")
+        .expect("preview camera");
+    let (selected_entity, parent) = adapter.with_scene_mut(|scene| {
+        let selected = scene.create_entity();
+        scene.set_local_transform(
+            LocalTransform::from_translation(Float3::new(11.0, -2.0, 3.0)),
+            selected,
+        );
+        let parent = scene.create_entity();
+        scene.set_local_transform(
+            LocalTransform::from_translation(Float3::new(7.0, -3.0, 2.0)),
+            parent,
+        );
+        assert!(scene.set_parent(
+            Some(parent),
+            diffuse_scene::entity_id::EntityID::from_raw_value(camera_node.id)
+        ));
+        (selected, parent)
+    });
+    adapter.with_scene_mut(|scene| scene.propagate_transforms());
+    adapter.tick_scene_default();
+
+    let camera_before = adapter.current_render_camera();
+    let expected_min = Float3::new(10.75, -2.25, 2.75);
+    let expected_max = Float3::new(11.25, -1.75, 3.25);
+    let expected =
+        EditorViewportFraming::pose(&camera_before, expected_min, expected_max, None, 1.3);
+    let manifest_before = adapter.manifest();
+
+    adapter.frame_entity(selected_entity.raw_value(), None);
+
+    let camera = adapter.current_render_camera();
+    assert!(simd_distance(camera.target, expected.target) < 1e-4);
+    assert!(simd_distance(camera.eye, expected.eye) < 1e-4);
+    assert_eq!(adapter.manifest(), manifest_before);
+    let _ = parent;
+}
