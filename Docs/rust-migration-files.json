@@ -2800,7 +2800,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/commands/catalog.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorUI/Commands/Command.swift",
@@ -2811,7 +2811,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/commands/command.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorUI/Commands/Dispatcher.swift",
@@ -2844,7 +2844,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/commands/policy.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorUI/Commands/SceneFiles.swift",
@@ -4810,7 +4810,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/command_catalog_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/CommitOnBlurTextFieldTests.swift",

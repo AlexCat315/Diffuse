@@ -21,3 +21,21 @@ impl EditorAppResourceBundle {
         })
     }
 }
+
+impl EditorAppResourceBundle {
+    /// The bundle when the executable ships beside one. String lookups fall
+    /// back to their keys without it; asset callers still use [`Self::bundle`].
+    pub fn bundle_if_available() -> Option<&'static ResourceBundle> {
+        static BUNDLE: OnceLock<Option<ResourceBundle>> = OnceLock::new();
+        BUNDLE
+            .get_or_init(|| {
+                ResourceBundle::beside_executable(&[
+                    "DiffuseEditor_EditorUI",
+                    "DiffuseEditor_EditorUI.resources",
+                ])
+                .ok()
+                .flatten()
+            })
+            .as_ref()
+    }
+}

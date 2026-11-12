@@ -29,6 +29,14 @@ pub enum PlaybackState {
 }
 
 impl PlaybackState {
+    pub fn raw_value(self) -> &'static str {
+        match self {
+            PlaybackState::Stopped => "stopped",
+            PlaybackState::Playing => "playing",
+            PlaybackState::Paused => "paused",
+        }
+    }
+
     pub fn can_transition(self, next: PlaybackState) -> bool {
         matches!(
             (self, next),

@@ -167,7 +167,7 @@ impl EditorShortcutKey {
 
     pub fn delete() -> Self {
         Self::fixed(
-            "⌫",
+            "\u{8}",
             "⌫",
             "Delete",
             vec![Scancode::BACKSPACE, Scancode::DELETE],

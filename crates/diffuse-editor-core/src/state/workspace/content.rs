@@ -22,6 +22,15 @@ impl EditorContent {
         EditorContent::Timeline,
     ];
 
+    /// The persisted raw value, which is also the command identifier suffix.
+    pub fn raw_value(self) -> &'static str {
+        match self {
+            EditorContent::Scene => "scene",
+            EditorContent::Files => "files",
+            EditorContent::Timeline => "timeline",
+        }
+    }
+
     pub fn title(self) -> &'static str {
         match self {
             EditorContent::Scene => "Scene",
