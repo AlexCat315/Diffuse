@@ -12330,7 +12330,7 @@
       "rust": [
         "crates/diffuse-intent/src/tests/intent_runtime/commit_pipeline_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/IntentRuntimeTests/ComponentTransactionTests.swift",
