@@ -6016,7 +6016,7 @@
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/rust_analyzer/rust_analyzer_executable_locator_tests.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/SourceKitLSP/SourceKitLSPProcessTests.swift",
