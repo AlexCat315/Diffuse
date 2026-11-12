@@ -12088,7 +12088,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/core/deformable_mesh_upload_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Core/GeometryOverlayTests.swift",
