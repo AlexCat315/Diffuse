@@ -377,7 +377,6 @@ impl NativeRenderer {
             self.lighting.ensure_environment()?;
         }
         let mesh_revision = self.meshes.revision;
-        let post_revision = self.post.revision;
         let shadow_plan = ShadowAtlasPlanner::make_shadow_atlas_plan(
             &packet.scene,
             packet.drawable_size,
@@ -417,7 +416,11 @@ impl NativeRenderer {
         };
         next_frame.prepare(
             packet,
-            RenderFrameResourceVersion::new(mesh_revision, post_revision, packet.drawable_size),
+            RenderFrameResourceVersion::new(
+                mesh_revision,
+                self.post.revision,
+                packet.drawable_size,
+            ),
             hdr,
         );
         self.device.begin_frame()?;

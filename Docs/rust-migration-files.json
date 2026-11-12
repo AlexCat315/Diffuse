@@ -12121,7 +12121,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/core/render_backend_gpu_smoke_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Core/RenderCameraMatricesTests.swift",
