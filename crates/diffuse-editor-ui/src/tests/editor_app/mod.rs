@@ -13,6 +13,7 @@ pub mod inspector_field_controls_tests;
 pub mod particle_module_stack_editor_tests;
 pub mod project_list_tests;
 pub mod release_install_validator_tests;
+pub mod settings_draft_tests;
 pub mod render_pipeline_tests;
 pub mod shortcut_handler_tests;
 pub mod viewport_gizmo_selection_policy_tests;

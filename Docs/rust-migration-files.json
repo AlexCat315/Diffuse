@@ -4300,7 +4300,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/settings/assistant/draft.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorUI/Settings/Assistant/Editing.swift",
