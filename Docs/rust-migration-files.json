@@ -5552,7 +5552,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/inspector/choices.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Inspector/GeneratedForms.swift",
