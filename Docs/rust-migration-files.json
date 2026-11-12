@@ -4951,7 +4951,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/project_list_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/ReleaseInstallValidatorTests.swift",
