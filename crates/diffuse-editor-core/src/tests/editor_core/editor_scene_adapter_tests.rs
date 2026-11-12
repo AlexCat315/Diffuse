@@ -1271,3 +1271,168 @@ fn multi_entity_transforms_honor_locks_atomically() {
         Some(second_original.columns[3])
     );
 }
+
+/// Preview scene manifest captures hierarchy roots.
+#[test]
+fn preview_manifest_captures_hierarchy_roots() {
+    use diffuse_scene::components::core::value::manifest_value_for;
+
+    let adapter = preview_adapter();
+    let manifest = adapter.manifest_for_selection(adapter.default_selection_id());
+
+    assert_eq!(
+        manifest.schema_version,
+        crate::scene::manifest::editor_scene_manifest::EditorSceneManifest::CURRENT_SCHEMA_VERSION
+    );
+    assert_eq!(manifest.revision, adapter.revision());
+    assert_eq!(manifest.entity_count, adapter.entity_count() as i64);
+    assert_eq!(manifest.selected_entity_id, adapter.default_selection_id());
+    assert!(!manifest.roots.is_empty());
+    assert!(manifest.roots.iter().any(|node| node.name == "Main Camera"));
+    assert!(manifest.roots.iter().any(|node| {
+        manifest_value_for(&node.components, "camera")
+            .and_then(|value| value.object_value())
+            .is_some()
+    }));
+}
+
+/// Preview scene reports active particles so the viewport keeps driving frames.
+#[test]
+fn preview_scene_has_active_particles() {
+    let adapter = preview_adapter();
+    assert!(adapter.has_active_particles());
+}
+
+/// Viewport framing centers and fits a complete multi-selection.
+#[test]
+fn viewport_framing_fits_multi_selection() {
+    use diffuse_math::simd::simd_compat::{Float3, simd_distance};
+    use diffuse_scene::runtime_world::LocalTransform;
+
+    let adapter = preview_adapter();
+    adapter.set_editor_viewport_camera_enabled(true);
+    let (left, right) = adapter.with_scene_mut(|scene| {
+        let left = scene.create_entity();
+        let right = scene.create_entity();
+        scene.set_local_transform(
+            LocalTransform::from_translation(Float3::new(-2.0, 0.0, 0.0)),
+            left,
+        );
+        scene.set_local_transform(
+            LocalTransform::from_translation(Float3::new(3.0, 4.0, 1.0)),
+            right,
+        );
+        (left, right)
+    });
+    adapter.with_scene_mut(|scene| scene.propagate_transforms());
+    adapter.tick_scene_default();
+
+    let selected: std::collections::BTreeSet<u64> =
+        [left.raw_value(), right.raw_value()].into_iter().collect();
+    let expected_min = Float3::new(-2.25, -0.25, -0.25);
+    let expected_max = Float3::new(3.25, 4.25, 1.25);
+    let expected_center = (expected_min + expected_max) * 0.5;
+
+    adapter.frame_entities(&selected, Some(16.0 / 9.0));
+
+    assert!(simd_distance(adapter.current_render_camera().target, expected_center) < 1e-4);
+}
+
+/// Resetting preview scene publishes a new revision.
+#[test]
+fn reset_preview_scene_publishes_revision() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let adapter = preview_adapter();
+    let revisions = Rc::new(RefCell::new(Vec::new()));
+    {
+        let revisions = revisions.clone();
+        adapter
+            .on_revision_changed
+            .replace(Some(Rc::new(move |revision| {
+                revisions.borrow_mut().push(revision);
+            })));
+    }
+
+    adapter.reset_to_preview_scene();
+
+    assert_eq!(*revisions.borrow(), [adapter.revision()]);
+    assert!(adapter.default_selection_id().is_some());
+}
+
+/// Ticking drives animation and writes a non-empty joint palette for a skinned entity.
+#[test]
+fn current_joint_palette_map_returns_palette_after_tick() {
+    use diffuse_assets::asset_pipeline::{
+        MeshAnimation, MeshAnimationChannel, MeshAnimationInterpolation, MeshAnimationPath,
+        MeshAnimationSampler, MeshAsset, MeshNode, MeshSkin,
+    };
+    use diffuse_assets::asset_registry::AssetRegistry;
+    use diffuse_math::simd::simd_compat::{Float4, MATRIX_IDENTITY_FLOAT4X4};
+    use diffuse_scene::media::animation::AnimationPlayer;
+    use diffuse_scene::scene_bootstrap::AssetReferenceComponent;
+
+    let mesh_index = 9_001;
+    let sampler = MeshAnimationSampler::new(
+        vec![0.0, 1.0],
+        vec![
+            Float4::new(0.0, 0.0, 0.0, 0.0),
+            Float4::new(1.0, 0.0, 0.0, 0.0),
+        ],
+        MeshAnimationInterpolation::Linear,
+    );
+    let channel = MeshAnimationChannel {
+        sampler_index: 0,
+        target_node_index: Some(0),
+        path: MeshAnimationPath::Translation,
+    };
+    let clip = MeshAnimation {
+        name: Some("walk".to_string()),
+        samplers: vec![sampler],
+        channels: vec![channel],
+    };
+    let mut mesh = MeshAsset::new("test_skinned", Vec::new(), Vec::new());
+    mesh.nodes = vec![MeshNode {
+        name: Some("root".to_string()),
+        ..MeshNode::default()
+    }];
+    mesh.skins = vec![MeshSkin {
+        name: None,
+        joint_node_indices: vec![0],
+        inverse_bind_matrices: vec![MATRIX_IDENTITY_FLOAT4X4],
+    }];
+    mesh.animations = vec![clip];
+    AssetRegistry::shared().register_for_testing(mesh, mesh_index);
+
+    let adapter = preview_adapter();
+    let entity = adapter.with_scene_mut(|scene| {
+        let entity = scene.create_entity();
+        scene.set_component(AnimationPlayer::new(None, 1.0, true, true, 0.0), entity);
+        scene.set_component(
+            AssetReferenceComponent::new(
+                format!("test:{mesh_index}"),
+                "test",
+                "test.gltf",
+                "/test.gltf",
+                "gltf",
+                mesh_index,
+            ),
+            entity,
+        );
+        entity
+    });
+
+    adapter.tick_scene(0.1, 0, Vec::new(), false);
+    AssetRegistry::shared().unregister_testing_mesh(mesh_index);
+
+    let palette = adapter.current_joint_palette_map();
+    assert!(palette.palette(entity).is_some());
+    assert!(
+        !palette
+            .palette(entity)
+            .expect("palette")
+            .matrices
+            .is_empty()
+    );
+}
