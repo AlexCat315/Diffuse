@@ -4733,7 +4733,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/game_application.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/GameRuntime/GameProjectAssetIndexLoader.swift",
@@ -5097,7 +5097,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/bundled_languages_tests.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: formattingActivatesOnDemandWithoutResettingChat needs EditorApplication/formatDocument/plugin session (hub not migrated); other two cases are tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/ConsoleLoggingTests.swift",
@@ -5119,7 +5120,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/edit_log_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorAIRequestPolicyTests.swift",
@@ -5141,7 +5142,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_ai_settings_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorAgentTaskTests.swift",
@@ -5669,7 +5670,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/plugin_components_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/PluginPlatformTests.swift",
@@ -6465,7 +6466,8 @@
       "rust": [
         "crates/diffuse-game-runtime/src/tests/game_runtime/crystal_rush_gameplay_tests.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: examples/CrystalRush/Scripts/src/lib.rs (D1 example script) is still pending; test is translated and #[ignore]d until the example builds"
     },
     {
       "source": "Editor/Tests/GameRuntimeTests/GameProjectAssetIndexLoaderTests.swift",
@@ -6520,7 +6522,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/tests/game_runtime/native_game_application_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/GameRuntimeTests/PlayerInstallValidatorTests.swift",
@@ -6575,7 +6577,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/script_system/script_asset_registry_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/ScriptSystemTests/ScriptWorkspaceExternalChangeTests.swift",
