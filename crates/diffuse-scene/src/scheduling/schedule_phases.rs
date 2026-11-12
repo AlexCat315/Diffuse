@@ -250,7 +250,7 @@ pub fn run_pre_physics_scripts(
     let simulated = apply_ragdoll_animation_to_bodies(world);
     // Swift's `ragdollSimulatedBodies` is persistent schedule state; the bridge
     // reads it from the world, so publish the new set there as well.
-    world.set_resource(RagdollSimulatedBodiesResource::new(simulated.clone()));
+    world.set_derived_resource(RagdollSimulatedBodiesResource::new(simulated.clone()));
     state.ragdoll_simulated_bodies = simulated;
 
     if world.hierarchy_needs_propagation() {
@@ -461,14 +461,14 @@ pub fn reset_disabled_physics_resources(state: &mut ScheduleState, world: &mut R
     state.vehicle_state_frame = VehicleStateFrameResource::default();
     state.soft_body_state_frame = SoftBodyStateFrameResource::default();
 
-    world.set_resource(state.physics_clock.clone());
-    world.set_resource(state.physics_frame_state.clone());
-    world.set_resource(state.physics_contact_frame.clone());
-    world.set_resource(state.physics_debug_frame.clone());
-    world.set_resource(state.physics_event_frame.clone());
-    world.set_resource(state.character_state_frame.clone());
-    world.set_resource(state.vehicle_state_frame.clone());
-    world.set_resource(state.soft_body_state_frame.clone());
+    world.set_derived_resource(state.physics_clock.clone());
+    world.set_derived_resource(state.physics_frame_state.clone());
+    world.set_derived_resource(state.physics_contact_frame.clone());
+    world.set_derived_resource(state.physics_debug_frame.clone());
+    world.set_derived_resource(state.physics_event_frame.clone());
+    world.set_derived_resource(state.character_state_frame.clone());
+    world.set_derived_resource(state.vehicle_state_frame.clone());
+    world.set_derived_resource(state.soft_body_state_frame.clone());
 }
 
 /// Capture the frame's physics commands when recording is on and replay is off.
@@ -804,19 +804,19 @@ pub fn write_back_physics(
     state.soft_body_state_frame =
         SoftBodyStateFrameResource::new(frame.results.soft_body_states.clone());
 
-    world.set_resource(state.physics_clock.clone());
-    world.set_resource(state.physics_frame_state.clone());
-    world.set_resource(state.character_state_frame.clone());
-    world.set_resource(state.vehicle_state_frame.clone());
-    world.set_resource(state.soft_body_state_frame.clone());
+    world.set_derived_resource(state.physics_clock.clone());
+    world.set_derived_resource(state.physics_frame_state.clone());
+    world.set_derived_resource(state.character_state_frame.clone());
+    world.set_derived_resource(state.vehicle_state_frame.clone());
+    world.set_derived_resource(state.soft_body_state_frame.clone());
 
     let state_hash_frame = PhysicsStateHashFrameResource {
         simulated_step: state.physics_clock.simulated_steps,
         hash: physics_state_hash(world),
     };
-    world.set_resource(state_hash_frame.clone());
+    world.set_derived_resource(state_hash_frame.clone());
     append_physics_command_frame(state, world, frame, state_hash_frame);
-    world.set_resource(state.physics_contact_frame.clone());
+    world.set_derived_resource(state.physics_contact_frame.clone());
 
     if state.uses_shared_physics_backend() {
         state.physics_query_scene.adopt_synchronized_world(
@@ -907,7 +907,7 @@ fn append_physics_command_frame(
     if (recording.frames.len() as i64) >= recording.max_frames {
         recording.is_recording = false;
     }
-    world.set_resource(recording);
+    world.set_derived_resource(recording);
 }
 
 // MARK: - triggerDetection
@@ -941,8 +941,8 @@ pub fn detect_triggers(
             Vec::new(),
             false,
         );
-        world.set_resource(trigger_frame);
-        world.set_resource(state.physics_event_frame.clone());
+        world.set_derived_resource(trigger_frame);
+        world.set_derived_resource(state.physics_event_frame.clone());
         return;
     }
 
@@ -1036,9 +1036,9 @@ pub fn detect_triggers(
         frame.results.joint_break_events.clone(),
         false,
     );
-    world.set_resource(trigger_frame);
-    world.set_resource(state.physics_contact_frame.clone());
-    world.set_resource(state.physics_event_frame.clone());
+    world.set_derived_resource(trigger_frame);
+    world.set_derived_resource(state.physics_contact_frame.clone());
+    world.set_derived_resource(state.physics_event_frame.clone());
 
     let mut destruction_events = frame.recording.destruction_events.clone();
     apply_destruction_contacts(&contact_events, world, &mut destruction_events);
@@ -1130,14 +1130,14 @@ pub fn update_spatial_index(
     frame: &mut RuntimeFrameContext,
 ) {
     let (index, report) = build_spatial_index_resource(world, &state.job_system);
-    world.set_resource(index.clone());
+    world.set_derived_resource(index.clone());
     state.physics_debug_frame = build_physics_debug_frame(
         world,
         &index,
         &frame.results.contact_events,
         &state.character_state_frame,
     );
-    world.set_resource(state.physics_debug_frame.clone());
+    world.set_derived_resource(state.physics_debug_frame.clone());
     frame.jobs.record(
         &report,
         crate::scheduling::schedule_commands::RuntimeSystemPhase::SpatialIndexUpdate,

@@ -265,7 +265,7 @@ impl SceneRuntime {
 
     pub fn begin_physics_command_recording(&mut self, max_frames: i64) {
         self.world
-            .set_resource(PhysicsCommandRecordingResource::new(
+            .set_derived_resource(PhysicsCommandRecordingResource::new(
                 true,
                 max_frames,
                 Vec::new(),
@@ -279,7 +279,7 @@ impl SceneRuntime {
             .resource::<PhysicsCommandRecordingResource>()
             .unwrap_or_default();
         recording.is_recording = false;
-        self.world.set_resource(recording.clone());
+        self.world.set_derived_resource(recording.clone());
         PhysicsCommandTape::new(recording.frames)
     }
 
@@ -296,7 +296,7 @@ impl SceneRuntime {
     ) -> RuntimeScheduleReport {
         self.set_physics_settings(frame.settings);
         self.world
-            .set_resource(PhysicsCommandReplayControlResource::new(true));
+            .set_derived_resource(PhysicsCommandReplayControlResource::new(true));
 
         let mut body_commands = frame.body_commands.clone();
         body_commands.sort_by_key(|command| command.entity.raw_value());
@@ -339,7 +339,7 @@ impl SceneRuntime {
 
         let report = self.tick(frame.delta_time_seconds, 0, Vec::new());
         self.world
-            .set_resource(PhysicsCommandReplayControlResource::default());
+            .set_derived_resource(PhysicsCommandReplayControlResource::default());
         report
     }
 
@@ -435,7 +435,7 @@ impl SceneRuntime {
         frame_index: u64,
         input_events: Vec<diffuse_kernel::input_event::InputEvent>,
     ) -> RuntimeScheduleReport {
-        self.world.set_resource(InputFrameResource::new(
+        self.world.set_derived_resource(InputFrameResource::new(
             frame_index,
             delta_time_seconds,
             input_events,
@@ -500,13 +500,7 @@ impl SceneRuntime {
         Vec<crate::runtime_world::RuntimeComponentQuery<C>>,
         diffuse_kernel::job_system::JobDispatchReport,
     ) {
-        let entities = self.world.entities_with::<C>();
-        let snapshot = self.world.component_snapshot_matching::<C>(&entities);
-        job_system.parallel_compact_map(&entities, None, |entity| {
-            snapshot.get(entity).cloned().map(|component| {
-                crate::runtime_world::RuntimeComponentQuery::new(*entity, component)
-            })
-        })
+        self.world.query_parallel::<C>(job_system)
     }
 
     pub fn query_pair<A: RuntimeComponent, B: RuntimeComponent>(
@@ -523,16 +517,7 @@ impl SceneRuntime {
         Vec<crate::runtime_world::RuntimeComponentPairQuery<A, B>>,
         diffuse_kernel::job_system::JobDispatchReport,
     ) {
-        let entities = self.world.entities_with::<A>();
-        let snapshot_a = self.world.component_snapshot_matching::<A>(&entities);
-        let snapshot_b = self.world.component_snapshot_matching::<B>(&entities);
-        job_system.parallel_compact_map(&entities, None, |entity| {
-            Some(crate::runtime_world::RuntimeComponentPairQuery::new(
-                *entity,
-                snapshot_a.get(entity)?.clone(),
-                snapshot_b.get(entity)?.clone(),
-            ))
-        })
+        self.world.query_pair_parallel::<A, B>(job_system)
     }
 
     pub fn query_triple<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
@@ -553,18 +538,7 @@ impl SceneRuntime {
         Vec<crate::runtime_world::RuntimeComponentTripleQuery<A, B, C>>,
         diffuse_kernel::job_system::JobDispatchReport,
     ) {
-        let entities = self.world.entities_with::<A>();
-        let snapshot_a = self.world.component_snapshot_matching::<A>(&entities);
-        let snapshot_b = self.world.component_snapshot_matching::<B>(&entities);
-        let snapshot_c = self.world.component_snapshot_matching::<C>(&entities);
-        job_system.parallel_compact_map(&entities, None, |entity| {
-            Some(crate::runtime_world::RuntimeComponentTripleQuery::new(
-                *entity,
-                snapshot_a.get(entity)?.clone(),
-                snapshot_b.get(entity)?.clone(),
-                snapshot_c.get(entity)?.clone(),
-            ))
-        })
+        self.world.query_triple_parallel::<A, B, C>(job_system)
     }
 
     pub fn update_component<C: RuntimeComponent>(

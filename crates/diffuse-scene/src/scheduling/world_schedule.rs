@@ -211,9 +211,9 @@ impl RuntimeWorldSchedule {
         world.advance_revision();
         // Cleared after the revision bump: a command enqueued during
         // `postPhysicsScripts` must survive into the next frame's `commandApply`.
-        world.set_resource(CharacterCommandFrameResource::empty());
-        world.set_resource(VehicleCommandFrameResource::empty());
-        world.set_resource(DestructionCommandFrameResource::empty());
+        world.set_derived_resource(CharacterCommandFrameResource::empty());
+        world.set_derived_resource(VehicleCommandFrameResource::empty());
+        world.set_derived_resource(DestructionCommandFrameResource::empty());
 
         build_schedule_report(&self.state, world, &frame, phase_nanoseconds)
     }
@@ -233,7 +233,7 @@ impl RuntimeWorldSchedule {
         frame
             .jobs
             .record(&scene.report, RuntimeSystemPhase::RenderExtract);
-        world.set_resource(scene.resource.clone());
+        world.set_derived_resource(scene.resource.clone());
         self.last_render_scene = scene.resource;
     }
 

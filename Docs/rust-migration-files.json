@@ -12957,7 +12957,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/runtime_world_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/SceneSerializerTests.swift",

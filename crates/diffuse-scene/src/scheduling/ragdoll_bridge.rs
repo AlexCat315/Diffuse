@@ -216,8 +216,8 @@ pub fn write_ragdoll_physics_to_animation(world: &mut RuntimeWorld) {
         states.insert(entity, RagdollState::new(entity, ragdoll.mode, bone_states));
     }
 
-    world.set_resource(palette_map);
-    world.set_resource(RagdollStateFrameResource::new(states));
+    world.set_derived_resource(palette_map);
+    world.set_derived_resource(RagdollStateFrameResource::new(states));
 }
 
 /// Blend two transforms by `weight`.

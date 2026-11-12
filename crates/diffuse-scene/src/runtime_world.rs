@@ -296,6 +296,39 @@ impl<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>
     }
 }
 
+/// The shortest store supplies pair candidates, sorted so parallel and
+/// sequential queries return the same order.
+fn pair_query_candidates<A: RuntimeComponent, B: RuntimeComponent>(
+    snapshot_a: &BTreeMap<EntityID, A>,
+    snapshot_b: &BTreeMap<EntityID, B>,
+) -> Vec<EntityID> {
+    let mut candidates: Vec<EntityID> = if snapshot_a.len() <= snapshot_b.len() {
+        snapshot_a.keys().copied().collect()
+    } else {
+        snapshot_b.keys().copied().collect()
+    };
+    candidates.sort_by_key(|entity| entity.raw_value());
+    candidates
+}
+
+/// Triple queries start from the smallest of the three stores.
+fn triple_query_candidates<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
+    snapshot_a: &BTreeMap<EntityID, A>,
+    snapshot_b: &BTreeMap<EntityID, B>,
+    snapshot_c: &BTreeMap<EntityID, C>,
+) -> Vec<EntityID> {
+    let mut candidates: Vec<EntityID> =
+        if snapshot_a.len() <= snapshot_b.len() && snapshot_a.len() <= snapshot_c.len() {
+            snapshot_a.keys().copied().collect()
+        } else if snapshot_b.len() <= snapshot_c.len() {
+            snapshot_b.keys().copied().collect()
+        } else {
+            snapshot_c.keys().copied().collect()
+        };
+    candidates.sort_by_key(|entity| entity.raw_value());
+    candidates
+}
+
 // MARK: - RuntimeWorld
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -796,17 +829,63 @@ impl RuntimeWorld {
             .collect()
     }
 
+    /// Swift's `query(_:using:)`: the same projection, chunked across the job
+    /// system. The report says whether more than one chunk ran.
+    pub fn query_parallel<C: RuntimeComponent>(
+        &self,
+        job_system: &JobSystem,
+    ) -> (Vec<RuntimeComponentQuery<C>>, JobDispatchReport) {
+        let snapshot = self.components.snapshot::<C>();
+        let entities = self.entities_with::<C>();
+        job_system.parallel_compact_map(&entities, Some(1), |entity| {
+            snapshot
+                .get(entity)
+                .map(|component| RuntimeComponentQuery::new(*entity, component.clone()))
+        })
+    }
+
+    /// Swift's `query(_:_:using:)`.
+    pub fn query_pair_parallel<A: RuntimeComponent, B: RuntimeComponent>(
+        &self,
+        job_system: &JobSystem,
+    ) -> (Vec<RuntimeComponentPairQuery<A, B>>, JobDispatchReport) {
+        let snapshot_a = self.components.snapshot::<A>();
+        let snapshot_b = self.components.snapshot::<B>();
+        let entities = pair_query_candidates(&snapshot_a, &snapshot_b);
+        job_system.parallel_compact_map(&entities, Some(1), |entity| {
+            Some(RuntimeComponentPairQuery::new(
+                *entity,
+                snapshot_a.get(entity)?.clone(),
+                snapshot_b.get(entity)?.clone(),
+            ))
+        })
+    }
+
+    /// Swift's `query(_:_:_:using:)`.
+    pub fn query_triple_parallel<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
+        &self,
+        job_system: &JobSystem,
+    ) -> (Vec<RuntimeComponentTripleQuery<A, B, C>>, JobDispatchReport) {
+        let snapshot_a = self.components.snapshot::<A>();
+        let snapshot_b = self.components.snapshot::<B>();
+        let snapshot_c = self.components.snapshot::<C>();
+        let entities = triple_query_candidates(&snapshot_a, &snapshot_b, &snapshot_c);
+        job_system.parallel_compact_map(&entities, Some(1), |entity| {
+            Some(RuntimeComponentTripleQuery::new(
+                *entity,
+                snapshot_a.get(entity)?.clone(),
+                snapshot_b.get(entity)?.clone(),
+                snapshot_c.get(entity)?.clone(),
+            ))
+        })
+    }
+
     pub fn query_pair<A: RuntimeComponent, B: RuntimeComponent>(
         &self,
     ) -> Vec<RuntimeComponentPairQuery<A, B>> {
         let snapshot_a = self.components.snapshot::<A>();
         let snapshot_b = self.components.snapshot::<B>();
-        let mut candidates: Vec<EntityID> = if snapshot_a.len() <= snapshot_b.len() {
-            snapshot_a.keys().copied().collect()
-        } else {
-            snapshot_b.keys().copied().collect()
-        };
-        candidates.sort_by_key(|entity| entity.raw_value());
+        let candidates = pair_query_candidates(&snapshot_a, &snapshot_b);
         candidates
             .into_iter()
             .filter_map(|entity| {
@@ -825,15 +904,7 @@ impl RuntimeWorld {
         let snapshot_a = self.components.snapshot::<A>();
         let snapshot_b = self.components.snapshot::<B>();
         let snapshot_c = self.components.snapshot::<C>();
-        let mut candidates: Vec<EntityID> =
-            if snapshot_a.len() <= snapshot_b.len() && snapshot_a.len() <= snapshot_c.len() {
-                snapshot_a.keys().copied().collect()
-            } else if snapshot_b.len() <= snapshot_c.len() {
-                snapshot_b.keys().copied().collect()
-            } else {
-                snapshot_c.keys().copied().collect()
-            };
-        candidates.sort_by_key(|entity| entity.raw_value());
+        let candidates = triple_query_candidates(&snapshot_a, &snapshot_b, &snapshot_c);
         candidates
             .into_iter()
             .filter_map(|entity| {
