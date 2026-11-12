@@ -9116,7 +9116,8 @@
       "rust": [
         "crates/diffuse-plugin/src/lifecycle/runtime_activation.rs"
       ],
-      "status": "pending"
+      "status": "removed",
+      "reason": "extension 行为已并入 crates/diffuse-plugin/src/lifecycle/manager.rs（activation_events/matches/available_capabilities），独立的 runtime_activation.rs 为空壳并已删除"
     },
     {
       "source": "Engine/Sources/PluginRuntime/Lifecycle/Status.swift",
