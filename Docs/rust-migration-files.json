@@ -12451,7 +12451,8 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_grid_surface_tests.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: macOS AppKit window + CAMetalLayer host surface needs objc2/objc2-quartz-core dev-dependencies (see MIGRATION.md §10)"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeInsetGeometryTests.swift",
