@@ -2064,7 +2064,8 @@
         "crates/diffuse-editor-core/src/scripting/assets/script_workspace_model.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: requires the un-migrated DynamicScriptManager and language-service stack (dynamic_script_manager.rs, script_language_support.rs, analysis/session files; see §9 batch 256)"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Dynamic/DynamicScriptBuildCoordinator.swift",
@@ -3328,7 +3329,8 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/documents/writing/analysis.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: declarative outline rules need a regex engine; no regex crate exists in the workspace (§10)"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Documents/Writing/Bar.swift",
@@ -13291,7 +13293,8 @@
       "rust": [
         "crates/diffuse-android/src/content/input_snapshot.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: needs serde/serde_json added to diffuse-android crate deps and content/scene.rs (pending: Bounds/HostedScene/TypographyDriver); see §10"
     },
     {
       "source": "Platforms/Android/Sources/CoveAndroidApp/Content/Inspection.swift",
@@ -13302,7 +13305,8 @@
       "rust": [
         "crates/diffuse-android/src/content/inspection.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: needs serde/serde_json added to diffuse-android crate deps and content/scene.rs (pending: Bounds/HostedScene/TypographyDriver); see §10"
     },
     {
       "source": "Platforms/Android/Sources/CoveAndroidApp/Content/Scene.swift",
@@ -13346,7 +13350,7 @@
       "rust": [
         "crates/diffuse-android/src/frame/timings.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Platforms/Android/Sources/CoveAndroidApp/Game/Session.swift",
@@ -13379,7 +13383,8 @@
       "rust": [
         "crates/diffuse-android/src/validation/counter/typography.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: needs serde/serde_json added to diffuse-android crate deps and content/scene.rs (pending: Bounds/HostedScene/TypographyDriver); see §10"
     },
     {
       "source": "Platforms/Android/Sources/CoveAndroidApp/Validation/Showcase.swift",
@@ -13390,7 +13395,8 @@
       "rust": [
         "crates/diffuse-android/src/validation/showcase.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: needs serde/serde_json added to diffuse-android crate deps and content/scene.rs (pending: Bounds/HostedScene/TypographyDriver); see §10"
     },
     {
       "source": "Tools/Developer/Package.swift",
