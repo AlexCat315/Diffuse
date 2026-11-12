@@ -327,7 +327,7 @@ fn write_value(
         vec![SceneMutation::SetComponentData {
             entity_id: entity.raw_value(),
             type_id: schema.type_id.clone(),
-            value: ComponentValue::field_patch(value, &field.path),
+            value: ComponentValue::field_patch(value, path),
             mode: ComponentWriteMode::Merge,
         }],
     );
