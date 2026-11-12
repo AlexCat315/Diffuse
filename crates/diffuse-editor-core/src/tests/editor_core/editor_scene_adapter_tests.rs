@@ -2148,3 +2148,63 @@ fn scene_manifest_round_trips_soft_body_and_cloth() {
             .any(|section| section.id == "soft-body-mesh")
     );
 }
+
+/// Non-looping particles stop driving preview frames after they expire.
+#[test]
+fn non_looping_particles_stop_driving_preview_frames() {
+    use diffuse_math::simd::simd_compat::Float3;
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::emitter::particle_emitter_settings::ParticleEmitterSettings;
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    let adapter = preview_adapter();
+    adapter.set_scene(SceneRuntime::new(
+        diffuse_scene::components::core::registry::ComponentRegistry::built_in(),
+    ));
+    let mut settings = ParticleEmitterSettings::default();
+    settings.emission.looping = false;
+    settings.emission.duration = 0.1;
+    settings.emission.emission_rate = 10.0;
+    settings.emission.max_particles = 8;
+    settings.appearance.lifetime = 0.1;
+    settings.velocity.start_velocity = Float3::ZERO;
+    settings.forces.gravity = Float3::ZERO;
+    adapter.with_scene_mut(|scene| {
+        let entity = scene.create_entity();
+        scene.set_component(ParticleEmitter::new(settings), entity);
+    });
+
+    assert!(adapter.has_active_particles());
+    adapter.tick_scene(0.1, 0, Vec::new(), false);
+    assert!(adapter.has_active_particles());
+    adapter.tick_scene(0.2, 1, Vec::new(), false);
+    assert!(!adapter.has_active_particles());
+}
+
+/// Editor scene adapter exposes particle frame stats after ticking.
+#[test]
+fn editor_scene_adapter_exposes_particle_frame_stats() {
+    use diffuse_math::simd::simd_compat::Float3;
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::emitter::particle_emitter_settings::ParticleEmitterSettings;
+
+    let adapter = preview_adapter();
+    let mut settings = ParticleEmitterSettings::default();
+    settings.emission.emission_rate = 10.0;
+    settings.emission.max_particles = 100;
+    settings.appearance.lifetime = 100.0;
+    settings.forces.gravity = Float3::ZERO;
+    adapter.with_scene_mut(|scene| {
+        let entity = scene.create_entity();
+        scene.set_component(ParticleEmitter::new(settings), entity);
+    });
+
+    adapter.tick_scene(1.0, 0, Vec::new(), false);
+
+    let stats = adapter.current_particle_frame_stats();
+    assert!(stats.emitter_count >= 1);
+    assert!(stats.continuous_spawned_count >= 10);
+    assert!(stats.spawned_particle_count >= 10);
+    assert!(stats.live_particle_count >= 10);
+    assert!(stats.max_particle_count >= 100);
+}
