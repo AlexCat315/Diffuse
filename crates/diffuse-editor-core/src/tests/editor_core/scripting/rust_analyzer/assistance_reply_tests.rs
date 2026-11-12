@@ -2,7 +2,6 @@
 //! `Editor/Tests/EditorCoreTests/Scripting/SourceKitLSP/AssistanceReplyTests.swift`.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 
 use serde_json::json;
 
@@ -133,5 +132,5 @@ fn watched_files() {
             "Package.resolved:1".to_string(),
         ])
     );
-    std::fs::remove_dir_all(PathBuf::from(root)).ok();
+    std::fs::remove_dir_all(root).ok();
 }
