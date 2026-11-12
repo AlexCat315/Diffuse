@@ -1643,3 +1643,227 @@ fn scene_manifest_round_trips_renderable_scene_contract() {
         Float3::new(0.1, 0.2, 0.3)
     );
 }
+
+/// Scene manifest restores preview hierarchy and runtime components.
+#[test]
+fn scene_manifest_restores_preview_hierarchy_and_components() {
+    use diffuse_scene::physics::collider::Collider;
+    use diffuse_scene::physics::joints::physics_joint::PhysicsJoint;
+    use diffuse_scene::physics::joints::physics_joint_configuration::PhysicsJointKind;
+    use diffuse_scene::physics::rigid_body::{RigidBody, RigidBodyMotionType};
+    use diffuse_scene::rendering::render_extraction::{
+        CameraComponent, LightComponent, RenderMeshComponent,
+    };
+
+    use crate::scene::models::editor_scene_node::EditorSceneNode;
+
+    fn flatten(nodes: &[EditorSceneNode]) -> Vec<EditorSceneNode> {
+        nodes
+            .iter()
+            .flat_map(|node| {
+                let mut all = vec![node.clone()];
+                all.extend(flatten(&node.children));
+                all
+            })
+            .collect()
+    }
+
+    let source = preview_adapter();
+    let manifest = source.manifest_for_selection(source.default_selection_id());
+    let restored = preview_adapter();
+    let result = restored.load(&manifest);
+
+    assert_eq!(result.entity_count, manifest.entity_count);
+    assert!(result.selected_entity_id.is_some());
+    let source_names: Vec<String> = source.roots().into_iter().map(|node| node.name).collect();
+    let restored_names: Vec<String> = restored.roots().into_iter().map(|node| node.name).collect();
+    assert_eq!(restored_names, source_names);
+
+    let nodes = flatten(&restored.roots());
+    let hero = nodes.iter().find(|node| node.name == "Hero");
+    let camera = nodes.iter().find(|node| node.name == "Main Camera");
+    let light = nodes.iter().find(|node| node.name == "Key Light");
+    let constraint = nodes.iter().find(|node| node.name == "Hero Follow");
+    assert!(hero.is_some() && camera.is_some() && light.is_some() && constraint.is_some());
+
+    let scene = restored.scene();
+    if let Some(hero) = hero {
+        let entity = diffuse_scene::entity_id::EntityID::from_raw_value(hero.id);
+        assert_eq!(
+            scene
+                .component::<RenderMeshComponent>(entity)
+                .map(|mesh| mesh.mesh_index),
+            Some(1)
+        );
+        assert_eq!(
+            scene
+                .component::<RigidBody>(entity)
+                .map(|body| body.motion_type),
+            Some(RigidBodyMotionType::Dynamic)
+        );
+        assert!(scene.component::<Collider>(entity).is_some());
+    }
+    if let Some(camera) = camera {
+        let entity = diffuse_scene::entity_id::EntityID::from_raw_value(camera.id);
+        let camera = scene.component::<CameraComponent>(entity).expect("camera");
+        assert!(camera.is_active);
+        assert_eq!(camera.aspect_ratio, 1.0);
+    }
+    if let Some(light) = light {
+        let entity = diffuse_scene::entity_id::EntityID::from_raw_value(light.id);
+        assert_eq!(
+            scene
+                .component::<LightComponent>(entity)
+                .map(|light| light.intensity),
+            Some(3.0)
+        );
+    }
+    if let Some(constraint) = constraint {
+        let entity = diffuse_scene::entity_id::EntityID::from_raw_value(constraint.id);
+        assert_eq!(
+            scene
+                .component::<PhysicsJoint>(entity)
+                .map(|joint| joint.constraint_type()),
+            Some(PhysicsJointKind::Distance)
+        );
+    }
+}
+
+/// Scene manifest preserves rigid-body CCD and pending impulses.
+#[test]
+fn scene_manifest_preserves_complete_rigid_body_state() {
+    use diffuse_math::simd::simd_compat::Float3;
+    use diffuse_scene::physics::rigid_body::{RigidBody, RigidBodyOptions};
+    use diffuse_scene::scene_bootstrap::SceneNameComponent;
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    let source = preview_adapter();
+    source.set_scene(SceneRuntime::new(
+        diffuse_scene::components::core::registry::ComponentRegistry::built_in(),
+    ));
+    let entity = source.with_scene_mut(|scene| {
+        let entity = scene.create_entity();
+        scene.set_component(SceneNameComponent::new("Physics Body"), entity);
+        scene.set_component(
+            RigidBody::new(RigidBodyOptions {
+                linear_velocity: Float3::new(1.0, 2.0, 3.0),
+                angular_velocity: Float3::new(4.0, 5.0, 6.0),
+                accumulated_force: Float3::new(7.0, 8.0, 9.0),
+                accumulated_torque: Float3::new(10.0, 11.0, 12.0),
+                accumulated_linear_impulse: Float3::new(13.0, 14.0, 15.0),
+                accumulated_angular_impulse: Float3::new(16.0, 17.0, 18.0),
+                continuous_collision_detection: true,
+                ..RigidBodyOptions::default()
+            }),
+            entity,
+        );
+        entity
+    });
+
+    let manifest = source.manifest_for_selection(Some(entity.raw_value()));
+    let data = serde_json::to_vec(&manifest).expect("encode");
+    let decoded: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let restored = preview_adapter();
+    let _ = restored.load(&decoded);
+
+    let restored_node = restored
+        .roots()
+        .into_iter()
+        .find(|node| node.name == "Physics Body")
+        .expect("physics body");
+    let body = restored
+        .scene()
+        .component::<RigidBody>(diffuse_scene::entity_id::EntityID::from_raw_value(
+            restored_node.id,
+        ))
+        .expect("rigid body");
+    assert_eq!(body.linear_velocity, Float3::new(1.0, 2.0, 3.0));
+    assert_eq!(body.angular_velocity, Float3::new(4.0, 5.0, 6.0));
+    assert_eq!(body.accumulated_force, Float3::new(7.0, 8.0, 9.0));
+    assert_eq!(body.accumulated_torque, Float3::new(10.0, 11.0, 12.0));
+    assert_eq!(
+        body.accumulated_linear_impulse,
+        Float3::new(13.0, 14.0, 15.0)
+    );
+    assert_eq!(
+        body.accumulated_angular_impulse,
+        Float3::new(16.0, 17.0, 18.0)
+    );
+    assert!(body.continuous_collision_detection);
+}
+
+/// Scene manifest preserves backend kind, collision steps, and capacity.
+#[test]
+fn scene_manifest_preserves_complete_physics_settings() {
+    use diffuse_math::simd::simd_compat::Float3;
+    use diffuse_scene::physics::backend::physics_backend_kind::PhysicsBackendKind;
+    use diffuse_scene::physics::physics_settings::{
+        PhysicsCapacitySettings, PhysicsSettingsResource,
+    };
+    use diffuse_scene::physics::physics_types::PhysicsSimulationMode;
+
+    let source = preview_adapter();
+    source.set_scene(diffuse_scene::scene_runtime::SceneRuntime::new(
+        diffuse_scene::components::core::registry::ComponentRegistry::built_in(),
+    ));
+    source.with_scene_mut(|scene| {
+        scene.set_resource(PhysicsSettingsResource::new(
+            PhysicsSimulationMode::Bake,
+            PhysicsBackendKind::None,
+            Float3::new(1.0, -15.0, 2.0),
+            1.0 / 120.0,
+            8,
+            false,
+            4,
+            PhysicsCapacitySettings::new(20_000, 3),
+        ));
+    });
+
+    let data = serde_json::to_vec(&source.manifest()).expect("encode");
+    let decoded: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let restored = preview_adapter();
+    let _ = restored.load(&decoded);
+
+    let settings = restored
+        .scene()
+        .resource::<PhysicsSettingsResource>()
+        .expect("physics settings");
+    assert_eq!(settings.backend_kind, PhysicsBackendKind::None);
+    assert_eq!(settings.simulation_mode, PhysicsSimulationMode::Bake);
+    assert_eq!(settings.gravity, Float3::new(1.0, -15.0, 2.0));
+    assert!((settings.fixed_time_step_seconds - 1.0 / 120.0).abs() < 0.000_001);
+    assert_eq!(settings.max_substeps_per_frame, 8);
+    assert_eq!(settings.collision_steps, 4);
+    assert!(!settings.allow_sleep);
+    assert_eq!(settings.capacity, PhysicsCapacitySettings::new(20_000, 3));
+}
+
+/// Legacy physics settings migrate to Natsel without retaining obsolete tuning.
+#[test]
+fn legacy_physics_settings_migrate() {
+    use diffuse_math::simd::simd_compat::Float3;
+    use diffuse_scene::physics::backend::physics_backend_kind::PhysicsBackendKind;
+    use diffuse_scene::physics::physics_settings::PhysicsCapacitySettings;
+
+    use crate::scene::manifest::settings::EditorSceneManifestPhysicsSettings;
+
+    let legacy = r#"{"simulationMode":"play","backendKind":"jolt","gravity":{"x":1,"y":-15,"z":2},
+     "fixedTimeStepSeconds":0.01,"maxSubstepsPerFrame":8,"allowSleep":false,"collisionSteps":4,
+     "capacity":{"maxBodies":64,"workerThreadCount":2},"jolt":{"maxBodyPairs":128}}"#;
+    let decoded: EditorSceneManifestPhysicsSettings =
+        serde_json::from_str(legacy).expect("legacy settings");
+    assert_eq!(decoded.backend_kind, "natsel");
+    assert_eq!(decoded.settings().backend_kind, PhysicsBackendKind::Natsel);
+    assert_eq!(decoded.settings().gravity, Float3::new(1.0, -15.0, 2.0));
+    assert_eq!(decoded.settings().collision_steps, 4);
+    assert_eq!(
+        decoded.settings().capacity,
+        PhysicsCapacitySettings::new(64, 2)
+    );
+    let encoded = serde_json::to_vec(&decoded).expect("encode");
+    let object: serde_json::Value = serde_json::from_slice(&encoded).expect("json");
+    assert_eq!(object["backendKind"], "natsel");
+    assert!(object.get("jolt").is_none());
+}
