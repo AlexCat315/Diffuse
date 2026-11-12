@@ -5111,7 +5111,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/console_logging_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditLogTests.swift",
