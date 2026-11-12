@@ -6040,7 +6040,7 @@
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/rust_analyzer/rust_analyzer_transport_tests.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/SwiftToolchainInstallationTests.swift",
