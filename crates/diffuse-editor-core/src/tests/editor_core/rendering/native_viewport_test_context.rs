@@ -19,7 +19,7 @@ use diffuse_render::surface::viewport_surface::{ViewportSamplingRegion, Viewport
 use diffuse_render_validation::GridImage;
 use diffuse_render_validation::SceneCapture;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ViewportTestOutput {
     pub native: TextureFormat,
     pub samples: usize,

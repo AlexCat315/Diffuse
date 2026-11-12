@@ -5795,7 +5795,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/rendering/native_viewport_integration_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Rendering/NativeViewportTestContext.swift",
