@@ -2767,7 +2767,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/workstation/documents.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Workstation/Media.swift",
