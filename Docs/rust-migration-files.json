@@ -4502,7 +4502,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/shell/focus.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Shell/LanguageServer.swift",
