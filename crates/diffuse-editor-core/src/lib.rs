@@ -16,6 +16,7 @@ pub mod scene;
 pub mod scripting;
 pub mod state;
 pub mod tasks;
+#[cfg(test)]
 pub mod tests;
 pub mod version_control;
 pub mod workstation;

@@ -5700,7 +5700,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/project_file_path_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/ProjectRuntimeResourcesTests.swift",
