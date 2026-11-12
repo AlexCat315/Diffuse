@@ -3681,7 +3681,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/diagnostics/code_editor_diagnostics.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/ScriptEditor/Diagnostics/CompletionConversion.swift",
@@ -3736,7 +3736,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/hover/hover_overlay.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/ScriptEditor/Hover/HoverPresentation.swift",
@@ -3747,7 +3747,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/hover/hover_presentation.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/ScriptEditor/Hover/HoverResolver.swift",
