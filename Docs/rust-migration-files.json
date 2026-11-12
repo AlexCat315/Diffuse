@@ -5729,7 +5729,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/rendering/hud_router.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Rendering/NativeAppWindowTests.swift",
