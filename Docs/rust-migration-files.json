@@ -1348,7 +1348,7 @@
         "crates/diffuse-editor-core/src/projects/editor_project_lifecycle.rs"
       ],
       "d1": "adjust",
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorCore/Projects/EditorScratchWorkspace.swift",

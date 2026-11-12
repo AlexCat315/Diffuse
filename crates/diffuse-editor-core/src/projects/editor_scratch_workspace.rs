@@ -64,7 +64,7 @@ fn remove_stale_descriptor(directory: &Path) {
 }
 
 /// `FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]`.
-fn application_support_directory() -> PathBuf {
+pub(crate) fn application_support_directory() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
         home_directory()
