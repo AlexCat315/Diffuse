@@ -4188,7 +4188,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/root/chrome/modal_barrier.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Root/Chrome/PluginReview.swift",
