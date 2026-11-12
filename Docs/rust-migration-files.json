@@ -5475,7 +5475,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_viewport_projection_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorViewportRenderGateTests.swift",
@@ -5486,7 +5486,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_viewport_render_gate_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorViewportResolutionTests.swift",
@@ -5497,7 +5497,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_viewport_resolution_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorViewportSurfacePickingTests.swift",
