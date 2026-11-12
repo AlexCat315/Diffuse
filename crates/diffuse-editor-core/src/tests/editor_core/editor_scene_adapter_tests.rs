@@ -749,3 +749,525 @@ fn grouped_multi_asset_spawn_undo() {
     assert_eq!(adapter.entity_count(), original_count);
     assert!(!adapter.can_undo_edit());
 }
+
+fn preview_adapter() -> crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter {
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+
+    use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
+    use crate::scene::inspector::rendering::renderers::EditorInspectorRendererRegistry;
+
+    EditorSceneAdapter::new(
+        true,
+        ComponentRegistry::built_in(),
+        EditorInspectorRendererRegistry::new(),
+    )
+}
+
+/// Human transform edits undo and redo through the adapter history.
+#[test]
+fn transform_undo_redo() {
+    use diffuse_math::simd::simd_compat::Float3;
+
+    let adapter = preview_adapter();
+    let entity_id = adapter.default_selection_id().expect("default selection");
+    let original = adapter
+        .entity_local_translation(entity_id)
+        .expect("translation");
+    let edited = original + Float3::new(1.0, 2.0, 3.0);
+
+    adapter.set_entity_local_translation(entity_id, edited);
+    assert!(adapter.can_undo_edit());
+    assert_eq!(adapter.entity_local_translation(entity_id), Some(edited));
+
+    assert!(adapter.undo_edit());
+    assert_eq!(adapter.entity_local_translation(entity_id), Some(original));
+    assert!(adapter.can_redo_edit());
+
+    assert!(adapter.redo_edit());
+    assert_eq!(adapter.entity_local_translation(entity_id), Some(edited));
+}
+
+/// Loading a document starts a fresh edit history.
+#[test]
+fn load_resets_history() {
+    use diffuse_math::simd::simd_compat::Float3;
+
+    let adapter = preview_adapter();
+    let entity_id = adapter.default_selection_id().expect("default selection");
+    let original = adapter
+        .entity_local_translation(entity_id)
+        .expect("translation");
+    adapter.set_entity_local_translation(entity_id, original + Float3::new(1.0, 0.0, 0.0));
+    assert!(adapter.can_undo_edit());
+
+    let _ = adapter.load(&adapter.manifest());
+    assert!(!adapter.can_undo_edit());
+    assert!(!adapter.can_redo_edit());
+}
+
+/// Hierarchy visibility updates render state and participates in undo.
+#[test]
+fn visibility_undo() {
+    use diffuse_scene::rendering::render_extraction::RenderMeshComponent;
+
+    let adapter = preview_adapter();
+    let entity = adapter
+        .scene()
+        .entities_with::<RenderMeshComponent>()
+        .first()
+        .copied()
+        .expect("renderable entity");
+    assert!(adapter.is_hierarchy_visible(entity.raw_value()));
+
+    assert!(adapter.set_hierarchy_visibility(
+        false,
+        &std::collections::BTreeSet::from([entity.raw_value()])
+    ));
+    assert!(!adapter.is_hierarchy_visible(entity.raw_value()));
+
+    assert!(adapter.undo_edit());
+    assert!(adapter.is_hierarchy_visible(entity.raw_value()));
+}
+
+/// Locked entities reject authored edits.
+#[test]
+fn locked_entity_rejects_edit() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use diffuse_math::simd::simd_compat::Float3;
+
+    let adapter = preview_adapter();
+    let entity_id = adapter.default_selection_id().expect("default selection");
+    let original = adapter
+        .entity_local_translation(entity_id)
+        .expect("translation");
+    let reported_error = Rc::new(RefCell::new(None::<String>));
+    {
+        let reported_error = reported_error.clone();
+        adapter
+            .on_transaction_error
+            .replace(Some(Rc::new(move |error| {
+                *reported_error.borrow_mut() = Some(error);
+            })));
+    }
+    adapter.set_entity_locked(true, &std::collections::BTreeSet::from([entity_id]));
+
+    adapter.set_entity_local_translation(entity_id, original + Float3::new(1.0, 0.0, 0.0));
+
+    assert_eq!(adapter.entity_local_translation(entity_id), Some(original));
+    assert!(
+        reported_error
+            .borrow()
+            .as_deref()
+            .is_some_and(|error| error.contains("locked"))
+    );
+    assert!(adapter.can_undo_edit());
+    assert!(adapter.undo_edit());
+    assert!(!adapter.is_entity_locked(entity_id));
+}
+
+/// Multi-entity deletion is atomic and uses one undo step.
+#[test]
+fn multi_entity_deletion_is_atomic() {
+    let adapter = preview_adapter();
+    let entity_ids: std::collections::BTreeSet<u64> =
+        adapter.roots().iter().take(2).map(|node| node.id).collect();
+    let original_count = adapter.entity_count();
+    assert_eq!(entity_ids.len(), 2);
+
+    assert!(adapter.delete_entities(&entity_ids));
+    assert_eq!(adapter.entity_count(), original_count - 2);
+    assert!(
+        entity_ids
+            .iter()
+            .all(|id| adapter.entity_summary(Some(*id)).is_none())
+    );
+
+    assert!(adapter.undo_edit());
+    assert_eq!(adapter.entity_count(), original_count);
+    assert!(
+        entity_ids
+            .iter()
+            .all(|id| adapter.entity_summary(Some(*id)).is_some())
+    );
+    assert!(!adapter.can_undo_edit());
+}
+
+/// Multi-entity deletion fails as a unit when one entity is locked.
+#[test]
+fn multi_entity_deletion_honors_locks_atomically() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let adapter = preview_adapter();
+    let entity_ids: std::collections::BTreeSet<u64> =
+        adapter.roots().iter().take(2).map(|node| node.id).collect();
+    let locked_id = *entity_ids.iter().next().expect("locked id");
+    let original_count = adapter.entity_count();
+    let reported_error = Rc::new(RefCell::new(None::<String>));
+    {
+        let reported_error = reported_error.clone();
+        adapter
+            .on_transaction_error
+            .replace(Some(Rc::new(move |error| {
+                *reported_error.borrow_mut() = Some(error);
+            })));
+    }
+    adapter.set_entity_locked(true, &std::collections::BTreeSet::from([locked_id]));
+
+    assert!(!adapter.delete_entities(&entity_ids));
+    assert_eq!(adapter.entity_count(), original_count);
+    assert!(
+        entity_ids
+            .iter()
+            .all(|id| adapter.entity_summary(Some(*id)).is_some())
+    );
+    assert!(
+        reported_error
+            .borrow()
+            .as_deref()
+            .is_some_and(|error| error.contains("locked"))
+    );
+}
+
+/// Multi-entity deletion rejects stale selections instead of partially deleting.
+#[test]
+fn multi_entity_deletion_rejects_stale_selections() {
+    let adapter = preview_adapter();
+    let valid_id = adapter.roots().first().expect("root").id;
+    let original_count = adapter.entity_count();
+
+    assert!(!adapter.delete_entities(&std::collections::BTreeSet::from([valid_id, u64::MAX])));
+    assert_eq!(adapter.entity_count(), original_count);
+    assert!(adapter.entity_summary(Some(valid_id)).is_some());
+    assert!(!adapter.can_undo_edit());
+}
+
+/// Deleting an ancestor and its selected descendant is a single valid transaction.
+#[test]
+fn multi_entity_deletion_collapses_selected_descendants() {
+    use crate::scene::adapter::spawn::EditorEntityTemplate;
+
+    let adapter = preview_adapter();
+    let parent_id = adapter
+        .spawn_entity_default(EditorEntityTemplate::Empty)
+        .expect("parent");
+    let child_id = adapter
+        .spawn_entity(EditorEntityTemplate::Empty, None, Some(parent_id))
+        .expect("child");
+    let populated_count = adapter.entity_count();
+
+    assert!(adapter.delete_entities(&std::collections::BTreeSet::from([parent_id, child_id])));
+    assert_eq!(adapter.entity_count(), populated_count - 2);
+    assert!(adapter.entity_summary(Some(parent_id)).is_none());
+    assert!(adapter.entity_summary(Some(child_id)).is_none());
+
+    assert!(adapter.undo_edit());
+    assert!(adapter.entity_summary(Some(parent_id)).is_some());
+    assert!(adapter.entity_summary(Some(child_id)).is_some());
+    assert!(adapter.entity_has_ancestor(child_id, &std::collections::BTreeSet::from([parent_id])));
+}
+
+/// Hierarchy rename trims input, rejects empty names, and is undoable.
+#[test]
+fn hierarchy_rename_is_validated_and_undoable() {
+    let adapter = preview_adapter();
+    let entity_id = adapter.default_selection_id().expect("default selection");
+    let original_name = adapter
+        .entity_summary(Some(entity_id))
+        .expect("summary")
+        .name;
+
+    assert!(!adapter.rename_entity(entity_id, "   \n"));
+    assert_eq!(
+        adapter
+            .entity_summary(Some(entity_id))
+            .map(|summary| summary.name),
+        Some(original_name.clone())
+    );
+    assert!(!adapter.can_undo_edit());
+
+    assert!(adapter.rename_entity(entity_id, "  Production Camera  "));
+    assert_eq!(
+        adapter
+            .entity_summary(Some(entity_id))
+            .map(|summary| summary.name),
+        Some("Production Camera".to_string())
+    );
+    assert!(adapter.undo_edit());
+    assert_eq!(
+        adapter
+            .entity_summary(Some(entity_id))
+            .map(|summary| summary.name),
+        Some(original_name)
+    );
+    assert!(!adapter.can_undo_edit());
+}
+
+/// Multi-entity duplication is atomic and uses one undo step.
+#[test]
+fn multi_entity_duplication_is_atomic() {
+    let adapter = preview_adapter();
+    let source_ids: std::collections::BTreeSet<u64> =
+        adapter.roots().iter().take(2).map(|node| node.id).collect();
+    let original_count = adapter.entity_count();
+    assert_eq!(source_ids.len(), 2);
+
+    let duplicated_ids = adapter.duplicate_entities(&source_ids).expect("duplicates");
+    assert_eq!(duplicated_ids.len(), 2);
+    assert_eq!(adapter.entity_count(), original_count + 2);
+    assert!(
+        duplicated_ids
+            .iter()
+            .all(|id| adapter.entity_summary(Some(*id)).is_some())
+    );
+
+    assert!(adapter.undo_edit());
+    assert_eq!(adapter.entity_count(), original_count);
+    assert!(
+        duplicated_ids
+            .iter()
+            .all(|id| adapter.entity_summary(Some(*id)).is_none())
+    );
+    assert!(!adapter.can_undo_edit());
+}
+
+/// Multi-entity duplication rejects a locked member as a unit.
+#[test]
+fn multi_entity_duplication_honors_locks_atomically() {
+    let adapter = preview_adapter();
+    let source_ids: std::collections::BTreeSet<u64> =
+        adapter.roots().iter().take(2).map(|node| node.id).collect();
+    let locked_id = *source_ids.iter().next().expect("locked id");
+    let original_count = adapter.entity_count();
+    adapter.set_entity_locked(true, &std::collections::BTreeSet::from([locked_id]));
+
+    assert!(adapter.duplicate_entities(&source_ids).is_none());
+    assert_eq!(adapter.entity_count(), original_count);
+}
+
+/// Moving a nested multi-selection to root preserves descendants and is one undo step.
+#[test]
+fn multi_entity_move_to_root_is_atomic() {
+    use crate::scene::adapter::spawn::EditorEntityTemplate;
+
+    let adapter = preview_adapter();
+    let grandparent_id = adapter
+        .spawn_entity_default(EditorEntityTemplate::Empty)
+        .expect("grandparent");
+    let parent_id = adapter
+        .spawn_entity(EditorEntityTemplate::Empty, None, Some(grandparent_id))
+        .expect("parent");
+    let child_id = adapter
+        .spawn_entity(EditorEntityTemplate::Empty, None, Some(parent_id))
+        .expect("child");
+
+    assert!(
+        adapter.move_entities_to_root(&std::collections::BTreeSet::from([parent_id, child_id]))
+    );
+    assert!(adapter.roots().iter().any(|node| node.id == parent_id));
+    assert!(!adapter.roots().iter().any(|node| node.id == child_id));
+    assert!(adapter.entity_has_ancestor(child_id, &std::collections::BTreeSet::from([parent_id])));
+
+    assert!(adapter.undo_edit());
+    assert!(adapter.entity_has_ancestor(
+        parent_id,
+        &std::collections::BTreeSet::from([grandparent_id])
+    ));
+    assert!(adapter.entity_has_ancestor(child_id, &std::collections::BTreeSet::from([parent_id])));
+}
+
+/// Moving a root selected with its descendant does not detach the descendant.
+#[test]
+fn move_to_root_collapses_selected_descendants() {
+    use crate::scene::adapter::spawn::EditorEntityTemplate;
+
+    let adapter = preview_adapter();
+    let root_id = adapter
+        .spawn_entity_default(EditorEntityTemplate::Empty)
+        .expect("root");
+    let child_id = adapter
+        .spawn_entity(EditorEntityTemplate::Empty, None, Some(root_id))
+        .expect("child");
+
+    assert!(!adapter.move_entities_to_root(&std::collections::BTreeSet::from([root_id, child_id])));
+    assert!(adapter.entity_has_ancestor(child_id, &std::collections::BTreeSet::from([root_id])));
+}
+
+/// Moving a multi-selection to root preserves the hierarchy's visible order.
+#[test]
+fn move_to_root_preserves_sibling_order() {
+    use crate::scene::adapter::spawn::EditorEntityTemplate;
+
+    let adapter = preview_adapter();
+    let parent_id = adapter
+        .spawn_entity_default(EditorEntityTemplate::Empty)
+        .expect("parent");
+    let first_id = adapter
+        .spawn_entity(EditorEntityTemplate::Empty, None, Some(parent_id))
+        .expect("first");
+    let second_id = adapter
+        .spawn_entity(EditorEntityTemplate::Empty, None, Some(parent_id))
+        .expect("second");
+
+    assert!(adapter.move_entity(second_id, Some(parent_id), 0).is_some());
+    let sibling_order: Vec<u64> = adapter
+        .roots()
+        .into_iter()
+        .find(|node| node.id == parent_id)
+        .expect("parent node")
+        .children
+        .iter()
+        .map(|child| child.id)
+        .collect();
+    assert_eq!(sibling_order, [second_id, first_id]);
+
+    assert!(
+        adapter.move_entities_to_root(&std::collections::BTreeSet::from([first_id, second_id]))
+    );
+    let root_order: Vec<u64> = adapter.roots().iter().map(|node| node.id).collect();
+    assert_eq!(&root_order[root_order.len() - 2..], [second_id, first_id]);
+
+    assert!(adapter.undo_edit());
+    let restored_children: Vec<u64> = adapter
+        .roots()
+        .into_iter()
+        .find(|node| node.id == parent_id)
+        .expect("parent node")
+        .children
+        .iter()
+        .map(|child| child.id)
+        .collect();
+    assert_eq!(restored_children, [second_id, first_id]);
+}
+
+/// Hierarchy locks round-trip and remap entity identifiers.
+#[test]
+fn locked_entity_round_trip() {
+    let adapter = preview_adapter();
+    let original_id = adapter.default_selection_id().expect("default selection");
+    adapter.set_entity_locked(true, &std::collections::BTreeSet::from([original_id]));
+
+    let manifest = adapter.manifest_for_selection(Some(original_id));
+    assert_eq!(manifest.locked_entity_ids, Some(vec![original_id]));
+
+    let restored = preview_adapter();
+    let result = restored.load_with_notify(&manifest, false);
+    let remapped_id = result.selected_entity_id.expect("remapped selection");
+    assert!(restored.is_entity_locked(remapped_id));
+}
+
+/// Hierarchy lock changes participate in one-step undo and redo.
+#[test]
+fn hierarchy_lock_undo_redo() {
+    let adapter = preview_adapter();
+    let entity_id = adapter.default_selection_id().expect("default selection");
+
+    adapter.set_entity_locked(true, &std::collections::BTreeSet::from([entity_id]));
+    assert!(adapter.is_entity_locked(entity_id));
+    assert!(adapter.can_undo_edit());
+    assert!(adapter.undo_edit());
+    assert!(!adapter.is_entity_locked(entity_id));
+    assert!(adapter.can_redo_edit());
+    assert!(adapter.redo_edit());
+    assert!(adapter.is_entity_locked(entity_id));
+}
+
+/// Interactive transform updates coalesce into one undo entry.
+#[test]
+fn interactive_transforms_coalesce_for_undo() {
+    let adapter = preview_adapter();
+    let entity_id = adapter.default_selection_id().expect("default selection");
+    let original = adapter
+        .entity_local_translation(entity_id)
+        .expect("translation");
+
+    adapter.begin_interactive_edit_history_group();
+    for x in 1..=5 {
+        let mut matrix = adapter.entity_local_matrix(entity_id).expect("matrix");
+        matrix.columns[3].x = original.x + x as f32;
+        assert!(
+            adapter.set_entity_local_matrices(&std::collections::BTreeMap::from([(
+                entity_id, matrix
+            )]))
+        );
+    }
+    assert!(!adapter.can_undo_edit());
+    adapter.end_interactive_edit_history_group();
+
+    assert!(adapter.can_undo_edit());
+    assert!(adapter.undo_edit());
+    assert_eq!(adapter.entity_local_translation(entity_id), Some(original));
+    assert!(!adapter.can_undo_edit());
+}
+
+/// Cancelling an interactive transform restores its starting scene without history.
+#[test]
+fn interactive_transform_cancellation_restores_start() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    let adapter = preview_adapter();
+    let entity_id = adapter.default_selection_id().expect("default selection");
+    let original = adapter
+        .entity_local_translation(entity_id)
+        .expect("translation");
+    let revision_notifications = Rc::new(Cell::new(0));
+    {
+        let revision_notifications = revision_notifications.clone();
+        adapter.on_revision_changed.replace(Some(Rc::new(move |_| {
+            revision_notifications.set(revision_notifications.get() + 1);
+        })));
+    }
+
+    adapter.begin_interactive_edit_history_group();
+    let mut matrix = adapter.entity_local_matrix(entity_id).expect("matrix");
+    matrix.columns[3].x = original.x + 12.0;
+    assert!(
+        adapter.set_entity_local_matrices(&std::collections::BTreeMap::from([(entity_id, matrix)]))
+    );
+
+    adapter.cancel_interactive_edit_history_group();
+    adapter.end_interactive_edit_history_group();
+
+    assert_eq!(adapter.entity_local_translation(entity_id), Some(original));
+    assert!(!adapter.can_undo_edit());
+    assert!(revision_notifications.get() >= 2);
+}
+
+/// Multi-entity transforms reject locked members atomically.
+#[test]
+fn multi_entity_transforms_honor_locks_atomically() {
+    let adapter = preview_adapter();
+    let ids: Vec<u64> = adapter.roots().iter().take(2).map(|node| node.id).collect();
+    assert_eq!(ids.len(), 2);
+    let first_id = ids[0];
+    let second_id = ids[1];
+    let first_original = adapter.entity_local_matrix(first_id).expect("first");
+    let second_original = adapter.entity_local_matrix(second_id).expect("second");
+    adapter.set_entity_locked(true, &std::collections::BTreeSet::from([second_id]));
+    let mut first_next = first_original;
+    let mut second_next = second_original;
+    first_next.columns[3].x += 3.0;
+    second_next.columns[3].x += 3.0;
+
+    assert!(
+        !adapter.set_entity_local_matrices(&std::collections::BTreeMap::from([
+            (first_id, first_next),
+            (second_id, second_next),
+        ]))
+    );
+    assert_eq!(
+        adapter
+            .entity_local_matrix(first_id)
+            .map(|matrix| matrix.columns[3]),
+        Some(first_original.columns[3])
+    );
+    assert_eq!(
+        adapter
+            .entity_local_matrix(second_id)
+            .map(|matrix| matrix.columns[3]),
+        Some(second_original.columns[3])
+    );
+}
