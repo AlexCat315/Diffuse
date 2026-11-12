@@ -1145,6 +1145,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 328 | diffuse-editor-core（插件目录访问器） | 1 | 19 | `Application/Plugins/Catalogs.swift` → `application/plugins/catalogs.rs`：语言/提供者/智能体目录读取、智能体启用判定、主题快照与按明暗解析当前主题、已启用插件清单；clippy（本批零告警）、rustfmt、`cargo check -p diffuse-editor-core --lib` 通过；1 行标 `written` |
 | 2026-11-13 | 批次 329 | diffuse-editor-ui（组件卡片菜单） | 1 | 35 | `Panels/Inspector/ComponentMenu.swift` → `panels/inspector/component_menu.rs`：弹出菜单承载 Reset/Remove（危险项），触发图标 24×24 带无障碍标签；操作失败时按严重级别写入控制台并附组件标题；多选实体集合走 `reset_component`/`remove_component_from_selection`；clippy（本批零告警）、rustfmt、`cargo check -p diffuse-editor-ui --lib` 通过；1 行标 `written` |
 | 2026-11-13 | 批次 330 | diffuse-editor-ui（组件菜单告警清理） | — | — | 批次 329 的 `component_menu.rs` 去掉未使用的 `SemanticStyleViewExt` 与对 `Signal<bool>` 的多余 `clone`；`cargo clippy -p diffuse-editor-ui --all-targets` 本文件零告警，`cargo test -p diffuse-editor-ui --lib` 50/50 通过 |
+| 2026-11-13 | 批次 331 | diffuse-editor-ui（失焦提交文本框） | 2 | 58 | `Panels/Shared/CommitOnBlurTextField.swift` → `panels/shared/commit_on_blur_text_field.rs`：本地草稿 + 失焦/回车一次性写回（每编辑一个撤销事务），身份切换丢弃草稿，混合值不在聚焦/失焦时提交；`CommitOnBlurTextFieldTests.swift` 取消 `blocked` → `tests/editor_app/commit_on_blur_text_field_tests.rs`（3 例通过）：清空草稿失焦后模型回退只发生一次、回车提交后可继续编辑、混合字段仅接受主值；`TextBuffer` 比较使用 `has_same_contents`；clippy（本批零告警）、rustfmt、`cargo test -p diffuse-editor-ui --lib` 53/53 通过；生产 1 行标 `written`、测试 1 行标 `tested` |
 
 
 ## 10. 已知问题与需要用户确认的事项

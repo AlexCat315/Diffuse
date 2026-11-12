@@ -3896,7 +3896,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/shared/commit_on_blur_text_field.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Shared/EditorPanelComponents.swift",
@@ -4824,8 +4824,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/commit_on_blur_text_field_tests.rs"
       ],
-      "status": "blocked",
-      "blocked_by": "P1: CommitOnBlurTextField component is not migrated (panels/shared production pending)"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/DeveloperParticleDiagnosticsTests.swift",
