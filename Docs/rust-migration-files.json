@@ -12968,7 +12968,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/scene_serializer_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/ScriptTransformBatchTests.swift",
