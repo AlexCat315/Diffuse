@@ -710,6 +710,7 @@ dependencies = [
  "diffuse-render",
  "diffuse-scene",
  "diffuse-script",
+ "serde",
  "serde_json",
 ]
 

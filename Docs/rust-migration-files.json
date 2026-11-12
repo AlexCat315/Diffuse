@@ -2909,7 +2909,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/launch_options.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Localization.swift",
