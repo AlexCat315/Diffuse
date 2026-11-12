@@ -4625,7 +4625,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/toolbar/contributed.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Toolbar/EditorPlaybackToolbar.swift",
