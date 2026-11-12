@@ -12539,7 +12539,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_post_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativePreparationTests.swift",
@@ -12561,7 +12561,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_stylized_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeViewportSurfaceTests.swift",
