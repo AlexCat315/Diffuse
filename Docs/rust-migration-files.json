@@ -4366,7 +4366,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/settings/navigation_catalog.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorUI/Settings/Plugins/Cards.swift",

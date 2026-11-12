@@ -18,6 +18,7 @@ pub mod profiler_layout_tests;
 pub mod project_workspace_tests;
 pub mod script_behavior_inspector_tests;
 pub mod script_semantic_commands_tests;
+pub mod settings_navigation_catalog_tests;
 pub mod settings_workflow_tests;
 pub mod viewport_authoring_controls_tests;
 pub mod viewport_invalidation_tests;
