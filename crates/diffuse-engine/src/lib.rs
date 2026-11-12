@@ -6,4 +6,5 @@ pub mod locked_state;
 pub mod render_thread;
 pub mod simulation_thread;
 pub mod scripting;
+#[cfg(test)]
 pub mod tests;

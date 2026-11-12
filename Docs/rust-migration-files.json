@@ -12132,7 +12132,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/core/render_camera_matrices_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Core/SceneLightUniformTests.swift",

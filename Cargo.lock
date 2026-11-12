@@ -176,6 +176,7 @@ dependencies = [
  "cove-logging",
  "cove-platform",
  "cove-text",
+ "cove-ui-compose",
  "serde",
  "serde_json",
 ]
