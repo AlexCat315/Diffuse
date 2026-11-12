@@ -1099,6 +1099,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 281 | diffuse-editor-ui（AI 设置草稿） | 1 | 40 | `Settings/Assistant/Draft.swift` → `settings/assistant/draft.rs`（禁用时模型留空、切换服务商采用默认模型/保留自定义、清空未提交凭据、trim 后丢弃空值）；新增 `settings_draft_tests.rs` 3 例；`cargo test -p diffuse-editor-ui --lib settings_draft_tests` 3/3 通过；clippy/rustfmt、`inventory.py --check` 通过；1 行标 `tested`；`SettingsWorkflowTests` 其余用例仍待中枢 |
 | 2026-11-13 | 批次 282 | diffuse-editor-core（场景适配器编辑/层级测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 17 例（变换撤销/重做、载入重置历史、可见性撤销、锁定拒绝、批量删除/复制/移根原子性、重命名校验、锁存往返、交互式变换合并与取消）；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 27/27 通过；clippy/rustfmt 通过；清单无状态变化（该 Swift 测试文件仍 pending） |
 | 2026-11-13 | 批次 283 | diffuse-editor-core（预览场景/取景/动画测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 5 例（预览清单根/相机组件、活动粒子、多选取景居中、重置预览发布修订、动画调色板非空）；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 32/32 通过；clippy/rustfmt 通过；清单无状态变化（该 Swift 测试文件仍 pending） |
+| 2026-11-13 | 批次 284 | diffuse-editor-core（GameSave/清单版本测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 3 例（当前清单 schema 版本、`GameSaveDocument` 写读往返、缺失文件返回 nil）；往返比较以序列化后的清单为基准，避免 f32→f64 文本表示导致等价场景不等；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 35/35 通过；clippy/rustfmt 通过；清单无状态变化 |
 
 ## 10. 已知问题与需要用户确认的事项
 

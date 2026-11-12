@@ -1436,3 +1436,70 @@ fn current_joint_palette_map_returns_palette_after_tick() {
             .is_empty()
     );
 }
+
+/// New manifests use the current schema version.
+#[test]
+fn current_schema_version() {
+    let adapter = preview_adapter();
+    let manifest = adapter.manifest();
+    assert_eq!(
+        manifest.schema_version,
+        crate::scene::manifest::editor_scene_manifest::EditorSceneManifest::CURRENT_SCHEMA_VERSION
+    );
+}
+
+/// GameSaveDocument write and read round-trip.
+#[test]
+fn game_save_document_write_read() {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use crate::scene::game_save_document::GameSaveDocument;
+
+    static NEXT_SLOT_DIR: AtomicU64 = AtomicU64::new(0);
+    let unique = NEXT_SLOT_DIR.fetch_add(1, Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let tmp = std::env::temp_dir().join(format!(
+        "diffuse-game-save-{}-{nanos}-{unique}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&tmp).expect("save directory");
+
+    let adapter = preview_adapter();
+    let manifest = adapter.manifest();
+    // The manifest already holds JSON numbers; compare the persisted form so
+    // f32-to-f64 widening cannot make an identical scene unequal.
+    let normalized: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&serde_json::to_vec(&manifest).expect("normalize"))
+            .expect("normalized manifest");
+    let document = GameSaveDocument::new(0, manifest);
+    let url = GameSaveDocument::url(0, &tmp);
+    document.write(&url).expect("write save");
+
+    let loaded = GameSaveDocument::read(&url)
+        .expect("read save")
+        .expect("save");
+    assert_eq!(loaded.slot, 0);
+    assert_eq!(loaded.manifest, normalized);
+    let _ = std::fs::remove_dir_all(tmp);
+}
+
+/// GameSaveDocument read returns nil for a missing file.
+#[test]
+fn game_save_read_missing_returns_nil() {
+    use crate::scene::game_save_document::GameSaveDocument;
+
+    let unique = format!(
+        "nonexistent-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0)
+    );
+    let url = GameSaveDocument::url(99, &std::env::temp_dir().join(unique));
+    let result = GameSaveDocument::read(&url).expect("read missing");
+    assert!(result.is_none());
+}
