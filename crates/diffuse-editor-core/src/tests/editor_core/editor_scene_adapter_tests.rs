@@ -2208,3 +2208,205 @@ fn editor_scene_adapter_exposes_particle_frame_stats() {
     assert!(stats.live_particle_count >= 10);
     assert!(stats.max_particle_count >= 100);
 }
+
+/// AudioSource round-trips through manifest encode/decode.
+#[test]
+fn audio_source_round_trips() {
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+    use diffuse_scene::media::audio::AudioSource;
+    use diffuse_scene::runtime_world::LocalTransform;
+    use diffuse_scene::scene_bootstrap::{SceneKindComponent, SceneNameComponent};
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    let mut scene = SceneRuntime::new(ComponentRegistry::built_in());
+    let entity = scene.create_entity();
+    scene.set_component(SceneNameComponent::new("SFX"), entity);
+    scene.set_component(SceneKindComponent::new("Audio"), entity);
+    scene.set_local_transform(LocalTransform::IDENTITY, entity);
+    scene.set_component(
+        AudioSource::new("explosion", 0.8, 1.2, true, false, 0.5),
+        entity,
+    );
+    let adapter = preview_adapter();
+    adapter.set_scene(scene);
+    let manifest = adapter.manifest();
+    let restored = preview_adapter();
+    let _ = restored.load_with_notify(&manifest, false);
+    let scene = restored.scene();
+    let restored_entity = scene.entities().into_iter().next().expect("entity");
+    let source = scene
+        .component::<AudioSource>(restored_entity)
+        .expect("audio source");
+    assert_eq!(source.clip_name, "explosion");
+    assert_eq!(source.volume, 0.8);
+    assert!(source.loop_);
+    assert!(!source.play_on_awake);
+}
+
+/// AudioListener round-trips through manifest encode/decode.
+#[test]
+fn audio_listener_round_trips() {
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+    use diffuse_scene::media::audio::AudioListener;
+    use diffuse_scene::runtime_world::LocalTransform;
+    use diffuse_scene::scene_bootstrap::{SceneKindComponent, SceneNameComponent};
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    let mut scene = SceneRuntime::new(ComponentRegistry::built_in());
+    let entity = scene.create_entity();
+    scene.set_component(SceneNameComponent::new("Listener"), entity);
+    scene.set_component(SceneKindComponent::new("Audio Listener"), entity);
+    scene.set_local_transform(LocalTransform::IDENTITY, entity);
+    scene.set_component(AudioListener::new(0.35), entity);
+    let adapter = preview_adapter();
+    adapter.set_scene(scene);
+    let data = serde_json::to_vec(&adapter.manifest()).expect("encode");
+    let decoded: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let restored = preview_adapter();
+    let _ = restored.load_with_notify(&decoded, false);
+    let scene = restored.scene();
+    let restored_entity = scene.entities().into_iter().next().expect("entity");
+    assert_eq!(
+        scene
+            .component::<AudioListener>(restored_entity)
+            .map(|listener| listener.master_volume),
+        Some(0.35)
+    );
+}
+
+/// AnimationPlayer round-trips through manifest encode/decode.
+#[test]
+fn animation_player_round_trips() {
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+    use diffuse_scene::media::animation::AnimationPlayer;
+    use diffuse_scene::runtime_world::LocalTransform;
+    use diffuse_scene::scene_bootstrap::{SceneKindComponent, SceneNameComponent};
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    let mut scene = SceneRuntime::new(ComponentRegistry::built_in());
+    let entity = scene.create_entity();
+    scene.set_component(SceneNameComponent::new("Hero"), entity);
+    scene.set_component(SceneKindComponent::new("Character"), entity);
+    scene.set_local_transform(LocalTransform::IDENTITY, entity);
+    scene.set_component(
+        AnimationPlayer::new(Some("run".to_string()), 1.5, true, true, 3.25),
+        entity,
+    );
+    let adapter = preview_adapter();
+    adapter.set_scene(scene);
+    let manifest = adapter.manifest();
+    let restored = preview_adapter();
+    let _ = restored.load_with_notify(&manifest, false);
+    let scene = restored.scene();
+    let restored_entity = scene.entities().into_iter().next().expect("entity");
+    let player = scene
+        .component::<AnimationPlayer>(restored_entity)
+        .expect("animation player");
+    assert_eq!(player.clip_name.as_deref(), Some("run"));
+    assert_eq!(player.speed, 1.5);
+    assert_eq!(player.time, 3.25);
+    assert!(player.is_playing);
+}
+
+/// AnimationGraphPlayer round-trips through manifest encode/decode.
+#[test]
+fn animation_graph_player_round_trips() {
+    use std::collections::BTreeMap;
+
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+    use diffuse_scene::media::animation::{
+        AnimationBlendSample1D, AnimationBlendSpace1D, AnimationGraph, AnimationGraphPlayer,
+        AnimationMotion, AnimationState, AnimationStateMachine, AnimationTransition,
+        AnimationTransitionComparison,
+    };
+    use diffuse_scene::runtime_world::LocalTransform;
+    use diffuse_scene::scene_bootstrap::{SceneKindComponent, SceneNameComponent};
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    let mut scene = SceneRuntime::new(ComponentRegistry::built_in());
+    let entity = scene.create_entity();
+    scene.set_component(SceneNameComponent::new("Hero"), entity);
+    scene.set_component(SceneKindComponent::new("Character"), entity);
+    scene.set_local_transform(LocalTransform::IDENTITY, entity);
+    let graph = AnimationGraph::new(
+        vec![AnimationBlendSpace1D::new(
+            "locomotion",
+            "speed",
+            vec![
+                AnimationBlendSample1D::new(Some("idle".to_string()), 0.0),
+                AnimationBlendSample1D::new(Some("run".to_string()), 1.0),
+            ],
+        )],
+        AnimationStateMachine::new(
+            "Idle",
+            vec![
+                AnimationState::new(
+                    "Idle",
+                    AnimationMotion::Clip(Some("idle".to_string())),
+                    1.0,
+                    true,
+                ),
+                AnimationState::new(
+                    "Run",
+                    AnimationMotion::BlendSpace1D("locomotion".to_string()),
+                    1.0,
+                    true,
+                ),
+            ],
+            vec![AnimationTransition::new(
+                "Idle",
+                "Run",
+                "speed",
+                AnimationTransitionComparison::GreaterThan,
+                0.5,
+                0.25,
+            )],
+        ),
+    );
+    scene.set_component(
+        AnimationGraphPlayer::new(
+            graph,
+            BTreeMap::from([("speed".to_string(), 0.8)]),
+            Some("Run".to_string()),
+            Some("Idle".to_string()),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            true,
+        ),
+        entity,
+    );
+    let adapter = preview_adapter();
+    adapter.set_scene(scene);
+    let manifest = adapter.manifest();
+    let restored = preview_adapter();
+    let _ = restored.load_with_notify(&manifest, false);
+    let scene = restored.scene();
+    let restored_entity = scene.entities().into_iter().next().expect("entity");
+    let player = scene
+        .component::<AnimationGraphPlayer>(restored_entity)
+        .expect("graph player");
+    assert_eq!(
+        player
+            .graph
+            .blend_spaces_1d
+            .first()
+            .map(|space| space.name.as_str()),
+        Some("locomotion")
+    );
+    assert_eq!(
+        player
+            .graph
+            .state_machine
+            .transitions
+            .first()
+            .map(|transition| transition.duration),
+        Some(0.25)
+    );
+    assert_eq!(player.parameters.get("speed"), Some(&0.8));
+    assert_eq!(player.active_state.as_deref(), Some("Run"));
+    assert_eq!(player.previous_state.as_deref(), Some("Idle"));
+}
