@@ -12507,7 +12507,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_particle_instance_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeParticleSimulationTests.swift",
