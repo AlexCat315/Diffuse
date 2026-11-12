@@ -59,3 +59,16 @@ pub fn make_for(api: GraphicsApi, enable_validation: bool) -> RhiResult<Option<D
         ..DeviceConfig::default()
     })
 }
+
+/// The API the Swift `NativeRendererTests` suites select: Metal on macOS and
+/// Vulkan on Windows/Linux (only the platform-parameterised suites differ).
+pub const fn validation_api() -> GraphicsApi {
+    #[cfg(target_os = "macos")]
+    {
+        GraphicsApi::Metal
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        GraphicsApi::Vulkan
+    }
+}

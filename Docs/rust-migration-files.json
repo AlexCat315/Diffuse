@@ -12385,7 +12385,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_binding_set_cache_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeEditorGridTests.swift",
@@ -12418,7 +12418,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_fxaa_composition_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeGeometryOverlayTests.swift",
@@ -12495,7 +12495,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_pbr_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeParticleInstanceTests.swift",
@@ -12550,7 +12550,7 @@
       "rust": [
         "crates/diffuse-render-validation/src/tests/native_renderer/native_preparation_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/NativeRendererTests/NativeStylizedTests.swift",
