@@ -1114,6 +1114,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 296 | diffuse-editor-core（粒子模块覆盖测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 1 例：把覆盖用 emitter 的 moduleStack 写入组件文档后解码，验证 emission/collision/textureSheet/gpuSimulation 设置全部生效；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 56/56 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 297 | diffuse-editor-core（注册检查器测试 + 向量轴修复） | 1 | 186 | `EditorRegistryInspectorTests.swift` → `editor_registry_inspector_tests.rs`（5 例：贡献表单/嵌套事务/精确整数、混合向量轴保留其他坐标、锁定/过期绑定整批拒绝、选项/JSON/只读/取消、模块渲染器身份与撤销）；修复 `inspector/registry.rs` 的 `write_value` 使用轴路径写补丁（原用字段路径导致数组向量轴编辑静默无效）；`cargo test -p diffuse-editor-core --lib` 211/211 通过；clippy/rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 | 2026-11-13 | 批次 298 | diffuse-editor-core（场景适配器测试完成） | 1 | 1813 | `EditorSceneAdapterTests.swift` 余下用例全部迁入 `editor_scene_adapter_tests.rs`（索引包裹、完整粒子 emitter 清单 JSON 往返、模块栈覆盖等），Rust 侧 58 例覆盖该文件 57 个 `@Test`（多一个拆分用例）；`cargo test -p diffuse-editor-core --lib` 213/213 通过；clippy（本批零告警）、rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
+| 2026-11-13 | 批次 299 | diffuse-editor-core（检查器相机/音频/动画/物理测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 先迁 9 例：相机分区/启用/FOV 角度/FOV 宽高比、音频监听音量、动画图 JSON 定义写回、物理世界设置、后端选择、刚体速度/阻尼/CCD；测试改用 `EditorInspectorRendererRegistry::built_in()`；`cargo test -p diffuse-editor-core --lib editor_inspector_sections_tests` 9/9 通过；clippy/rustfmt 通过；该 Swift 测试文件仍 pending（26 例中余 17 例） |
 
 ## 10. 已知问题与需要用户确认的事项
 
