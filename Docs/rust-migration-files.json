@@ -4744,7 +4744,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/game_project_asset_index_loader.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/GameRuntime/GameProjectDirectoryResolver.swift",
@@ -4766,7 +4766,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/game_project_scene_loader.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/GameRuntime/GameProjectScriptLoader.swift",
@@ -4777,7 +4777,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/game_project_script_loader.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/GameRuntime/PlayerInstallValidator.swift",
@@ -5075,7 +5075,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/asset_import_resolver_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/BundledContributionsTests.swift",
@@ -5691,7 +5691,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/project_exporter_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/ProjectFilePathTests.swift",
@@ -6476,7 +6476,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/tests/game_runtime/game_project_asset_index_loader_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/GameRuntimeTests/GameProjectDirectoryResolverTests.swift",
@@ -6498,7 +6498,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/tests/game_runtime/game_project_scene_loader_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/GameRuntimeTests/GameProjectScriptLoaderTests.swift",
@@ -6509,7 +6509,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/tests/game_runtime/game_project_script_loader_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/GameRuntimeTests/NativeGameApplicationTests.swift",

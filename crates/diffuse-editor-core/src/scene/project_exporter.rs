@@ -197,7 +197,7 @@ impl ProjectExporter {
         let output_url = PathIdentity::canonical_url(to);
         if let Some(source_project_directory) = source_project_directory {
             let source_url = PathIdentity::canonical_url(source_project_directory);
-            if PathIdentity::contains(&source_url, &output_url, false) {
+            if PathIdentity::contains(&source_url, &output_url, true) {
                 return Err(ProjectExporterError::OutputContainsSourceProject(
                     to.to_string_lossy().into_owned(),
                 )
@@ -599,7 +599,7 @@ impl ProjectExporter {
             Self::EXCLUDED_RESOURCE_DIRECTORIES.contains(&name.as_str())
                 || excluded_urls
                     .iter()
-                    .any(|root| PathIdentity::contains(directory, root, false))
+                    .any(|root| PathIdentity::contains(directory, root, true))
         })?;
         for source in files {
             if !Self::AUDIO_EXTENSIONS.contains(&extension_lower(&source).as_str()) {
