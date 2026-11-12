@@ -37,6 +37,7 @@ cove-graphics.workspace = true
 # G4: enable once Cove provides cove-http
 # cove-http.workspace = true
 cove-logging.workspace = true
+cove-devtools.workspace = true
 cove-platform.workspace = true
 cove-runtime.workspace = true
 cove-system.workspace = true
@@ -46,7 +47,6 @@ serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-cove-devtools.workspace = true
 cove-ui.workspace = true
 diffuse-render-validation.workspace = true
 

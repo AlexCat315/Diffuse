@@ -25,6 +25,7 @@ use crate::ai::chat::editor_agent_task_service::EditorAgentTaskService;
 use crate::ai::tools::access::EditorToolAccess;
 use crate::application::diagnostics::subscriptions::EditorSubscriptions;
 use crate::application::plugins::plugin_session::PluginSession;
+use crate::diagnostics::session::EditorDiagnosticSession;
 use crate::editing::viewport::editor_viewport_render_gate::EditorViewportRenderGate;
 use crate::input::input_state::InputState;
 use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
@@ -55,6 +56,7 @@ pub struct EditorApplication {
     pub edit_log: EditLog,
     pub context_memory_store: Option<ContextMemoryStore>,
     pub project_script_catalog_monitor: ProjectScriptCatalogMonitor,
+    pub diagnostic_session: EditorDiagnosticSession,
     pub trusted_plugin_host_executable_url: Option<PathBuf>,
     /// Buffered viewport input until the engine's next tick.
     pub pending_viewport_events: RefCell<Vec<InputEvent>>,
