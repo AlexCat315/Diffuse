@@ -6485,7 +6485,7 @@
       "rust": [
         "crates/diffuse-game-runtime/src/tests/game_runtime/game_project_directory_resolver_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/GameRuntimeTests/GameProjectSceneLoaderTests.swift",
