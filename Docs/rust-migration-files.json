@@ -48,7 +48,8 @@
       "rust": [
         "DiffuseMCP/Package.swift -> Cargo.toml (see MIGRATION.md crate map)"
       ],
-      "status": "pending"
+      "status": "removed",
+      "reason": "SwiftPM 包清单；由 workspace Cargo.toml（MIGRATION.md §2 crate map）承接，Rust 侧无同构文件"
     },
     {
       "source": "DiffuseMCP/Sources/DiffuseMCP/main.swift",
@@ -70,7 +71,8 @@
       "rust": [
         "Editor/Documents/Package.swift -> Cargo.toml (see MIGRATION.md crate map)"
       ],
-      "status": "pending"
+      "status": "removed",
+      "reason": "SwiftPM 包清单；由 workspace Cargo.toml（MIGRATION.md §2 crate map）承接，Rust 侧无同构文件"
     },
     {
       "source": "Editor/Documents/Sources/StudioDocuments/Trash.swift",
@@ -114,7 +116,8 @@
       "rust": [
         "Editor/Package.swift -> Cargo.toml (see MIGRATION.md crate map)"
       ],
-      "status": "pending"
+      "status": "removed",
+      "reason": "SwiftPM 包清单；由 workspace Cargo.toml（MIGRATION.md §2 crate map）承接，Rust 侧无同构文件"
     },
     {
       "source": "Editor/Sources/CovePlayer/main.swift",
@@ -6660,7 +6663,8 @@
       "rust": [
         "Engine/Media/Package.swift -> Cargo.toml (see MIGRATION.md crate map)"
       ],
-      "status": "pending"
+      "status": "removed",
+      "reason": "SwiftPM 包清单；由 workspace Cargo.toml（MIGRATION.md §2 crate map）承接，Rust 侧无同构文件"
     },
     {
       "source": "Engine/Media/Sources/MediaRuntime/Decoding/Decoder.swift",
@@ -6750,7 +6754,8 @@
       "rust": [
         "Engine/Package.swift -> Cargo.toml (see MIGRATION.md crate map)"
       ],
-      "status": "pending"
+      "status": "removed",
+      "reason": "SwiftPM 包清单；由 workspace Cargo.toml（MIGRATION.md §2 crate map）承接，Rust 侧无同构文件"
     },
     {
       "source": "Engine/Sources/AIRuntime/Context/AIWorldContext.swift",
@@ -13245,7 +13250,8 @@
       "rust": [
         "Package.swift -> Cargo.toml (see MIGRATION.md crate map)"
       ],
-      "status": "pending"
+      "status": "removed",
+      "reason": "SwiftPM 包清单；由 workspace Cargo.toml（MIGRATION.md §2 crate map）承接，Rust 侧无同构文件"
     },
     {
       "source": "Platforms/Android/Package.swift",
@@ -13256,7 +13262,8 @@
       "rust": [
         "Platforms/Android/Package.swift -> Cargo.toml (see MIGRATION.md crate map)"
       ],
-      "status": "pending"
+      "status": "removed",
+      "reason": "SwiftPM 包清单；由 workspace Cargo.toml（MIGRATION.md §2 crate map）承接，Rust 侧无同构文件"
     },
     {
       "source": "Platforms/Android/Sources/CoveAndroidApp/Application.swift",
@@ -13414,7 +13421,8 @@
       "rust": [
         "Tools/Developer/Package.swift -> Cargo.toml (see MIGRATION.md crate map)"
       ],
-      "status": "pending"
+      "status": "removed",
+      "reason": "SwiftPM 包清单；由 workspace Cargo.toml（MIGRATION.md §2 crate map）承接，Rust 侧无同构文件"
     },
     {
       "source": "Tools/Developer/Sources/Build/IOSStaging/Entry.swift",
