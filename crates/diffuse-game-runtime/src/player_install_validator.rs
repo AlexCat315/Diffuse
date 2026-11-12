@@ -146,31 +146,5 @@ fn is_runnable_file(path: &Path) -> bool {
 }
 
 fn is_valid_application_info_plist(path: &Path) -> bool {
-    let Ok(data) = std::fs::read(path) else {
-        return false;
-    };
-    let Ok(text) = String::from_utf8(data) else {
-        return false;
-    };
-    plist_string_value(&text, "CFBundlePackageType").as_deref() == Some("APPL")
-        && plist_string_value(&text, "CFBundleExecutable").is_some_and(|value| !value.is_empty())
-}
-
-/// Reads a `<key>`/`<string>` pair from the XML property list the exporter writes.
-fn plist_string_value(text: &str, key: &str) -> Option<String> {
-    let key_marker = format!("<key>{key}</key>");
-    let start = text.find(&key_marker)? + key_marker.len();
-    let rest = &text[start..];
-    let string_start = rest.find("<string>")? + "<string>".len();
-    let string_end = rest[string_start..].find("</string>")? + string_start;
-    Some(unescape_xml(rest[string_start..string_end].trim()))
-}
-
-fn unescape_xml(value: &str) -> String {
-    value
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&apos;", "'")
-        .replace("&amp;", "&")
+    diffuse_kernel::plist::is_application_info_plist(path, None, "APPL")
 }

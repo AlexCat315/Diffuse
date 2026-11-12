@@ -4146,7 +4146,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/release_install_validator.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorUI/ResourcesSupport.swift",
@@ -4966,7 +4966,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/release_install_validator_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/RenderPipelineTests.swift",
