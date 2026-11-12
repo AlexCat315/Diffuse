@@ -12099,7 +12099,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/core/geometry_overlay_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Core/MeshSurfaceAndVisibilityTests.swift",
@@ -12110,7 +12110,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/core/mesh_surface_and_visibility_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderBackend/Core/RenderBackendGPUSmokeTests.swift",
