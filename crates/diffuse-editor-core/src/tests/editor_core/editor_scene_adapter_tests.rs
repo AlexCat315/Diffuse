@@ -1988,3 +1988,163 @@ fn scene_manifest_round_trips_camera_aspect_ratio() {
         Some(1.777)
     );
 }
+
+/// Scene manifest round-trips destructible configuration.
+#[test]
+fn scene_manifest_round_trips_destructible() {
+    use diffuse_scene::physics::destruction::Destructible;
+    use diffuse_scene::scene_bootstrap::SceneNameComponent;
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    use crate::scene::models::editor_scene_node::EditorSceneNode;
+
+    fn flatten(nodes: &[EditorSceneNode]) -> Vec<EditorSceneNode> {
+        nodes
+            .iter()
+            .flat_map(|node| {
+                let mut all = vec![node.clone()];
+                all.extend(flatten(&node.children));
+                all
+            })
+            .collect()
+    }
+
+    let source = preview_adapter();
+    source.set_scene(SceneRuntime::new(
+        diffuse_scene::components::core::registry::ComponentRegistry::built_in(),
+    ));
+    let destructible =
+        Destructible::new("tower.prefractured", 90.0, 18.0, 144, 22.0, 3.5, 0.4, false);
+    source.with_scene_mut(|scene| {
+        let entity = scene.create_entity();
+        scene.set_component(SceneNameComponent::new("Breakable Tower"), entity);
+        scene.set_component(destructible.clone(), entity);
+    });
+
+    let data = serde_json::to_vec(&source.manifest()).expect("encode");
+    let manifest: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let restored = preview_adapter();
+    let result = restored.load(&manifest);
+    assert_eq!(result.error, None);
+    let restored_raw = flatten(&restored.roots())
+        .into_iter()
+        .find(|node| node.name == "Breakable Tower")
+        .expect("breakable tower")
+        .id;
+    let scene = restored.scene();
+    assert_eq!(
+        scene.component::<Destructible>(diffuse_scene::entity_id::EntityID::from_raw_value(
+            restored_raw
+        )),
+        Some(destructible)
+    );
+    assert!(
+        restored
+            .inspector_sections(Some(restored_raw))
+            .iter()
+            .any(|section| section.id == "destructible")
+    );
+}
+
+/// Scene manifest round-trips soft-body and cloth configuration.
+#[test]
+fn scene_manifest_round_trips_soft_body_and_cloth() {
+    use diffuse_scene::physics::soft_bodies::cloth::{Cloth, ClothBendType};
+    use diffuse_scene::physics::soft_bodies::soft_body::{SoftBody, SoftBodyMesh};
+    use diffuse_scene::scene_bootstrap::SceneNameComponent;
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    use crate::scene::models::editor_scene_node::EditorSceneNode;
+
+    fn flatten(nodes: &[EditorSceneNode]) -> Vec<EditorSceneNode> {
+        nodes
+            .iter()
+            .flat_map(|node| {
+                let mut all = vec![node.clone()];
+                all.extend(flatten(&node.children));
+                all
+            })
+            .collect()
+    }
+
+    let source = preview_adapter();
+    source.set_scene(SceneRuntime::new(
+        diffuse_scene::components::core::registry::ComponentRegistry::built_in(),
+    ));
+    let soft_body = SoftBody::new(
+        0.6, 1.25, 0.3, 0.7, 0.15, 0.8, 0.04, 12, 75.0, 4, 0x00FF, false, false, true, true,
+    );
+    let cloth = Cloth::new(
+        9,
+        7,
+        0.18,
+        vec![0, 4, 8],
+        0.002,
+        0.003,
+        0.004,
+        ClothBendType::Dihedral,
+    );
+    let soft_body_mesh = SoftBodyMesh::new(
+        Some("asset:soft-tetra".to_string()),
+        vec![1, 3],
+        0.005,
+        0.006,
+        0.007,
+        0.008,
+        ClothBendType::Distance,
+    );
+    source.with_scene_mut(|scene| {
+        let entity = scene.create_entity();
+        scene.set_component(SceneNameComponent::new("Cloth Banner"), entity);
+        scene.set_component(soft_body.clone(), entity);
+        scene.set_component(cloth.clone(), entity);
+        let mesh_entity = scene.create_entity();
+        scene.set_component(SceneNameComponent::new("Soft Tetra"), mesh_entity);
+        scene.set_component(soft_body.clone(), mesh_entity);
+        scene.set_component(soft_body_mesh.clone(), mesh_entity);
+    });
+
+    let data = serde_json::to_vec(&source.manifest()).expect("encode");
+    let manifest: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let restored = preview_adapter();
+    let _ = restored.load(&manifest);
+    let nodes = flatten(&restored.roots());
+    let restored_raw = nodes
+        .iter()
+        .find(|node| node.name == "Cloth Banner")
+        .expect("cloth banner")
+        .id;
+    let restored_entity = diffuse_scene::entity_id::EntityID::from_raw_value(restored_raw);
+    let scene = restored.scene();
+    assert_eq!(
+        scene.component::<SoftBody>(restored_entity),
+        Some(soft_body.clone())
+    );
+    assert_eq!(scene.component::<Cloth>(restored_entity), Some(cloth));
+    let sections = restored.inspector_sections(Some(restored_raw));
+    assert!(sections.iter().any(|section| section.id == "soft-body"));
+    assert!(sections.iter().any(|section| section.id == "cloth"));
+    let restored_mesh_raw = nodes
+        .iter()
+        .find(|node| node.name == "Soft Tetra")
+        .expect("soft tetra")
+        .id;
+    let restored_mesh_entity =
+        diffuse_scene::entity_id::EntityID::from_raw_value(restored_mesh_raw);
+    assert_eq!(
+        scene.component::<SoftBody>(restored_mesh_entity),
+        Some(soft_body)
+    );
+    assert_eq!(
+        scene.component::<SoftBodyMesh>(restored_mesh_entity),
+        Some(soft_body_mesh)
+    );
+    assert!(
+        restored
+            .inspector_sections(Some(restored_mesh_raw))
+            .iter()
+            .any(|section| section.id == "soft-body-mesh")
+    );
+}

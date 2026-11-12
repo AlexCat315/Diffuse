@@ -1103,6 +1103,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 285 | diffuse-editor-core（可渲染场景契约测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 1 例：`renderMesh`/`renderMaterial` 组件经清单编码后字段与加载还原逐项校验；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 36/36 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 286 | diffuse-editor-core（清单恢复与物理设置测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 4 例：预览层级/运行时组件恢复、刚体 CCD 与累积冲量、物理后端/碰撞步/容量设置、旧 `jolt` 设置迁移到 `natsel` 且不保留旧字段；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 40/40 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 287 | diffuse-editor-core（粒子缩放/相机宽高比测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 2 例：粒子缩放与策略设置清单往返、相机 `aspectRatio` 清单/加载往返；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 42/42 通过；clippy/rustfmt 通过；清单无状态变化 |
+| 2026-11-13 | 批次 288 | diffuse-editor-core（破坏/软体清单测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 2 例：`Destructible` 配置与检查器分区往返、`SoftBody`/`Cloth`/`SoftBodyMesh` 配置与检查器分区往返；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 44/44 通过；clippy/rustfmt 通过；清单无状态变化 |
 
 ## 10. 已知问题与需要用户确认的事项
 
