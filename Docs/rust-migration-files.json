@@ -5221,7 +5221,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_component_registry_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorDiagnosticsTests.swift",

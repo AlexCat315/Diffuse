@@ -1108,6 +1108,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 290 | diffuse-editor-core（音频/动画清单测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 4 例：`AudioSource`、`AudioListener`、`AnimationPlayer`、`AnimationGraphPlayer` 的清单编码/加载往返（含 blend space、状态机转换、参数与活动状态）；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 50/50 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 291 | diffuse-editor-core（车辆清单测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 2 例：完整轮式车辆（轮/差速器/防倾杆/引擎/变速箱/禁用状态）清单往返与 `vehicle` 检查器分区；tracked/motorcycle 控制器的清单往返；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 52/52 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 292 | diffuse-editor-core（注册组件测试） | 0 | 0 | `EditorComponentRegistryTests.swift` 先迁 3 例：自定义 `test.counter` 组件（菜单/默认值/reset/undo/manifest/prefab/预览重置继承注册表）、交互式编辑按实体+组件合并、取消与 redo 失效/锁定拒绝；新增测试内 `EditorRegistryCounter` schema；`cargo test -p diffuse-editor-core --lib editor_component_registry_tests` 3/3 通过；clippy/rustfmt 通过；该 Swift 测试文件仍 pending |
+| 2026-11-13 | 批次 293 | diffuse-editor-core（注册组件测试完成） | 1 | 218 | `EditorComponentRegistryTests.swift` 余下 3 例迁入 `editor_component_registry_tests.rs`：相机/灯光模板默认值与单步撤销、贡献组件默认值 + 缺失 `localTransform` 由加载补齐、manifest/prefab 组件值一致并重映射 Constraint/Ragdoll/Script 引用；6/6 通过；clippy/rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 
 ## 10. 已知问题与需要用户确认的事项
 
