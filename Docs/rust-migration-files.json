@@ -2865,7 +2865,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/commands/shortcut.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorUI/HUD/BattleHUDModel.swift",
