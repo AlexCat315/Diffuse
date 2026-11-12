@@ -258,7 +258,6 @@ name = "cove-devtools"
 version = "0.3.0-dev"
 dependencies = [
  "cove-agent",
- "cove-composition",
  "cove-core",
  "cove-devtools-protocol",
  "cove-logging",
@@ -273,8 +272,6 @@ dependencies = [
 name = "cove-devtools-protocol"
 version = "0.3.0-dev"
 dependencies = [
- "cove-logging",
- "cove-platform",
  "serde",
  "serde_json",
  "thiserror",

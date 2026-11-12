@@ -9,7 +9,7 @@ use crate::state::editor_state::SelectionPrimaryModifierBehavior;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct EditorSelectionState {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "selectedEntityID", skip_serializing_if = "Option::is_none")]
     pub selected_entity_id: Option<u64>,
     #[serde(rename = "selectedEntityIDs")]
     pub selected_entity_ids: BTreeSet<u64>,

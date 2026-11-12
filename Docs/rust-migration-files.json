@@ -4821,7 +4821,8 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/commit_on_blur_text_field_tests.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: CommitOnBlurTextField component is not migrated (panels/shared production pending)"
     },
     {
       "source": "Editor/Tests/EditorAppTests/DeveloperParticleDiagnosticsTests.swift",
@@ -4887,7 +4888,8 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/editor_native_menu_tests.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: needs EditorCommandCatalog/menu builder and EditorCommandDispatcher (commands production pending)"
     },
     {
       "source": "Editor/Tests/EditorAppTests/EditorPanelWorkflowTests.swift",
@@ -5384,7 +5386,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_scratch_workspace_tests.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: two cases need EditorApplication (hub not migrated); the third depends on EditorProjectLifecycle::create"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorScriptPlaybackTests.swift",
@@ -5450,7 +5453,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_viewport_grid_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorViewportNavigationTests.swift",
@@ -5527,7 +5530,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/grouped_state_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/InputStateTests.swift",
@@ -5538,7 +5541,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/input_state_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Inspector/Choices.swift",
@@ -5626,7 +5629,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_picker_tests.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: mesh picker model is not migrated (scene adapter picking production pending)"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/MeshRenderingTests.swift",
@@ -5659,7 +5663,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/particles/feedback_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/PluginComponentsTests.swift",
@@ -6202,7 +6206,8 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_workbench/inspector_layout_tests.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: needs collider-shape editor state and WorkbenchUITestSupport (production/test support pending)"
     },
     {
       "source": "Editor/Tests/EditorWorkbenchTests/InspectorSearchRegressionTests.swift",
@@ -6268,7 +6273,8 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_workbench/navigation_and_server_status_tests.rs"
       ],
-      "status": "pending"
+      "status": "blocked",
+      "blocked_by": "P1: needs EditorApplication, viewport view menu and language-server status (hub/UI production pending)"
     },
     {
       "source": "Editor/Tests/EditorWorkbenchTests/PluginPanelTests.swift",
