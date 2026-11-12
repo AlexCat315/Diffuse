@@ -5884,7 +5884,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/project_script_catalog_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/ScriptInspectorContractTests.swift",
