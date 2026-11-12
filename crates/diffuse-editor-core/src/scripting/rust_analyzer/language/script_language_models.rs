@@ -454,3 +454,17 @@ impl ScriptLanguageSupportError {
         }
     }
 }
+
+// MARK: - Service state
+
+/// Swift defines this in `ScriptWorkspaceModel.swift`; the language stack and
+/// the workspace share it, so the Rust port keeps it beside the other language
+/// models.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum ScriptLanguageServiceState {
+    #[default]
+    Inactive,
+    Starting,
+    Ready,
+    Unavailable(String),
+}

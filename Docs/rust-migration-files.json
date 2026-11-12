@@ -2231,7 +2231,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/script_language_lifecycle.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/ScriptLanguageModels.swift",
