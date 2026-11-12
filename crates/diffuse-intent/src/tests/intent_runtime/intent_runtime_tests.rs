@@ -50,7 +50,7 @@ use crate::transactions::transaction_ir::{
     TransactionOperation, TransactionProvenance,
 };
 
-fn scene() -> SceneRuntime {
+pub(crate) fn scene() -> SceneRuntime {
     SceneRuntime::new(ComponentRegistry::built_in())
 }
 
@@ -62,7 +62,7 @@ fn scene_with_script_codec() -> SceneRuntime {
     scene
 }
 
-fn transaction(
+pub(crate) fn transaction(
     intent: IntentIR,
     summary: &str,
     operations: Vec<TransactionOperation>,
@@ -74,7 +74,7 @@ fn transaction(
     transaction
 }
 
-fn scene_context(scene: SceneRuntime) -> TransactionExecutionContext {
+pub(crate) fn scene_context(scene: SceneRuntime) -> TransactionExecutionContext {
     TransactionExecutionContext {
         scene_runtime: Some(scene),
         ..TransactionExecutionContext::default()
@@ -872,4 +872,19 @@ fn ambiguity_scorer_builds_destructive_confirmation_questions() {
         crate::invocation::capability_invocation::ConfirmationSeverity::Destructive
     );
     assert_eq!(question.ambiguity_score, score.score);
+}
+
+pub(crate) fn capability_context(
+    scene: &SceneRuntime,
+    source: IntentSource,
+    confidence: f64,
+) -> crate::invocation::capability_invocation_planning::CapabilityInvocationContext {
+    crate::invocation::capability_invocation_planning::CapabilityInvocationContext::from_scene_runtime(
+        scene,
+        None,
+        true,
+        source,
+        confidence,
+        Vec::new(),
+    )
 }
