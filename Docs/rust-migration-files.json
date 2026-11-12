@@ -5839,7 +5839,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/rendering/viewport_host_input_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Rendering/ViewportHostScaleTests.swift",
