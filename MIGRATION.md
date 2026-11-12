@@ -1090,6 +1090,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 272 | diffuse-editor-core（reducer/组件编辑测试） | 2 | 315 | `EditorReducerTests.swift` → 10 例、`EditorComponentEditingTests.swift` → 10 例；`cargo test -p diffuse-editor-core --lib` 对应模块 20/20 通过；clippy/rustfmt、`inventory.py --check` 通过；2 行标 `tested` |
 | 2026-11-13 | 批次 273 | diffuse-editor-core（EditorStore 测试） | 1 | 277 | `EditorStoreTests.swift` → `editor_store_tests.rs`（16 例：瞬态工作台状态、编译诊断行列、未解析绑定定位、订阅/版本、恢复脏状态、控制台、选择修饰键编解码、分组默认值、物理调试选项、能力设置、帧统计与诊断历史上限/瞬态）；`cargo test -p diffuse-editor-core --lib editor_store_tests` 16/16 通过；clippy/rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 | 2026-11-13 | 批次 274 | diffuse-editor-core（智能体任务测试） | 1 | 89 | `EditorAgentTaskTests.swift` → `editor_agent_task_tests.rs`（5 例：内容工具画像、能力发现不扩大白名单、任务目标冻结与生命周期、会话不持久化、终态释放活动槽）；`cargo test -p diffuse-editor-core --lib editor_agent_task_tests` 5/5 通过；clippy/rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
+| 2026-11-13 | 批次 275 | diffuse-editor-core（插件授权存储测试） | 1 | 116 | `EditorPluginAuthorizationStoreTests.swift` → `editor_plugin_authorization_store_tests.rs`（3 例：精确 inspection 绑定/重开加载/权限 0600、重复记录隔离、未知格式隔离）；`cargo test -p diffuse-editor-core --lib editor_plugin_authorization_store_tests` 3/3 通过；clippy/rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 
 ## 10. 已知问题与需要用户确认的事项
 
