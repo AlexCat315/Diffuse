@@ -3471,7 +3471,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/inspector/inspector_json_input.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Inspector/InspectorPanel.swift",
@@ -3880,7 +3880,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/template.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Shared/CommitOnBlurTextField.swift",
