@@ -554,7 +554,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/editor_integration.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/EditorPluginCapabilityError.swift",
@@ -642,7 +642,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/plugin_session.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/Plugins.swift",
