@@ -576,7 +576,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/host_pool.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/Installations.swift",
