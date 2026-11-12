@@ -1100,6 +1100,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 282 | diffuse-editor-core（场景适配器编辑/层级测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 17 例（变换撤销/重做、载入重置历史、可见性撤销、锁定拒绝、批量删除/复制/移根原子性、重命名校验、锁存往返、交互式变换合并与取消）；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 27/27 通过；clippy/rustfmt 通过；清单无状态变化（该 Swift 测试文件仍 pending） |
 | 2026-11-13 | 批次 283 | diffuse-editor-core（预览场景/取景/动画测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 5 例（预览清单根/相机组件、活动粒子、多选取景居中、重置预览发布修订、动画调色板非空）；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 32/32 通过；clippy/rustfmt 通过；清单无状态变化（该 Swift 测试文件仍 pending） |
 | 2026-11-13 | 批次 284 | diffuse-editor-core（GameSave/清单版本测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 3 例（当前清单 schema 版本、`GameSaveDocument` 写读往返、缺失文件返回 nil）；往返比较以序列化后的清单为基准，避免 f32→f64 文本表示导致等价场景不等；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 35/35 通过；clippy/rustfmt 通过；清单无状态变化 |
+| 2026-11-13 | 批次 285 | diffuse-editor-core（可渲染场景契约测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 1 例：`renderMesh`/`renderMaterial` 组件经清单编码后字段与加载还原逐项校验；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 36/36 通过；clippy/rustfmt 通过；清单无状态变化 |
 
 ## 10. 已知问题与需要用户确认的事项
 

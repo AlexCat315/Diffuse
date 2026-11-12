@@ -1503,3 +1503,143 @@ fn game_save_read_missing_returns_nil() {
     let result = GameSaveDocument::read(&url).expect("read missing");
     assert!(result.is_none());
 }
+
+/// Scene manifest round-trips the renderable scene contract.
+#[test]
+fn scene_manifest_round_trips_renderable_scene_contract() {
+    use diffuse_math::simd::simd_compat::{Float3, Float4};
+    use diffuse_scene::components::core::value::{ComponentValue, manifest_value_for};
+    use diffuse_scene::rendering::render_extraction::{
+        RenderMaterialComponent, RenderMeshComponent,
+    };
+
+    use crate::scene::manifest::node::EditorSceneManifestNode;
+
+    fn find_node(nodes: &[EditorSceneManifestNode], id: u64) -> Option<&EditorSceneManifestNode> {
+        for node in nodes {
+            if node.id == id {
+                return Some(node);
+            }
+            if let Some(found) = find_node(&node.children, id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    fn flatten(nodes: &[crate::scene::models::editor_scene_node::EditorSceneNode]) -> Vec<u64> {
+        let mut ids = Vec::new();
+        for node in nodes {
+            ids.push(node.id);
+            ids.extend(flatten(&node.children));
+        }
+        ids
+    }
+
+    let source = preview_adapter();
+    let hero_id = flatten(&source.roots())
+        .into_iter()
+        .find(|id| {
+            source
+                .entity_summary(Some(*id))
+                .is_some_and(|summary| summary.name == "Hero")
+        })
+        .expect("preview scene hero");
+    let hero = diffuse_scene::entity_id::EntityID::from_raw_value(hero_id);
+    source.with_scene_mut(|scene| {
+        scene.set_component(
+            RenderMeshComponent::new(
+                12,
+                true,
+                Float3::new(0.4, 0.5, 0.6),
+                Some("hero.asset".to_string()),
+                Vec::new(),
+            ),
+            hero,
+        );
+        scene.set_component(
+            RenderMaterialComponent::new(
+                Float4::new(0.8, 0.7, 0.6, 0.9),
+                Some(2),
+                Some(4),
+                0.3,
+                0.65,
+                Float3::new(0.1, 0.2, 0.3),
+                None,
+                None,
+                None,
+            ),
+            hero,
+        );
+    });
+
+    let manifest = source.manifest_for_selection(Some(hero_id));
+    let manifest_hero = find_node(&manifest.roots, hero_id).expect("manifest hero");
+    let mesh_doc = manifest_value_for(&manifest_hero.components, "renderMesh")
+        .and_then(ComponentValue::object_value)
+        .expect("mesh document");
+    assert_eq!(
+        mesh_doc.get("meshIndex"),
+        Some(&ComponentValue::Number(12.0))
+    );
+    assert_eq!(
+        mesh_doc.get("assetID"),
+        Some(&ComponentValue::String("hero.asset".to_string()))
+    );
+    assert_eq!(
+        mesh_doc.get("colorTint"),
+        Some(&ComponentValue::Array(vec![
+            ComponentValue::Number(f64::from(0.4f32)),
+            ComponentValue::Number(f64::from(0.5f32)),
+            ComponentValue::Number(f64::from(0.6f32)),
+        ]))
+    );
+    let material_doc = manifest_value_for(&manifest_hero.components, "renderMaterial")
+        .and_then(ComponentValue::object_value)
+        .expect("material document");
+    assert_eq!(
+        material_doc.get("baseColorFactor"),
+        Some(&ComponentValue::Array(vec![
+            ComponentValue::Number(f64::from(0.8f32)),
+            ComponentValue::Number(f64::from(0.7f32)),
+            ComponentValue::Number(f64::from(0.6f32)),
+            ComponentValue::Number(f64::from(0.9f32)),
+        ]))
+    );
+    assert_eq!(
+        material_doc.get("baseColorTextureIndex"),
+        Some(&ComponentValue::Number(2.0))
+    );
+    assert_eq!(
+        material_doc.get("normalTextureIndex"),
+        Some(&ComponentValue::Number(4.0))
+    );
+
+    let restored = preview_adapter();
+    let result = restored.load(&manifest);
+    let restored_hero = diffuse_scene::entity_id::EntityID::from_raw_value(
+        result.selected_entity_id.expect("hero"),
+    );
+    let scene = restored.scene();
+    let restored_mesh = scene
+        .component::<RenderMeshComponent>(restored_hero)
+        .expect("mesh");
+    let restored_material = scene
+        .component::<RenderMaterialComponent>(restored_hero)
+        .expect("material");
+    assert_eq!(restored_mesh.mesh_index, 12);
+    assert_eq!(restored_mesh.asset_id.as_deref(), Some("hero.asset"));
+    assert_eq!(restored_mesh.color_tint, Float3::new(0.4, 0.5, 0.6));
+    assert_eq!(
+        restored_material.base_color_factor,
+        Float4::new(0.8, 0.7, 0.6, 0.9)
+    );
+    assert_eq!(restored_material.base_color_texture_index, Some(2));
+    assert_eq!(restored_material.normal_texture_index, Some(4));
+    assert_eq!(restored_material.metallic_factor, 0.3);
+    assert_eq!(restored_material.roughness_factor, 0.65);
+    assert_eq!(
+        restored_material.emissive_factor,
+        Float3::new(0.1, 0.2, 0.3)
+    );
+}
