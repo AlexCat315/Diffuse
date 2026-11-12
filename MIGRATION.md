@@ -1116,6 +1116,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 298 | diffuse-editor-core（场景适配器测试完成） | 1 | 1813 | `EditorSceneAdapterTests.swift` 余下用例全部迁入 `editor_scene_adapter_tests.rs`（索引包裹、完整粒子 emitter 清单 JSON 往返、模块栈覆盖等），Rust 侧 58 例覆盖该文件 57 个 `@Test`（多一个拆分用例）；`cargo test -p diffuse-editor-core --lib` 213/213 通过；clippy（本批零告警）、rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 | 2026-11-13 | 批次 299 | diffuse-editor-core（检查器相机/音频/动画/物理测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 先迁 9 例：相机分区/启用/FOV 角度/FOV 宽高比、音频监听音量、动画图 JSON 定义写回、物理世界设置、后端选择、刚体速度/阻尼/CCD；测试改用 `EditorInspectorRendererRegistry::built_in()`；`cargo test -p diffuse-editor-core --lib editor_inspector_sections_tests` 9/9 通过；clippy/rustfmt 通过；该 Swift 测试文件仍 pending（26 例中余 17 例） |
 | 2026-11-13 | 批次 300 | diffuse-editor-core（检查器车辆/破坏/碰撞体测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 再迁 4 例：车辆启用/引擎/离合器与 tracked/motorcycle 控制器切换、破坏阈值与运行时只读状态、碰撞体中心/层掩码、复合碰撞体变换与 JSON 形状编辑；`editor_inspector_sections_tests.rs` 13/13 通过；clippy/rustfmt 通过；该 Swift 文件仍 pending（余 13 例） |
+| 2026-11-13 | 批次 301 | diffuse-editor-core（检查器关节/软体测试） | 0 | 0 | `EditorInspectorSectionsTests.swift` 再迁 3 例：typed physics joint（端点候选排序/自排除、hinge 轴/限位/马达/弹簧、切 SixDOF 后字段对齐）、soft-body+cloth 模拟/拓扑/固定点、表面软体资源/四面体/固定点；`editor_inspector_sections_tests.rs` 16/16 通过；clippy（本批零告警）、rustfmt 通过；该 Swift 文件仍 pending（余 10 个粒子用例） |
 
 ## 10. 已知问题与需要用户确认的事项
 

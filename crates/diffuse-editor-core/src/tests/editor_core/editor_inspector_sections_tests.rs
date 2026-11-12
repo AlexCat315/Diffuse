@@ -750,3 +750,403 @@ fn compound_collider_bindings_and_shape_field_alignment() {
     assert!(field(&adapter, id, "collider", "shape-capsule-half-height").is_none());
     assert!(field(&adapter, id, "collider", "shape-cylinder-half-height").is_none());
 }
+
+/// Typed physics joint inspector edits hinge and SixDOF configurations.
+#[test]
+fn typed_physics_joint_bindings() {
+    use diffuse_math::simd::simd_compat::Float3;
+    use diffuse_scene::physics::collider::{Collider, ColliderShape};
+    use diffuse_scene::physics::joints::physics_joint::PhysicsJoint;
+    use diffuse_scene::physics::joints::physics_joint_configuration::{
+        HingeJointConfiguration, PhysicsJointConfiguration, PhysicsJointKind, PhysicsJointMotor,
+        PhysicsJointMotorMode,
+    };
+
+    use crate::scene::inspector::enum_options::EditorInspectorEnumOption;
+
+    let adapter = adapter();
+    let (body_a, body_b, body_c, joint_entity) = adapter.with_scene_mut(|scene| {
+        let body_a = scene.create_entity();
+        let body_b = scene.create_entity();
+        let body_c = scene.create_entity();
+        let joint_entity = scene.create_entity();
+        for body in [body_a, body_b, body_c] {
+            scene.set_component(
+                Collider::with_shape(ColliderShape::Box {
+                    half_extents: Float3::splat(0.5),
+                    center: Float3::ZERO,
+                }),
+                body,
+            );
+        }
+        (body_a, body_b, body_c, joint_entity)
+    });
+    let joint = PhysicsJoint::new(
+        PhysicsJointConfiguration::Hinge(HingeJointConfiguration::new(
+            Float3::new(0.0, 1.0, 0.0),
+            Float3::new(0.0, 1.0, 0.0),
+            -0.5,
+            0.75,
+            PhysicsJointMotor::new(PhysicsJointMotorMode::Velocity, 0.0, 2.0, 50.0),
+            diffuse_scene::physics::joints::physics_joint_configuration::PhysicsJointSpring::new(
+                3.0, 0.4,
+            ),
+        )),
+        body_a,
+        body_b,
+        Float3::ZERO,
+        Float3::ZERO,
+        true,
+        PhysicsJoint::DEFAULT_BREAK_LIMIT,
+        PhysicsJoint::DEFAULT_BREAK_LIMIT,
+    );
+    adapter.with_scene_mut(|scene| {
+        scene.set_component(joint, joint_entity);
+    });
+    let id = joint_entity.raw_value();
+
+    let Some(EditorInspectorFieldValue::EntityReference {
+        binding: endpoint_a,
+        options: options_a,
+    }) = field(&adapter, id, "constraint", "joint-entity-a")
+    else {
+        panic!("expected joint endpoint A");
+    };
+    let Some(EditorInspectorFieldValue::EntityReference {
+        options: options_b, ..
+    }) = field(&adapter, id, "constraint", "joint-entity-b")
+    else {
+        panic!("expected joint endpoint B");
+    };
+    let option_ids: Vec<u64> = options_a.iter().map(|option| option.id).collect();
+    let mut sorted = option_ids.clone();
+    sorted.sort_unstable();
+    assert_eq!(option_ids, sorted);
+    let option_set: std::collections::BTreeSet<u64> = option_ids.iter().copied().collect();
+    assert!(option_set.is_superset(&std::collections::BTreeSet::from([
+        body_a.raw_value(),
+        body_b.raw_value(),
+        body_c.raw_value()
+    ])));
+    assert!(!option_ids.contains(&joint_entity.raw_value()));
+    assert_eq!(options_b, options_a);
+    endpoint_a.set(body_b.raw_value());
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<PhysicsJoint>(joint_entity)
+            .map(|joint| joint.entity_a),
+        Some(body_a)
+    );
+    endpoint_a.set(body_c.raw_value());
+    assert_eq!(
+        adapter
+            .scene()
+            .component::<PhysicsJoint>(joint_entity)
+            .map(|joint| joint.entity_a),
+        Some(body_c)
+    );
+
+    let Some(EditorInspectorFieldValue::StringOptions { binding: kind, .. }) =
+        field(&adapter, id, "constraint", "joint-type")
+    else {
+        panic!("expected joint type");
+    };
+    let Some(EditorInspectorFieldValue::Vector3 {
+        x: axis_x,
+        y: axis_y,
+        z: axis_z,
+    }) = field(&adapter, id, "constraint", "joint-axis-a")
+    else {
+        panic!("expected axis");
+    };
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: minimum_angle,
+        ..
+    }) = field(&adapter, id, "constraint", "joint-minimum-angle")
+    else {
+        panic!("expected minimum angle");
+    };
+    let Some(EditorInspectorFieldValue::StringOptions {
+        binding: motor_mode,
+        ..
+    }) = field(&adapter, id, "constraint", "joint-motor-mode")
+    else {
+        panic!("expected motor mode");
+    };
+    let Some(EditorInspectorFieldValue::Number(target_velocity)) =
+        field(&adapter, id, "constraint", "joint-motor-target-velocity")
+    else {
+        panic!("expected target velocity");
+    };
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: spring_damping,
+        ..
+    }) = field(&adapter, id, "constraint", "joint-spring-damping")
+    else {
+        panic!("expected spring damping");
+    };
+
+    axis_x.set(0.0);
+    axis_y.set(0.0);
+    axis_z.set(1.0);
+    minimum_angle.set(-0.25);
+    motor_mode.set(PhysicsJointMotorMode::Position.inspector_option_id());
+    target_velocity.set(6.0);
+    spring_damping.set(0.8);
+
+    let Some(PhysicsJointConfiguration::Hinge(edited_hinge)) = adapter
+        .scene()
+        .component::<PhysicsJoint>(joint_entity)
+        .map(|joint| joint.configuration)
+    else {
+        panic!("expected edited hinge configuration");
+    };
+    assert_eq!(edited_hinge.axis_a, Float3::new(0.0, 0.0, 1.0));
+    assert_eq!(edited_hinge.minimum_angle, -0.25);
+    assert_eq!(edited_hinge.motor.mode, PhysicsJointMotorMode::Position);
+    assert_eq!(edited_hinge.motor.target_velocity, 6.0);
+    assert_eq!(edited_hinge.spring.damping, 0.8);
+
+    kind.set(PhysicsJointKind::SixDof.inspector_option_id());
+    let Some(EditorInspectorFieldValue::Vector3 {
+        x: linear_min_x,
+        y: linear_min_y,
+        z: linear_min_z,
+    }) = field(&adapter, id, "constraint", "joint-linear-minimum")
+    else {
+        panic!("expected SixDOF linear minimum");
+    };
+    let Some(EditorInspectorFieldValue::StringOptions {
+        binding: angular_motor_mode,
+        ..
+    }) = field(&adapter, id, "constraint", "joint-angular-mode")
+    else {
+        panic!("expected SixDOF angular mode");
+    };
+    linear_min_x.set(-1.0);
+    linear_min_y.set(-2.0);
+    linear_min_z.set(-3.0);
+    angular_motor_mode.set(PhysicsJointMotorMode::Velocity.inspector_option_id());
+
+    let Some(PhysicsJointConfiguration::SixDof(six_dof)) = adapter
+        .scene()
+        .component::<PhysicsJoint>(joint_entity)
+        .map(|joint| joint.configuration)
+    else {
+        panic!("expected SixDOF configuration");
+    };
+    assert_eq!(six_dof.linear_minimum, Float3::new(-1.0, -2.0, -3.0));
+    assert_eq!(six_dof.angular_motor.mode, PhysicsJointMotorMode::Velocity);
+    assert!(field(&adapter, id, "constraint", "joint-minimum-angle").is_none());
+}
+
+/// Soft-body and cloth inspector edits simulation, topology, and fixed points.
+#[test]
+fn soft_body_and_cloth_bindings() {
+    use diffuse_scene::physics::soft_bodies::cloth::{Cloth, ClothBendType};
+    use diffuse_scene::physics::soft_bodies::soft_body::SoftBody;
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(id);
+    assert!(adapter.add_component("softBody", id));
+    assert!(adapter.add_component("cloth", id));
+    assert!(has_section(&adapter, id, "soft-body"));
+    assert!(has_section(&adapter, id, "cloth"));
+
+    let Some(EditorInspectorFieldValue::Bool(enabled)) =
+        field(&adapter, id, "soft-body", "soft-body-enabled")
+    else {
+        panic!("expected enabled");
+    };
+    let Some(EditorInspectorFieldValue::Bool(self_collision)) =
+        field(&adapter, id, "soft-body", "soft-body-self-collision")
+    else {
+        panic!("expected self collision");
+    };
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: pressure, ..
+    }) = field(&adapter, id, "soft-body", "soft-body-pressure")
+    else {
+        panic!("expected pressure");
+    };
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: iterations,
+        ..
+    }) = field(&adapter, id, "soft-body", "soft-body-iterations")
+    else {
+        panic!("expected iterations");
+    };
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: grid_x, ..
+    }) = field(&adapter, id, "cloth", "cloth-grid-x")
+    else {
+        panic!("expected grid x");
+    };
+    let Some(EditorInspectorFieldValue::Json {
+        binding: fixed_vertices,
+        ..
+    }) = field(&adapter, id, "cloth", "cloth-fixed-vertices")
+    else {
+        panic!("expected fixed vertices");
+    };
+    let Some(EditorInspectorFieldValue::StringOptions {
+        binding: bend_type, ..
+    }) = field(&adapter, id, "cloth", "cloth-bend-type")
+    else {
+        panic!("expected bend type");
+    };
+
+    enabled.set(false);
+    self_collision.set(true);
+    pressure.set(2.5);
+    iterations.set(11.0);
+    grid_x.set(6.0);
+    fixed_vertices.set("[0,2,5,999]".to_string());
+    bend_type.set("dihedral".to_string());
+
+    let soft_body = adapter
+        .scene()
+        .component::<SoftBody>(entity)
+        .expect("soft body");
+    let cloth = adapter.scene().component::<Cloth>(entity).expect("cloth");
+    assert!(!soft_body.is_enabled);
+    assert!(soft_body.self_collision);
+    assert_eq!(soft_body.pressure, 2.5);
+    assert_eq!(soft_body.solver_iterations, 11);
+    assert_eq!(cloth.grid_size_x, 6);
+    assert_eq!(cloth.fixed_vertex_indices, vec![0, 2, 5]);
+    assert_eq!(cloth.bend_type, ClothBendType::Dihedral);
+
+    assert!(adapter.remove_component("cloth", id));
+    assert!(adapter.remove_component("softBody", id));
+    assert!(!has_section(&adapter, id, "cloth"));
+    assert!(!has_section(&adapter, id, "soft-body"));
+}
+
+/// Surface soft-body inspector edits asset topology and excludes cloth.
+#[test]
+fn soft_body_mesh_bindings() {
+    use std::collections::BTreeMap;
+
+    use diffuse_math::simd::simd_compat::{Float2, Float3};
+    use diffuse_scene::physics::queries::spatial_queries::{
+        MeshColliderGeometry, MeshColliderGeometryResource,
+    };
+    use diffuse_scene::physics::soft_bodies::cloth::ClothBendType;
+    use diffuse_scene::physics::soft_bodies::soft_body::SoftBodyMesh;
+    use diffuse_scene::scene_bootstrap::AssetReferenceComponent;
+
+    let adapter = adapter();
+    let id = make_entity(&adapter);
+    let entity = diffuse_scene::entity_id::EntityID::from_raw_value(id);
+    adapter.with_scene_mut(|scene| {
+        scene.set_component(
+            AssetReferenceComponent::new(
+                "mesh-12",
+                "Tetra",
+                "Tetra.glb",
+                "/tmp/Tetra.glb",
+                "model",
+                12,
+            ),
+            entity,
+        );
+        scene.set_resource(MeshColliderGeometryResource::new(
+            BTreeMap::from([(
+                "meshIndex:12".to_string(),
+                MeshColliderGeometry::new(
+                    vec![
+                        Float3::ZERO,
+                        Float3::new(1.0, 0.0, 0.0),
+                        Float3::new(0.0, 1.0, 0.0),
+                        Float3::new(0.0, 0.0, 1.0),
+                    ],
+                    vec![0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3],
+                    vec![0, 1, 2, 3],
+                    Vec::<Float2>::new(),
+                    None,
+                    0,
+                ),
+            )]),
+            None,
+        ));
+    });
+
+    assert!(adapter.add_component("softBody", id));
+    assert!(adapter.add_component("softBodyMesh", id));
+    assert!(has_section(&adapter, id, "soft-body-mesh"));
+    assert!(
+        !adapter
+            .addable_component_schemas(id)
+            .iter()
+            .any(|schema| schema.type_id == "cloth")
+    );
+    assert!(!adapter.add_component("cloth", id));
+
+    let Some(EditorInspectorFieldValue::Text(resource)) =
+        field(&adapter, id, "soft-body-mesh", "soft-body-mesh-resource")
+    else {
+        panic!("expected resource");
+    };
+    let Some(EditorInspectorFieldValue::Json {
+        binding: fixed_vertices,
+        ..
+    }) = field(&adapter, id, "soft-body-mesh", "soft-body-mesh-fixed")
+    else {
+        panic!("expected fixed vertices");
+    };
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: compliance,
+        ..
+    }) = field(&adapter, id, "soft-body-mesh", "soft-body-mesh-compliance")
+    else {
+        panic!("expected compliance");
+    };
+    let Some(EditorInspectorFieldValue::ConstrainedNumber {
+        binding: volume_compliance,
+        ..
+    }) = field(&adapter, id, "soft-body-mesh", "soft-body-mesh-volume")
+    else {
+        panic!("expected volume compliance");
+    };
+    let Some(EditorInspectorFieldValue::StringOptions {
+        binding: bend_type, ..
+    }) = field(&adapter, id, "soft-body-mesh", "soft-body-mesh-bend-type")
+    else {
+        panic!("expected bend type");
+    };
+    let Some(EditorInspectorFieldValue::ReadOnly(tetrahedron_count)) =
+        field(&adapter, id, "soft-body-mesh", "soft-body-mesh-tetrahedra")
+    else {
+        panic!("expected tetrahedra");
+    };
+
+    assert_eq!(resource.get(), "meshIndex:12");
+    assert_eq!(tetrahedron_count, "1");
+    resource.set("soft.tetra".to_string());
+    fixed_vertices.set("[7,2,-1,2]".to_string());
+    compliance.set(0.006);
+    volume_compliance.set(0.002);
+    bend_type.set("distance".to_string());
+
+    let mesh = adapter
+        .scene()
+        .component::<SoftBodyMesh>(entity)
+        .expect("soft body mesh");
+    assert_eq!(mesh.resource_id.as_deref(), Some("soft.tetra"));
+    assert_eq!(mesh.fixed_vertex_indices, vec![2, 7]);
+    assert_eq!(mesh.compliance, 0.006);
+    assert_eq!(mesh.volume_compliance, 0.002);
+    assert_eq!(mesh.bend_type, ClothBendType::Distance);
+
+    assert!(adapter.remove_component("softBodyMesh", id));
+    assert!(!has_section(&adapter, id, "soft-body-mesh"));
+    assert!(
+        adapter
+            .addable_component_schemas(id)
+            .iter()
+            .any(|schema| schema.type_id == "cloth")
+    );
+}
