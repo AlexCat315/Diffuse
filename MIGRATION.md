@@ -1153,6 +1153,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 336 | diffuse-editor-core（位置换算测试） | 1 | 122 | `ScriptLanguagePositionTests.swift` → `rust_analyzer/script_language_position_tests.rs`（11 例通过）：单行 UTF-16 列、非 BMP 代理对计 2、行推进与行尾光标、尾随换行、越界/空文本钳制、CJK 全索引往返、服务器超长列钳到行尾、标识符范围（含标点后的尾随词）、空白/标点无标识符、UTF-8 字节偏移；`TextBuffer` 字符索引语义保持一致；clippy（本批零告警）、rustfmt、`cargo test -p diffuse-editor-core --lib` 324/324 通过；1 行标 `tested` |
 | 2026-11-13 | 批次 337 | diffuse-editor-core（语言辅助回复测试） | 1 | 71 | `AssistanceReplyTests.swift` → `rust_analyzer/assistance_reply_tests.rs`（4 例通过）：诊断保留 tags（未知 tag 丢弃）与 relatedInformation URI/位置；带 data 的补全项保留 resolution、带 documentation 的不保留；工作区符号接受 SymbolInformation 与仅文件的 WorkspaceSymbol（后者落在第 0 行）、损坏项丢弃；被监视文件扫描报告新增/修改/删除并忽略 node_modules 与非目标扩展；clippy（本批零告警）、rustfmt、`cargo test -p diffuse-editor-core --lib` 328/328 通过；1 行标 `tested` |
 | 2026-11-13 | 批次 338 | diffuse-editor-core（测试告警清理） | — | — | 批次 337 的 `assistance_reply_tests.rs` 去掉多余的 `PathBuf::from` 转换与导入；clippy 本文件零告警、`cargo test -p diffuse-editor-core --lib assistance_reply_tests` 4/4 通过 |
+| 2026-11-13 | 批次 339 | diffuse-editor-core（LSP 回复解码测试） | 1 | 139 | `ScriptLanguageReplyTests.swift` → `rust_analyzer/script_language_reply_tests.rs`（9 例通过）：Markdown/旧式 MarkedString hover、空 hover、Markdown 摘要去装饰（保留代码与项目符号、去掉链接/粗体/标题）、CompletionList 与裸数组、Location 与 LocationLink 定义、publishDiagnostics 字段与严重级别、忽略其他通知；clippy（本批零告警）、rustfmt、`cargo test -p diffuse-editor-core --lib` 337/337 通过；1 行标 `tested` |
 
 
 ## 10. 已知问题与需要用户确认的事项

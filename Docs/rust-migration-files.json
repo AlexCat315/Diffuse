@@ -5980,7 +5980,7 @@
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/rust_analyzer/script_language_reply_tests.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/SourceKitLSP/ScriptLanguageWorkspaceTests.swift",
