@@ -5806,7 +5806,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/rendering/native_viewport_test_context.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Rendering/ScriptCanvasTests.swift",

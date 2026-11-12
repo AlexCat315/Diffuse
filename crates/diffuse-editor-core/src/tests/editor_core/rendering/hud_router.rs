@@ -1,6 +1,6 @@
 //! Ported from `Editor/Tests/EditorCoreTests/Rendering/HUDRouter.swift`.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use cove_graphics::rhi::{CommandBuffer, Device, RenderColorTarget, TextureFormat};
 use diffuse_render::RenderPacket;
@@ -11,10 +11,31 @@ use diffuse_render::surface::in_game_ui_providing::{
 use diffuse_scene::scene_runtime::SceneRuntimeSnapshot;
 
 /// A test-scoped provider allows failure and enable/disable cases to share
-/// one renderer without installing process-wide state.
-#[derive(Default)]
+/// one renderer without installing process-wide state. The provider is shared
+/// by handle so the reference renderer and the test observe the same route.
+#[derive(Clone, Default)]
 pub struct HUDRouter {
-    pub provider: Option<Box<dyn InGameUIProviding>>,
+    provider: Arc<Mutex<Option<Box<dyn InGameUIProviding>>>>,
+}
+
+impl HUDRouter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn set_provider(&self, provider: Option<Box<dyn InGameUIProviding>>) {
+        *self.lock() = provider;
+    }
+
+    pub fn has_provider(&self) -> bool {
+        self.lock().is_some()
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Option<Box<dyn InGameUIProviding>>> {
+        self.provider
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 }
 
 impl InGameUIProviding for HUDRouter {
@@ -24,7 +45,7 @@ impl InGameUIProviding for HUDRouter {
         snapshot: &SceneRuntimeSnapshot,
         target: NativeInGameUITarget,
     ) -> Result<InGameUIRecordingOutcome, InGameUIRecordingOutcomeError> {
-        match &self.provider {
+        match self.lock().as_ref() {
             Some(provider) => provider.record_in_game_ui(packet, snapshot, target),
             None => Ok(InGameUIRecordingOutcome::new(target.commands, None)),
         }
@@ -113,11 +134,11 @@ mod tests {
         assert!(outcome.recording.is_none());
 
         let calls = Arc::new(AtomicUsize::new(0));
-        let router = HUDRouter {
-            provider: Some(Box::new(CountingProvider {
-                calls: calls.clone(),
-            })),
-        };
+        let router = HUDRouter::new();
+        router.set_provider(Some(Box::new(CountingProvider {
+            calls: calls.clone(),
+        })));
+        assert!(router.has_provider());
         assert!(
             router
                 .record_in_game_ui(&packet, &snapshot, target(device))
