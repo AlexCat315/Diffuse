@@ -12,5 +12,6 @@ pub mod projects;
 pub mod root;
 pub mod settings;
 pub mod shell;
+#[cfg(test)]
 pub mod tests;
 pub mod toolbar;

@@ -4863,7 +4863,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/editor_app_resource_bundle_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/EditorAssetImportCoordinatorTests.swift",
@@ -6177,7 +6177,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_workbench/frame_cadence_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorWorkbenchTests/GeometryInspectorLayoutTests.swift",
