@@ -5737,10 +5737,9 @@
       "source_sha256": "07b4484b22b7c4a50185fbca2c77b1fce7dccbc589b0d4aac252c2b004a3582c",
       "kind": "test",
       "crate": "diffuse-editor-core",
-      "rust": [
-        "crates/diffuse-editor-core/src/tests/editor_core/rendering/native_app_window_tests.rs"
-      ],
-      "status": "pending"
+      "rust": [],
+      "status": "blocked",
+      "blocked_by": "P1: exercises Cove hosts desktop AppKit window/application lifecycle (Application.run, AppRenderingContext, AppWindowRenderSettings, NativeAppFrameCapture, CAMetalLayer/NSWindow) which only exist in ../Cove and cannot be edited; diffuse-editor-core does not depend on cove-hosts and adding that workspace dependency needs §10 confirmation. Cove already covers the same surface in crates/hosts/tests/native_window_lifecycle_tests.rs."
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Rendering/NativeImageCompositionTests.swift",
@@ -5762,7 +5761,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/rendering/native_in_game_ui_benchmark_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Rendering/NativeInGameUIIntegrationTests.swift",
