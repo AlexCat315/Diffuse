@@ -2778,3 +2778,340 @@ fn particle_emitter_manifest_applies_module_stack() {
     assert_eq!(emitter.settings.texture_sheet.frame_randomness, 2);
     assert_eq!(emitter.settings.gpu_simulation.workgroup_size, 128);
 }
+
+/// Scene manifest remaps ragdoll bodies and exposes its inspector.
+#[test]
+fn scene_manifest_round_trips_ragdoll() {
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+    use diffuse_scene::physics::ragdoll::{Ragdoll, RagdollBoneMapping, RagdollMode};
+    use diffuse_scene::scene_bootstrap::SceneNameComponent;
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    use crate::scene::models::editor_scene_node::EditorSceneNode;
+
+    fn flatten(nodes: &[EditorSceneNode]) -> Vec<EditorSceneNode> {
+        nodes
+            .iter()
+            .flat_map(|node| {
+                let mut all = vec![node.clone()];
+                all.extend(flatten(&node.children));
+                all
+            })
+            .collect()
+    }
+
+    let source = preview_adapter();
+    source.set_scene(SceneRuntime::new(ComponentRegistry::built_in()));
+    let (root, body) = source.with_scene_mut(|scene| {
+        let root = scene.create_entity();
+        scene.set_component(SceneNameComponent::new("Ragdoll Root"), root);
+        let body = scene.create_entity();
+        scene.set_component(SceneNameComponent::new("Hips Body"), body);
+        scene.set_component(
+            Ragdoll::new(
+                RagdollMode::Blended,
+                0.4,
+                true,
+                vec![RagdollBoneMapping::new("hips", 0, body)],
+            ),
+            root,
+        );
+        (root, body)
+    });
+
+    let data =
+        serde_json::to_vec(&source.manifest_for_selection(Some(root.raw_value()))).expect("encode");
+    let manifest: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let restored = preview_adapter();
+    let _ = restored.load(&manifest);
+    let nodes = flatten(&restored.roots());
+    let restored_root_raw = nodes
+        .iter()
+        .find(|node| node.name == "Ragdoll Root")
+        .expect("ragdoll root")
+        .id;
+    let restored_body_raw = nodes
+        .iter()
+        .find(|node| node.name == "Hips Body")
+        .expect("hips body")
+        .id;
+    let ragdoll = restored
+        .scene()
+        .component::<Ragdoll>(diffuse_scene::entity_id::EntityID::from_raw_value(
+            restored_root_raw,
+        ))
+        .expect("ragdoll");
+    assert_eq!(ragdoll.mode, RagdollMode::Blended);
+    assert_eq!(ragdoll.blend_weight, 0.4);
+    assert_eq!(
+        ragdoll.bones.first().map(|bone| bone.body_entity),
+        Some(diffuse_scene::entity_id::EntityID::from_raw_value(
+            restored_body_raw
+        ))
+    );
+    assert!(
+        restored
+            .inspector_sections(Some(restored_root_raw))
+            .iter()
+            .any(|section| section.id == "ragdoll")
+    );
+    let _ = body;
+}
+
+/// Scene manifest round-trips a particle emitter through JSON.
+#[test]
+fn scene_manifest_round_trips_particle_emitter() {
+    use std::collections::BTreeMap;
+
+    use diffuse_math::simd::simd_compat::{Float3, Float4};
+    use diffuse_scene::components::core::registry::{ComponentDecodeContext, ComponentRegistry};
+    use diffuse_scene::components::core::value::{
+        ComponentValue, ManifestComponent, manifest_value_for,
+    };
+    use diffuse_scene::particles::emitter::particle_emitter::ParticleEmitter;
+    use diffuse_scene::particles::emitter::particle_emitter_settings::ParticleEmitterSettings;
+    use diffuse_scene::particles::particle_curve::{ParticleCurve, ParticleCurveKeyframe};
+    use diffuse_scene::particles::particle_events::ParticleSubEmitter;
+    use diffuse_scene::particles::particle_types::{
+        ParticleBlendMode, ParticleCollisionMode, ParticleEmissionShape, ParticleForceMode,
+        ParticleRenderAlignment, ParticleRenderBoundsMode, ParticleSimulationBackend,
+        ParticleSimulationSpace, ParticleSubEmitterTrigger, ParticleTextureSheetPlaybackMode,
+        ParticleVectorFieldMode,
+    };
+    use diffuse_scene::scene_runtime::SceneRuntime;
+    use diffuse_scene::serialization::scene_serializer::SceneSerializer;
+    use diffuse_script::interop::component_registry_script_codec::ComponentRegistryScriptCodec;
+
+    use crate::scene::manifest::node::EditorSceneManifestNode;
+
+    fn find_node(
+        nodes: &[EditorSceneManifestNode],
+        id: u64,
+    ) -> Option<&EditorSceneManifestNode> {
+        for node in nodes {
+            if node.id == id {
+                return Some(node);
+            }
+            if let Some(found) = find_node(&node.children, id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    fn find_root_name(
+        nodes: &[crate::scene::models::editor_scene_node::EditorSceneNode],
+        name: &str,
+    ) -> Option<u64> {
+        for node in nodes {
+            if node.name == name {
+                return Some(node.id);
+            }
+            if let Some(found) = find_root_name(&node.children, name) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    fn decode_emitter(doc: &BTreeMap<String, ComponentValue>) -> ParticleEmitter {
+        let mut registry = ComponentRegistry::built_in();
+        registry.register_default_script_codec();
+        let mut scene = SceneRuntime::new(registry);
+        let entity = scene.create_entity();
+        let components = vec![ManifestComponent::new(
+            "particleEmitter",
+            ComponentValue::Object(doc.clone()),
+        )];
+        let mut context = ComponentDecodeContext::new(BTreeMap::new());
+        SceneSerializer::apply_component_document(
+            scene.world_mut(),
+            entity,
+            &components,
+            &mut context,
+        );
+        scene
+            .component::<ParticleEmitter>(entity)
+            .expect("particle emitter")
+    }
+
+    let source = preview_adapter();
+    let hero_id = find_root_name(&source.roots(), "Hero").expect("preview hero");
+    let sub_emitters = vec![
+        ParticleSubEmitter::new(
+            ParticleSubEmitterTrigger::Death,
+            2,
+            0.5,
+            1,
+            0.25,
+            0.45,
+            Float3::new(2.0, 0.0, 0.0),
+            Float3::new(0.1, 0.0, 0.0),
+            0.3,
+            0.12,
+            Float4::new(1.0, 0.0, 0.0, 1.0),
+            Float4::new(1.0, 0.0, 0.0, 0.0),
+        ),
+        ParticleSubEmitter::new(
+            ParticleSubEmitterTrigger::Collision,
+            1,
+            1.0,
+            2,
+            0.4,
+            0.8,
+            Float3::new(0.0, 2.0, 0.0),
+            Float3::new(0.0, 0.2, 0.0),
+            0.5,
+            0.2,
+            Float4::new(0.0, 0.0, 1.0, 1.0),
+            Float4::new(0.0, 0.0, 1.0, 0.0),
+        ),
+    ];
+    let mut settings = ParticleEmitterSettings::default();
+    settings.emission.looping = false;
+    settings.emission.duration = 3.25;
+    settings.emission.simulation_speed = 1.4;
+    settings.emission.prewarm_time = 0.75;
+    settings.emission.prewarm_step = 0.04;
+    settings.emission.emission_rate = 24.0;
+    settings.emission.emission_rate_curve = ParticleCurve::Constant(1.25);
+    settings.emission.distance_emission_rate = 9.0;
+    settings.emission.distance_emission_rate_curve = ParticleCurve::Keyframes(vec![
+        ParticleCurveKeyframe::new(0.0, 0.0),
+        ParticleCurveKeyframe::new(1.0, 2.0),
+    ]);
+    settings.emission.burst_count = 5;
+    settings.emission.burst_interval = 0.4;
+    settings.emission.max_particles = 64;
+    settings.emission.max_spawned_particles_per_frame = 12;
+    settings.emission.max_rendered_particles = 32;
+    settings.appearance.lifetime = 1.25;
+    settings.sub_emitters.legacy_trigger = ParticleSubEmitterTrigger::Death;
+    settings.sub_emitters.legacy_burst_count = 4;
+    settings.sub_emitters.legacy_probability = 0.8;
+    settings.sub_emitters.legacy_max_depth = 2;
+    settings.sub_emitters.legacy_inherit_velocity = 0.45;
+    settings.sub_emitters.legacy_lifetime = 0.6;
+    settings.sub_emitters.legacy_start_velocity = Float3::new(1.0, 2.0, 3.0);
+    settings.sub_emitters.legacy_velocity_randomness = Float3::new(0.2, 0.3, 0.4);
+    settings.sub_emitters.legacy_start_size = 0.22;
+    settings.sub_emitters.legacy_end_size = 0.06;
+    settings.sub_emitters.legacy_start_color = Float4::new(1.0, 0.5, 0.25, 1.0);
+    settings.sub_emitters.legacy_end_color = Float4::new(1.0, 0.1, 0.0, 0.0);
+    settings.sub_emitters.rules = sub_emitters;
+    settings.shape.spawn_radius = 0.3;
+    settings.shape.emission_shape = ParticleEmissionShape::Box;
+    settings.shape.box_half_extents = Float3::new(1.0, 2.0, 3.0);
+    settings.shape.cone_radius = 0.8;
+    settings.shape.cone_height = 3.5;
+    settings.velocity.start_velocity = Float3::new(0.0, 2.0, 0.0);
+    settings.velocity.velocity_inheritance = 0.35;
+    settings.forces.gravity = Float3::new(0.0, -3.0, 0.0);
+    settings.forces.noise_strength = 1.5;
+    settings.forces.noise_scale = 2.25;
+    settings.forces.noise_speed = 0.5;
+    settings.forces.force_mode = ParticleForceMode::Radial;
+    settings.forces.force_center = Float3::new(1.0, 2.0, 3.0);
+    settings.forces.force_axis = Float3::new(0.0, 1.0, 0.0);
+    settings.forces.force_radius = 8.0;
+    settings.forces.force_strength = -2.5;
+    settings.forces.force_falloff = 1.5;
+    settings.forces.vector_field_mode = ParticleVectorFieldMode::Curl;
+    settings.forces.vector_field_direction = Float3::new(0.0, 0.0, 1.0);
+    settings.forces.vector_field_strength = 3.75;
+    settings.forces.vector_field_scale = 1.5;
+    settings.forces.vector_field_scroll_speed = 0.25;
+    settings.collision.collision_mode = ParticleCollisionMode::WorldPlane;
+    settings.gpu_simulation.simulation_space = ParticleSimulationSpace::World;
+    settings.gpu_simulation.simulation_backend = ParticleSimulationBackend::GpuIfSupported;
+    settings.gpu_simulation.workgroup_size = 128;
+    settings.collision.collision_plane_y = -0.5;
+    settings.collision.collision_restitution = 0.6;
+    settings.collision.collision_damping = 0.15;
+    settings.appearance.start_size = 0.4;
+    settings.appearance.end_size = 0.05;
+    settings.appearance.size_randomness = 0.45;
+    settings.appearance.start_rotation = 0.2;
+    settings.appearance.rotation_randomness = 0.4;
+    settings.appearance.angular_velocity = 1.2;
+    settings.appearance.angular_velocity_randomness = 0.6;
+    settings.appearance.size_curve = ParticleCurve::Keyframes(vec![
+        ParticleCurveKeyframe::new(0.0, 0.0),
+        ParticleCurveKeyframe::new(1.0, 1.0),
+    ]);
+    settings.appearance.color_curve = ParticleCurve::Keyframes(vec![
+        ParticleCurveKeyframe::new(0.0, 1.0),
+        ParticleCurveKeyframe::new(1.0, 0.0),
+    ]);
+    settings.appearance.blend_mode = ParticleBlendMode::Additive;
+    settings.renderer.render_sort_priority = 14;
+    settings.renderer.render_alignment = ParticleRenderAlignment::Velocity;
+    settings.renderer.velocity_stretch_scale = 0.3;
+    settings.renderer.velocity_stretch_max = 7.0;
+    settings.renderer.max_render_distance = 96.0;
+    settings.renderer.render_distance_fade_range = 16.0;
+    settings.renderer.render_lod_start_distance = 32.0;
+    settings.renderer.render_lod_end_distance = 128.0;
+    settings.renderer.render_lod_min_particle_scale = 0.4;
+    settings.renderer.render_bounds_mode = ParticleRenderBoundsMode::Automatic;
+    settings.renderer.render_bounds_radius = 28.0;
+    settings.texture_sheet.texture_asset_id = Some("Assets/Textures/smoke.png".to_string());
+    settings.texture_sheet.texture_path = Some("/tmp/particle-smoke.png".to_string());
+    settings.texture_sheet.columns = 3;
+    settings.texture_sheet.rows = 2;
+    settings.texture_sheet.frame_count = 6;
+    settings.texture_sheet.frame_rate = 15.0;
+    settings.texture_sheet.playback_mode = ParticleTextureSheetPlaybackMode::Loop;
+    settings.texture_sheet.start_frame = 2;
+    settings.texture_sheet.frame_randomness = 3;
+    settings.trails.trail_length = 0.8;
+    settings.trails.trail_segments = 6;
+    settings.trails.trail_end_size_scale = 0.3;
+    settings.trails.trail_end_alpha_scale = 0.15;
+    settings.emission.seed = 777;
+
+    source.with_scene_mut(|scene| {
+        scene.set_component(
+            ParticleEmitter::new(settings),
+            diffuse_scene::entity_id::EntityID::from_raw_value(hero_id),
+        );
+    });
+    let original = source
+        .scene()
+        .component::<ParticleEmitter>(diffuse_scene::entity_id::EntityID::from_raw_value(hero_id))
+        .expect("original emitter");
+    let manifest = source.manifest_for_selection(Some(hero_id));
+    let saved_particle_doc = find_node(&manifest.roots, hero_id)
+        .and_then(|node| manifest_value_for(&node.components, "particleEmitter"))
+        .and_then(ComponentValue::object_value)
+        .expect("saved particle document");
+    let saved_emitter = decode_emitter(saved_particle_doc);
+    assert_eq!(saved_emitter.settings, original.settings);
+    assert_eq!(saved_emitter.module_stack(), original.module_stack());
+
+    let data = serde_json::to_vec(&manifest).expect("encode");
+    let decoded: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let decoded_particle_doc = find_node(&decoded.roots, hero_id)
+        .and_then(|node| manifest_value_for(&node.components, "particleEmitter"))
+        .and_then(ComponentValue::object_value)
+        .expect("decoded particle document");
+    let decoded_emitter = decode_emitter(decoded_particle_doc);
+    assert_eq!(decoded_emitter.settings, saved_emitter.settings);
+    assert_eq!(decoded_emitter.module_stack(), saved_emitter.module_stack());
+
+    let restored = preview_adapter();
+    let result = restored.load(&decoded);
+    assert_eq!(result.error, None);
+    let restored_id = result.selected_entity_id.expect("selected entity");
+    let emitter = restored
+        .scene()
+        .component::<ParticleEmitter>(diffuse_scene::entity_id::EntityID::from_raw_value(
+            restored_id,
+        ))
+        .expect("restored emitter");
+    assert_eq!(emitter.settings, original.settings);
+    assert_eq!(emitter.module_stack(), original.module_stack());
+    assert!(emitter.particles().is_empty());
+}
