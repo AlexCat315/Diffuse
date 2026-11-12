@@ -40,7 +40,7 @@ impl ProjectStaticScripts {
         std::fs::create_dir_all(&sources)?;
         let mut entries = Vec::with_capacity(assets.len());
         for asset in assets {
-            let relative = format!(".cove/static-sources/{}.swift", asset.id.raw_value);
+            let relative = format!(".cove/static-sources/{}.rs", asset.id.raw_value);
             std::fs::copy(&asset.url, directory.join(&relative))?;
             entries.push(StaticScriptEntry {
                 identifier: asset.id.runtime_identifier(),

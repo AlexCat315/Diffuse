@@ -797,7 +797,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/assets/asset_import_resolver.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Assets/EditorAssetFileWorkflow.swift",
@@ -2019,7 +2019,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/scene/project_exporter.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Assets/LanguageEditHistory.swift",
@@ -2100,7 +2100,7 @@
         "crates/diffuse-editor-core/src/scripting/dynamic/project_compiled_scripts.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Dynamic/ProjectScriptCatalog.swift",
@@ -3361,7 +3361,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/documents/writing/formatting.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Documents/Writing/Outline.swift",
