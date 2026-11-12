@@ -10,11 +10,14 @@
 //!   scene gets `RenderCamera::fallback()`, never an absent camera.
 
 use diffuse_kernel::job_system::{JobDispatchReport, JobSystem};
+use diffuse_math::simd::simd_compat::Float2;
 
 use crate::entity_id::EntityID;
 use crate::physics::character_controller::CharacterStateFrameResource;
 use crate::physics::physics_frame_state::PhysicsStepClockResource;
-use crate::physics::soft_bodies::soft_body::SoftBodyStateFrameResource;
+use crate::physics::queries::spatial_queries::MeshColliderGeometryResource;
+use crate::physics::soft_bodies::cloth::Cloth;
+use crate::physics::soft_bodies::soft_body::{SoftBodyMesh, SoftBodyStateFrameResource};
 use crate::rendering::render_extraction::{
     CameraComponent, ExtractedRenderSceneResource, LightComponent, LightType,
     RenderMaterialComponent, RenderMeshComponent,
@@ -23,10 +26,10 @@ use crate::rendering::render_scene::{
     ParticleRenderSummary, RenderCamera, RenderCameraProjection, RenderDeformableMesh,
     RenderInstance, RenderLight, RenderLightType, RenderMaterial, RenderMeshHandle, RenderScene,
 };
+use crate::runtime_world::{RuntimeWorld, WorldTransform};
 use crate::scheduling::render_particles::{
     collect_particle_simulation_batches, collect_render_particles,
 };
-use crate::runtime_world::{RuntimeWorld, WorldTransform};
 
 /// The result of one extraction.
 pub struct RenderExtractionResult {
@@ -256,7 +259,11 @@ fn world_forward(transform: &WorldTransform) -> diffuse_math::simd::simd_compat:
 /// Collect deformable meshes from the latest soft-body simulation state.
 ///
 /// Only a body with both positions and triangle indices is drawable; a soft body that
-/// has not been simulated yet has neither and is skipped.
+/// has not been simulated yet has neither and is skipped. Cloth topology supplies its
+/// own grid texture coordinates; an arbitrary surface falls back to the ones authored
+/// with its geometry. A mesh whose buffers did not change keeps the previous frame's
+/// revision and normal data, so a pinned or sleeping surface does not upload itself
+/// again.
 fn collect_render_deformable_meshes(world: &RuntimeWorld) -> Vec<RenderDeformableMesh> {
     let states = world
         .resource::<SoftBodyStateFrameResource>()
@@ -266,26 +273,98 @@ fn collect_render_deformable_meshes(world: &RuntimeWorld) -> Vec<RenderDeformabl
         .resource::<PhysicsStepClockResource>()
         .map(|clock| clock.simulated_steps.max(0) as u64)
         .unwrap_or(0);
+    let geometry_resource = world.resource::<MeshColliderGeometryResource>();
+    let cached: std::collections::BTreeMap<EntityID, RenderDeformableMesh> = world
+        .resource::<ExtractedRenderSceneResource>()
+        .map(|resource| {
+            resource
+                .scene
+                .deformable_meshes
+                .iter()
+                .cloned()
+                .map(|mesh| (mesh.entity, mesh))
+                .collect()
+        })
+        .unwrap_or_default();
 
     let mut meshes: Vec<RenderDeformableMesh> = Vec::new();
     for (entity, state) in &states {
         if state.positions.is_empty() || state.triangle_indices.is_empty() {
             continue;
         }
-        if world
-            .component::<RenderMeshComponent>(*entity)
-            .is_some_and(|mesh| !mesh.is_visible)
-        {
+        let Some(render_mesh) = world.component::<RenderMeshComponent>(*entity) else {
+            continue;
+        };
+        if !render_mesh.is_visible {
             continue;
         }
-        let mut mesh = RenderDeformableMesh::new(*entity, simulated_revision);
-        mesh.positions = state.positions.clone();
-        mesh.triangle_indices = state.triangle_indices.clone();
-        meshes.push(mesh);
+        let texture_coordinates = cloth_texture_coordinates(
+            world.component::<Cloth>(*entity).as_ref(),
+            state.positions.len(),
+        );
+        let resolved_texture_coordinates = if texture_coordinates.is_empty() {
+            world
+                .component::<SoftBodyMesh>(*entity)
+                .and_then(|mesh| mesh.resource_id)
+                .and_then(|resource_id| {
+                    geometry_resource
+                        .as_ref()
+                        .and_then(|geometry| geometry.geometry_for(Some(&resource_id)))
+                })
+                .filter(|geometry| geometry.texture_coordinates.len() == state.positions.len())
+                .map(|geometry| geometry.texture_coordinates.clone())
+                .unwrap_or_default()
+        } else {
+            texture_coordinates
+        };
+        if let Some(previous) = cached.get(entity)
+            && previous.positions == state.positions
+            && previous.triangle_indices == state.triangle_indices
+            && previous.texture_coordinates == resolved_texture_coordinates
+        {
+            meshes.push(previous.clone());
+            continue;
+        }
+        let previous_revision = cached.get(entity).map(|mesh| mesh.revision).unwrap_or(0);
+        let next_revision = previous_revision
+            .checked_add(1)
+            .unwrap_or(previous_revision);
+        let mesh = RenderDeformableMesh::with_geometry(
+            *entity,
+            simulated_revision.max(next_revision),
+            None,
+            state.positions.clone(),
+            state.triangle_indices.clone(),
+            resolved_texture_coordinates,
+            None,
+        );
+        if mesh.is_valid() {
+            meshes.push(mesh);
+        }
     }
     // The scene keeps deformable meshes in entity order so the upload is stable.
     meshes.sort_by_key(|mesh| mesh.entity.raw_value());
     meshes
+}
+
+/// A cloth's vertices are a regular grid, so its texture coordinates are derived
+/// from the grid resolution rather than authored.
+fn cloth_texture_coordinates(cloth: Option<&Cloth>, vertex_count: usize) -> Vec<Float2> {
+    let Some(cloth) = cloth else {
+        return Vec::new();
+    };
+    if cloth.vertex_count() as usize != vertex_count {
+        return Vec::new();
+    }
+    let denominator_x = (cloth.grid_size_x - 1).max(1) as f32;
+    let denominator_z = (cloth.grid_size_z - 1).max(1) as f32;
+    (0..vertex_count)
+        .map(|index| {
+            let x = (index as i64 % cloth.grid_size_x) as f32;
+            let z = (index as i64 / cloth.grid_size_x) as f32;
+            Float2::new(x / denominator_x, z / denominator_z)
+        })
+        .collect()
 }
 
 /// Expose the character state frame so the extraction can be extended without

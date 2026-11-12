@@ -12990,7 +12990,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/soft_body_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/SpatialQueryTests.swift",
