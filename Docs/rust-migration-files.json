@@ -12055,7 +12055,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/job_system_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/PackageResourceBundleTests.swift",
@@ -12066,7 +12066,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/package_resource_bundle_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/PortablePNG.swift",
