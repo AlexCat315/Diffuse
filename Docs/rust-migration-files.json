@@ -13023,7 +13023,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/vehicle_acceptance_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/SceneRuntimeTests/VehicleTests.swift",
@@ -13034,7 +13034,7 @@
       "rust": [
         "crates/diffuse-scene/src/tests/scene_runtime/vehicle_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/ScriptRuntimeTests/AnimationRuntimeTests.swift",
