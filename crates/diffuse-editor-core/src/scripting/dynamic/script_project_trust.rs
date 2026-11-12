@@ -49,6 +49,12 @@ impl ScriptProjectTrustStore {
         Self::with_storage_url(default_storage_url(&environment))
     }
 
+    /// Swift's `init(environment:)` with an explicit environment instead of
+    /// `ProcessInfo.processInfo.environment`.
+    pub fn with_environment(environment: &BTreeMap<String, String>) -> Self {
+        Self::with_storage_url(default_storage_url(environment))
+    }
+
     /// Swift's `init(storageURL:environment:)` with an explicit file.
     pub fn with_storage_url(storage_url: PathBuf) -> Self {
         let (trusted_paths, load_warning) = match std::fs::read(&storage_url) {

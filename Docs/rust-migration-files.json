@@ -5711,7 +5711,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/project_runtime_resources_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Rendering/HUDRouter.swift",
@@ -5900,7 +5900,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/script_project_trust_store_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/SourceKitLSP/AnalysisCacheTests.swift",
