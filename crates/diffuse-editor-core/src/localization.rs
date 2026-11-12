@@ -41,6 +41,8 @@ pub(crate) fn localized(key: &str) -> String {
         Some(name) => vec![name.clone(), name.to_lowercase()],
         None => Vec::new(),
     };
-    let bundle = EditorCoreResourceBundle::bundle().root().to_path_buf();
-    LocalizedStringKey::new(key, Some(bundle), None).resolved_for(&locales)
+    let Some(bundle) = EditorCoreResourceBundle::bundle_if_available() else {
+        return key.to_string();
+    };
+    LocalizedStringKey::new(key, Some(bundle.root().to_path_buf()), None).resolved_for(&locales)
 }
