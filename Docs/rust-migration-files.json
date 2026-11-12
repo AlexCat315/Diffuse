@@ -4226,7 +4226,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/root/chrome/shortcut_handler.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Root/Chrome/UnsavedChangesDialog.swift",
@@ -5035,7 +5035,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/tests/editor_app/shortcut_handler_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorAppTests/ViewportGizmoSelectionPolicyTests.swift",
