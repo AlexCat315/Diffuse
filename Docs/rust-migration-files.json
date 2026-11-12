@@ -12198,7 +12198,7 @@
       "rust": [
         "crates/diffuse-engine/src/tests/engine_core/render_backend/viewport_target_allocation_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/EngineCoreTests/RenderThreadTests.swift",
