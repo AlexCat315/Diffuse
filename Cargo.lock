@@ -261,7 +261,6 @@ dependencies = [
  "cove-core",
  "cove-devtools-protocol",
  "cove-logging",
- "cove-platform",
  "serde",
  "serde_json",
  "thiserror",

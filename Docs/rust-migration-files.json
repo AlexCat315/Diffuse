@@ -2745,7 +2745,7 @@
         "crates/diffuse-editor-core/src/version_control/workspace.rs"
       ],
       "d1": "adjust",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Workstation/AgentTools.swift",
