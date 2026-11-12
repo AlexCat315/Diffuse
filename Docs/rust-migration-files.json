@@ -1006,7 +1006,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/contributions/workbench/view_session.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Diagnostics/Formatting.swift",
