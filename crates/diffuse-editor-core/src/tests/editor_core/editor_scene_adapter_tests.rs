@@ -2410,3 +2410,155 @@ fn animation_graph_player_round_trips() {
     assert_eq!(player.active_state.as_deref(), Some("Run"));
     assert_eq!(player.previous_state.as_deref(), Some("Idle"));
 }
+
+/// Scene manifest round-trips a complete wheel vehicle.
+#[test]
+fn scene_manifest_round_trips_vehicle() {
+    use diffuse_math::simd::simd_compat::Float3;
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+    use diffuse_scene::physics::vehicles::vehicle::Vehicle;
+    use diffuse_scene::physics::vehicles::vehicle_controller_configuration::VehicleControllerConfiguration;
+    use diffuse_scene::physics::vehicles::vehicle_powertrain::{
+        VehicleEngineConfiguration, VehicleTransmissionConfiguration,
+    };
+    use diffuse_scene::physics::vehicles::vehicle_wheel_configuration::{
+        VehicleAntiRollBarConfiguration, VehicleDifferentialConfiguration, VehicleTransmissionMode,
+        VehicleWheelConfiguration,
+    };
+    use diffuse_scene::scene_bootstrap::SceneNameComponent;
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    use crate::scene::models::editor_scene_node::EditorSceneNode;
+
+    fn flatten(nodes: &[EditorSceneNode]) -> Vec<EditorSceneNode> {
+        nodes
+            .iter()
+            .flat_map(|node| {
+                let mut all = vec![node.clone()];
+                all.extend(flatten(&node.children));
+                all
+            })
+            .collect()
+    }
+
+    let wheel = |position: Float3| {
+        let mut wheel = VehicleWheelConfiguration::at_position(position);
+        wheel.suspension_frequency = 2.25;
+        wheel.radius = 0.42;
+        wheel.max_steer_angle = 0.6;
+        wheel
+    };
+    let mut anti_roll_bar = VehicleAntiRollBarConfiguration::new(0, 1);
+    anti_roll_bar.stiffness = 1_800.0;
+    let vehicle = Vehicle::new(
+        VehicleControllerConfiguration::Wheeled,
+        vec![
+            wheel(Float3::new(0.8, -0.3, 1.2)),
+            wheel(Float3::new(-0.8, -0.3, 1.2)),
+        ],
+        vec![VehicleDifferentialConfiguration::new(0, 1)],
+        vec![anti_roll_bar],
+        VehicleEngineConfiguration::new(640.0, 850.0, 7_200.0, 0.5, 0.2),
+        VehicleTransmissionConfiguration::new(
+            VehicleTransmissionMode::Manual,
+            vec![3.2, 2.1, 1.4],
+            vec![-3.0],
+            0.5,
+            0.3,
+            0.5,
+            4_000.0,
+            2_000.0,
+            14.0,
+        ),
+        Float3::new(0.0, 1.0, 0.0),
+        Float3::new(0.0, 0.0, 1.0),
+        1.2,
+        false,
+    );
+
+    let source = preview_adapter();
+    source.set_scene(SceneRuntime::new(ComponentRegistry::built_in()));
+    let raw_id = source.with_scene_mut(|scene| {
+        let entity = scene.create_entity();
+        scene.set_component(SceneNameComponent::new("Test Vehicle"), entity);
+        scene.set_component(vehicle.clone(), entity);
+        entity.raw_value()
+    });
+
+    let data = serde_json::to_vec(&source.manifest_for_selection(Some(raw_id))).expect("encode");
+    let decoded: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+        serde_json::from_slice(&data).expect("decode");
+    let restored = preview_adapter();
+    let _ = restored.load(&decoded);
+    let restored_raw = flatten(&restored.roots())
+        .into_iter()
+        .find(|node| node.name == "Test Vehicle")
+        .expect("test vehicle")
+        .id;
+    assert_eq!(
+        restored
+            .scene()
+            .component::<Vehicle>(diffuse_scene::entity_id::EntityID::from_raw_value(
+                restored_raw
+            )),
+        Some(vehicle)
+    );
+    assert!(
+        restored
+            .inspector_sections(Some(restored_raw))
+            .iter()
+            .any(|section| section.id == "vehicle")
+    );
+}
+
+/// Scene manifest preserves tracked and motorcycle controller settings.
+#[test]
+fn scene_manifest_round_trips_vehicle_controllers() {
+    use diffuse_scene::components::core::registry::ComponentRegistry;
+    use diffuse_scene::physics::vehicles::vehicle::Vehicle;
+    use diffuse_scene::scene_bootstrap::SceneNameComponent;
+    use diffuse_scene::scene_runtime::SceneRuntime;
+
+    use crate::scene::models::editor_scene_node::EditorSceneNode;
+
+    fn flatten(nodes: &[EditorSceneNode]) -> Vec<EditorSceneNode> {
+        nodes
+            .iter()
+            .flat_map(|node| {
+                let mut all = vec![node.clone()];
+                all.extend(flatten(&node.children));
+                all
+            })
+            .collect()
+    }
+
+    for (name, vehicle) in [
+        ("Tracked Vehicle", Vehicle::tracked_default()),
+        ("Motorcycle", Vehicle::motorcycle_default()),
+    ] {
+        let source = preview_adapter();
+        source.set_scene(SceneRuntime::new(ComponentRegistry::built_in()));
+        source.with_scene_mut(|scene| {
+            let entity = scene.create_entity();
+            scene.set_component(SceneNameComponent::new(name), entity);
+            scene.set_component(vehicle.clone(), entity);
+        });
+        let data = serde_json::to_vec(&source.manifest()).expect("encode");
+        let manifest: crate::scene::manifest::editor_scene_manifest::EditorSceneManifest =
+            serde_json::from_slice(&data).expect("decode");
+        let restored = preview_adapter();
+        let _ = restored.load(&manifest);
+        let restored_raw = flatten(&restored.roots())
+            .into_iter()
+            .find(|node| node.name == name)
+            .expect("vehicle")
+            .id;
+        assert_eq!(
+            restored.scene().component::<Vehicle>(
+                diffuse_scene::entity_id::EntityID::from_raw_value(restored_raw)
+            ),
+            Some(vehicle),
+            "{name}"
+        );
+    }
+}

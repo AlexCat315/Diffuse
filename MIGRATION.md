@@ -1106,6 +1106,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 288 | diffuse-editor-core（破坏/软体清单测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 2 例：`Destructible` 配置与检查器分区往返、`SoftBody`/`Cloth`/`SoftBodyMesh` 配置与检查器分区往返；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 44/44 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 289 | diffuse-editor-core（粒子生命周期/统计测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 2 例：非循环粒子过期后停止驱动帧（先 0.1s 仍有活动、再 0.2s 结束）、一次 1s tick 的粒子帧统计（发射器/连续生成/存活/上限）；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 46/46 通过；clippy/rustfmt 通过；清单无状态变化 |
 | 2026-11-13 | 批次 290 | diffuse-editor-core（音频/动画清单测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 4 例：`AudioSource`、`AudioListener`、`AnimationPlayer`、`AnimationGraphPlayer` 的清单编码/加载往返（含 blend space、状态机转换、参数与活动状态）；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 50/50 通过；clippy/rustfmt 通过；清单无状态变化 |
+| 2026-11-13 | 批次 291 | diffuse-editor-core（车辆清单测试） | 0 | 0 | `EditorSceneAdapterTests.swift` 再迁 2 例：完整轮式车辆（轮/差速器/防倾杆/引擎/变速箱/禁用状态）清单往返与 `vehicle` 检查器分区；tracked/motorcycle 控制器的清单往返；`cargo test -p diffuse-editor-core --lib editor_scene_adapter_tests` 52/52 通过；clippy/rustfmt 通过；清单无状态变化 |
 
 ## 10. 已知问题与需要用户确认的事项
 
