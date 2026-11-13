@@ -5922,7 +5922,7 @@
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/rust_analyzer/analysis_cache_tests.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/SourceKitLSP/AssistanceReplyTests.swift",
