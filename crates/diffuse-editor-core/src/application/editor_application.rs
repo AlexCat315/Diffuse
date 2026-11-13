@@ -41,6 +41,9 @@ pub struct EditorApplication {
     pub store: EditorStore,
     pub input_state: RefCell<InputState>,
     pub scene: EditorSceneAdapter,
+    /// Canonical editor-facing state for script documents, diagnostics, builds,
+    /// media, version control and tasks.
+    pub workstation: std::sync::Arc<crate::workstation::services::EditorWorkstation>,
     /// Plugin session state: bindings, authorizations and declared components.
     pub plugin_session: PluginSession,
     pub observation_bus: ObservationBus,

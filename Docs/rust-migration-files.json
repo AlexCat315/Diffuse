@@ -227,7 +227,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/editor_project_tools.rs"
       ],
-      "status": "pending"
+      "status": "pending",
+      "notes": "2026-11-13 批次 345：仅 EditorProjectToolError 与 ProjectCompileReport 已落地（下游 version_control/tools.rs 与 workstation/agent_tools.rs 需要该错误类型）；extension EditorApplication 的 makeProjectToolExecutor / executeProjectTool / validateProjectScriptsDirectory / projectScriptURL / boundedScriptData / projectOutputError / gameplayScriptingAPI 仍待迁移，故本行保持 pending。"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Plugins/EditorPluginAuthorizationStore.swift",
@@ -601,7 +602,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/language_service.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/Monitor.swift",
@@ -2067,8 +2068,8 @@
         "crates/diffuse-editor-core/src/scripting/assets/script_workspace_model.rs"
       ],
       "d1": "rewrite",
-      "status": "blocked",
-      "blocked_by": "P1: requires the un-migrated DynamicScriptManager and language-service stack (dynamic_script_manager.rs, script_language_support.rs, analysis/session files; see §9 batch 256)"
+      "status": "compiled",
+      "notes": "2026-11-13 批次 345：blocked 解除（P1 依赖的 DynamicScriptManager / ScriptLanguageSupport / analysis session 已落地）；完整翻译，观察令牌为 u64，ScriptLanguageServiceState 复用 script_language_models.rs。"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Dynamic/DynamicScriptBuildCoordinator.swift",
@@ -2080,7 +2081,7 @@
         "crates/diffuse-editor-core/src/scripting/dynamic/dynamic_script_build_coordinator.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Dynamic/DynamicScriptManager.swift",
@@ -2092,7 +2093,7 @@
         "crates/diffuse-editor-core/src/scripting/dynamic/dynamic_script_manager.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Dynamic/ProjectCompiledScripts.swift",
@@ -2138,7 +2139,7 @@
         "crates/diffuse-editor-core/src/scripting/script_language_support.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/AnalysisCache.swift",
@@ -2150,7 +2151,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/analysis_cache.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/Assistance.swift",
@@ -2282,7 +2283,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/script_language_workspace.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/ScriptMarkdownText.swift",
@@ -2306,7 +2307,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/language/semantic_queries.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/Language/WatchedFiles.swift",
@@ -2330,7 +2331,7 @@
         "crates/diffuse-editor-core/src/scripting/rust_analyzer/server/capabilities.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/SourceKitLSP/SourceKit/SourceKitLSPExecutableLocator.swift",
@@ -2402,7 +2403,7 @@
         "crates/diffuse-editor-core/src/scripting/toolchain/analysis_session.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Scripting/Toolchain/EditingPreferences.swift",
@@ -2681,7 +2682,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tasks/runner.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/VersionControl/Backend.swift",
@@ -2736,7 +2737,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/version_control/tools.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/VersionControl/Workspace.swift",
@@ -2759,7 +2760,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/workstation/agent_tools.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Workstation/Documents.swift",
@@ -2781,7 +2782,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/workstation/media.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Workstation/Services.swift",
@@ -2792,7 +2793,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/workstation/services.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorUI/Commands/Catalog.swift",
@@ -7384,7 +7385,7 @@
       "rust": [
         "crates/diffuse-audio/src/playback/media_player.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Engine/Sources/CapabilityRuntime/BuiltInCapabilityCatalog.swift",

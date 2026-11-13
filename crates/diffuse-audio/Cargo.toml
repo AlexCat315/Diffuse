@@ -11,8 +11,11 @@ path = "src/lib.rs"
 
 [dependencies]
 diffuse-math.workspace = true
+diffuse-media.workspace = true
 diffuse-scene.workspace = true
 cove-logging.workspace = true
+cove-media = { workspace = true, features = ["ffmpeg"] }
+cove-shell.workspace = true
 
 [lints]
 workspace = true

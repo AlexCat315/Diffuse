@@ -93,3 +93,8 @@ overflow-checks = true
 
 [profile.release.package.natsel]
 overflow-checks = false
+
+# Same pinned ffmpeg-sys-next copy Cove uses: its build script loads the MSVC +
+# MSYS2 environment in-process, which the upstream crate cannot do on Windows.
+[patch.crates-io]
+ffmpeg-sys-next = { path = "../Cove/third-party/ffmpeg-sys-next" }

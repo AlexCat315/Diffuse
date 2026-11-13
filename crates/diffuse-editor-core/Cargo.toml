@@ -25,6 +25,7 @@ diffuse-intent.workspace = true
 diffuse-kernel.workspace = true
 diffuse-lsp.workspace = true
 diffuse-math.workspace = true
+diffuse-media.workspace = true
 diffuse-observation.workspace = true
 diffuse-perception.workspace = true
 diffuse-plugin.workspace = true
@@ -38,6 +39,7 @@ cove-graphics.workspace = true
 # cove-http.workspace = true
 cove-logging.workspace = true
 cove-devtools.workspace = true
+cove-media.workspace = true
 cove-platform.workspace = true
 cove-runtime.workspace = true
 cove-system.workspace = true
@@ -45,6 +47,7 @@ cove-ui-compose.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+unicode-segmentation.workspace = true
 
 [dev-dependencies]
 cove-ui.workspace = true
