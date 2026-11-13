@@ -1163,6 +1163,8 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 | 2026-11-13 | 批次 345 | diffuse-editor-core + diffuse-audio（Scripting/Workstation 子系统锚点） | 17 | 3722 | Scripting 子系统 12 个生产文件（DynamicScriptManager/DynamicScriptBuildCoordinator、ScriptLanguageSupport、AnalysisCache/ScriptLanguageWorkspace/SemanticQueries/Capabilities、AnalysisSession、Tasks/Runner、VersionControl/Tools、Workstation/AgentTools/Media/Services、ScriptWorkspaceModel）+ 其 4 个上游依赖（PluginLanguageService、EditorProjectToolError/ProjectCompileReport、SemanticQueries 扩展、MediaPlayer）全部 `compiled`；`ScriptWorkspaceModel.swift`（988 行，此前因 P1 依赖 blocked）解除 blocked 并完整翻译；`cargo check -p diffuse-editor-core -p diffuse-audio --all-targets`、`cargo clippy --no-deps -D warnings`、`cargo test -p diffuse-editor-core --lib` 346/346 通过；接上 Cove 的 ffmpeg-sys-next 补丁版（MSVC+MSYS2）使 `diffuse-audio` 构建通过；`EditorProjectTools.swift` 仅落地错误/报告类型（下游需要），`extension EditorApplication` 的 makeProjectToolExecutor 等仍待迁移，该行保持 `pending`；16 行标 `compiled`，1 行保持 `pending` |
 
+| 2026-11-13 | 批次 346 | diffuse-editor-core（动态脚本管理器测试） | 1 | 37 | `DynamicScriptManagerTests.swift` → `tests/script_system/dynamic_script_manager_tests.rs`（2 例：重复创建不覆盖源、名称禁止路径分隔符）；直接构造 `DynamicScriptManager`，仅文件系统操作不依赖 swift 工具链；错误经 `DynamicScriptManagerError::ScriptFile` 包装，断言 `AlreadyExists`/`InvalidName` 变体；`cargo test -p diffuse-editor-core --lib dynamic_script_manager_tests` 2/2 通过；clippy（新文件零告警）、rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
+
 ## 10. 已知问题与需要用户确认的事项
 
 - **二进制 plist 解析（`PlayerInstallValidator`）**：`Info.plist` 校验目前只解析项目导出器写出的 XML plist；Swift 的 `PropertyListSerialization` 还能读取二进制 plist。完整支持需要 `plist` crate（workspace 未引入），按 §2 待用户确认；在此之前二进制 plist 视为不可读。

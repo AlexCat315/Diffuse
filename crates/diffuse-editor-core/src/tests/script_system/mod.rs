@@ -1,4 +1,5 @@
 pub mod dynamic_script_build_coordinator_tests;
+pub mod dynamic_script_manager_tests;
 pub mod dynamic_script_toolchain_tests;
 pub mod language_workspace_edit_tests;
 pub mod script_asset_registry_tests;

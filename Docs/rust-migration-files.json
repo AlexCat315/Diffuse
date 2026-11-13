@@ -5876,7 +5876,8 @@
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/dynamic_script_manager_tests.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested",
+      "notes": "2026-11-13 批次 346：2 例（重复创建不覆盖、名称禁止路径分隔符）移植为 dynamic_script_manager_tests.rs 并全过；仅文件系统操作，不依赖 swift 工具链；错误经 DynamicScriptManagerError::ScriptFile 包装，断言 AlreadyExists/InvalidName 变体"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/ProjectScriptCatalogTests.swift",
