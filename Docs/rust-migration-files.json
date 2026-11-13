@@ -6564,7 +6564,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/script_system/dynamic_script_toolchain_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/ScriptSystemTests/LanguageWorkspaceEditTests.swift",

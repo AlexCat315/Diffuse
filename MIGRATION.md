@@ -1167,6 +1167,8 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 | 2026-11-13 | 批次 347 | diffuse-editor-core（分析缓存失效测试） | 1 | 105 | `AnalysisCacheTests.swift` → `rust_analyzer/analysis_cache_tests.rs`（5 例通过）：未知/变化环境丢弃生成缓存、匹配环境保留；引擎模块重建使缓存失效；复制工程（`.cove` 搬移）不能复用内嵌旧路径的模块缓存；workspace 或缓存目录为符号链接时同步/准备失败且不写穿目标。D1 改写：`SWIFT_EXEC`→`RUSTC`、`.swiftmodule`→引擎 crate 的 `Cargo.toml`/`src`、`.cove/rust-analyzer` 布局；`ScriptLanguageSupportError::Unavailable` 断言；Windows 无符号链接权限时两个 linked-* 用例自动跳过（Unix CI 实际执行）。`cargo test -p diffuse-editor-core --lib` 353/353 通过；clippy（新文件零告警）、rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 
+| 2026-11-13 | 批次 348 | diffuse-editor-core（动态脚本工具链测试） | 1 | 19 | `DynamicScriptToolchainTests.swift` → `tests/script_system/dynamic_script_toolchain_tests.rs`（1 例通过）：空环境默认 `rustc`、`COVE_RUSTC_PATH` 选择编译器、显式 override 优先于环境变量、空白值不掩盖默认；D1 改写 `swiftc`/`COVE_SWIFTC_PATH` → `rustc`/`COVE_RUSTC_PATH`；调用 `DynamicScriptManager::resolved_compiler_path`；`cargo test -p diffuse-editor-core --lib dynamic_script_toolchain` 1/1 通过；clippy（新文件零告警）、rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
+
 ## 10. 已知问题与需要用户确认的事项
 
 - **二进制 plist 解析（`PlayerInstallValidator`）**：`Info.plist` 校验目前只解析项目导出器写出的 XML plist；Swift 的 `PropertyListSerialization` 还能读取二进制 plist。完整支持需要 `plist` crate（workspace 未引入），按 §2 待用户确认；在此之前二进制 plist 视为不可读。
