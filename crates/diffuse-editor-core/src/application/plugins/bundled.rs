@@ -145,7 +145,10 @@ impl BundledPlugins {
 }
 
 fn load_catalog() -> Vec<BundledPlugin> {
-    let root = EditorCoreResourceBundle::bundle().root().join("Plugins");
+    let Some(bundle) = EditorCoreResourceBundle::bundle_if_available() else {
+        return Vec::new();
+    };
+    let root = bundle.root().join("Plugins");
     let Ok(entries) = fs::read_dir(&root) else {
         return Vec::new();
     };

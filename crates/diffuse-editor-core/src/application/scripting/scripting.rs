@@ -18,6 +18,12 @@ pub(crate) enum SceneScriptReloadEvent {
     Finished,
 }
 
+pub(crate) enum ScriptWorkspaceEvent {
+    Loaded(Box<ScriptFile>),
+    Deleted(String),
+    BuildFailed(Box<ScriptFile>, String),
+}
+
 impl EditorApplication {
     pub(crate) fn reload_scripts_after_scene_replacement(&self) {
         self.reload_project_scripts(true, false);
@@ -134,6 +140,30 @@ impl EditorApplication {
 
     /// Keeps build notifications and scene queries on the editor thread.
     pub fn poll_script_reload(&self) {
+        for event in self.script_workspace_events.try_iter() {
+            match event {
+                ScriptWorkspaceEvent::Loaded(file) => {
+                    self.scene.register_dynamic_script_option(
+                        file.identifier,
+                        file.display_name,
+                        &file.legacy_identifiers,
+                    );
+                    self.store.dispatch(EditorAction::ForceUIRefresh);
+                }
+                ScriptWorkspaceEvent::Deleted(identifier) => {
+                    self.scene.unregister_dynamic_script_option(&identifier);
+                    self.store.dispatch(EditorAction::ForceUIRefresh);
+                }
+                ScriptWorkspaceEvent::BuildFailed(file, message) => {
+                    self.report_script_build_failure(
+                        &file,
+                        "Script compilation failed",
+                        &message,
+                        message.clone(),
+                    );
+                }
+            }
+        }
         let mut events = Vec::new();
         self.script_reload_events.borrow_mut().retain(|receiver| {
             loop {
@@ -154,20 +184,12 @@ impl EditorApplication {
             match event {
                 SceneScriptReloadEvent::Compiled(file, status) => {
                     if let CompilationStatus::Failed { message } = &status {
-                        self.store.dispatch(EditorAction::AppendConsoleMessage {
-                            message: "Failed to compile dynamic script".into(),
-                            severity: EditorConsoleSeverity::Error,
-                            detail: Some(format!("{}: {message}", file.display_name)),
-                            target: Some(EditorIssueTarget::compiler_diagnostic(
-                                &file.identifier,
-                                &file.url,
-                                message,
-                            )),
-                            next_step: Some(
-                                "Open the script, fix the reported errors, then Save and Compile."
-                                    .into(),
-                            ),
-                        });
+                        self.report_script_build_failure(
+                            &file,
+                            "Failed to compile dynamic script",
+                            message,
+                            format!("{}: {message}", file.display_name),
+                        );
                     }
                     self.workstation
                         .scripts
@@ -185,6 +207,25 @@ impl EditorApplication {
                 }
             }
         }
+    }
+
+    fn report_script_build_failure(
+        &self,
+        file: &ScriptFile,
+        title: &str,
+        output: &str,
+        detail: String,
+    ) {
+        let target = EditorIssueTarget::compiler_diagnostic(&file.identifier, &file.url, output);
+        self.store.dispatch(EditorAction::AppendConsoleMessage {
+            message: title.into(),
+            severity: EditorConsoleSeverity::Error,
+            detail: Some(detail),
+            target: Some(target),
+            next_step: Some(
+                "Open the script, fix the reported errors, then Save and Compile.".into(),
+            ),
+        });
     }
 
     fn log_script_reload(&self, message: &str, severity: EditorConsoleSeverity, detail: String) {

@@ -2,11 +2,15 @@
 //! (lifecycle and empty-viewport portions; application-owned cases live with
 //! `EditorApplication`).
 
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
+use cove_ui_compose::primitives::text::TextBuffer;
 use diffuse_math::simd::simd_compat::Float3;
 use diffuse_scene::components::core::registry::ComponentRegistry;
 
+use crate::application::editor_application::EditorApplication;
 use crate::projects::editor_project_lifecycle::{
     EditorProjectLifecycle, EditorProjectLifecycleError, EditorProjectTemplate,
 };
@@ -14,6 +18,8 @@ use crate::rendering::viewport::viewport_host::ViewportScreenFrame;
 use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
 use crate::scene::adapter::spawn::EditorEntityTemplate;
 use crate::scene::inspector::rendering::renderers::EditorInspectorRendererRegistry;
+use crate::state::editor_reducer::EditorAction;
+use crate::state::editor_state::{EditorPendingDocumentAction, PlaybackState};
 
 fn parent() -> PathBuf {
     let url = std::env::temp_dir().join(format!(
@@ -34,6 +40,81 @@ fn adapter() -> EditorSceneAdapter {
 
 fn bundle_available() -> bool {
     crate::editor_core_resource_bundle::EditorCoreResourceBundle::bundle_if_available().is_some()
+}
+
+#[test]
+fn closing_project_stops_playback_and_protects_unsaved_script_buffers() {
+    let parent = parent();
+    let project =
+        EditorProjectLifecycle::create("Close Test", &parent, EditorProjectTemplate::Blank)
+            .expect("create project");
+    let app = EditorApplication::new(project.directory.to_string_lossy().into_owned())
+        .expect("editor session");
+    let closed = Rc::new(Cell::new(false));
+    let observed = closed.clone();
+    app.set_close_project_handler(Some(Rc::new(move || observed.set(true))));
+    assert!(app.workstation.scripts.create_script("One", "// one"));
+    app.workstation
+        .scripts
+        .update_selected_source(TextBuffer::new("// unsaved"));
+    app.apply_playback_state(PlaybackState::Playing);
+    app.request_close_project();
+    assert_eq!(app.store.playback_state(), PlaybackState::Stopped);
+    assert!(!closed.get());
+    assert_eq!(
+        app.store
+            .pending_close_request()
+            .expect("close prompt")
+            .action,
+        EditorPendingDocumentAction::CloseProject
+    );
+    assert!(app.workstation.scripts.persist_all());
+    assert_eq!(
+        std::fs::read_to_string(project.directory.join("Scripts/One.rs")).unwrap(),
+        "// unsaved"
+    );
+    app.store.dispatch(EditorAction::DismissCloseRequest);
+    app.request_close_project();
+    assert!(closed.get());
+    app.shutdown();
+    drop(app);
+    std::fs::remove_dir_all(parent).expect("remove test project");
+}
+
+#[test]
+fn new_scene_waits_for_unsaved_confirmation_and_creates_an_empty_document() {
+    let parent = parent();
+    let app =
+        EditorApplication::new(parent.to_string_lossy().into_owned()).expect("editor session");
+    let initial_document = app.store.state().document.identity;
+    assert!(!app.has_unsaved_scene_changes());
+    app.request_new_scene();
+    let empty_document = app.store.state().document.identity;
+    assert_ne!(initial_document, empty_document);
+    assert!(app.scene.roots().is_empty());
+    assert_eq!(app.store.selected_entity_id(), None);
+    assert!(app.has_unsaved_scene_changes());
+    app.request_new_scene();
+    assert_eq!(
+        app.store
+            .pending_close_request()
+            .expect("new scene prompt")
+            .action,
+        EditorPendingDocumentAction::NewScene
+    );
+    assert_eq!(app.store.state().document.identity, empty_document);
+    app.store.dispatch(EditorAction::DismissCloseRequest);
+    app.reset_preview_scene();
+    assert_ne!(app.store.state().document.identity, empty_document);
+    assert_eq!(
+        app.store.selected_entity_id(),
+        app.scene.default_selection_id()
+    );
+    assert!(app.store.selected_entity_id().is_some());
+    assert!(app.observation_bus.request_snapshot("scene").is_ok());
+    app.shutdown();
+    drop(app);
+    std::fs::remove_dir_all(parent).expect("remove test project");
 }
 
 /// Any folder opens as a project, gaining only a descriptor.

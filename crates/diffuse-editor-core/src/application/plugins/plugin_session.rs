@@ -84,7 +84,7 @@ pub struct PluginSession {
     pub manager: PluginManager,
     pub contributions: Arc<PluginContributions>,
     pub editor: PluginEditorIntegration,
-    pub runtime: PluginRuntimeAccess,
+    pub runtime: Arc<PluginRuntimeAccess>,
     pub authorization_store: EditorPluginAuthorizationStore,
     pub components: PluginComponentStore,
     state: Mutex<PluginSessionState>,
@@ -119,7 +119,7 @@ impl PluginSession {
             })
             .collect::<BTreeMap<_, _>>();
         let manager = PluginManager::new(contributions.registrar()?, loader, host_capabilities);
-        let runtime = PluginRuntimeAccess::new(contributions.clone());
+        let runtime = Arc::new(PluginRuntimeAccess::new(contributions.clone()));
         Ok(PluginSession {
             hosts,
             manager,

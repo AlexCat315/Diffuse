@@ -112,6 +112,8 @@ impl EditorApplication {
             let result = self.load_persisted_scene(&document.manifest)?;
             self.reload_scripts_after_scene_replacement();
             persistence.publish_selection(&result);
+            self.refresh_scene_world_view();
+            self.request_display_refresh();
             Ok::<_, super::scene_persistence::ScenePersistenceError>(Some(format!(
                 "slot {slot}, {} entities, saved {}",
                 result.entity_count, document.saved_at,

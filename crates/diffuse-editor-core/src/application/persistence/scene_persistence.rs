@@ -397,7 +397,14 @@ impl EditorScenePersistence {
         }
     }
 
-    fn remove_editor_autosave(&self) {
+    pub(crate) fn finish_session(&self) {
+        self.autosave_scene_if_needed(Self::AUTOSAVE_INTERVAL, true);
+        if self.play_snapshot.take().is_some() {
+            self.delete_persisted_physics_play_snapshot();
+        }
+    }
+
+    pub(crate) fn remove_editor_autosave(&self) {
         self.autosave.take();
         self.store
             .dispatch(EditorAction::SetSceneRecoveryPending(false));
@@ -484,15 +491,27 @@ impl EditorApplication {
     }
 
     pub fn open_scene_manifest_at(&self, path: &Path) -> Option<EditorSceneManifest> {
-        self.scene_persistence()
+        let opened = self
+            .scene_persistence()
             .open_scene_manifest(path, true, true, |manifest| {
                 self.replace_persisted_scene(manifest)
-            })
+            });
+        if opened.is_some() {
+            self.refresh_scene_world_view();
+            self.request_display_refresh();
+        }
+        opened
     }
 
     pub fn restore_project_scene_at_launch(&self) -> Option<EditorSceneManifest> {
-        self.scene_persistence()
-            .restore_project_scene_at_launch(|manifest| self.replace_persisted_scene(manifest))
+        let restored = self
+            .scene_persistence()
+            .restore_project_scene_at_launch(|manifest| self.replace_persisted_scene(manifest));
+        if restored.is_some() {
+            self.refresh_scene_world_view();
+            self.request_display_refresh();
+        }
+        restored
     }
 
     pub fn autosave_scene_if_needed(&self, elapsed: f64, force: bool) {
@@ -509,9 +528,7 @@ impl EditorApplication {
         manifest: &EditorSceneManifest,
     ) -> Result<EditorSceneManifestLoadResult, ScenePersistenceError> {
         let result = self.load_persisted_scene(manifest)?;
-        self.store
-            .dispatch(EditorAction::SetPendingConfirmationRequest(None));
-        self.store.dispatch(EditorAction::BeginSceneDocument);
+        self.begin_scene_document();
         self.reload_scripts_after_scene_replacement();
         Ok(result)
     }
@@ -525,14 +542,7 @@ impl EditorApplication {
                 EditorSceneManifestLoadError::UnsupportedVersion(manifest.schema_version).into(),
             );
         }
-        if let Some(mesh) = self.mesh_editing.get() {
-            mesh.leave();
-        }
-        if let Some(authoring) = self.geometry_authoring.get() {
-            authoring.cancel_interactive_edit();
-        }
-        let result = self.scene_persistence().load_scene(manifest)?;
-        self.request_display_refresh();
-        Ok(result)
+        self.leave_geometry_editing();
+        self.scene_persistence().load_scene(manifest)
     }
 }

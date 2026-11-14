@@ -4,7 +4,7 @@
 //! configured. Remote `Session` instances can be seeded from it.
 
 use std::collections::HashMap;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use diffuse_intent::transactions::world_event::WorldEvent;
 use diffuse_kernel::codable::new_uuid;
@@ -13,8 +13,9 @@ use diffuse_observation::publisher::{SnapshotProvider, StreamCursor};
 use crate::context::world_view::{WorldEntityRecord, WorldView};
 use crate::semantic::scene_semantic_snapshot::SceneSemanticSnapshot;
 
+#[derive(Clone)]
 pub struct AIWorldContext {
-    state: Mutex<AIWorldContextState>,
+    state: Arc<Mutex<AIWorldContextState>>,
 }
 
 struct AIWorldContextState {
@@ -29,12 +30,12 @@ impl AIWorldContext {
 
     pub fn new(world_view: WorldView) -> Self {
         Self {
-            state: Mutex::new(AIWorldContextState {
+            state: Arc::new(Mutex::new(AIWorldContextState {
                 world_view,
                 world_revision: 0,
                 stored_snapshots: HashMap::new(),
                 snapshot_insertion_order: Vec::new(),
-            }),
+            })),
         }
     }
 

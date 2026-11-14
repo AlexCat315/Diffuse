@@ -9,11 +9,14 @@ use diffuse_math::simd::simd_compat::{Float3, Float4, MATRIX_IDENTITY_FLOAT4X4};
 use diffuse_scene::entity_id::EntityID;
 use diffuse_scene::runtime_world::LocalTransform;
 
+use crate::application::editor_application::{EditorApplication, EditorApplicationOptions};
 use crate::application::persistence::scene_persistence::EditorScenePersistence;
 use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
 use crate::scene::manifest::editor_scene_manifest::EditorSceneManifest;
 use crate::state::editor_reducer::EditorAction;
-use crate::state::editor_state::{EditorConsoleSeverity, PlaybackState};
+use crate::state::editor_state::{
+    EditorConsoleSeverity, EditorPendingDocumentAction, PlaybackState,
+};
 use crate::state::editor_store::EditorStore;
 
 struct TempProject(PathBuf);
@@ -50,6 +53,17 @@ impl TempProject {
             store,
         )
     }
+
+    fn app(&self) -> Rc<EditorApplication> {
+        EditorApplication::with_options(
+            self.0.to_string_lossy().into_owned(),
+            EditorApplicationOptions {
+                seed_preview_scene: true,
+                ..Default::default()
+            },
+        )
+        .expect("editor session")
+    }
 }
 
 impl Drop for TempProject {
@@ -68,21 +82,28 @@ fn explicit_scene_open_restores_selection_and_keeps_the_canonical_save_path() {
     let manifest = source.manifest_for_selection(Some(id));
     let external = project.0.join("explicit.covescene");
     fs::write(&external, to_sorted_pretty(&manifest).expect("scene JSON")).expect("explicit scene");
-    let (target, scene, store) = project.session();
-    let reopened = target.open_scene_manifest(&external, true, true, |manifest| {
-        target.load_scene(manifest)
-    });
-    assert_eq!(reopened, Some(manifest));
+    let app = project.app();
+    let initial_document = app.store.state().document.identity;
+    app.scene
+        .set_entity_local_translation(id, Float3::new(9.0, 6.0, 3.0));
+    app.request_open_scene_manifest_at(&external);
+    let request = app.store.pending_close_request().expect("unsaved prompt");
+    assert_eq!(request.action, EditorPendingDocumentAction::OpenScene);
+    assert_eq!(request.document_path.as_deref(), external.to_str());
+    assert_eq!(app.store.state().document.identity, initial_document);
+    app.store.dispatch(EditorAction::DismissCloseRequest);
+    assert_eq!(app.open_scene_manifest_at(&external), Some(manifest));
+    assert_ne!(app.store.state().document.identity, initial_document);
     assert_eq!(
-        scene.entity_local_translation(store.selected_entity_id().expect("selection")),
+        app.scene
+            .entity_local_translation(app.store.selected_entity_id().expect("selection")),
         Some(position)
     );
-    assert!(!store.scene_dirty());
-    assert_eq!(
-        target.save_scene_manifest(None),
-        Some(target.scene_manifest_path())
-    );
-    assert!(target.scene_manifest_path().is_file());
+    assert!(!app.has_unsaved_scene_changes());
+    let canonical_save = app.scene_persistence().scene_manifest_path();
+    assert_eq!(app.save_scene_manifest(), Some(canonical_save.clone()));
+    assert!(canonical_save.is_file());
+    app.shutdown();
 }
 
 #[test]
@@ -157,29 +178,75 @@ fn interrupted_play_becomes_an_autosaved_recovery_on_launch() {
 }
 
 #[test]
-fn forced_autosave_restores_a_dirty_scene_and_explicit_save_clears_recovery() {
+fn shutdown_autosaves_a_dirty_scene_and_explicit_save_clears_recovery() {
     let project = TempProject::new();
-    let (source, scene, store) = project.session();
-    let id = scene.default_selection_id().expect("entity");
-    let edited = scene.entity_local_translation(id).expect("original") + Float3::new(4.0, 5.0, 6.0);
-    scene.set_entity_local_translation(id, edited);
-    assert!(store.scene_dirty());
-    source.autosave_scene_if_needed(EditorScenePersistence::AUTOSAVE_INTERVAL, true);
-    assert!(source.autosave_path().is_file());
-    let (target, scene, store) = project.session();
-    assert!(
-        target
-            .restore_project_scene_at_launch(|manifest| target.load_scene(manifest))
-            .is_some()
-    );
+    let source = project.app();
+    let id = source.scene.default_selection_id().expect("entity");
+    let edited =
+        source.scene.entity_local_translation(id).expect("original") + Float3::new(4.0, 5.0, 6.0);
+    source.scene.set_entity_local_translation(id, edited);
+    assert!(source.has_unsaved_scene_changes());
+    let autosave = source.scene_persistence().autosave_path();
+    source.shutdown();
+    assert!(autosave.is_file());
+    drop(source);
+    let target = project.app();
+    assert!(target.restore_project_scene_at_launch().is_some());
     assert_eq!(
-        scene.entity_local_translation(store.selected_entity_id().expect("selection")),
+        target
+            .scene
+            .entity_local_translation(target.store.selected_entity_id().expect("selection")),
         Some(edited)
     );
-    assert!(store.scene_dirty() && store.scene_recovery_pending());
-    assert!(target.save_scene_manifest(None).is_some());
-    assert!(!store.scene_dirty());
-    assert!(!target.autosave_path().exists());
+    assert!(target.has_unsaved_scene_changes() && target.store.scene_recovery_pending());
+    assert!(target.save_scene_manifest().is_some());
+    assert!(!target.has_unsaved_scene_changes());
+    assert!(!autosave.exists());
+    target.shutdown();
+}
+
+#[test]
+fn clean_shutdown_removes_the_owned_play_crash_marker() {
+    let project = TempProject::new();
+    let app = project.app();
+    app.apply_playback_state(PlaybackState::Playing);
+    let marker = app.scene_persistence().physics_play_snapshot_path();
+    assert!(marker.is_file());
+    app.shutdown();
+    app.shutdown();
+    assert!(!app.is_active());
+    assert!(!marker.exists());
+}
+
+#[test]
+fn corrupt_context_memory_is_quarantined_on_construction() {
+    let project = TempProject::new();
+    let cove = project.0.join(".cove");
+    fs::create_dir(&cove).expect("metadata directory");
+    let storage = cove.join("context_memory.json");
+    fs::write(&storage, b"invalid context memory").expect("write corruption");
+    let app = project.app();
+    assert!(app.context_memory_store.is_some());
+    let quarantined = fs::read_dir(&cove)
+        .expect("metadata entries")
+        .flatten()
+        .find(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("context_memory.corrupt-")
+        })
+        .expect("quarantined context memory");
+    assert_eq!(
+        fs::read(quarantined.path()).unwrap(),
+        b"invalid context memory"
+    );
+    assert!(app.store.console_entries().iter().any(|entry| {
+        entry.message == "Recovered AI context memory storage"
+            && entry.severity == EditorConsoleSeverity::Warning
+    }));
+    app.shutdown();
+    assert_eq!(fs::read_to_string(storage).unwrap().trim(), "[]");
 }
 
 #[test]
