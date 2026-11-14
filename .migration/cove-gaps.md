@@ -129,3 +129,10 @@ Format:
 - Diffuse meanwhile: `diffuse-mcp` passes `contract.input_schema` and decoded editor schemas through unchanged; the resulting MCP tools advertise a keyword clients ignore and lose strictness after a round trip. No Diffuse-side workaround, per the no-bypass rule.
 - Fixed in Cove `crates/agent/src/schema.rs` (2026-11-11, user-authorized upstream edit): the field now carries `#[serde(default, rename = "additionalProperties", skip_serializing_if = "Option::is_none")]`. `tools/list` emits `additionalProperties` for all 37 tools and `diffuse-intent`'s schema test asserts both encode and decode. `cargo test -p cove-agent` (27+4+3) still passes.
 - Status: fixed (found 2026-11-11 while porting `DiffuseMCP`; fixed and verified 2026-11-11).
+
+## G13: Cove process sessions cannot launch an independent player on Windows
+- Needed by: `diffuse-editor-core` (`Application/Projects/Export.swift` → `application/projects/export.rs`).
+- Cove today: `cove_system::process::ProcessSession` and `cove_system::native_process::NativeProcess` launch Windows children in a job with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. `ProcessSession` also owns pipe collection and cancellation.
+- Needed: an independent launch API for desktop GUI applications, preserving native argument paths and providing child reaping while the launching process runs.
+- Diffuse meanwhile: the player launches directly with Rust's process API and a reaper thread. macOS signing, script builds and player validation continue to use Cove process APIs.
+- Status: open (source inspection, 2026-11-14).

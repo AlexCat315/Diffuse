@@ -12,12 +12,17 @@ use diffuse_scene::runtime_world::LocalTransform;
 use crate::application::editor_application::{EditorApplication, EditorApplicationOptions};
 use crate::application::persistence::scene_persistence::EditorScenePersistence;
 use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
+use crate::scene::game_save_document::GameSaveDocument;
 use crate::scene::manifest::editor_scene_manifest::EditorSceneManifest;
+use crate::scene::project_exporter::ProjectExporter;
 use crate::state::editor_reducer::EditorAction;
 use crate::state::editor_state::{
     EditorConsoleSeverity, EditorPendingDocumentAction, PlaybackState,
 };
 use crate::state::editor_store::EditorStore;
+use crate::state::workspace::editor_workbench_state::{
+    EditorIssueTarget, EditorOperationKind, EditorOperationStatus,
+};
 
 struct TempProject(PathBuf);
 
@@ -279,6 +284,120 @@ fn scene_save_during_play_uses_the_authored_snapshot() {
     assert_eq!(scene.entity_local_translation(id), Some(authored));
     assert!(!persistence.physics_play_snapshot_path().exists());
     assert!(!store.scene_dirty());
+}
+
+#[test]
+fn export_during_playback_packages_the_authored_scene() {
+    let project = TempProject::new();
+    let app = project.app();
+    let id = app.scene.default_selection_id().expect("entity");
+    let original = app.scene.entity_local_translation(id).expect("original");
+    let authored = original + Float3::new(3.0, 4.0, 5.0);
+    let runtime_only = original + Float3::new(30.0, 40.0, 50.0);
+    app.scene.set_entity_local_translation(id, authored);
+    app.apply_playback_state(PlaybackState::Playing);
+    let mut matrix = MATRIX_IDENTITY_FLOAT4X4;
+    matrix.set_column(
+        3,
+        Float4::new(runtime_only.x, runtime_only.y, runtime_only.z, 1.0),
+    );
+    app.scene.with_scene_mut(|scene| {
+        scene.set_local_transform(LocalTransform::new(matrix), EntityID::from_raw_value(id))
+    });
+
+    let output = app.export_project().expect("project export");
+    let descriptor = ProjectExporter::read_descriptor(&output).expect("export descriptor");
+    assert_eq!(
+        descriptor.app_name,
+        project.0.file_name().unwrap().to_string_lossy()
+    );
+    let save = GameSaveDocument::read(&GameSaveDocument::url(ProjectExporter::SCENE_SLOT, &output))
+        .expect("export scene slot")
+        .expect("export scene");
+    let restored = EditorSceneAdapter::with_defaults(false);
+    let result = restored.load_with_notify(&save.manifest, false);
+    assert!(result.succeeded());
+    assert_eq!(app.store.playback_state(), PlaybackState::Playing);
+    assert_eq!(app.scene.entity_local_translation(id), Some(runtime_only));
+    assert_eq!(
+        restored.entity_local_translation(result.selected_entity_id.expect("selection")),
+        Some(authored)
+    );
+    app.shutdown();
+}
+
+#[test]
+fn background_project_export_captures_the_scene_and_serializes_requests() {
+    let project = TempProject::new();
+    let app = project.app();
+    let manifest = app.authored_scene_manifest().0;
+    assert!(manifest.entity_count > 0);
+    app.request_project_export(false);
+    app.request_project_export(false);
+    assert!(app.export_project().is_none());
+    let operations = app.store.operations();
+    assert_eq!(operations.len(), 1);
+    assert_eq!(operations[0].kind, EditorOperationKind::Exporting);
+    assert_eq!(operations[0].status, EditorOperationStatus::Running);
+    app.create_empty_scene();
+    assert_eq!(app.scene.entity_count(), 0);
+
+    let timeout = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        app.poll_project_export();
+        let status = app.store.operations()[0].status;
+        if status != EditorOperationStatus::Running {
+            assert_eq!(
+                status,
+                EditorOperationStatus::Succeeded,
+                "{:?}",
+                app.store.console_entries()
+            );
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < timeout,
+            "export worker did not finish"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let output = project.0.join("export");
+    let save = GameSaveDocument::read(&GameSaveDocument::url(ProjectExporter::SCENE_SLOT, &output))
+        .expect("export scene slot")
+        .expect("exported scene");
+    assert_eq!(save.manifest, manifest);
+    app.shutdown();
+}
+
+#[test]
+fn project_export_blocks_untrusted_cargo_sources_without_replacing_the_bundle() {
+    let project = TempProject::new();
+    let app = project.app();
+    let output = app.export_project().expect("previous export");
+    let descriptor = fs::read(output.join("build.json")).expect("previous descriptor");
+    let scripts = project.0.join("Scripts/src");
+    fs::create_dir_all(&scripts).expect("Rust script crate");
+    fs::write(scripts.join("lib.rs"), "pub struct Gameplay;\n").expect("write script");
+
+    assert!(app.export_project().is_none());
+    assert_eq!(fs::read(output.join("build.json")).unwrap(), descriptor);
+    let operations = app.store.operations();
+    let operation = operations.last().expect("failed operation");
+    assert_eq!(operation.status, EditorOperationStatus::Failed);
+    assert_eq!(
+        operation.target,
+        Some(EditorIssueTarget::File {
+            path: app.project_directory.clone()
+        })
+    );
+    assert!(app.store.console_entries().iter().any(|entry| {
+        entry.severity == EditorConsoleSeverity::Error
+            && entry
+                .detail
+                .as_ref()
+                .is_some_and(|detail| detail.contains("Rust script execution is blocked"))
+    }));
+    app.shutdown();
 }
 
 #[test]

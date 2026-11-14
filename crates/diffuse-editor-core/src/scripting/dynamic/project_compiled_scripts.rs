@@ -21,6 +21,7 @@ use crate::scene::project_exporter::ProjectExporterError;
 use crate::scripting::assets::script_asset_registry::{
     ResolvedScriptAsset, ScriptAssetRegistry, ScriptAssetRegistryError,
 };
+use crate::scripting::dynamic::script_project_trust::ScriptProjectTrustError;
 use crate::scripting::static_::project_static_scripts::ProjectStaticScripts;
 use crate::scripting::toolchain::preferences::SwiftToolchainPreferences;
 use crate::scripting::toolchain::resolution::SwiftToolchainResolver;
@@ -166,6 +167,10 @@ impl ProjectCompiledScripts {
         CapabilityDigest::sha256(data)
     }
 
+    pub(crate) fn has_sources(project: &Path) -> Result<bool, ProjectCompiledScriptsError> {
+        Ok(!Self::sources(&project.join("Scripts"))?.is_empty())
+    }
+
     /// Builds the project's `Scripts/` gameplay into `into`.
     ///
     /// Static delivery stages the sources for a player-side build. Dynamic
@@ -177,17 +182,18 @@ impl ProjectCompiledScripts {
         from: &Path,
         configuration: Option<&ProjectScriptBuildConfiguration>,
         into: &Path,
+        allow_script_build: bool,
     ) -> Result<BTreeSet<String>, ProjectCompiledScriptsError> {
         let scripts_directory = from.join("Scripts");
-        if !scripts_directory.is_dir() {
-            return Ok(BTreeSet::new());
-        }
         let sources = Self::sources(&scripts_directory)?;
         if sources.is_empty() {
             return Ok(BTreeSet::new());
         }
         let configuration =
             configuration.ok_or(ProjectExporterError::MissingScriptBuildConfiguration)?;
+        if configuration.delivery == ProjectScriptDelivery::DynamicLibrary && !allow_script_build {
+            return Err(ScriptProjectTrustError::ExecutionBlocked.into());
+        }
         let registry = ScriptAssetRegistry::new(&from.to_string_lossy());
         let assets = registry.resolve(sources)?;
         if configuration.delivery == ProjectScriptDelivery::StaticLink {
@@ -261,18 +267,36 @@ impl ProjectCompiledScripts {
             .collect())
     }
 
-    /// Rust sources of the `Scripts/` crate. Cargo compiles `Scripts/src`, so
-    /// only what lives there becomes a script asset.
+    /// Sources currently recognized by the editor and by the Cargo script crate.
     fn sources(scripts_directory: &Path) -> Result<Vec<PathBuf>, ProjectCompiledScriptsError> {
-        let source_root = scripts_directory.join("src");
-        if !source_root.is_dir() {
-            return Ok(Vec::new());
+        let documents = match std::fs::read_dir(scripts_directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(error.into()),
+        };
+        let mut sources = Vec::new();
+        for entry in documents {
+            let entry = entry?;
+            if entry.file_name() != "build.rs"
+                && is_rust_source(&entry.path())
+                && entry.file_type()?.is_file()
+            {
+                sources.push(entry.path());
+            }
         }
-        let mut sources: Vec<PathBuf> =
-            project_resource_walker::files(&source_root, false, |_| false)?
-                .into_iter()
-                .filter(|url| is_rust_source(url))
-                .collect();
+        let source_root = scripts_directory.join("src");
+        match std::fs::symlink_metadata(&source_root) {
+            Ok(metadata) if metadata.is_dir() => {
+                sources.extend(
+                    project_resource_walker::files(&source_root, false, |_| false)?
+                        .into_iter()
+                        .filter(|url| is_rust_source(url)),
+                );
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
         sources.sort_by(|left, right| {
             file_name_lower(left)
                 .cmp(&file_name_lower(right))
@@ -340,6 +364,8 @@ fn file_name_lower(url: &Path) -> String {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectCompiledScriptsError {
+    #[error(transparent)]
+    Trust(#[from] ScriptProjectTrustError),
     #[error(transparent)]
     Exporter(#[from] ProjectExporterError),
     #[error(transparent)]

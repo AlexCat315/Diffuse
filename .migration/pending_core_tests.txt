@@ -9,7 +9,6 @@ Editor/Tests/EditorCoreTests/EditorDiagnosticsTests.swift
 Editor/Tests/EditorCoreTests/EditorPluginReloadTests.swift
 Editor/Tests/EditorCoreTests/EditorProjectLifecycleTests.swift
 Editor/Tests/EditorCoreTests/EditorProjectToolsTests.swift
-Editor/Tests/EditorCoreTests/EditorSceneRecoveryTests.swift
 Editor/Tests/EditorCoreTests/EditorScriptPlaybackTests.swift
 Editor/Tests/EditorCoreTests/EditorToolPolicyTests.swift
 Editor/Tests/EditorCoreTests/EditorViewportCameraIsolationTests.swift

@@ -51,6 +51,7 @@ use crate::ai::tools::audit::EditorToolAudit;
 use crate::application::diagnostics::subscriptions::EditorSubscriptions;
 use crate::application::persistence::scene_persistence::EditorScenePersistence;
 use crate::application::plugins::plugin_session::{PluginSession, PluginSessionError};
+use crate::application::projects::export::ProjectExportJob;
 use crate::application::scripting::scripting::{SceneScriptReloadEvent, ScriptWorkspaceEvent};
 use crate::assets::asset_catalog::EditorAssetCatalog;
 use crate::assets::project_runtime_resources::ProjectRuntimeResources;
@@ -145,6 +146,7 @@ pub struct EditorApplication {
     pub(crate) scene_persistence: OnceCell<EditorScenePersistence>,
     pub(crate) script_reload_events: RefCell<Vec<Receiver<SceneScriptReloadEvent>>>,
     pub(crate) script_workspace_events: Receiver<ScriptWorkspaceEvent>,
+    pub(crate) project_export: RefCell<Option<ProjectExportJob>>,
 }
 
 // SAFETY: Swift declares `EditorApplication: @unchecked Sendable`; the editor
@@ -338,6 +340,7 @@ impl EditorApplication {
             scene_persistence: OnceCell::new(),
             script_reload_events: RefCell::default(),
             script_workspace_events,
+            project_export: RefCell::default(),
         });
         if let Some(detail) = context_memory_warning {
             app.log_warning("Recovered AI context memory storage", detail);
@@ -406,6 +409,7 @@ impl EditorApplication {
             return;
         }
         self.subscriptions.console.stop();
+        self.project_export.take();
         self.leave_geometry_editing();
         self.subscriptions.renderer_preparation.cancel();
         self.diagnostic_session.close();

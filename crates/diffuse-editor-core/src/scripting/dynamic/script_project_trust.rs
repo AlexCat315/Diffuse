@@ -200,7 +200,7 @@ fn home_directory() -> Option<PathBuf> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ScriptProjectTrustError {
-    #[error("Swift script execution is blocked until this project is explicitly trusted.")]
+    #[error("Rust script execution is blocked until this project is explicitly trusted.")]
     ExecutionBlocked,
 }
 
@@ -208,7 +208,7 @@ impl ScriptProjectTrustError {
     pub fn error_description(&self) -> &'static str {
         match self {
             ScriptProjectTrustError::ExecutionBlocked => {
-                "Swift script execution is blocked until this project is explicitly trusted."
+                "Rust script execution is blocked until this project is explicitly trusted."
             }
         }
     }

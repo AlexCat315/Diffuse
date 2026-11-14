@@ -634,6 +634,11 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `EditorApplication::{new, with_options}` 在主线程返回 `Rc<EditorApplication>`。构造时载入项目资产、音频路径和脚本目录，设置场景回调并为观察总线注册共享的场景快照提供器。宿主可通过 `EditorApplicationOptions` 提供渲染设备、游戏 HUD 和脚本分析所需的 crate 源码路径。
 - `request_new_scene`、`request_open_scene_manifest_at` 和 `request_close_project` 使用既有文档确认状态。场景替换时跳过旧的待确认事务并刷新文档标识与语义快照。`shutdown` 强制保存停止状态下未存盘的场景，只删除本次会话持有的 Play 崩溃标记，并持久化上下文记忆。
 
+### `diffuse-editor-core` 项目导出（批次 357）
+
+- `EditorApplication::request_project_export(run_after_export)` 在编辑器线程捕获场景清单，将复制、构建与签名交给后台线程。宿主在每帧调用 `poll_project_export`，由编辑器线程更新工作台操作状态和日志，并按请求调用 `run_exported_project(&Path)`。`export_project` 是同步入口，可返回 `<project>/export`。同一应用只受理一个导出请求，各编辑器会话通过项目级文件锁串行发布导出包。
+- 导出与保存复用 `authored_scene_manifest`。脚本检测覆盖编辑器已有的顶层 `.rs` 和 Cargo 的 `Scripts/src`，信任检查延伸至导出器实际启动 Cargo 的路径。
+
 ## 9. 进度与批次日志
 
 `python3 Tools/Migration/inventory.py --status` 输出各 crate 的计数；每个批次在下面追加一行：
@@ -1206,11 +1211,15 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 | 2026-11-14 | 批次 356 | diffuse-editor-core（应用构造、项目生命周期和关闭恢复） | 1 | 99 | 迁移项目生命周期并标 `written`，接通场景替换、未保存确认、关闭自动保存、Play 标记清理与损坏上下文记忆隔离。Windows 定向首轮通过 12/18。内置插件目录缺少资源包时改为返回空目录后，仅复跑受影响的 6 项并全部通过。 |
 
+| 2026-11-14 | 批次 357 | diffuse-editor-core（应用导出与运行、场景恢复测试） | 2 | 532 | 迁移同步和后台项目导出、操作状态、预播放快照、脚本信任检查、播放器定位与启动、macOS 临时签名。完成场景恢复套件的播放中导出断言。Windows 定向执行场景恢复和导出器用例，27 项通过。导出生产行标 `written`，恢复测试行标 `tested`。 |
+
 ## 10. 已知问题与需要用户确认的事项
 
-- **应用接线（批次 355–356）**：核心应用已可构造并关闭，桌面外壳启动、逐帧脚本消息与自动保存轮询、视口渲染、插件启动、应用导出及助手会话接线仍待迁移。场景替换已跳过协调器内暂存的确认，取消正在进行的助手请求与同步助手工作流上下文仍等待 AI 应用层。无打包资源的开发环境使用空内置插件目录，带资源的发布路径及 Windows 外平台尚未运行本批测试。
+- **应用接线（批次 355–357）**：核心应用已可构造、关闭及导出。桌面外壳启动、逐帧轮询脚本消息、后台导出与自动保存、视口渲染、插件启动及助手会话接线仍待迁移。场景替换已跳过协调器内暂存的确认，取消正在进行的助手请求与同步助手工作流上下文仍等待 AI 应用层。无打包资源的开发环境使用空内置插件目录，带资源的发布路径及 Windows 外平台尚未运行本批测试。
 
-- **项目生命周期与恢复测试（批次 356）**：新建与打开的未保存确认、关闭保护脚本缓冲区、自动保存与清理、损坏上下文记忆均通过真实 Rust 应用入口验证。项目生命周期套件的打包示例接线和恢复套件的播放时导出仍保留 `pending`。
+- **项目生命周期与恢复测试（批次 356–357）**：新建与打开的未保存确认、关闭保护脚本缓冲区、自动保存与清理、损坏上下文记忆、播放中导出均通过真实 Rust 应用入口验证。项目生命周期套件的打包示例接线仍保留 `pending`。
+
+- **导出播放器（批次 357）**：保留 `COVE_PLAYER_EXECUTABLE` 和编辑器旁的 `CovePlayer` 查找。Rust 播放器入口仍待迁移，真实游戏启动、脚本交付以及 macOS 签名尚未进行端到端验证。独立播放器通过标准库进程 API 启动与回收，Cove 的 Windows 作业对象缺口已记为 [G13](.migration/cove-gaps.md#g13-cove-process-sessions-cannot-launch-an-independent-player-on-windows)。
 
 - **网格编辑应用接线（批次 354–356）**：网格工具、检查器、叠加生成与场景保存已接线。核心构造已注册网格检查器，桌面视口输入及逐帧提交仍需调用对应入口。三条交互测试迁移行仍待真实应用的撤销路径。Windows 定向用例在测试线程产生 SDL 音频主线程初始化日志，其他平台尚未验证。
 

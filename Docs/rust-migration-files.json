@@ -725,7 +725,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/projects/export.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Projects/ProjectLifecycle.swift",
@@ -5380,8 +5380,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_scene_recovery_tests.rs"
       ],
-      "status": "pending",
-      "notes": "Core persistence and playback cases translated. Application shutdown, context memory recovery and project export assertions remain pending."
+      "status": "tested",
+      "notes": "All recovery and playback scenarios are ported. Batch 357 added the project export round trip during playback and exercised the suite on Windows."
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorScratchWorkspaceTests.swift",

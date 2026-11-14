@@ -193,6 +193,29 @@ impl ProjectExporter {
         script_build_configuration: Option<&ProjectScriptBuildConfiguration>,
         to: &Path,
     ) -> Result<ProjectExportDescriptor, ProjectExportError> {
+        Self::export_with_script_trust(
+            manifest,
+            app_name,
+            assets,
+            source_project_directory,
+            player_executable_url,
+            script_build_configuration,
+            to,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn export_with_script_trust(
+        manifest: &EditorSceneManifest,
+        app_name: &str,
+        assets: &[EditorAsset],
+        source_project_directory: Option<&Path>,
+        player_executable_url: Option<&Path>,
+        script_build_configuration: Option<&ProjectScriptBuildConfiguration>,
+        to: &Path,
+        allow_script_build: bool,
+    ) -> Result<ProjectExportDescriptor, ProjectExportError> {
         let assets = Self::validated_assets(assets)?;
         let output_url = PathIdentity::canonical_url(to);
         if let Some(source_project_directory) = source_project_directory {
@@ -250,6 +273,7 @@ impl ProjectExporter {
                 source_project_directory,
                 script_build_configuration,
                 &staging_directory,
+                allow_script_build,
             )?;
             if let Some(conflict) = compiled_identifiers
                 .intersection(&available_script_identifiers)
@@ -737,7 +761,7 @@ fn iso8601_now() -> String {
     cove_logging::iso8601(now.floor()).replace(".000Z", "Z")
 }
 
-fn player_executable_name() -> &'static str {
+pub(crate) fn player_executable_name() -> &'static str {
     if cfg!(windows) {
         "CovePlayer.exe"
     } else {
@@ -821,7 +845,7 @@ fn directory_entries(directory: &Path, skip_hidden: bool) -> io::Result<Vec<Path
     Ok(entries)
 }
 
-fn is_executable_file(url: &Path) -> bool {
+pub(crate) fn is_executable_file(url: &Path) -> bool {
     let Ok(metadata) = std::fs::metadata(url) else {
         return false;
     };
