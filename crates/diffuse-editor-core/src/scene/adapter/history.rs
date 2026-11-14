@@ -75,33 +75,49 @@ impl EditorSceneAdapter {
         self.edit_history.borrow().can_redo()
     }
 
-    pub fn record_asset_edit(&self, undo: Rc<dyn Fn() -> bool>, redo: Rc<dyn Fn() -> bool>) {
+    pub fn record_asset_edit(
+        &self,
+        undo: Rc<dyn Fn() -> bool>,
+        redo: Rc<dyn Fn() -> bool>,
+        refresh: Rc<dyn Fn()>,
+    ) {
         self.end_interactive_edit_history_group();
-        self.edit_history.borrow_mut().record_asset_edit(undo, redo);
+        self.edit_history
+            .borrow_mut()
+            .record_asset_edit(undo, redo, refresh);
     }
 
     pub fn undo_edit(&self) -> bool {
-        let scene = self.scene();
-        let previous = self.edit_history.borrow_mut().undo(scene);
-        match previous {
-            Some(previous) => {
-                self.restore_history_scene(previous);
-                true
-            }
-            None => false,
-        }
+        self.navigate_edit_history(false)
     }
 
     pub fn redo_edit(&self) -> bool {
-        let scene = self.scene();
-        let next = self.edit_history.borrow_mut().redo(scene);
-        match next {
-            Some(next) => {
-                self.restore_history_scene(next);
-                true
-            }
-            None => false,
+        self.navigate_edit_history(true)
+    }
+
+    fn navigate_edit_history(&self, redo: bool) -> bool {
+        let asset = self.edit_history.borrow().asset_action(redo);
+        if let Some((restore, _)) = &asset
+            && !restore()
+        {
+            return false;
         }
+        let scene = self.scene();
+        let restored = if redo {
+            self.edit_history.borrow_mut().complete_redo(scene)
+        } else {
+            self.edit_history.borrow_mut().complete_undo(scene)
+        };
+        let Some(restored) = restored else {
+            return false;
+        };
+        if let Some((_, refresh)) = asset {
+            self.set_scene(restored);
+            refresh();
+        } else {
+            self.restore_history_scene(restored);
+        }
+        true
     }
 
     pub fn reset_edit_history(&self) {

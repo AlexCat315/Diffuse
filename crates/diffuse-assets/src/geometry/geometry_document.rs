@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::asset_pipeline::MeshMaterial;
 use crate::geometry::bezier_spline::{BezierSpline, TubeParameters};
 use crate::geometry::geometry_baker::{GeometryEvaluation, GeometryShading};
-use crate::geometry::geometry_modifier::{GeometryModifierEntry, new_uuid, with_legacy_index};
+use crate::geometry::geometry_modifier::{GeometryModifierEntry, with_legacy_index};
 use crate::geometry::geometry_primitives::GeometryPrimitives;
 use crate::geometry::polygon_mesh::{GeometryError, GeometryLimits, PolygonMesh};
 
@@ -270,15 +270,12 @@ impl GeometryDocument {
         if bytes.len() > Self::MAXIMUM_BYTES {
             return Err(GeometryError::BudgetExceeded);
         }
-        // `Data.write(options: .atomic)` writes a sibling file and renames it.
-        let temporary = format!("{path}.tmp-{}", new_uuid());
-        std::fs::write(&temporary, &bytes)
-            .map_err(|error| GeometryError::invalid_parameter(format!("{temporary}: {error}")))?;
-        if let Err(error) = std::fs::rename(&temporary, path) {
-            let _ = std::fs::remove_file(&temporary);
-            return Err(GeometryError::invalid_parameter(format!("{path}: {error}")));
-        }
-        Ok(())
+        cove_system::atomic_file::AtomicFile::write(
+            &bytes,
+            std::path::Path::new(path),
+            cove_system::files::Access::Inherit,
+        )
+        .map_err(|error| GeometryError::invalid_parameter(format!("{path}: {error}")))
     }
 
     /// Decodes a modifier stack, binding the position Swift reads from

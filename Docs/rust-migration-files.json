@@ -1230,7 +1230,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/geometry/editor_geometry_authoring.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Geometry/EditorMeshEditing.swift",
@@ -1307,7 +1307,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/geometry/geometry_inspector.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Geometry/MeshEditingInspector.swift",
@@ -5522,7 +5522,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/geometry_authoring_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/GroupedStateTests.swift",

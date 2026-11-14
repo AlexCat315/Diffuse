@@ -614,6 +614,11 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `SceneCapture::new(validation, api, in_game_ui)`、`render(&mut self, &RenderPacket)`、`finish()`、`readback()` 直接使用 Cove RHI；回读期间持有 viewport image 的资源租约。`GridImage::{readback,write_ppm,difference}` 处理 BGRA 回读、RGB PPM 和忽略 alpha 的逐通道比较。
 - CLI `native_rhi_pass_probe` 默认 grid；独立 `render_backend` bench 默认 mesh。完整保留 1280×720、180 帧、30 预热帧、3 次重复、每三帧 GPU 完成、最近秩 p50/p95、工作量一致性、PPM 与报告先写出再检查图像阈值。报告使用既有 Swift JSON pretty/sorted 格式化器；控制台信息统一走 cove_logging。
 
+### `diffuse-editor-core` 几何资产编辑（批次 353）
+
+- `EditorApplication::geometry_authoring` 惰性持有主线程的 `Rc<EditorGeometryAuthoring>`。几何编辑器通过场景适配器注册检查器字段。`document(entity_id)` 返回预览或缓存文档，`viewport_picker(entity_id)` 复用求值后多边形和世界矩阵对应的拾取器。
+- `edit` 与 `begin_interactive_edit`、`preview_interactive_edit`、`commit_interactive_edit`、`cancel_interactive_edit` 是网格编辑调用入口。预览从原稿重新求值并发布临时网格。正式编辑、撤销和重做写盘后更新目录、碰撞资源及未修改的文本页。
+
 ## 9. 进度与批次日志
 
 `python3 Tools/Migration/inventory.py --status` 输出各 crate 的计数；每个批次在下面追加一行：
@@ -1178,9 +1183,11 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 | 2026-11-14 | 批次 352 | diffuse-editor-core（资产文件工作流、网格拾取与表面线框） | 5 | 625 | 迁移项目内资产移动、依赖复制、引用改写和修复回滚，扫描保留既有 Swift 字符串引用并纳入 D1 的 Rust 脚本，跳过 Cargo `target`。网格拾取复用视口投影与三角形 BVH，保留点选、框选、遮挡、X-Ray、透视边插值及凹面三角化；线框掩码省略内部三角边。3 个生产文件标 `written`。移植的 10 项测试首次通过 9 项，修复 Windows 混合斜杠绝对路径匹配后，失败项单独通过；两个测试文件标 `tested`。本批仅在 Windows 运行定向测试。 |
 
+| 2026-11-14 | 批次 353 | diffuse-editor-core（几何资产编辑与检查器） | 3 | 719 | 补齐 `.dmesh` 预设创建、项目路径检查、文档与拾取缓存、临时预览、文件替换和统一撤销栈；迁移几何检查器中的源、材质及稳定 ID 修饰器绑定。撤销与重做在历史借用释放后刷新碰撞资源和面板。保存使用 Cove 原子替换。两条生产行标 `written`，一条测试行标 `tested`。Windows 串行定向测试一次通过 8 项，含预览应用及取消回归用例。 |
+
 ## 10. 已知问题与需要用户确认的事项
 
-- **编辑器调用链（批次 352）**：资产浏览器的应用层工作流仍依赖 `Application/Assets/Assets.swift` 与 `Application/Scripting/Scripting.swift` 的重载路径；网格拾取和表面线框仍待网格编辑交互及视口渲染接入。独立模块已迁移，相关调用方仍在清单中待完成。
+- **编辑器调用链（批次 353）**：几何资产编辑与检查器已能通过场景适配器调用，应用启动、网格编辑交互与视口绘制仍待接入。预设创建目前直接调用场景的生成接口，待 `Application/Assets/Assets.swift` 迁移后接回语义标注。迁移的几何测试使用场景适配器和文档工作区验证文件与历史，图形应用端及其他平台尚待验证。资产浏览器仍依赖应用层资产及脚本重载路径。
 
 - **锁文件中的新增传递依赖待确认（2026-11-14）**：工作期间并发提交 `b8278585` 包含 Cove 当前依赖图自动加入的锁文件条目；这些不是本批手动声明的直接第三方依赖，尚未取得 §2 要求的用户确认。新增的第三方包（含版本）为：`addr2line 0.27.1`、`adler2 2.0.1`、`ascii 1.1.0`、`bytemuck 1.25.2`、`byteorder-lite 0.1.0`、`cfg_aliases 0.2.2`、`chunked_transfer 1.5.0`、`cpp_demangle 0.5.1`、`crc32fast 1.5.5`、`ctrlc 3.5.2`、`fallible-iterator 0.3.0`、`fdeflate 0.3.7`、`flate2 1.1.11`、`gimli 0.34.0`、`httpdate 1.0.3`、`image 0.25.10`、`memmap2 0.9.12`、`miniz_oxide 0.8.9/0.9.1`、`moxcms 0.8.1`、`nix 0.31.3`、`object 0.40.0`、`plist 1.10.3`、`png 0.18.1`、`pxfm 0.1.30`、`quick-xml 0.41.0/0.42.0`、`rustc-demangle 0.1.28`、`ruzstd 0.9.1`、`simd-adler32 0.3.10`、`tiny_http 0.12.0`、`twox-hash 2.1.5`、`typed-arena 2.0.2`、`windows-sys 0.59.0`、`windows-targets 0.52.6` 及其各平台架构包、`zlib-rs 0.6.8`、`zune-core 0.5.3`、`zune-jpeg 0.5.15`。另新增四个 Cove 本地包，不属于第三方 crate。不能把锁文件更新视为已获授权；保留并发提交，待确认后再完成依赖门禁。
 - **Android 游戏宿主接线（G2，2026-11-14 复核）**：Cove 已能为 `Game` 注册内容，但注册接口尚不传入游戏所需的设备，也不承接逐帧更新、游戏纹理、按键释放和快照；Diffuse 的 `GameSession` 与静态脚本注册仍须接到该宿主。不得仅凭注册工厂就将 Android 玩家标为完成。

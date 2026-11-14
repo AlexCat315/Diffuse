@@ -29,7 +29,7 @@ type FilesChangedHandler = Arc<dyn Fn() + Send + Sync>;
 /// Workstation documents have independent persistence and execution lifecycles.
 pub struct EditorWorkstation {
     pub scripts: Arc<ScriptWorkspaceModel>,
-    pub documents: EditorDocumentWorkspace,
+    pub documents: Arc<EditorDocumentWorkspace>,
     pub media: EditorMediaWorkspace,
     pub version_control: EditorVersionControl,
     pub tasks: Arc<EditorTasks>,
@@ -52,7 +52,7 @@ impl EditorWorkstation {
         let media = EditorMediaWorkspace::new(&root)?;
         let plugins = StepPlugins::new(plugins);
         Ok(Arc::new_cyclic(|weak: &Weak<EditorWorkstation>| {
-            let documents = EditorDocumentWorkspace::new(&root);
+            let documents = Arc::new(EditorDocumentWorkspace::new(&root));
             // Every domain requests its binding from the same lifecycle owner.
             let version_control = EditorVersionControl::new(&root, plugins.clone());
             let tasks = Arc::new(EditorTasks::new(&root, plugins.clone()));

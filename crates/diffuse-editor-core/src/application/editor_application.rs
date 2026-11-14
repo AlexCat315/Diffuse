@@ -4,8 +4,9 @@
 //! state for one window. Construction and the per-domain behaviour live here and
 //! in the `application/**` extension modules; this file owns the shared fields.
 
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use cove_platform::InputEvent;
 use cove_runtime::PlatformEventBridge;
@@ -27,6 +28,8 @@ use crate::application::diagnostics::subscriptions::EditorSubscriptions;
 use crate::application::plugins::plugin_session::PluginSession;
 use crate::diagnostics::session::EditorDiagnosticSession;
 use crate::editing::viewport::editor_viewport_render_gate::EditorViewportRenderGate;
+use crate::geometry::editor_geometry_authoring::EditorGeometryAuthoring;
+use crate::geometry::editor_mesh_editing::EditorMeshEditing;
 use crate::input::input_state::InputState;
 use crate::scene::adapter::editor_scene_adapter::EditorSceneAdapter;
 use crate::scripting::dynamic::project_script_catalog::ProjectScriptCatalogMonitor;
@@ -38,7 +41,7 @@ pub type ActivatePanelHandler = std::rc::Rc<dyn Fn(&str)>;
 pub struct EditorApplication {
     pub engine: EngineHost,
     pub project_directory: String,
-    pub store: EditorStore,
+    pub store: Rc<EditorStore>,
     pub input_state: RefCell<InputState>,
     pub scene: EditorSceneAdapter,
     /// Canonical editor-facing state for script documents, diagnostics, builds,
@@ -70,6 +73,9 @@ pub struct EditorApplication {
     pub last_render_frame_stats: RefCell<RenderFrameStats>,
     pub is_shutting_down: std::sync::atomic::AtomicBool,
     pub activate_panel_handler: RefCell<Option<ActivatePanelHandler>>,
+    pub(crate) display_invalidation_handler: RefCell<Option<Rc<dyn Fn()>>>,
+    pub(crate) geometry_authoring: OnceCell<Rc<EditorGeometryAuthoring>>,
+    pub(crate) mesh_editing: OnceCell<Rc<EditorMeshEditing>>,
 }
 
 // SAFETY: Swift declares `EditorApplication: @unchecked Sendable`; the editor
@@ -82,6 +88,51 @@ unsafe impl Send for EditorApplication {}
 unsafe impl Sync for EditorApplication {}
 
 impl EditorApplication {
+    pub fn mesh_editing(self: &Rc<Self>) -> &Rc<EditorMeshEditing> {
+        self.mesh_editing.get_or_init(|| {
+            let app = Rc::downgrade(self);
+            EditorMeshEditing::new(
+                Rc::clone(self.geometry_authoring()),
+                self.scene.clone(),
+                Rc::clone(&self.store),
+                Rc::new(move || {
+                    if let Some(app) = app.upgrade() {
+                        app.request_display_refresh();
+                    }
+                }),
+            )
+        })
+    }
+
+    pub fn geometry_authoring(self: &Rc<Self>) -> &Rc<EditorGeometryAuthoring> {
+        self.geometry_authoring.get_or_init(|| {
+            let app = Rc::downgrade(self);
+            EditorGeometryAuthoring::new(
+                self.project_directory.clone().into(),
+                self.scene.clone(),
+                Rc::clone(&self.store),
+                self.workstation.documents.clone(),
+                Rc::new(move || {
+                    if let Some(app) = app.upgrade() {
+                        app.render_gate.replace(EditorViewportRenderGate::new());
+                        app.request_display_refresh();
+                    }
+                }),
+            )
+        })
+    }
+
+    pub fn set_display_invalidation_handler(&self, handler: Option<Rc<dyn Fn()>>) {
+        self.display_invalidation_handler.replace(handler);
+    }
+
+    pub fn request_display_refresh(&self) {
+        let handler = self.display_invalidation_handler.borrow().clone();
+        if let Some(handler) = handler {
+            handler();
+        }
+    }
+
     pub fn is_active(&self) -> bool {
         !self
             .is_shutting_down

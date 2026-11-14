@@ -10,10 +10,15 @@ use diffuse_intent::transactions::mutation_components::SceneComponentKey;
 use diffuse_scene::scene_runtime::SceneRuntime;
 
 type EditAction = Rc<dyn Fn() -> bool>;
+type EditRefresh = Rc<dyn Fn()>;
 
 enum Entry {
     Scene(SceneRuntime),
-    Asset { undo: EditAction, redo: EditAction },
+    Asset {
+        undo: EditAction,
+        redo: EditAction,
+        refresh: EditRefresh,
+    },
 }
 
 pub struct EditorSceneEditHistory {
@@ -162,7 +167,27 @@ impl EditorSceneEditHistory {
         previous
     }
 
-    pub fn undo(&mut self, scene: SceneRuntime) -> Option<SceneRuntime> {
+    pub(crate) fn asset_action(&self, redo: bool) -> Option<(EditAction, EditRefresh)> {
+        let entry = if redo {
+            self.redo_scenes.last()
+        } else {
+            self.undo_scenes.last()
+        }?;
+        match entry {
+            Entry::Scene(_) => None,
+            Entry::Asset {
+                undo,
+                redo: redo_action,
+                refresh,
+            } => Some((
+                (if redo { redo_action } else { undo }).clone(),
+                refresh.clone(),
+            )),
+        }
+    }
+
+    // The adapter runs a file action before completing its history step.
+    pub(crate) fn complete_undo(&mut self, scene: SceneRuntime) -> Option<SceneRuntime> {
         let entry = self.undo_scenes.last()?;
         match entry {
             Entry::Scene(previous) => {
@@ -172,11 +197,7 @@ impl EditorSceneEditHistory {
                 self.current_scene = Some(previous.clone());
                 Some(previous)
             }
-            Entry::Asset { undo, .. } => {
-                let undo = undo.clone();
-                if !undo() {
-                    return None;
-                }
+            Entry::Asset { .. } => {
                 let entry = self.undo_scenes.pop()?;
                 self.redo_scenes.push(entry);
                 Some(self.current_scene.clone().unwrap_or(scene))
@@ -184,7 +205,7 @@ impl EditorSceneEditHistory {
         }
     }
 
-    pub fn redo(&mut self, scene: SceneRuntime) -> Option<SceneRuntime> {
+    pub(crate) fn complete_redo(&mut self, scene: SceneRuntime) -> Option<SceneRuntime> {
         let entry = self.redo_scenes.last()?;
         match entry {
             Entry::Scene(next) => {
@@ -194,11 +215,7 @@ impl EditorSceneEditHistory {
                 self.current_scene = Some(next.clone());
                 Some(next)
             }
-            Entry::Asset { redo, .. } => {
-                let redo = redo.clone();
-                if !redo() {
-                    return None;
-                }
+            Entry::Asset { .. } => {
                 let entry = self.redo_scenes.pop()?;
                 self.undo_scenes.push(entry);
                 Some(self.current_scene.clone().unwrap_or(scene))
@@ -208,8 +225,12 @@ impl EditorSceneEditHistory {
 
     /// File-backed authoring edits share chronological ordering with scene edits.
     /// A failed restore keeps the entry available instead of consuming history.
-    pub fn record_asset_edit(&mut self, undo: EditAction, redo: EditAction) {
-        self.undo_scenes.push(Entry::Asset { undo, redo });
+    pub fn record_asset_edit(&mut self, undo: EditAction, redo: EditAction, refresh: EditRefresh) {
+        self.undo_scenes.push(Entry::Asset {
+            undo,
+            redo,
+            refresh,
+        });
         self.trim_history();
         self.redo_scenes.clear();
     }
