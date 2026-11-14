@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Instant;
 
@@ -20,6 +21,8 @@ use cove_runtime::PlatformEventBridge;
 use diffuse_ai::context::ai_world_context::AIWorldContext;
 use diffuse_ai::context::world_view::WorldView;
 use diffuse_ai::semantic::scene_semantic_encoder::SceneSemanticEncoder;
+use diffuse_ai::session::Session;
+use diffuse_ai::tools::plugin_capability_executor::PluginCapabilityExecutor;
 use diffuse_ai::tools::tool_policy::ToolPolicy;
 use diffuse_assets::asset_registry::AssetRegistryError;
 use diffuse_capability::release::release_phase_gate::ReleasePhaseGate;
@@ -44,7 +47,7 @@ use diffuse_render::surface::viewport_surface::ViewportSurfaceState;
 use diffuse_render::{RenderDrawableSize, RenderSettings};
 
 use crate::ai::chat::edit_log::EditLog;
-use crate::ai::chat::editor_agent_task_service::EditorAgentTaskService;
+use crate::ai::chat::editor_agent_task_service::{EditorAgentExecution, EditorAgentTaskService};
 use crate::ai::chat::editor_ai_settings::{EditorAISettings, EditorCapabilitySettings};
 use crate::ai::plugins::editor_plugin_host_locator::EditorPluginHostLocator;
 use crate::ai::tools::access::EditorToolAccess;
@@ -125,7 +128,19 @@ pub struct EditorApplication {
     pub events: PlatformEventBridge,
     pub subscriptions: EditorSubscriptions,
     pub render_gate: RefCell<EditorViewportRenderGate>,
-    pub agent_task_service: EditorAgentTaskService,
+    pub(crate) agent_task_service: RefCell<EditorAgentTaskService>,
+    /// Agent session backing the AI assistant (Swift `session`).
+    pub(crate) session: RefCell<Option<Arc<Session>>>,
+    /// Tracks the in-flight agent request and its pending proposal.
+    pub(crate) agent_execution: RefCell<EditorAgentExecution>,
+    /// Background task that swaps in a new Session without blocking the main thread.
+    pub(crate) pending_ai_setup_task: RefCell<Option<JoinHandle<()>>>,
+    /// Background task streaming world observations into the active Session.
+    pub(crate) pending_world_observation_task: RefCell<Option<JoinHandle<()>>>,
+    /// Bridges plugin-declared capabilities into the agent runtime.
+    pub(crate) plugin_capability_executor: RefCell<Option<PluginCapabilityExecutor>>,
+    /// Guards project-tool execution while a build is in flight.
+    pub(crate) project_tool_build_in_progress: RefCell<bool>,
     pub edit_log: EditLog,
     pub context_memory_store: Option<ContextMemoryStore>,
     pub project_script_catalog_monitor: ProjectScriptCatalogMonitor,
@@ -424,7 +439,13 @@ impl EditorApplication {
             events: options.events,
             subscriptions: EditorSubscriptions::new(),
             render_gate: RefCell::new(EditorViewportRenderGate::new()),
-            agent_task_service: EditorAgentTaskService::new(),
+            agent_task_service: RefCell::new(EditorAgentTaskService::new()),
+            session: RefCell::new(None),
+            agent_execution: RefCell::new(EditorAgentExecution::new()),
+            pending_ai_setup_task: RefCell::new(None),
+            pending_world_observation_task: RefCell::new(None),
+            plugin_capability_executor: RefCell::new(None),
+            project_tool_build_in_progress: RefCell::new(false),
             context_memory_store,
             diagnostic_session: EditorDiagnosticSession::new(),
             trusted_plugin_host_executable_url: EditorPluginHostLocator::resolve(
