@@ -5958,7 +5958,7 @@
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/rust_analyzer/script_language_incremental_tests.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/SourceKitLSP/ScriptLanguagePositionTests.swift",
@@ -6688,8 +6688,7 @@
       "rust": [
         "crates/diffuse-media/src/decoding/readers.rs"
       ],
-      "reason": "通用 demux/decode 由 cove-media 承担；CFFmpegBridge C 源码与同步解码 API 随 8.1.3 底座删除",
-      "status": "removed"
+      "status": "tested"
     },
     {
       "source": "Engine/Media/Sources/MediaRuntime/Decoding/Values.swift",
@@ -7364,7 +7363,7 @@
       "rust": [
         "crates/diffuse-audio/src/backends/sdl3_audio_backend.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/AudioRuntime/Backends/SilentAudioBackend.swift",
@@ -7386,7 +7385,7 @@
       "rust": [
         "crates/diffuse-audio/src/playback/media_player.rs"
       ],
-      "status": "compiled"
+      "status": "tested"
     },
     {
       "source": "Engine/Sources/CapabilityRuntime/BuiltInCapabilityCatalog.swift",
@@ -11984,7 +11983,7 @@
       "rust": [
         "crates/diffuse-audio/src/tests/audio_runtime/media_playback_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Engine/Tests/CapabilityRuntimeTests/CapabilityRuntimeTests.swift",

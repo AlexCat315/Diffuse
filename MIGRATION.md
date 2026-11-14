@@ -19,6 +19,7 @@
 - **不得修改 `../Cove` 或 `../Natsel`。** 缺什么、坏什么，写进 [.migration/cove-gaps.md](.migration/cove-gaps.md)（格式见该文件），然后按计划的 API 名继续写，在批次报告中标出。
 - 2026-11-04 用户明确授权补齐上游 Natsel API，本批次可修改 `../Natsel` 的 G8 相关实现；Cove 仍只读。
 - 2026-11-11 用户明确授权修复 G11，可修改 `../Cove` 的 `crates/agent/src/schema.rs`（仅该文件）。其余 Cove 代码仍只读。
+- 2026-11-14 用户明确要求实现迁移所需的 Cove 接口；可为这些接口和其验证修改 `../Cove`。`../Natsel` 仍只读；不因此取得新增第三方 crate 的授权。
 - Cove 的 Rust 代码未经完整验证。Diffuse 测试失败时，先判断根因在 Diffuse 还是 Cove；属于 Cove 的写进 gaps，不要在 Diffuse 里绕过。
 
 ## 2. 目标结构
@@ -1168,6 +1169,10 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-13 | 批次 347 | diffuse-editor-core（分析缓存失效测试） | 1 | 105 | `AnalysisCacheTests.swift` → `rust_analyzer/analysis_cache_tests.rs`（5 例通过）：未知/变化环境丢弃生成缓存、匹配环境保留；引擎模块重建使缓存失效；复制工程（`.cove` 搬移）不能复用内嵌旧路径的模块缓存；workspace 或缓存目录为符号链接时同步/准备失败且不写穿目标。D1 改写：`SWIFT_EXEC`→`RUSTC`、`.swiftmodule`→引擎 crate 的 `Cargo.toml`/`src`、`.cove/rust-analyzer` 布局；`ScriptLanguageSupportError::Unavailable` 断言；Windows 无符号链接权限时两个 linked-* 用例自动跳过（Unix CI 实际执行）。`cargo test -p diffuse-editor-core --lib` 353/353 通过；clippy（新文件零告警）、rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
 
 | 2026-11-13 | 批次 348 | diffuse-editor-core（动态脚本工具链测试） | 1 | 19 | `DynamicScriptToolchainTests.swift` → `tests/script_system/dynamic_script_toolchain_tests.rs`（1 例通过）：空环境默认 `rustc`、`COVE_RUSTC_PATH` 选择编译器、显式 override 优先于环境变量、空白值不掩盖默认；D1 改写 `swiftc`/`COVE_SWIFTC_PATH` → `rustc`/`COVE_RUSTC_PATH`；调用 `DynamicScriptManager::resolved_compiler_path`；`cargo test -p diffuse-editor-core --lib dynamic_script_toolchain` 1/1 通过；clippy（新文件零告警）、rustfmt、`inventory.py --check` 通过；1 行标 `tested` |
+
+| 2026-11-14 | 批次 349 | diffuse-editor-core（增量文档同步测试） | 1 | 51 | `ScriptLanguageIncrementalTests.swift` 迁移为 Rust：验证 UTF-16 范围、组合字符和 CRLF 回放，以及 10 万行文档的合并编辑、撤销和无变化；文件 URI 按 D1 改为 `.rs`。定向测试 2/2 通过，rustfmt 和清单检查通过；1 行标 `tested`。当前 Cove 依赖图会触发 Cargo.lock 更新，本批未保留锁文件变化；依赖与编辑器已有警告仍存在。SDL 音频实时增益与变速接口缺口登记为 G12，后端仍待迁移。 |
+
+| 2026-11-14 | 批次 350 | diffuse-audio + diffuse-media（SDL 后端与媒体读取） | 4 | 300 | 根据用户授权补齐 Cove 音频流实时增益、变速和主线程子系统引用管理，迁移 SDL3 后端并接入默认音频引擎；播放器改用 Cove 流。恢复 `AudioFile`、`AudioReader`、`VideoReader` 及原有解码/定位断言，媒体检查直接使用 Cove 已打开的解码流，取消变为可区分错误；修复 Windows 本地路径与导出根目录检查。Cove shell 音频测试 4/4、Diffuse 音频 21/21、媒体 7/7 通过（完整导出测试使用 `--features cove-media/ffmpeg-tools` 构建的 FFmpeg）；`cargo check -p diffuse-media -p diffuse-audio --all-targets` 与 `cargo clippy -p diffuse-media -p diffuse-audio --all-targets --no-deps -- -D warnings` 通过；4 行标 `tested`，包括恢复此前误标 removed 的读取器。Cove 与 Natsel 依赖仍有既有编译警告；Windows 外平台与发布包内 FFmpeg 工具仍须验证。 |
 
 ## 10. 已知问题与需要用户确认的事项
 

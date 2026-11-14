@@ -1,11 +1,7 @@
 //! Locating the FFmpeg command line tools.
 //!
-//! `cove-media` builds FFmpeg 9.x into `OUT_DIR` with `--disable-programs`, so
-//! no CLI is part of that artifact. Diffuse resolves the external tools in this
-//! order: an explicit override, tools shipped beside the executable, then the
-//! system `PATH` (Homebrew's FFmpeg 9.x on macOS). The pinned 8.1.3
-//! `FFmpeg.artifactbundle/<variant>/bin` candidate was removed with the
-//! artifact bundle in batch 85.
+//! Diffuse checks overrides, shipped tools and `PATH`, then asks Cove's resolver
+//! for its configured directory or an optional `ffmpeg-tools` build.
 
 use std::path::{Path, PathBuf};
 
@@ -58,9 +54,19 @@ impl FFmpegTools {
                 candidates.push(entry.join(name));
             }
         }
-        candidates
+        let found = candidates
             .into_iter()
-            .find(|candidate| is_executable_file(candidate))
+            .find(|candidate| is_executable_file(candidate));
+        found
+            .or_else(|| {
+                cove_media::FfmpegTools::discover().ok().map(|tools| {
+                    if name == FFMPEG_NAME {
+                        tools.ffmpeg().to_path_buf()
+                    } else {
+                        tools.ffprobe().to_path_buf()
+                    }
+                })
+            })
             .ok_or_else(|| {
                 MediaError::Export(format!(
                     "{name} is missing. Install FFmpeg 9.x or set {override_variable}."

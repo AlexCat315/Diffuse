@@ -10,6 +10,7 @@ description = "Diffuse media composition and export"
 path = "src/lib.rs"
 
 [dependencies]
+cove-media = { workspace = true, features = ["ffmpeg"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

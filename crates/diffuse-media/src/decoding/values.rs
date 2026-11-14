@@ -61,7 +61,12 @@ impl MediaUrl {
 
     /// `url.lastPathComponent`.
     pub fn last_path_component(&self) -> &str {
-        match self.raw.rfind('/') {
+        let separator = if cfg!(windows) {
+            self.raw.rfind(['/', '\\'])
+        } else {
+            self.raw.rfind('/')
+        };
+        match separator {
             Some(index) => &self.raw[index + 1..],
             None => &self.raw,
         }
@@ -79,6 +84,15 @@ impl MediaUrl {
 
     /// `url.appendingPathComponent(_:)`.
     pub fn appending_path_component(&self, component: &str) -> Self {
+        #[cfg(windows)]
+        if self.is_file_url() {
+            return MediaUrl {
+                raw: std::path::Path::new(&self.raw)
+                    .join(component)
+                    .to_string_lossy()
+                    .into_owned(),
+            };
+        }
         if self.raw.ends_with('/') {
             MediaUrl {
                 raw: format!("{}{}", self.raw, component),
@@ -92,6 +106,18 @@ impl MediaUrl {
 
     /// `url.deletingLastPathComponent()`.
     pub fn deleting_last_path_component(&self) -> Self {
+        #[cfg(windows)]
+        if self.is_file_url() {
+            let path = std::path::Path::new(&self.raw);
+            return MediaUrl {
+                raw: path
+                    .parent()
+                    .filter(|parent| !parent.as_os_str().is_empty())
+                    .unwrap_or_else(|| std::path::Path::new("."))
+                    .to_string_lossy()
+                    .into_owned(),
+            };
+        }
         let trimmed = self.raw.trim_end_matches('/');
         match trimmed.rfind('/') {
             Some(0) => MediaUrl {
@@ -159,32 +185,58 @@ fn scheme(value: &str) -> Option<&str> {
 
 /// Lexical `.`/`..` compaction, keeping a leading root.
 fn standardize(path: &str) -> String {
-    let rooted = path.starts_with('/');
-    let mut components: Vec<&str> = Vec::new();
-    for component in path.split('/') {
-        match component {
-            "" | "." => {}
-            ".." => {
-                if matches!(components.last(), Some(last) if *last != "..") {
-                    components.pop();
-                } else if !rooted {
-                    components.push("..");
+    #[cfg(windows)]
+    {
+        use std::path::{Component, Path, PathBuf};
+        let mut result = PathBuf::new();
+        for component in Path::new(path).components() {
+            match component {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    if result.file_name().is_some_and(|name| name != "..") {
+                        result.pop();
+                    } else if !result.has_root() {
+                        result.push("..");
+                    }
                 }
+                other => result.push(other.as_os_str()),
             }
-            other => components.push(other),
+        }
+        if result.as_os_str().is_empty() {
+            ".".into()
+        } else {
+            result.to_string_lossy().into_owned()
         }
     }
-    let joined = components.join("/");
-    if rooted {
-        format!("/{joined}")
-    } else if joined.is_empty() {
-        ".".to_string()
-    } else {
-        joined
+    #[cfg(not(windows))]
+    {
+        let rooted = path.starts_with('/');
+        let mut components: Vec<&str> = Vec::new();
+        for component in path.split('/') {
+            match component {
+                "" | "." => {}
+                ".." => {
+                    if matches!(components.last(), Some(last) if *last != "..") {
+                        components.pop();
+                    } else if !rooted {
+                        components.push("..");
+                    }
+                }
+                other => components.push(other),
+            }
+        }
+        let joined = components.join("/");
+        if rooted {
+            format!("/{joined}")
+        } else if joined.is_empty() {
+            ".".to_string()
+        } else {
+            joined
+        }
     }
 }
 
-/// `MediaError`: the three failure domains the Swift runtime distinguished.
+/// Media failures, including cancellation which Swift throws separately.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MediaError {
     /// `case invalid(String)` - caller-supplied values that cannot be used.
@@ -196,6 +248,8 @@ pub enum MediaError {
     /// `case export(String)` - the export worker failed.
     #[error("{0}")]
     Export(String),
+    #[error("media input cancelled")]
+    Cancelled,
 }
 
 impl MediaError {
@@ -205,6 +259,7 @@ impl MediaError {
             MediaError::Invalid(text) | MediaError::Decoding(text) | MediaError::Export(text) => {
                 text
             }
+            MediaError::Cancelled => "media input cancelled",
         }
     }
 }
@@ -227,89 +282,44 @@ pub struct MediaAsset {
 impl MediaAsset {
     /// `MediaAsset.inspect(_:)`.
     ///
-    /// The pinned 8.1.3 C bridge opened two decoders (audio-only and
-    /// video-only). FFmpeg 9.x's `ffprobe` reports the same facts in one pass,
-    /// including files carrying just one kind of stream.
+    /// Inspect each kind using its successfully opened decoder, as in Swift.
     pub fn inspect(url: &MediaUrl) -> Result<Self, MediaError> {
-        if !url.is_file_url() {
-            return Err(MediaError::Decoding(format!(
-                "Only local files can be inspected: {}",
-                url.last_path_component()
-            )));
-        }
-        let probe = crate::editing::tools::FFmpegTools::ffprobe()?;
-        let output = std::process::Command::new(&probe)
-            .args([
-                "-v",
-                "error",
-                "-show_format",
-                "-show_streams",
-                "-of",
-                "json",
-            ])
-            .arg(url.path())
-            .output()
-            .map_err(|error| MediaError::Decoding(format!("ffprobe failed: {error}")))?;
-        if !output.status.success() {
+        use cove_media::{DecoderOptions, MediaDecoder, MediaSource};
+
+        let open = |options| {
+            url.is_file_url()
+                .then(|| MediaDecoder::open(MediaSource::file(url.path()), options).ok())
+                .flatten()
+        };
+        let audio = open(DecoderOptions::audio_only());
+        let video = open(DecoderOptions::video_only());
+        let audio_stream = audio.as_ref().and_then(MediaDecoder::audio_stream);
+        let video_stream = video.as_ref().and_then(MediaDecoder::video_stream);
+        if audio_stream.is_none() && video_stream.is_none() {
             return Err(MediaError::Decoding(format!(
                 "No supported media streams: {}",
                 url.last_path_component()
             )));
         }
-        let document: serde_json::Value = serde_json::from_slice(&output.stdout)
-            .map_err(|error| MediaError::Decoding(format!("ffprobe JSON: {error}")))?;
-        let streams: Vec<&serde_json::Value> = document
-            .get("streams")
-            .and_then(serde_json::Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-            .iter()
-            .collect();
-        let video = streams.iter().find(|stream| {
-            stream.get("codec_type").and_then(serde_json::Value::as_str) == Some("video")
-        });
-        let width = video
-            .and_then(|stream| stream.get("width"))
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0) as usize;
-        let height = video
-            .and_then(|stream| stream.get("height"))
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0) as usize;
-        let has_audio = streams.iter().any(|stream| {
-            stream.get("codec_type").and_then(serde_json::Value::as_str) == Some("audio")
-        });
-        if video.is_none() && !has_audio {
-            return Err(MediaError::Decoding(format!(
-                "No supported media streams: {}",
-                url.last_path_component()
-            )));
-        }
-        let duration = number(
-            document
-                .get("format")
-                .and_then(|format| format.get("duration")),
-        )
-        .or_else(|| {
-            streams
-                .iter()
-                .find_map(|stream| number(stream.get("duration")))
-        })
-        .unwrap_or(0.0);
+        let duration = |decoder: Option<&MediaDecoder>, stream: Option<&cove_media::StreamInfo>| {
+            stream
+                .and_then(|stream| stream.duration)
+                .or_else(|| decoder.and_then(|decoder| decoder.info().duration))
+                .map_or(0.0, |duration| duration.seconds())
+        };
+        let dimensions =
+            video
+                .as_ref()
+                .and_then(MediaDecoder::video_dimensions)
+                .map(|(width, height)| MediaAssetVideo {
+                    width: width as usize,
+                    height: height as usize,
+                });
         Ok(MediaAsset {
-            duration,
-            video: (width > 0 && height > 0).then_some(MediaAssetVideo { width, height }),
-            has_audio,
+            duration: duration(audio.as_ref(), audio_stream)
+                .max(duration(video.as_ref(), video_stream)),
+            video: dimensions,
+            has_audio: audio_stream.is_some(),
         })
     }
-}
-
-/// ffprobe emits durations as strings; stream objects sometimes use numbers.
-fn number(value: Option<&serde_json::Value>) -> Option<f64> {
-    value.and_then(|value| {
-        value
-            .as_str()
-            .and_then(|text| text.parse::<f64>().ok())
-            .or_else(|| value.as_f64())
-    })
 }

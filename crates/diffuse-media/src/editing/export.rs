@@ -154,8 +154,9 @@ impl ExportPlan {
                 .appending_path_component(&clip.source)
                 .resolving_symlinks_in_path()
                 .standardized_file_url();
-            let prefix = format!("{}/", root.path());
-            if !url.path().starts_with(&prefix) {
+            let source_path = Path::new(url.path());
+            let root_path = Path::new(root.path());
+            if source_path == root_path || !source_path.starts_with(root_path) {
                 return Err(MediaError::Invalid(
                     "Media source escapes project root".to_string(),
                 ));

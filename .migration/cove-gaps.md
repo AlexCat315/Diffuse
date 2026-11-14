@@ -74,7 +74,14 @@ Format:
 - Cove today: `Shell` owns SDL3 windowing, clipboard and input (`sdl3_shell`, `sdl3_clipboard`) but nothing for audio: no `SDL_InitSubSystem(SDL_INIT_AUDIO)`, no `SDL_OpenAudioDeviceStream`, no stream queue/available queries, no `SDL_ResumeAudioStreamDevice`.
 - Needed: a `cove_shell` audio-device API, i.e. open a default playback stream for an `f32` stereo spec at a requested rate, expose the device's real format (freq/channels/sample format), report queued and available bytes for pacing, accept `put`/`flush`/`resume`, and close on drop. Equivalent of the five SDL calls the Swift sink made.
 - Diffuse meanwhile: `diffuse-audio` implements `AudioBackend` fully (`SilentAudioBackend` today) and takes the trait object; `SDL3AudioBackend` and `MediaPlayer` are translated against the planned API above and stay blocked at their gate until this lands.
-- Status: open
+- Status: fixed in the current Cove checkout (2026-11-14): `Sdl3AudioDevice` serves playback and the SDL backend; subsystem initialization and release are dispatched to SDL's main thread. Cross-platform verification is pending.
+
+## G12: SDL audio streams lack gain and playback-rate controls
+- Needed by: `diffuse-audio` (`Backends/SDL3AudioBackend.swift`).
+- Cove today: `cove_shell::Sdl3AudioDevice` exposes queueing, flushing and device control, but no equivalent of `SDL_SetAudioStreamGain` or `SDL_SetAudioStreamFrequencyRatio`.
+- Needed: stream gain and frequency-ratio setters with SDL's live-stream semantics, including changes to already queued audio.
+- Diffuse meanwhile: the SDL backend remains pending; applying gain or resampling only when feeding samples would change the behavior of queued audio. No upstream code was modified.
+- Status: fixed in the current Cove checkout (2026-11-14): live `set_gain` and `set_frequency_ratio` serve the Diffuse backend's short pan-adjusted queue. Cross-platform verification is pending.
 
 ## G9: process running state is cleared before termination is observed
 - Needed by: `diffuse-script` cancellation and bounded compiler shutdown.
@@ -105,6 +112,7 @@ Format:
 - Cove today: `ffmpeg-sys-next =9.0.1` with the `build` feature clones `release/9.0` into `OUT_DIR` and configures with `--disable-programs`; only static libraries, and the media crate has no encoder/muxer
 - Diffuse meanwhile: batch 85 keeps the export strategy and resolves an external FFmpeg 9.x CLI (`COVE_FFMPEG_EXECUTABLE`/`COVE_FFPROBE_EXECUTABLE`, shipped `Tools`/`Helpers`, then `PATH`); the `cove-media` `ffmpeg` feature is not enabled on any Diffuse crate yet
 - Status: open (export capability needs a Cove API or a permanent external-tool dependency)
+- Update (2026-11-14): `MediaAsset::inspect` uses Cove's in-process decoder and no longer needs `ffprobe`. Cove now has an optional `ffmpeg-tools` build and resolver; Diffuse consults it for export. Packaging the CLI for desktop releases still needs verification.
 
 ## G10: `JsonSchemaValidator` does not evaluate regex patterns
 - Needed by: every capability input carrying a `scene:<number>` reference (`diffuse-intent` typed capabilities, `diffuse-ai` capability drafts and `SceneEditPlanExecutor`)

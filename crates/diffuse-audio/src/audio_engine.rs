@@ -19,6 +19,7 @@ use diffuse_scene::entity_id::EntityID;
 use diffuse_scene::media::audio::{AudioListener, AudioSource};
 
 use crate::audio_backend::{AudioBackend, AudioVoiceID};
+use crate::backends::sdl3_audio_backend::SDL3AudioBackend;
 use crate::backends::silent_audio_backend::SilentAudioBackend;
 
 /// What the engine needs from the scene, in the shape Swift's `SceneRuntime`
@@ -105,7 +106,10 @@ impl AudioEngine {
     /// The best backend this platform offers, matching Swift: SDL3 when the
     /// binding is present, otherwise silence.
     pub fn with_default_backend() -> Self {
-        Self::new(Box::new(SilentAudioBackend::new()))
+        match SDL3AudioBackend::new() {
+            Some(backend) => Self::new(Box::new(backend)),
+            None => Self::new(Box::new(SilentAudioBackend::new())),
+        }
     }
 
     fn state(&self) -> MutexGuard<'_, EngineState> {

@@ -68,6 +68,15 @@ pub struct EditorSceneAdapter {
 }
 
 impl EditorSceneAdapter {
+    /// Uses the built-in component and inspector registries from Swift's defaults.
+    pub fn with_defaults(seed_preview_scene: bool) -> Self {
+        Self::new(
+            seed_preview_scene,
+            ComponentRegistry::built_in(),
+            EditorInspectorRendererRegistry::built_in(),
+        )
+    }
+
     /// Navigation is session state, independent of authored game cameras.
     pub fn default_viewport_camera() -> RenderCamera {
         RenderCamera::new(Float3::new(6.0, 4.0, 8.0), Float3::ZERO)

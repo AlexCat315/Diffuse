@@ -1,15 +1,13 @@
-//! `MediaRuntimeTests` — Swift's `DecodingTests.swift`, re-grounded on the
-//! FFmpeg 9.x command line tools that `cove-media` aligns with.
+//! `MediaRuntimeTests` — Swift's `DecodingTests.swift` with Cove's decoder.
 //!
 //! Fixtures are the same three files the Swift target bundled: `tone.wav`,
 //! `tone.m4a` and `video.mp4`. They are read from `crates/diffuse-media/fixtures`.
-//! The synchronous PCM/frame readers belonged to the removed `CFFmpegBridge`;
-//! their stream-level facts are now asserted through `MediaAsset::inspect`.
 
 use crate::decoding::values::{MediaAsset, MediaError, MediaUrl};
 use crate::editing::composition::{CompositionClip, CompositionVideo, MediaComposition};
 use crate::editing::export::MediaExporter;
 use crate::editing::tools::FFmpegTools;
+use crate::{AudioFile, AudioReader, VideoReader};
 
 /// `private func fixture(_ name: String) -> URL`.
 fn fixture(name: &str) -> MediaUrl {
@@ -19,41 +17,77 @@ fn fixture(name: &str) -> MediaUrl {
     MediaUrl::from_file_path(path.to_string_lossy().into_owned())
 }
 
-/// `pcmResamplingDrainsTailAndEnforcesResidentLimit` — the WAV fixture must
-/// still be recognized as a 0.25 s audio-only asset.
+#[cfg(windows)]
 #[test]
-fn wav_asset_probe_reports_audio_only() {
-    let asset = MediaAsset::inspect(&fixture("tone.wav")).expect("tone.wav inspects");
-    assert!(asset.has_audio);
-    assert!(asset.video.is_none());
-    assert!((asset.duration - 0.25).abs() < 0.01);
-    assert!(
-        MediaAsset::inspect(&fixture("video.mp4"))
-            .expect("video.mp4 inspects")
-            .video
-            .is_some()
+fn windows_paths_preserve_roots_and_normalize_components() {
+    let file = MediaUrl::from_file_path(r"C:\project\media\video.mp4");
+    assert_eq!(file.last_path_component(), "video.mp4");
+    let directory = file.deleting_last_path_component();
+    assert_eq!(directory.path(), r"C:\project\media");
+    assert_eq!(
+        directory.appending_path_component("tone.wav").path(),
+        r"C:\project\media\tone.wav"
+    );
+    assert_eq!(
+        MediaUrl::from_file_path(r"C:\project\media\..\tone.wav")
+            .standardized_file_url()
+            .path(),
+        r"C:\project\tone.wav"
+    );
+    assert_eq!(
+        MediaUrl::from_file_path(r"\\?\C:\project\media\..\tone.wav")
+            .standardized_file_url()
+            .path(),
+        r"\\?\C:\project\tone.wav"
     );
 }
 
-/// `compressedAudioDecodesWithoutAnExternalProcess` — compressed audio must
-/// still probe as audio-only with a usable duration.
 #[test]
-fn compressed_audio_asset_probe_reports_stream_facts() {
+fn pcm_resampling_drains_tail_and_enforces_resident_limit() {
+    let pcm = AudioFile::decode(&fixture("tone.wav")).expect("decode WAV");
+    assert_eq!(pcm.format.channels, 2);
+    assert_eq!(pcm.format.sample_rate, 48_000);
+    assert_eq!(pcm.frames(), 12_000);
+    assert!(pcm.samples.iter().any(|sample| *sample != 0.0));
+    assert!(AudioFile::decode_with_limit(&fixture("tone.wav"), 100).is_err());
+    assert!(AudioFile::decode(&fixture("video.mp4")).is_err());
+}
+
+/// `compressedAudioDecodesWithoutAnExternalProcess`.
+#[test]
+fn compressed_audio_decodes_without_an_external_process() {
     let info = MediaAsset::inspect(&fixture("tone.m4a")).expect("tone.m4a inspects");
     assert!(info.has_audio);
     assert!(info.video.is_none());
-    assert!(info.duration > 0.0);
+    let reader = AudioReader::new(&fixture("tone.m4a")).expect("open audio");
+    let mut frames = 0;
+    while let Some(buffer) = reader.next_buffer().expect("read audio") {
+        frames += buffer.frames();
+    }
+    assert!(frames >= 12_000);
+    reader.seek(0.0).expect("seek audio");
+    assert!(reader.next_buffer().expect("read after seek").is_some());
 }
 
-/// `videoFramesSeekAndResetAfterEOF` — dimensions, duration and the remote-URL
-/// rejection are the parts that survive without the synchronous frame reader.
+/// `videoFramesSeekAndResetAfterEOF`.
 #[test]
-fn video_asset_probe_reports_dimensions_and_duration() {
+fn video_frames_seek_and_reset_after_eof() {
     let asset = MediaAsset::inspect(&fixture("video.mp4")).expect("video.mp4 inspects");
     let video = asset.video.expect("video stream present");
     assert_eq!(video.width, 16);
     assert_eq!(video.height, 16);
     assert!((asset.duration - 1.0).abs() < 0.01);
+    let reader = VideoReader::new(&fixture("video.mp4")).expect("open video");
+    let mut count = 0;
+    while let Some(frame) = reader.next_frame().expect("read frame") {
+        let rgba = frame.rgba_pixels().expect("RGBA pixels");
+        assert_eq!(rgba.len(), 16 * 16 * 4);
+        assert!(rgba[0] > 200 && rgba[1] < 30);
+        count += 1;
+    }
+    assert_eq!(count, 10);
+    let frame = reader.frame_at(0.5).expect("seek frame").expect("frame");
+    assert!((frame.pts.expect("timestamp").seconds() - 0.5).abs() < 0.01);
     // `try MediaAsset.inspect(URL(string: "https://example.com/video.mp4")!)`
     let remote = MediaUrl::parse("https://example.com/video.mp4").expect("URL(string:) parses");
     assert!(MediaAsset::inspect(&remote).is_err());
@@ -138,7 +172,7 @@ fn unique_suffix() -> String {
     format!("{nanos:X}{:X}", COUNTER.fetch_add(1, Ordering::Relaxed))
 }
 
-/// `MediaError` keeps Swift's three cases and their descriptions.
+/// Media errors preserve Swift's cases and their descriptions.
 #[test]
 fn media_error_cases_match_swift() {
     let invalid = MediaError::Invalid("a".to_string());

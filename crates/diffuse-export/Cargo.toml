@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 diffuse-editor-core.workspace = true
 cove-logging.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

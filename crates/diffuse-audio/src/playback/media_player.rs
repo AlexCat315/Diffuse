@@ -13,7 +13,6 @@
 //! [`cove_media::VideoFrame`]. Playback errors stay in the Diffuse domain via
 //! [`diffuse_media::MediaError`].
 
-use std::ffi::{c_int, c_void};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -122,7 +121,7 @@ impl MediaPlayer {
                 .seek(MediaTime::from_seconds(start).map_err(media_error)?)
                 .map_err(media_error)?;
         }
-        let sink = if audio.is_some() {
+        let mut sink = if audio.is_some() {
             Some(PlaybackAudioSink::new()?)
         } else {
             None
@@ -139,7 +138,7 @@ impl MediaPlayer {
             self.check_cancellation()?;
 
             // `if let audio, let sink, !audioEnded` then the 0.2 s queue loop.
-            if !audio_ended && let (Some(audio), Some(sink)) = (&mut audio, &sink) {
+            if !audio_ended && let (Some(audio), Some(sink)) = (&mut audio, &mut sink) {
                 while sink.queued_seconds() < 0.2 && !audio_ended {
                     if let Some(buffer) = audio.next_audio().map_err(media_error)? {
                         // `max(0, Int(((end - start) - submitted) * 48000))`.
@@ -148,13 +147,7 @@ impl MediaPlayer {
                         let remaining_frames =
                             (((end - start) - submitted) * 48000.0).max(0.0) as usize;
                         let frames = buffer.frames().min(remaining_frames);
-                        // `buffer.samples.prefix(frames * 8)`: 8 bytes per
-                        // frame (2 × f32), native-endian like Swift's Data.
-                        let bytes: Vec<u8> = buffer.samples[..frames * 2]
-                            .iter()
-                            .flat_map(|sample| sample.to_ne_bytes())
-                            .collect();
-                        sink.write(&bytes)?;
+                        sink.write(&buffer.samples[..frames * 2])?;
                         submitted += frames as f64 / 48000.0;
                         if frames < buffer.frames() || remaining_frames == 0 {
                             audio_ended = true;
@@ -169,7 +162,7 @@ impl MediaPlayer {
 
             // `if began == nil { try sink?.resume(); began = clock.now }`.
             if began.is_none() {
-                if let Some(sink) = &sink {
+                if let Some(sink) = &mut sink {
                     sink.resume()?;
                 }
                 began = Some(Instant::now());
@@ -266,197 +259,62 @@ fn frame_time(frame: &VideoFrame) -> f64 {
 /// opened, probed, seeked or decoded; `cove-media` reports all of those as
 /// its own `MediaError`, whose message is preserved verbatim.
 fn media_error(error: cove_media::MediaError) -> MediaError {
-    MediaError::Decoding(error.message)
-}
-
-/// `private final class PlaybackAudioSink` — the one SDL3-specific part of
-/// playback. Swift kept `private import CSDL3`; the Rust equivalent keeps the
-/// declarations in this private module so no other file can name an SDL symbol.
-/// The symbols come from the SDL3 static library linked by `cove-shell`'s
-/// build script (see `.migration/cove-gaps.md` G7: no public `cove_shell`
-/// audio-device surface exists yet).
-mod sdl {
-    use std::ffi::{c_int, c_void};
-
-    /// `SDL_AudioSpec` (`format: SDL_AudioFormat`, `channels`, `freq`). A C
-    /// enum is `int`-sized; using `u32` gives the same field offsets and size
-    /// whether the vendored SDL3 declares `SDL_AudioFormat` as 16 or 32 bits.
-    #[repr(C)]
-    #[derive(Clone, Copy, Default)]
-    pub struct SDL_AudioSpec {
-        pub format: u32,
-        pub channels: c_int,
-        pub freq: c_int,
-    }
-
-    /// Opaque `SdlAudioStream *`.
-    pub enum SdlAudioStream {}
-
-    /// `COVE_SDL_INIT_AUDIO` = `SDL_INIT_AUDIO`.
-    pub const SDL_INIT_AUDIO: u32 = 0x0000_0010;
-    /// `COVE_SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK`.
-    pub const SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK: u32 = 0xFFFF_FFFF;
-    /// `SDL_AUDIO_F32` is byte-order dependent (`SDL_AUDIO_F32LE`/`BE`).
-    #[cfg(target_endian = "little")]
-    pub const SDL_AUDIO_F32: u32 = 0x8120;
-    #[cfg(target_endian = "big")]
-    pub const SDL_AUDIO_F32: u32 = 0x9120;
-
-    // SAFETY: every declaration below is a direct SDL3 C API (SDL_init.h,
-    // SDL_audio.h); pointers are validated by the caller before use and the
-    // SDL3 library is linked into the binary by `cove-shell`.
-    unsafe extern "C" {
-        pub fn SDL_InitSubSystem(flags: u32) -> bool;
-        pub fn SDL_QuitSubSystem(flags: u32);
-        pub fn SDL_OpenAudioDeviceStream(
-            devid: u32,
-            spec: *const SDL_AudioSpec,
-            callback: Option<unsafe extern "C" fn()>,
-            userdata: *mut c_void,
-        ) -> *mut SdlAudioStream;
-        pub fn SDL_GetAudioStreamDevice(stream: *mut SdlAudioStream) -> u32;
-        pub fn SDL_GetAudioDeviceFormat(
-            devid: u32,
-            spec: *mut SDL_AudioSpec,
-            sample_frames: *mut c_int,
-        ) -> bool;
-        pub fn SDL_GetAudioStreamQueued(stream: *mut SdlAudioStream) -> c_int;
-        pub fn SDL_GetAudioStreamAvailable(stream: *mut SdlAudioStream) -> c_int;
-        pub fn SDL_PutAudioStreamData(
-            stream: *mut SdlAudioStream,
-            buf: *const c_void,
-            len: c_int,
-        ) -> bool;
-        pub fn SDL_FlushAudioStream(stream: *mut SdlAudioStream) -> bool;
-        pub fn SDL_ResumeAudioStreamDevice(stream: *mut SdlAudioStream) -> bool;
-        pub fn SDL_DestroyAudioStream(stream: *mut SdlAudioStream);
+    if error.kind == cove_media::MediaErrorKind::Cancelled {
+        MediaError::Cancelled
+    } else {
+        MediaError::Decoding(error.message)
     }
 }
 
-/// `private final class PlaybackAudioSink`.
+/// Owns the SDL stream through Cove's platform audio interface.
 struct PlaybackAudioSink {
-    stream: *mut sdl::SdlAudioStream,
+    stream: cove_shell::Sdl3AudioDevice,
     output_bytes_per_second: f64,
+    _audio: cove_shell::Sdl3AudioSubsystem,
 }
 
 impl PlaybackAudioSink {
-    /// `init() throws`.
     fn new() -> Result<Self, MediaError> {
-        // SAFETY: `SDL_INIT_AUDIO` is a valid subsystem flag; the returned
-        // boolean is checked before any other SDL call.
-        let initialized = unsafe { sdl::SDL_InitSubSystem(sdl::SDL_INIT_AUDIO) };
-        if !initialized {
-            return Err(MediaError::Decoding(
-                "Audio device initialization failed".to_string(),
-            ));
-        }
-        let spec = sdl::SDL_AudioSpec {
-            format: sdl::SDL_AUDIO_F32,
-            channels: 2,
-            freq: 48000,
-        };
-        // SAFETY: `spec` is a fully initialized SDL_AudioSpec; a null callback
-        // and userdata open a stream the caller feeds with SDL_PutAudioStreamData.
-        let stream = unsafe {
-            sdl::SDL_OpenAudioDeviceStream(
-                sdl::SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
-                &spec,
-                None,
-                std::ptr::null_mut(),
-            )
-        };
-        if stream.is_null() {
-            // SAFETY: the audio subsystem was initialized above and no stream
-            // was opened, so quitting here balances that initialization.
-            unsafe { sdl::SDL_QuitSubSystem(sdl::SDL_INIT_AUDIO) };
-            return Err(MediaError::Decoding(
-                "Audio output device is unavailable".to_string(),
-            ));
-        }
-        let mut output = sdl::SDL_AudioSpec::default();
-        // SAFETY: `output` is a writable SDL_AudioSpec and the sample-frame
-        // out-parameter may be null. Swift ignores the boolean result.
-        let _ = unsafe {
-            sdl::SDL_GetAudioDeviceFormat(
-                sdl::SDL_GetAudioStreamDevice(stream),
-                &mut output,
-                std::ptr::null_mut(),
-            )
-        };
-        // `Double(max(1, output.freq)) * Double(max(1, output.channels)) *
-        //  Double(max(1, Int(output.format.rawValue & 0xFF) / 8))`.
-        let bytes_per_sample = ((output.format & 0xFF) / 8).max(1);
-        let output_bytes_per_second = (output.freq.max(1) as f64)
-            * (output.channels.max(1) as f64)
-            * (bytes_per_sample as f64);
-        Ok(PlaybackAudioSink {
+        let audio = cove_shell::Sdl3AudioSubsystem::new()
+            .map_err(|_| MediaError::Decoding("Audio device initialization failed".into()))?;
+        let stream =
+            cove_shell::Sdl3AudioDevice::open_default(cove_shell::AudioStreamSpec::stereo(48_000))
+                .map_err(|_| MediaError::Decoding("Audio output device is unavailable".into()))?;
+        let output_bytes_per_second = stream.format().map_or(1.0, |output| {
+            f64::from(output.frequency.max(1))
+                * f64::from(output.channels.max(1))
+                * f64::from(((output.sample_format.raw() & 0xff) / 8).max(1))
+        });
+        Ok(Self {
             stream,
             output_bytes_per_second,
+            _audio: audio,
         })
     }
 
-    /// `var queuedSeconds: Double`.
     fn queued_seconds(&self) -> f64 {
-        // SAFETY: `stream` is the live stream opened in `new`, owned by this
-        // sink until `Drop`; both calls only query its state.
-        let (queued, available) = unsafe {
-            (
-                sdl::SDL_GetAudioStreamQueued(self.stream),
-                sdl::SDL_GetAudioStreamAvailable(self.stream),
-            )
-        };
-        // `Double(max(0, queued)) / (48000 * 8) +
-        //  Double(max(0, available)) / outputBytesPerSecond`.
-        (queued.max(0) as f64) / (48000.0 * 8.0)
-            + (available.max(0) as f64) / self.output_bytes_per_second
+        self.stream.queued_bytes() as f64 / (48_000.0 * 8.0)
+            + self.stream.available_bytes() as f64 / self.output_bytes_per_second
     }
 
-    /// `func write(_ samples: Data) throws`.
-    fn write(&self, samples: &[u8]) -> Result<(), MediaError> {
-        // SAFETY: `samples` is a valid byte slice for the duration of the call;
-        // SDL copies exactly `len` bytes from its base address.
-        let accepted = unsafe {
-            sdl::SDL_PutAudioStreamData(
-                self.stream,
-                samples.as_ptr().cast::<c_void>(),
-                samples.len() as c_int,
-            )
-        };
-        if !accepted {
+    fn write(&mut self, samples: &[f32]) -> Result<(), MediaError> {
+        if samples.is_empty() {
             return Err(MediaError::Decoding(
-                "Audio stream rejected decoded samples".to_string(),
+                "Audio stream rejected decoded samples".into(),
             ));
         }
-        Ok(())
+        self.stream
+            .put(samples)
+            .map_err(|_| MediaError::Decoding("Audio stream rejected decoded samples".into()))
     }
 
-    /// `func flush()` — Swift ignores the result.
-    fn flush(&self) {
-        // SAFETY: `stream` is the live stream opened in `new`.
-        let _ = unsafe { sdl::SDL_FlushAudioStream(self.stream) };
+    fn flush(&mut self) {
+        let _ = self.stream.flush();
     }
 
-    /// `func resume() throws`.
-    fn resume(&self) -> Result<(), MediaError> {
-        // SAFETY: `stream` was opened in `new` in a paused state.
-        let resumed = unsafe { sdl::SDL_ResumeAudioStreamDevice(self.stream) };
-        if !resumed {
-            return Err(MediaError::Decoding(
-                "Audio device failed to resume".to_string(),
-            ));
-        }
-        Ok(())
-    }
-}
-
-impl Drop for PlaybackAudioSink {
-    /// `deinit { SDL_DestroyAudioStream(stream); SDL_QuitSubSystem(...) }`.
-    fn drop(&mut self) {
-        // SAFETY: `stream` was opened in `new` and is destroyed exactly once
-        // here; the audio subsystem initialized there is quit once here.
-        unsafe {
-            sdl::SDL_DestroyAudioStream(self.stream);
-            sdl::SDL_QuitSubSystem(sdl::SDL_INIT_AUDIO);
-        }
+    fn resume(&mut self) -> Result<(), MediaError> {
+        self.stream
+            .resume()
+            .map_err(|_| MediaError::Decoding("Audio device failed to resume".into()))
     }
 }
