@@ -139,7 +139,7 @@
       "rust": [
         "crates/diffuse-export/src/main.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Sources/EditorApp/main.swift",
@@ -812,7 +812,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/assets/editor_asset_file_workflow.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Assets/ProjectRuntimeResources.swift",
@@ -1274,7 +1274,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/geometry/editor_mesh_picker.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Geometry/EditorMeshRendering.swift",
@@ -1296,7 +1296,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/geometry/editor_mesh_surface_overlay.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Geometry/GeometryInspector.swift",
@@ -5180,7 +5180,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_asset_file_workflow_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorAssetReloadTests.swift",
@@ -5632,8 +5632,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_picker_tests.rs"
       ],
-      "status": "blocked",
-      "blocked_by": "P1: mesh picker model is not migrated (scene adapter picking production pending)"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/MeshRenderingTests.swift",

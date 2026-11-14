@@ -26,6 +26,7 @@ Format:
 - Needed: a way to install a `HostedSceneContent` for a launch mode, e.g. `install_scene_content(mode: SceneLaunchMode, factory: fn() -> Box<dyn HostedSceneContent>)`
 - Diffuse meanwhile: translate `CoveAndroidApp` against that planned function and keep the crate `blocked` at `cargo check`
 - Status: open
+- Update (2026-11-14): `install_scene_content` now registers factories for `Game`, but `HostedSceneContent` only supplies a view/checkpoint/typography; it does not expose the RHI device, per-frame drawable size and delta, game surface, held-key events, suspension, or game snapshot required by Diffuse's `GameSession`. Registering a factory alone does not implement the game path. The host and Diffuse game session still need those behaviors connected and tested.
 
 ## G3: `cove-package` cannot bundle helper executables or extra resources
 - Needed by: editor packaging (`DiffusePluginHost` ships beside the editor; `Editor/cove.json` `desktopHelpers`), player export, shader artifacts in `RenderBackend/Resources`

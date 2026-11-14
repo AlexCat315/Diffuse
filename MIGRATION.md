@@ -1174,7 +1174,17 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 | 2026-11-14 | 批次 350 | diffuse-audio + diffuse-media（SDL 后端与媒体读取） | 4 | 300 | 根据用户授权补齐 Cove 音频流实时增益、变速和主线程子系统引用管理，迁移 SDL3 后端并接入默认音频引擎；播放器改用 Cove 流。恢复 `AudioFile`、`AudioReader`、`VideoReader` 及原有解码/定位断言，媒体检查直接使用 Cove 已打开的解码流，取消变为可区分错误；修复 Windows 本地路径与导出根目录检查。Cove shell 音频测试 4/4、Diffuse 音频 21/21、媒体 7/7 通过（完整导出测试使用 `--features cove-media/ffmpeg-tools` 构建的 FFmpeg）；`cargo check -p diffuse-media -p diffuse-audio --all-targets` 与 `cargo clippy -p diffuse-media -p diffuse-audio --all-targets --no-deps -- -D warnings` 通过；4 行标 `tested`，包括恢复此前误标 removed 的读取器。Cove 与 Natsel 依赖仍有既有编译警告；Windows 外平台与发布包内 FFmpeg 工具仍须验证。 |
 
+| 2026-11-14 | 批次 351 | diffuse-export（项目导出入口） | 1 | 38 | 替换空入口：读取场景清单并用默认注册表校验，要求静态脚本，加载工程资产并调用现有导出器，保留参数、默认项目名、输出和 Cove 日志；增加场景适配器的内建注册表构造入口。临时工程验证参数错误、静态模式、输出描述和 `..` 路径标准化；`cargo test -p diffuse-export -- --test-threads=1`、`cargo check -p diffuse-export --all-targets` 与 `cargo clippy -p diffuse-export --all-targets --no-deps -- -D warnings` 通过；1 行标 `tested`。已登记 Android 宿主仍缺逐帧游戏接线的 G2 后续缺口。 |
+
+| 2026-11-14 | 批次 352 | diffuse-editor-core（资产文件工作流、网格拾取与表面线框） | 5 | 625 | 迁移项目内资产移动、依赖复制、引用改写和修复回滚，扫描保留既有 Swift 字符串引用并纳入 D1 的 Rust 脚本，跳过 Cargo `target`。网格拾取复用视口投影与三角形 BVH，保留点选、框选、遮挡、X-Ray、透视边插值及凹面三角化；线框掩码省略内部三角边。3 个生产文件标 `written`。移植的 10 项测试首次通过 9 项，修复 Windows 混合斜杠绝对路径匹配后，失败项单独通过；两个测试文件标 `tested`。本批仅在 Windows 运行定向测试。 |
+
 ## 10. 已知问题与需要用户确认的事项
+
+- **编辑器调用链（批次 352）**：资产浏览器的应用层工作流仍依赖 `Application/Assets/Assets.swift` 与 `Application/Scripting/Scripting.swift` 的重载路径；网格拾取和表面线框仍待网格编辑交互及视口渲染接入。独立模块已迁移，相关调用方仍在清单中待完成。
+
+- **锁文件中的新增传递依赖待确认（2026-11-14）**：工作期间并发提交 `b8278585` 包含 Cove 当前依赖图自动加入的锁文件条目；这些不是本批手动声明的直接第三方依赖，尚未取得 §2 要求的用户确认。新增的第三方包（含版本）为：`addr2line 0.27.1`、`adler2 2.0.1`、`ascii 1.1.0`、`bytemuck 1.25.2`、`byteorder-lite 0.1.0`、`cfg_aliases 0.2.2`、`chunked_transfer 1.5.0`、`cpp_demangle 0.5.1`、`crc32fast 1.5.5`、`ctrlc 3.5.2`、`fallible-iterator 0.3.0`、`fdeflate 0.3.7`、`flate2 1.1.11`、`gimli 0.34.0`、`httpdate 1.0.3`、`image 0.25.10`、`memmap2 0.9.12`、`miniz_oxide 0.8.9/0.9.1`、`moxcms 0.8.1`、`nix 0.31.3`、`object 0.40.0`、`plist 1.10.3`、`png 0.18.1`、`pxfm 0.1.30`、`quick-xml 0.41.0/0.42.0`、`rustc-demangle 0.1.28`、`ruzstd 0.9.1`、`simd-adler32 0.3.10`、`tiny_http 0.12.0`、`twox-hash 2.1.5`、`typed-arena 2.0.2`、`windows-sys 0.59.0`、`windows-targets 0.52.6` 及其各平台架构包、`zlib-rs 0.6.8`、`zune-core 0.5.3`、`zune-jpeg 0.5.15`。另新增四个 Cove 本地包，不属于第三方 crate。不能把锁文件更新视为已获授权；保留并发提交，待确认后再完成依赖门禁。
+- **Android 游戏宿主接线（G2，2026-11-14 复核）**：Cove 已能为 `Game` 注册内容，但注册接口尚不传入游戏所需的设备，也不承接逐帧更新、游戏纹理、按键释放和快照；Diffuse 的 `GameSession` 与静态脚本注册仍须接到该宿主。不得仅凭注册工厂就将 Android 玩家标为完成。
+- **媒体工具交付（2026-11-14）**：本机通过 Cove 的 `ffmpeg-tools` 构建并完成导出测试；常规构建仍可从环境变量或已安装程序定位 FFmpeg，发布包复制工具的路径与 Windows 之外的平台尚待验证。媒体检查本身已不再依赖命令行程序。
 
 - **二进制 plist 解析（`PlayerInstallValidator`）**：`Info.plist` 校验目前只解析项目导出器写出的 XML plist；Swift 的 `PropertyListSerialization` 还能读取二进制 plist。完整支持需要 `plist` crate（workspace 未引入），按 §2 待用户确认；在此之前二进制 plist 视为不可读。
 - **`diffuse-intent` 的 `Edit` 序列化键名与 Swift 不一致（2026-11-11 批次 104 发现，未修）**：Swift 合成的 `CodingKey` 保留属性拼写 `sessionID` / `proposalID` / `sequenceRevisionID` / `originalProposalID`，而 [edit.rs](crates/diffuse-intent/src/planning/edit.rs) 的 `rename_all = "camelCase"` 产出 `sessionId` / `proposalId` / `sequenceRevisionId` / `originalProposalId`。批次 104 的 `edit_log.rs` 已用独立的行级 `Serialize` 保证 `edit_log.jsonl` 的磁盘格式正确，`Edit` 自身的 serde 键名仍待统一（是否只改 diff 结构字段，需先确认没有其他持久化载体依赖现行键名）。

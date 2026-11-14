@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
 use cove_logging::{Level, LogEvent, LogSystem, LoggingConfiguration};
@@ -30,7 +30,16 @@ fn run(arguments: &[OsString]) -> Result<(), Box<dyn Error>> {
             "Usage: CoveProjectExport --project PATH --output PATH --static-scripts".into(),
         );
     };
-    let source = std::path::absolute(Path::new(project))?;
+    let mut source = PathBuf::new();
+    for component in std::path::absolute(Path::new(project))?.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                source.pop();
+            }
+            other => source.push(other.as_os_str()),
+        }
+    }
     let manifest: EditorSceneManifest = serde_json::from_slice(&std::fs::read(
         source.join(".cove").join("editor-scene-manifest.json"),
     )?)?;
@@ -155,5 +164,24 @@ mod tests {
         assert_eq!(descriptor.app_name, "Test Game");
         assert_eq!(descriptor.entity_count, 0);
         assert_eq!(descriptor.asset_count, 0);
+        let default_output = root.join("DefaultOutput");
+        let default_arguments = vec![
+            "diffuse-export".into(),
+            "--project".into(),
+            root.join("missing")
+                .join("..")
+                .join("Project")
+                .into_os_string(),
+            "--output".into(),
+            default_output.clone().into_os_string(),
+            "--static-scripts".into(),
+        ];
+        run(&default_arguments).expect("export with normalized project path");
+        assert_eq!(
+            ProjectExporter::read_descriptor(&default_output)
+                .expect("read descriptor")
+                .app_name,
+            "Project"
+        );
     }
 }
