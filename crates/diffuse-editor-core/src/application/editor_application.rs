@@ -11,6 +11,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
+use std::time::Instant;
 
 use cove_graphics::rhi::Device;
 use cove_logging::{Level, LogEvent, LogSystem, LogValue};
@@ -147,6 +148,9 @@ pub struct EditorApplication {
     pub(crate) script_reload_events: RefCell<Vec<Receiver<SceneScriptReloadEvent>>>,
     pub(crate) script_workspace_events: Receiver<ScriptWorkspaceEvent>,
     pub(crate) project_export: RefCell<Option<ProjectExportJob>>,
+    last_prepared_scene_revision: std::cell::Cell<Option<u64>>,
+    script_catalog_elapsed: std::cell::Cell<f64>,
+    frame_clock: Instant,
 }
 
 // SAFETY: Swift declares `EditorApplication: @unchecked Sendable`; the editor
@@ -161,6 +165,107 @@ unsafe impl Sync for EditorApplication {}
 impl EditorApplication {
     pub fn new(project_directory: String) -> Result<Rc<Self>, EditorApplicationError> {
         Self::with_options(project_directory, EditorApplicationOptions::default())
+    }
+
+    /// Starts the engine and attaches the platform event stream for this window.
+    pub fn bootstrap(self: &Rc<Self>) -> cove_graphics::rhi::RhiResult<()> {
+        if self.engine.is_started() {
+            return Ok(());
+        }
+        self.queue_viewport_render_settings();
+        let renderer = self.engine.prepare_renderer(None, true, &self.last_queued_render_settings.borrow(), |_| ())?;
+        let manager = self.workstation.scripts.manager().clone();
+        self.workstation.tasks.set_test_source(Some(Arc::new(move || {
+            manager.workspace_tests().map_err(|error| error.to_string())
+        })));
+        self.workstation.tasks.follow(&self.workstation.scripts);
+        self.last_prepared_scene_revision.set(None);
+        self.render_gate.replace(EditorViewportRenderGate::new());
+        self.engine.start(None, false, renderer.map(|renderer| Box::new(renderer) as Box<_>));
+        self.engine.set_render_completion_handler(Some(Arc::new(|_| cove_runtime::scene::wake_scene_thread())));
+        let app = Rc::downgrade(self);
+        self.subscriptions.set_events(Some(self.events.subscribe(move |event| {
+            if let Some(app) = app.upgrade() {
+                app.handle_platform_event(event);
+            }
+        })));
+        self.store.dispatch(EditorAction::SetConnected(true));
+        self.request_display_refresh();
+        Ok(())
+    }
+
+    /// Advances one editor frame and publishes the completed engine surface.
+    pub fn tick(self: &Rc<Self>, elapsed: f64) {
+        use crate::editing::viewport::editor_viewport_frame_drive::EditorViewportFrameDrive;
+        use crate::editing::viewport::editor_viewport_render_gate::EditorViewportRenderGateSignature;
+        use crate::state::editor_state::PlaybackState;
+        use crate::state::workspace::editor_workbench_state::EditorViewportMode;
+
+        if !self.is_active() {
+            return;
+        }
+        for record in self.subscriptions.console.take() {
+            self.store.dispatch(EditorAction::AppendLogRecord(record));
+        }
+        self.poll_project_export();
+        self.poll_script_reload();
+        let elapsed = elapsed.max(0.0);
+        let catalog_elapsed = self.script_catalog_elapsed.get() + elapsed;
+        if catalog_elapsed >= 1.0 {
+            self.script_catalog_elapsed.set(0.0);
+            self.reload_project_scripts(false, true);
+        } else {
+            self.script_catalog_elapsed.set(catalog_elapsed);
+        }
+        self.autosave_scene_if_needed(elapsed, false);
+
+        let surface = self.engine.current_viewport_surface_state();
+        if *self.last_viewport_surface_state.borrow() != surface {
+            self.last_viewport_surface_state.replace(surface);
+            self.store.dispatch(EditorAction::ViewportSurfaceUpdated);
+        }
+        if !self.engine.is_started() {
+            return;
+        }
+
+        let next_frame = self.store.frame_index().wrapping_add(1);
+        self.store.dispatch(EditorAction::TickFrame(next_frame));
+        let events = self.pending_viewport_events.take();
+        self.input_state.borrow_mut().process(&events);
+        let playing = self.store.playback_state() == PlaybackState::Playing;
+        let realtime = self.store.viewport_realtime_enabled();
+        let advance = playing || (realtime && self.store.playback_state() == PlaybackState::Stopped);
+        let simulation_delta = if advance { elapsed.min(0.25) } else { 0.0 };
+        self.drive_continuous_viewport_camera(elapsed.min(0.25));
+        let revision = self.scene.revision();
+        if advance || self.last_prepared_scene_revision.get() != Some(revision) {
+            self.scene.tick_scene(simulation_delta, next_frame, events.clone(), playing);
+            self.last_prepared_scene_revision.set(Some(self.scene.revision()));
+        }
+        let presenting = self.store.should_render();
+        let continuous = EditorViewportFrameDrive::wants_continuous_frames(realtime, self.store.playback_state(), self.viewport_interacting(), presenting);
+        let size = self.effective_viewport_drawable_size();
+        let joint_palettes = self.scene.current_joint_palette_map();
+        let overlays = self.make_geometry_overlays(size);
+        let render = self.render_gate.borrow_mut().should_render(
+            EditorViewportRenderGateSignature::with_overlays(self.scene.revision(), self.scene.current_render_camera(), size, *self.render_settings_generation.borrow(), joint_palettes.clone(), overlays.clone()),
+            continuous, !events.is_empty(), self.last_queued_render_settings.borrow().post_processing.taa,
+            presenting, self.frame_clock.elapsed().as_secs_f64(),
+        );
+        if advance || render {
+            let mut render_scene = self.scene.current_render_scene();
+            render_scene.geometry_overlays = overlays;
+            let game = self.store.viewport_mode() == EditorViewportMode::Game;
+            self.engine.tick(simulation_delta, events, size, render, Some(render_scene),
+                Some(self.scene.current_scene_snapshot()), Some(joint_palettes),
+                Some(if game && self.store.game_preview_hud_enabled() { self.scene.current_in_game_canvas() } else { Default::default() }),
+                Some(self.scene.make_particle_simulation_feedback_handler()),
+                game && self.store.game_preview_resolution().size().is_some(),
+            );
+        }
+        if continuous {
+            self.request_display_refresh();
+        }
     }
 
     pub fn with_options(
@@ -341,6 +446,9 @@ impl EditorApplication {
             script_reload_events: RefCell::default(),
             script_workspace_events,
             project_export: RefCell::default(),
+            last_prepared_scene_revision: std::cell::Cell::new(None),
+            script_catalog_elapsed: std::cell::Cell::new(0.0),
+            frame_clock: Instant::now(),
         });
         if let Some(detail) = context_memory_warning {
             app.log_warning("Recovered AI context memory storage", detail);
