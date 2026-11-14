@@ -8,7 +8,9 @@ use cove_platform::KeyModifiers;
 use cove_ui_compose::scene_core::Rect;
 use diffuse_assets::asset_registry::ImportableAssetKind;
 use diffuse_assets::geometry::geometry_document::GeometrySource;
-use diffuse_assets::geometry::polygon_mesh::{GeometryError, GeometryLimits, PolygonMesh, PolygonMeshEdge};
+use diffuse_assets::geometry::polygon_mesh::{
+    GeometryError, GeometryLimits, PolygonMesh, PolygonMeshEdge,
+};
 use diffuse_math::simd::simd_compat::{Float2, Float3, Float4x4, simd_cross, simd_length};
 
 use crate::editing::editor_gizmo_controller::EditorGizmoController;
@@ -59,22 +61,34 @@ impl EditorMeshEditing {
         invalidate_display: Rc<dyn Fn()>,
     ) -> Rc<Self> {
         let editing = Rc::new(Self {
-            authoring, scene, store, invalidate_display,
-            entity_id: Cell::new(None), mode: Cell::new(EditorMeshSelectionMode::Object),
-            selection: RefCell::default(), xray: Cell::new(false),
+            authoring,
+            scene,
+            store,
+            invalidate_display,
+            entity_id: Cell::new(None),
+            mode: Cell::new(EditorMeshSelectionMode::Object),
+            selection: RefCell::default(),
+            xray: Cell::new(false),
             shows_evaluated_wireframe: Cell::new(true),
             extrusion_distance: Cell::new(0.25),
             extrusion_direction: Cell::new(EditorMeshExtrusionDirection::Normal),
-            pointer: RefCell::default(), topology: RefCell::default(), vertex_count: Cell::new(0),
-            cached_picker: RefCell::default(), transform_vertices: RefCell::default(),
-            inset_faces: RefCell::default(), loop_cut: RefCell::default(),
-            inset_distance: Cell::new(0.1), inset_preview_valid: Cell::new(false),
+            pointer: RefCell::default(),
+            topology: RefCell::default(),
+            vertex_count: Cell::new(0),
+            cached_picker: RefCell::default(),
+            transform_vertices: RefCell::default(),
+            inset_faces: RefCell::default(),
+            loop_cut: RefCell::default(),
+            inset_distance: Cell::new(0.1),
+            inset_preview_valid: Cell::new(false),
         });
         let weak = Rc::downgrade(&editing);
         let mut provider = editing.scene.additional_inspector_sections.borrow_mut();
         let previous = provider.take();
         *provider = Some(Rc::new(move |entity| {
-            let mut sections = previous.as_ref().map_or_else(Vec::new, |provider| provider(entity));
+            let mut sections = previous
+                .as_ref()
+                .map_or_else(Vec::new, |provider| provider(entity));
             if let Some(editing) = weak.upgrade() {
                 sections.extend(editing.inspector_sections(entity));
             }
@@ -84,36 +98,61 @@ impl EditorMeshEditing {
         editing
     }
 
-    pub fn entity_id(&self) -> Option<u64> { self.entity_id.get() }
-    pub fn mode(&self) -> EditorMeshSelectionMode { self.mode.get() }
-    pub fn selection(&self) -> BTreeSet<usize> { self.selection.borrow().clone() }
-    pub fn xray(&self) -> bool { self.xray.get() }
-    pub fn shows_evaluated_wireframe(&self) -> bool { self.shows_evaluated_wireframe.get() }
+    pub fn entity_id(&self) -> Option<u64> {
+        self.entity_id.get()
+    }
+    pub fn mode(&self) -> EditorMeshSelectionMode {
+        self.mode.get()
+    }
+    pub fn selection(&self) -> BTreeSet<usize> {
+        self.selection.borrow().clone()
+    }
+    pub fn xray(&self) -> bool {
+        self.xray.get()
+    }
+    pub fn shows_evaluated_wireframe(&self) -> bool {
+        self.shows_evaluated_wireframe.get()
+    }
     pub fn is_editing(&self) -> bool {
         self.entity_id().is_some() && self.mode() != EditorMeshSelectionMode::Object
     }
-    pub fn is_transforming(&self) -> bool { self.transform_vertices.borrow().is_some() }
-    pub fn has_topology_preview(&self) -> bool { self.is_insetting() || self.is_loop_cutting() }
-    pub fn has_interactive_edit(&self) -> bool { self.is_transforming() || self.has_topology_preview() }
+    pub fn is_transforming(&self) -> bool {
+        self.transform_vertices.borrow().is_some()
+    }
+    pub fn has_topology_preview(&self) -> bool {
+        self.is_insetting() || self.is_loop_cutting()
+    }
+    pub fn has_interactive_edit(&self) -> bool {
+        self.is_transforming() || self.has_topology_preview()
+    }
 
     fn editable_selection(&self) -> Option<u64> {
         let id = self.store.selected_entity_id()?;
         (self.store.playback_state() == PlaybackState::Stopped
             && self.scene.is_authoring_enabled()
             && !self.scene.is_entity_locked(id)
-            && self.scene.referenced_asset(id).is_some_and(|asset| asset.kind == ImportableAssetKind::Dmesh))
-            .then_some(id)
+            && self
+                .scene
+                .referenced_asset(id)
+                .is_some_and(|asset| asset.kind == ImportableAssetKind::Dmesh))
+        .then_some(id)
     }
 
-    pub fn can_enter(&self) -> bool { self.editable_selection().is_some() }
+    pub fn can_enter(&self) -> bool {
+        self.editable_selection().is_some()
+    }
 
     pub fn set_mode(&self, mode: EditorMeshSelectionMode) -> bool {
         if mode == EditorMeshSelectionMode::Object {
             self.leave();
             return true;
         }
-        let Some(id) = self.editable_selection() else { return false };
-        if self.entity_id() == Some(id) && self.mode() == mode { return true; }
+        let Some(id) = self.editable_selection() else {
+            return false;
+        };
+        if self.entity_id() == Some(id) && self.mode() == mode {
+            return true;
+        }
         self.cancel_interactive_edit();
         if (self.entity_id() != Some(id) || !self.is_editing())
             && !self.authoring.edit(id, |document| {
@@ -130,20 +169,30 @@ impl EditorMeshEditing {
         self.entity_id.set(Some(id));
         self.mode.set(mode);
         self.selection.borrow_mut().clear();
-        if let Some(mesh) = self.control_mesh() { self.remember_topology(&mesh); }
+        if let Some(mesh) = self.control_mesh() {
+            self.remember_topology(&mesh);
+        }
         self.refresh();
         true
     }
 
     pub fn synchronize(&self) {
-        if !self.is_editing() { return; }
-        let mesh = (self.editable_selection() == self.entity_id()).then(|| self.control_mesh()).flatten();
+        if !self.is_editing() {
+            return;
+        }
+        let mesh = (self.editable_selection() == self.entity_id())
+            .then(|| self.control_mesh())
+            .flatten();
         let Some(mesh) = mesh else {
             self.leave();
             return;
         };
         let topology_changed = self.vertex_count.get() != mesh.positions.len()
-            || !self.topology.borrow().iter().eq(mesh.faces.iter().map(|face| &face.vertices));
+            || !self
+                .topology
+                .borrow()
+                .iter()
+                .eq(mesh.faces.iter().map(|face| &face.vertices));
         if !self.has_topology_preview() && topology_changed {
             self.cancel_transform();
             self.selection.borrow_mut().clear();
@@ -166,22 +215,40 @@ impl EditorMeshEditing {
         self.refresh();
     }
 
-    pub fn set_xray(&self, enabled: bool) { self.xray.set(enabled); self.refresh(); }
-    pub fn set_evaluated_wireframe(&self, enabled: bool) { self.shows_evaluated_wireframe.set(enabled); self.refresh(); }
+    pub fn set_xray(&self, enabled: bool) {
+        self.xray.set(enabled);
+        self.refresh();
+    }
+    pub fn set_evaluated_wireframe(&self, enabled: bool) {
+        self.shows_evaluated_wireframe.set(enabled);
+        self.refresh();
+    }
 
     pub fn has_modifiers(&self) -> bool {
-        self.entity_id().and_then(|id| self.authoring.document(id).ok().flatten())
+        self.entity_id()
+            .and_then(|id| self.authoring.document(id).ok().flatten())
             .is_some_and(|doc| doc.modifiers.iter().any(|entry| entry.enabled))
     }
 
     pub fn apply_modifiers(&self) -> bool {
         self.synchronize();
-        let Some(id) = self.entity_id().filter(|_| !self.has_interactive_edit()) else { return false };
-        let Some(last) = self.authoring.document(id).ok().flatten().and_then(|mut doc| doc.modifiers.pop()) else {
+        let Some(id) = self.entity_id().filter(|_| !self.has_interactive_edit()) else {
+            return false;
+        };
+        let Some(last) = self
+            .authoring
+            .document(id)
+            .ok()
+            .flatten()
+            .and_then(|mut doc| doc.modifiers.pop())
+        else {
             return false;
         };
         let success = self.authoring.apply_modifier(&last.id, id);
-        if success { self.synchronize(); self.refresh(); }
+        if success {
+            self.synchronize();
+            self.refresh();
+        }
         success
     }
 
@@ -208,10 +275,11 @@ impl EditorMeshEditing {
     }
 
     pub fn dissolve_selection(&self) -> bool {
-        self.mode() == EditorMeshSelectionMode::Edge && self.edit_components(|mesh, _, indices| {
-            mesh.dissolve(&selected_edges(mesh, indices)?, GeometryLimits::default())?;
-            Ok(BTreeSet::new())
-        })
+        self.mode() == EditorMeshSelectionMode::Edge
+            && self.edit_components(|mesh, _, indices| {
+                mesh.dissolve(&selected_edges(mesh, indices)?, GeometryLimits::default())?;
+                Ok(BTreeSet::new())
+            })
     }
 
     fn edit_faces(
@@ -224,12 +292,20 @@ impl EditorMeshEditing {
 
     fn edit_components(
         &self,
-        update: impl FnOnce(&mut PolygonMesh, EditorMeshSelectionMode, &BTreeSet<i64>) -> Result<BTreeSet<i64>, GeometryError>,
+        update: impl FnOnce(
+            &mut PolygonMesh,
+            EditorMeshSelectionMode,
+            &BTreeSet<i64>,
+        ) -> Result<BTreeSet<i64>, GeometryError>,
     ) -> bool {
         self.synchronize();
-        let Some(id) = self.entity_id().filter(|_| !self.has_interactive_edit()) else { return false };
+        let Some(id) = self.entity_id().filter(|_| !self.has_interactive_edit()) else {
+            return false;
+        };
         let selection = self.signed_selection();
-        if selection.is_empty() { return false; }
+        if selection.is_empty() {
+            return false;
+        }
         let mode = self.mode();
         let mut next = BTreeSet::new();
         let success = self.authoring.edit(id, |doc| {
@@ -240,7 +316,8 @@ impl EditorMeshEditing {
         });
         if success && let Some(mesh) = self.control_mesh() {
             self.remember_topology(&mesh);
-            self.selection.replace(next.into_iter().map(|index| index as usize).collect());
+            self.selection
+                .replace(next.into_iter().map(|index| index as usize).collect());
             self.refresh();
         }
         success
@@ -248,13 +325,19 @@ impl EditorMeshEditing {
 
     pub fn select(&self, indices: BTreeSet<usize>, extending: bool, toggling: bool) {
         self.synchronize();
-        let Some(count) = self.selectable_count() else { return };
+        let Some(count) = self.selectable_count() else {
+            return;
+        };
         let valid: BTreeSet<_> = indices.into_iter().filter(|&index| index < count).collect();
         {
             let mut selection = self.selection.borrow_mut();
-            if toggling { *selection = selection.symmetric_difference(&valid).copied().collect(); }
-            else if extending { selection.extend(valid); }
-            else { *selection = valid; }
+            if toggling {
+                *selection = selection.symmetric_difference(&valid).copied().collect();
+            } else if extending {
+                selection.extend(valid);
+            } else {
+                *selection = valid;
+            }
         }
         self.refresh();
     }
@@ -272,14 +355,18 @@ impl EditorMeshEditing {
         if let Some(count) = self.selectable_count() {
             {
                 let mut selection = self.selection.borrow_mut();
-                *selection = (0..count).filter(|index| !selection.contains(index)).collect();
+                *selection = (0..count)
+                    .filter(|index| !selection.contains(index))
+                    .collect();
             }
             self.refresh();
         }
     }
 
     fn selectable_count(&self) -> Option<usize> {
-        if !self.is_editing() || self.has_interactive_edit() { return None; }
+        if !self.is_editing() || self.has_interactive_edit() {
+            return None;
+        }
         let picker = self.picker()?;
         match self.mode() {
             EditorMeshSelectionMode::Object => None,
@@ -301,23 +388,43 @@ impl EditorMeshEditing {
         let mesh = self.control_mesh()?;
         let world = self.scene.entity_world_matrix(entity)?;
         if let Some(cache) = &*self.cached_picker.borrow()
-            && cache.entity == entity && cache.world == world && cache.picker.mesh == mesh
+            && cache.entity == entity
+            && cache.world == world
+            && cache.picker.mesh == mesh
         {
             return Some(Rc::clone(&cache.picker));
         }
         let picker = self.authoring.make_picker(entity, mesh, world)?;
-        self.cached_picker.replace(Some(CachedPicker { entity, world, picker: Rc::clone(&picker) }));
+        self.cached_picker.replace(Some(CachedPicker {
+            entity,
+            world,
+            picker: Rc::clone(&picker),
+        }));
         Some(picker)
     }
 
     pub fn selected_vertices(&self) -> BTreeSet<i64> {
-        let Some(picker) = self.picker() else { return BTreeSet::new() };
+        let Some(picker) = self.picker() else {
+            return BTreeSet::new();
+        };
         let selection = self.selection.borrow();
         match self.mode() {
             EditorMeshSelectionMode::Object => BTreeSet::new(),
-            EditorMeshSelectionMode::Vertex => selection.iter().filter(|&&index| index < picker.positions.len()).map(|&index| index as i64).collect(),
-            EditorMeshSelectionMode::Edge => selection.iter().filter_map(|&index| picker.edges.get(index)).flat_map(|edge| [edge.a, edge.b]).collect(),
-            EditorMeshSelectionMode::Face => selection.iter().filter_map(|&index| picker.mesh.faces.get(index)).flat_map(|face| face.vertices.iter().copied()).collect(),
+            EditorMeshSelectionMode::Vertex => selection
+                .iter()
+                .filter(|&&index| index < picker.positions.len())
+                .map(|&index| index as i64)
+                .collect(),
+            EditorMeshSelectionMode::Edge => selection
+                .iter()
+                .filter_map(|&index| picker.edges.get(index))
+                .flat_map(|edge| [edge.a, edge.b])
+                .collect(),
+            EditorMeshSelectionMode::Face => selection
+                .iter()
+                .filter_map(|&index| picker.mesh.faces.get(index))
+                .flat_map(|face| face.vertices.iter().copied())
+                .collect(),
         }
     }
 
@@ -325,15 +432,21 @@ impl EditorMeshEditing {
         let mesh = self.control_mesh()?;
         let vertices = self.selected_vertices();
         let count = vertices.len() as f32;
-        (!vertices.is_empty()).then(|| vertices.iter().fold(Float3::ZERO, |sum, &index| {
-            sum + mesh.positions[index as usize] / count
-        }))
+        (!vertices.is_empty()).then(|| {
+            vertices.iter().fold(Float3::ZERO, |sum, &index| {
+                sum + mesh.positions[index as usize] / count
+            })
+        })
     }
 
     pub fn move_selection_center(&self, position: Float3) -> bool {
         self.synchronize();
-        let Some(id) = self.entity_id().filter(|_| !self.has_interactive_edit()) else { return false };
-        let Some(center) = self.selection_center() else { return false };
+        let Some(id) = self.entity_id().filter(|_| !self.has_interactive_edit()) else {
+            return false;
+        };
+        let Some(center) = self.selection_center() else {
+            return false;
+        };
         let vertices = self.selected_vertices();
         self.authoring.edit(id, |doc| {
             if let GeometrySource::Polygon { mesh } = &mut doc.source {
@@ -346,26 +459,46 @@ impl EditorMeshEditing {
     pub fn extrude_region(&self) -> bool {
         use EditorMeshExtrusionDirection::{Normal, X, Y, Z};
         self.synchronize();
-        let Some(id) = self.entity_id().filter(|_| !self.has_interactive_edit() && self.mode() == EditorMeshSelectionMode::Face) else { return false };
+        let Some(id) = self.entity_id().filter(|_| {
+            !self.has_interactive_edit() && self.mode() == EditorMeshSelectionMode::Face
+        }) else {
+            return false;
+        };
         let selection = self.signed_selection();
         let distance = self.extrusion_distance.get();
-        if selection.is_empty() || !distance.is_finite() || distance == 0.0 { return false; }
+        if selection.is_empty() || !distance.is_finite() || distance == 0.0 {
+            return false;
+        }
         let direction = match self.extrusion_direction.get() {
             X => Float3::new(1.0, 0.0, 0.0),
             Y => Float3::new(0.0, 1.0, 0.0),
             Z => Float3::new(0.0, 0.0, 1.0),
             Normal => {
-                let Some(mesh) = self.control_mesh() else { return false };
+                let Some(mesh) = self.control_mesh() else {
+                    return false;
+                };
                 let mut normal = Float3::ZERO;
-                for face in selection.iter().filter_map(|&index| mesh.faces.get(index as usize)) {
+                for face in selection
+                    .iter()
+                    .filter_map(|&index| mesh.faces.get(index as usize))
+                {
                     let origin = mesh.positions[face.vertices[0] as usize];
-                    for (a, b) in face.vertices.iter().zip(face.vertices.iter().cycle().skip(1)) {
-                        normal += simd_cross(mesh.positions[*a as usize] - origin, mesh.positions[*b as usize] - origin);
+                    for (a, b) in face
+                        .vertices
+                        .iter()
+                        .zip(face.vertices.iter().cycle().skip(1))
+                    {
+                        normal += simd_cross(
+                            mesh.positions[*a as usize] - origin,
+                            mesh.positions[*b as usize] - origin,
+                        );
                     }
                 }
                 let length = simd_length(normal);
                 if !length.is_finite() || length <= 1e-8 {
-                    self.store.dispatch(EditorAction::console_message("Choose an extrusion axis for a selection without a common normal"));
+                    self.store.dispatch(EditorAction::console_message(
+                        "Choose an extrusion axis for a selection without a common normal",
+                    ));
                     return false;
                 }
                 normal / length
@@ -386,15 +519,24 @@ impl EditorMeshEditing {
 
     pub fn begin_transform(&self) -> bool {
         self.synchronize();
-        let Some(id) = self.entity_id().filter(|_| self.is_editing() && !self.has_interactive_edit()) else { return false };
+        let Some(id) = self
+            .entity_id()
+            .filter(|_| self.is_editing() && !self.has_interactive_edit())
+        else {
+            return false;
+        };
         let vertices = self.selected_vertices();
-        if vertices.is_empty() || !self.authoring.begin_interactive_edit(id) { return false; }
+        if vertices.is_empty() || !self.authoring.begin_interactive_edit(id) {
+            return false;
+        }
         self.transform_vertices.replace(Some(vertices));
         true
     }
 
     pub fn preview_transform(&self, delta: Float4x4) -> bool {
-        let Some(vertices) = self.transform_vertices.borrow().clone() else { return false };
+        let Some(vertices) = self.transform_vertices.borrow().clone() else {
+            return false;
+        };
         self.authoring.preview_interactive_edit(|document| {
             if let GeometrySource::Polygon { mesh } = &mut document.source {
                 mesh.transform(&vertices, delta, GeometryLimits::default())?;
@@ -408,24 +550,37 @@ impl EditorMeshEditing {
     }
 
     pub fn cancel_transform(&self) -> bool {
-        if !self.clear_transform() { return false; }
+        if !self.clear_transform() {
+            return false;
+        }
         self.authoring.cancel_interactive_edit();
         true
     }
 
     fn clear_transform(&self) -> bool {
-        if self.transform_vertices.borrow_mut().take().is_none() { return false; }
+        if self.transform_vertices.borrow_mut().take().is_none() {
+            return false;
+        }
         EditorGizmoController::shared().clear_drag();
         self.pointer.borrow_mut().clear();
         true
     }
 
     pub(super) fn signed_selection(&self) -> BTreeSet<i64> {
-        self.selection.borrow().iter().map(|&index| index as i64).collect()
+        self.selection
+            .borrow()
+            .iter()
+            .map(|&index| index as i64)
+            .collect()
     }
 
     pub(super) fn remember_topology(&self, mesh: &PolygonMesh) {
-        self.topology.replace(mesh.faces.iter().map(|face| face.vertices.clone()).collect());
+        self.topology.replace(
+            mesh.faces
+                .iter()
+                .map(|face| face.vertices.clone())
+                .collect(),
+        );
         self.vertex_count.set(mesh.positions.len());
     }
 
@@ -436,17 +591,29 @@ impl EditorMeshEditing {
 
     pub(super) fn report_error(&self, message: &str, detail: Option<String>) {
         self.store.dispatch(EditorAction::AppendConsoleMessage {
-            message: message.into(), severity: EditorConsoleSeverity::Error,
-            detail, target: None, next_step: None,
+            message: message.into(),
+            severity: EditorConsoleSeverity::Error,
+            detail,
+            target: None,
+            next_step: None,
         });
     }
 }
 
-fn selected_edges(mesh: &PolygonMesh, indices: &BTreeSet<i64>) -> Result<BTreeSet<PolygonMeshEdge>, GeometryError> {
+fn selected_edges(
+    mesh: &PolygonMesh,
+    indices: &BTreeSet<i64>,
+) -> Result<BTreeSet<PolygonMeshEdge>, GeometryError> {
     let edges = mesh.edges();
-    indices.iter().map(|&index| {
-        edges.get(index as usize).copied().ok_or_else(|| GeometryError::invalid_parameter("edge selection"))
-    }).collect()
+    indices
+        .iter()
+        .map(|&index| {
+            edges
+                .get(index as usize)
+                .copied()
+                .ok_or_else(|| GeometryError::invalid_parameter("edge selection"))
+        })
+        .collect()
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -462,7 +629,12 @@ impl EditorMeshExtrusionDirection {
     pub const ALL: [Self; 4] = [Self::Normal, Self::X, Self::Y, Self::Z];
 
     pub fn raw_value(self) -> &'static str {
-        match self { Self::Normal => "normal", Self::X => "x", Self::Y => "y", Self::Z => "z" }
+        match self {
+            Self::Normal => "normal",
+            Self::X => "x",
+            Self::Y => "y",
+            Self::Z => "z",
+        }
     }
 }
 
@@ -477,5 +649,7 @@ pub struct EditorMeshPointerSession {
 }
 
 impl EditorMeshPointerSession {
-    pub fn clear(&mut self) { *self = Self::default(); }
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
 }

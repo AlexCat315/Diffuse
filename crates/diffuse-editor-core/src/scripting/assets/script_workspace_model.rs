@@ -414,6 +414,10 @@ pub struct ScriptWorkspaceModel {
 }
 
 impl ScriptWorkspaceModel {
+    pub(crate) fn manager(&self) -> &Arc<DynamicScriptManager> {
+        &self.manager
+    }
+
     /// Swift `init(manager:onScriptLoaded:onScriptDeleted:onBuildFailed:) throws`
     /// with its three `= nil` handler defaults.
     pub fn new(manager: Arc<DynamicScriptManager>) -> Result<Arc<Self>, DynamicScriptManagerError> {

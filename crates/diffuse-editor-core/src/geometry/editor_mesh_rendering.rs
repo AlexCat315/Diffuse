@@ -19,7 +19,9 @@ use super::editor_mesh_picker::{EditorMeshPicker, EditorMeshSelectionMode};
 
 impl EditorMeshEditing {
     pub fn render_overlay(&self, viewport: Float2) -> Option<RenderGeometryOverlay> {
-        if !self.is_editing() { return None; }
+        if !self.is_editing() {
+            return None;
+        }
         let picker = self.picker()?;
         let active = Float4::new(1.0, 0.58, 0.12, 1.0);
         let inactive = Float4::new(0.65, 0.72, 0.8, 0.85);
@@ -30,43 +32,77 @@ impl EditorMeshEditing {
         let mut edges = BTreeSet::new();
         match mode {
             EditorMeshSelectionMode::Face => {
-                for face in selection.iter().filter_map(|&index| picker.mesh.faces.get(index)) {
-                    edges.extend(face.vertices.iter().zip(face.vertices.iter().cycle().skip(1))
-                        .map(|(&a, &b)| PolygonMeshEdge::new(a, b)));
+                for face in selection
+                    .iter()
+                    .filter_map(|&index| picker.mesh.faces.get(index))
+                {
+                    edges.extend(
+                        face.vertices
+                            .iter()
+                            .zip(face.vertices.iter().cycle().skip(1))
+                            .map(|(&a, &b)| PolygonMeshEdge::new(a, b)),
+                    );
                 }
             }
-            EditorMeshSelectionMode::Edge => edges.extend(selection.iter().filter_map(|&index| picker.edges.get(index)).copied()),
+            EditorMeshSelectionMode::Edge => edges.extend(
+                selection
+                    .iter()
+                    .filter_map(|&index| picker.edges.get(index))
+                    .copied(),
+            ),
             _ => {}
         }
-        Some(picker.surface_overlay(viewport, xray, |face| {
-            if mode == EditorMeshSelectionMode::Face && selection.contains(&face) {
-                Float4::new(1.0, 0.48, 0.08, if xray { 0.16 } else { 0.27 })
-            } else {
-                Float4::ZERO
-            }
-        }, |edge| {
-            let selected = if mode == EditorMeshSelectionMode::Vertex {
-                vertices.contains(&edge.a) && vertices.contains(&edge.b)
-            } else {
-                edges.contains(&edge)
-            };
-            Some(if selected { (active, 2.0) } else { (inactive, 1.0) })
-        }))
+        Some(picker.surface_overlay(
+            viewport,
+            xray,
+            |face| {
+                if mode == EditorMeshSelectionMode::Face && selection.contains(&face) {
+                    Float4::new(1.0, 0.48, 0.08, if xray { 0.16 } else { 0.27 })
+                } else {
+                    Float4::ZERO
+                }
+            },
+            |edge| {
+                let selected = if mode == EditorMeshSelectionMode::Vertex {
+                    vertices.contains(&edge.a) && vertices.contains(&edge.b)
+                } else {
+                    edges.contains(&edge)
+                };
+                Some(if selected {
+                    (active, 2.0)
+                } else {
+                    (inactive, 1.0)
+                })
+            },
+        ))
     }
 
     pub fn geometry_overlays(&self, viewport: Float2) -> Vec<RenderGeometryOverlay> {
-        if self.store.viewport_mode() != EditorViewportMode::Scene { return Vec::new(); }
+        if self.store.viewport_mode() != EditorViewportMode::Scene {
+            return Vec::new();
+        }
         self.synchronize();
-        if !viewport.x.is_finite() || !viewport.y.is_finite() || viewport.x <= 0.0 || viewport.y <= 0.0 {
+        if !viewport.x.is_finite()
+            || !viewport.y.is_finite()
+            || viewport.x <= 0.0
+            || viewport.y <= 0.0
+        {
             return Vec::new();
         }
         if let Some(overlay) = self.render_overlay(viewport) {
             let mut result = Vec::new();
-            if self.shows_evaluated_wireframe() && self.has_modifiers()
-                && let Some(picker) = self.entity_id().and_then(|id| self.authoring.viewport_picker(id))
+            if self.shows_evaluated_wireframe()
+                && self.has_modifiers()
+                && let Some(picker) = self
+                    .entity_id()
+                    .and_then(|id| self.authoring.viewport_picker(id))
             {
-                result.push(picker.surface_overlay(viewport, false, |_| Float4::ZERO,
-                    |_| Some((Float4::new(0.35, 0.7, 0.78, 0.55), 1.0))));
+                result.push(picker.surface_overlay(
+                    viewport,
+                    false,
+                    |_| Float4::ZERO,
+                    |_| Some((Float4::new(0.35, 0.7, 0.78, 0.55), 1.0)),
+                ));
             }
             result.push(overlay);
             return result;
@@ -75,23 +111,45 @@ impl EditorMeshEditing {
             return Vec::new();
         }
         let mut selection = self.store.selected_entity_ids();
-        if selection.is_empty() { selection.extend(self.store.selected_entity_id()); }
+        if selection.is_empty() {
+            selection.extend(self.store.selected_entity_id());
+        }
         let mut result = RenderGeometryOverlay::new(viewport);
         let camera = self.scene.current_render_camera();
         for (entity, _, _) in self.scene.viewport_world_bounds() {
-            if selection.contains(&entity) && let Some(picker) = self.authoring.viewport_picker(entity) {
+            if selection.contains(&entity)
+                && let Some(picker) = self.authoring.viewport_picker(entity)
+            {
                 let contour = silhouette(&picker, &camera);
-                result.triangles.extend(picker.surface_overlay(viewport, false, |_| Float4::ZERO, |edge| {
-                    contour.contains(&edge).then_some((Float4::new(1.0, 0.65, 0.18, 1.0), 2.0))
-                }).triangles);
+                result.triangles.extend(
+                    picker
+                        .surface_overlay(
+                            viewport,
+                            false,
+                            |_| Float4::ZERO,
+                            |edge| {
+                                contour
+                                    .contains(&edge)
+                                    .then_some((Float4::new(1.0, 0.65, 0.18, 1.0), 2.0))
+                            },
+                        )
+                        .triangles,
+                );
             }
         }
-        if result.is_empty() { Vec::new() } else { vec![result] }
+        if result.is_empty() {
+            Vec::new()
+        } else {
+            vec![result]
+        }
     }
 }
 
 impl EditorApplication {
-    pub fn make_geometry_overlays(self: &Rc<Self>, drawable_size: RenderDrawableSize) -> Vec<RenderGeometryOverlay> {
+    pub fn make_geometry_overlays(
+        self: &Rc<Self>,
+        drawable_size: RenderDrawableSize,
+    ) -> Vec<RenderGeometryOverlay> {
         let viewport = EditorViewportDropTarget::frame().map_or(
             Float2::new(drawable_size.width as f32, drawable_size.height as f32),
             |frame| Float2::new(frame.width, frame.height),
@@ -104,9 +162,16 @@ fn silhouette(picker: &EditorMeshPicker<'_>, camera: &RenderCamera) -> BTreeSet<
     let mut uses = BTreeMap::<_, (usize, u8)>::new();
     for face in &picker.mesh.faces {
         let origin = picker.positions[face.vertices[0] as usize];
-        let vertices = || face.vertices.iter().zip(face.vertices.iter().cycle().skip(1));
+        let vertices = || {
+            face.vertices
+                .iter()
+                .zip(face.vertices.iter().cycle().skip(1))
+        };
         let normal = vertices().fold(Float3::ZERO, |sum, (&a, &b)| {
-            sum + simd_cross(picker.positions[a as usize] - origin, picker.positions[b as usize] - origin)
+            sum + simd_cross(
+                picker.positions[a as usize] - origin,
+                picker.positions[b as usize] - origin,
+            )
         });
         let view = if camera.projection == RenderCameraProjection::Orthographic {
             camera.eye - camera.target
@@ -120,5 +185,7 @@ fn silhouette(picker: &EditorMeshPicker<'_>, camera: &RenderCamera) -> BTreeSet<
             *sides |= side;
         }
     }
-    uses.into_iter().filter_map(|(edge, (count, sides))| (count == 1 || sides == 3).then_some(edge)).collect()
+    uses.into_iter()
+        .filter_map(|(edge, (count, sides))| (count == 1 || sides == 3).then_some(edge))
+        .collect()
 }

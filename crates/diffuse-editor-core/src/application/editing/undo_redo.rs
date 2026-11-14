@@ -5,14 +5,26 @@ use crate::state::editor_reducer::EditorAction;
 use crate::state::editor_state::{EditorConsoleSeverity, PlaybackState};
 
 impl EditorApplication {
-    pub fn can_undo(&self) -> bool { self.scene.can_undo_edit() }
-    pub fn can_redo(&self) -> bool { self.scene.can_redo_edit() }
+    pub fn can_undo(&self) -> bool {
+        self.scene.can_undo_edit()
+    }
+    pub fn can_redo(&self) -> bool {
+        self.scene.can_redo_edit()
+    }
 
-    pub fn undo(&self) { self.navigate_scene_history(false); }
-    pub fn redo(&self) { self.navigate_scene_history(true); }
+    pub fn undo(&self) {
+        self.navigate_scene_history(false);
+    }
+    pub fn redo(&self) {
+        self.navigate_scene_history(true);
+    }
 
     fn navigate_scene_history(&self, redo: bool) {
-        if self.mesh_editing.get().is_some_and(|mesh| mesh.cancel_interactive_edit()) {
+        if self
+            .mesh_editing
+            .get()
+            .is_some_and(|mesh| mesh.cancel_interactive_edit())
+        {
             return;
         }
         if self.store.playback_state() != PlaybackState::Stopped {
@@ -29,20 +41,31 @@ impl EditorApplication {
             (self.scene.undo_edit(), "Undone", "Undo applied")
         };
         if applied {
-            if self.scene.entity_summary(self.store.selected_entity_id()).is_none() {
-                self.store.dispatch(EditorAction::SetSelectedEntity(self.scene.roots().first().map(|root| root.id)));
+            if self
+                .scene
+                .entity_summary(self.store.selected_entity_id())
+                .is_none()
+            {
+                self.store.dispatch(EditorAction::SetSelectedEntity(
+                    self.scene.roots().first().map(|root| root.id),
+                ));
             }
             self.request_display_refresh();
-            self.store.dispatch(EditorAction::SetAIStatusMessage(Some(status.into())));
+            self.store
+                .dispatch(EditorAction::SetAIStatusMessage(Some(status.into())));
             self.store.dispatch(EditorAction::console_message(message));
         }
     }
 
     pub fn report_scene_authoring_unavailable(&self, message: &str) {
-        self.store.dispatch(EditorAction::SetAIStatusMessage(Some(message.into())));
+        self.store
+            .dispatch(EditorAction::SetAIStatusMessage(Some(message.into())));
         self.store.dispatch(EditorAction::AppendConsoleMessage {
-            message: message.into(), severity: EditorConsoleSeverity::Warning,
-            detail: None, target: None, next_step: None,
+            message: message.into(),
+            severity: EditorConsoleSeverity::Warning,
+            detail: None,
+            target: None,
+            next_step: None,
         });
     }
 }

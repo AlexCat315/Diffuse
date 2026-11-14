@@ -74,7 +74,7 @@ cove-package = { path = "../Cove/xtask" }
 natsel = { path = "../Natsel" }
 
 serde = { version = "1", features = ["derive", "rc"] }
-serde_json = { version = "1", features = ["raw_value"] }
+serde_json = { version = "1", features = ["raw_value", "float_roundtrip"] }
 thiserror = "2"
 cc = "1"
 libc = "0.2"

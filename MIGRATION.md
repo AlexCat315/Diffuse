@@ -619,6 +619,16 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `EditorApplication::geometry_authoring` 惰性持有主线程的 `Rc<EditorGeometryAuthoring>`。几何编辑器通过场景适配器注册检查器字段。`document(entity_id)` 返回预览或缓存文档，`viewport_picker(entity_id)` 复用求值后多边形和世界矩阵对应的拾取器。
 - `edit` 与 `begin_interactive_edit`、`preview_interactive_edit`、`commit_interactive_edit`、`cancel_interactive_edit` 是网格编辑调用入口。预览从原稿重新求值并发布临时网格。正式编辑、撤销和重做写盘后更新目录、碰撞资源及未修改的文本页。
 
+### `diffuse-editor-core` 网格编辑（批次 354）
+
+- `EditorApplication::mesh_editing` 持有主线程的 `Rc<EditorMeshEditing>`。编辑器从 `set_mode`、`select`、`begin_transform`、`begin_inset`、`begin_loop_cut` 进入各操作。交互式工具统一使用 `commit_interactive_edit` 或 `cancel_interactive_edit` 结束，撤销与重做先取消活动预览。
+- `EditorApplication::make_geometry_overlays` 生成每帧的几何叠加数据。编辑模式绘制控制网格和可选求值线框，对象模式绘制选中模型轮廓。调用方应将同一份数据送入渲染门控签名和渲染包。
+
+### `diffuse-editor-core` 场景持久化（批次 355）
+
+- `save_scene_manifest` 在写场景清单前提交活动网格预览。无效预览会中止保存，编辑器保留预览供修改或取消。`authored_scene_manifest` 返回清单和是否使用播放前快照，供场景保存和后续导出复用。游戏存档从实时场景取样。
+- `restore_project_scene_at_launch` 比较正式场景、自动保存槽和中断播放快照的修改时间。应用的逐帧入口负责调用 `autosave_scene_if_needed` 和 `poll_script_reload`，关闭入口负责强制自动保存和删除本次播放的崩溃标记。
+
 ## 9. 进度与批次日志
 
 `python3 Tools/Migration/inventory.py --status` 输出各 crate 的计数；每个批次在下面追加一行：
@@ -1185,7 +1195,15 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 | 2026-11-14 | 批次 353 | diffuse-editor-core（几何资产编辑与检查器） | 3 | 719 | 补齐 `.dmesh` 预设创建、项目路径检查、文档与拾取缓存、临时预览、文件替换和统一撤销栈；迁移几何检查器中的源、材质及稳定 ID 修饰器绑定。撤销与重做在历史借用释放后刷新碰撞资源和面板。保存使用 Cove 原子替换。两条生产行标 `written`，一条测试行标 `tested`。Windows 串行定向测试一次通过 8 项，含预览应用及取消回归用例。 |
 
+| 2026-11-14 | 批次 354 | diffuse-editor-core（网格编辑、视口叠加与撤销入口） | 7 | 693 | 迁移点边面选择、中心与变换、拓扑操作、内插与环切事务、网格检查器、选中轮廓及场景撤销入口。Windows 定向测试一轮通过 19 项，覆盖遮挡、预览回滚、编辑冲突和渲染门控。6 条生产行标 `written`，渲染测试标 `tested`。 |
+
+| 2026-11-14 | 批次 355 | diffuse-editor-core（场景保存与恢复、游戏存档、播放） | 2 | 218 | 迁移游戏存档与播放状态机并标 `written`。实现显式保存与重开、自动保存、崩溃恢复及损坏文件隔离，接上网格预览提交和场景替换后的脚本重载。清单省略 Swift Codable 的空可选字段，修正行主序矩阵解码，启用既有 serde_json 的 `float_roundtrip` 特性。Windows 定向用例首轮通过 21/25，矩阵与浮点修复后仅复跑失败的 4 项并全部通过。 |
+
 ## 10. 已知问题与需要用户确认的事项
+
+- **场景持久化接线（批次 355）**：场景打开已更换文档身份并清空确认状态，取消进行中的助手请求、完成旧确认的处理仍等待 AI 应用层。脚本重载完成消息由主线程 `poll_script_reload` 消费，应用逐帧调用和助手工作流上下文更新仍待接线。关闭时自动保存、导出与真实应用生命周期相关的测试仍待迁移。Windows 外平台尚未运行本批测试。
+
+- **网格编辑应用接线（批次 354–355）**：网格工具、检查器、叠加生成与场景保存已接线。应用启动、视口输入及逐帧提交仍需调用对应入口。保存与重开用例使用生产持久化代码和场景适配器，三条交互测试迁移行仍待真实应用的撤销路径。Windows 定向用例在测试线程产生 SDL 音频主线程初始化日志，其他平台尚未验证。
 
 - **编辑器调用链（批次 353）**：几何资产编辑与检查器已能通过场景适配器调用，应用启动、网格编辑交互与视口绘制仍待接入。预设创建目前直接调用场景的生成接口，待 `Application/Assets/Assets.swift` 迁移后接回语义标注。迁移的几何测试使用场景适配器和文档工作区验证文件与历史，图形应用端及其他平台尚待验证。资产浏览器仍依赖应用层资产及脚本重载路径。
 

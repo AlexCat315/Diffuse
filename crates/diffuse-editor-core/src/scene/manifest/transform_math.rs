@@ -77,7 +77,7 @@ impl EditorSceneManifestMatrix {
         if self.rows.len() != 16 {
             return None;
         }
-        let column = |start: usize| {
+        let row = |start: usize| {
             Float4::new(
                 self.rows[start],
                 self.rows[start + 1],
@@ -85,12 +85,7 @@ impl EditorSceneManifestMatrix {
                 self.rows[start + 3],
             )
         };
-        Some(Float4x4::new_with_columns(
-            column(0),
-            column(4),
-            column(8),
-            column(12),
-        ))
+        Some(Float4x4::from_rows(&[row(0), row(4), row(8), row(12)]))
     }
 
     pub fn local_transform(&self) -> Option<LocalTransform> {

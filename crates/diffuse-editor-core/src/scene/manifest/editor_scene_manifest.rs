@@ -14,22 +14,30 @@ pub struct EditorSceneManifest {
     pub schema_version: i64,
     pub revision: u64,
     pub entity_count: i64,
-    #[serde(rename = "selectedEntityID", default)]
+    #[serde(
+        rename = "selectedEntityID",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub selected_entity_id: Option<u64>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scene_kind: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub physics_settings: Option<EditorSceneManifestPhysicsSettings>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub particle_scalability: Option<EditorSceneManifestParticleScalability>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub particle_scalability_policy: Option<EditorSceneManifestParticleScalabilityPolicy>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_asset_count: Option<i64>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_modified_at: Option<String>,
     /// Editor-only hierarchy locks.
-    #[serde(rename = "lockedEntityIDs", default)]
+    #[serde(
+        rename = "lockedEntityIDs",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub locked_entity_ids: Option<Vec<u64>>,
     pub roots: Vec<EditorSceneManifestNode>,
 }

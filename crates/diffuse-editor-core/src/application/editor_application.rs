@@ -7,6 +7,7 @@
 use std::cell::{OnceCell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::mpsc::Receiver;
 
 use cove_platform::InputEvent;
 use cove_runtime::PlatformEventBridge;
@@ -25,7 +26,9 @@ use crate::ai::chat::edit_log::EditLog;
 use crate::ai::chat::editor_agent_task_service::EditorAgentTaskService;
 use crate::ai::tools::access::EditorToolAccess;
 use crate::application::diagnostics::subscriptions::EditorSubscriptions;
+use crate::application::persistence::scene_persistence::EditorScenePersistence;
 use crate::application::plugins::plugin_session::PluginSession;
+use crate::application::scripting::scripting::SceneScriptReloadEvent;
 use crate::diagnostics::session::EditorDiagnosticSession;
 use crate::editing::viewport::editor_viewport_render_gate::EditorViewportRenderGate;
 use crate::geometry::editor_geometry_authoring::EditorGeometryAuthoring;
@@ -76,6 +79,8 @@ pub struct EditorApplication {
     pub(crate) display_invalidation_handler: RefCell<Option<Rc<dyn Fn()>>>,
     pub(crate) geometry_authoring: OnceCell<Rc<EditorGeometryAuthoring>>,
     pub(crate) mesh_editing: OnceCell<Rc<EditorMeshEditing>>,
+    pub(crate) scene_persistence: OnceCell<EditorScenePersistence>,
+    pub(crate) script_reload_events: RefCell<Vec<Receiver<SceneScriptReloadEvent>>>,
 }
 
 // SAFETY: Swift declares `EditorApplication: @unchecked Sendable`; the editor

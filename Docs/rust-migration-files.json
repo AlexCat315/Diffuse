@@ -448,7 +448,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/editing/undo_redo.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/EditorApplication.swift",
@@ -470,7 +470,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/persistence/game_save.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Persistence/Playback.swift",
@@ -481,7 +481,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/persistence/playback.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Persistence/ScenePersistence.swift",
@@ -492,7 +492,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/persistence/scene_persistence.rs"
       ],
-      "status": "pending"
+      "status": "pending",
+      "notes": "Core save, open, autosave and interrupted Play recovery are wired. Scene replacement still needs active assistant request cancellation and confirmation resolution from Application/AI/AgentTasks.swift."
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/Bundled.swift",
@@ -746,7 +747,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/scripting/scripting.rs"
       ],
-      "status": "pending"
+      "status": "pending",
+      "notes": "Catalog and trusted script rebuild on scene replacement translated. Application construction still needs Rust toolchain discovery; the tick loop must drain poll_script_reload and AI session workflow context must be refreshed."
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Viewport/RendererPreparation.swift",
@@ -1241,7 +1243,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/geometry/editor_mesh_editing.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Geometry/EditorMeshInset.swift",
@@ -1252,7 +1254,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/geometry/editor_mesh_inset.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Geometry/EditorMeshLoopCut.swift",
@@ -1263,7 +1265,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/geometry/editor_mesh_loop_cut.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Geometry/EditorMeshPicker.swift",
@@ -1285,7 +1287,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/geometry/editor_mesh_rendering.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Geometry/EditorMeshSurfaceOverlay.swift",
@@ -1318,7 +1320,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/geometry/mesh_editing_inspector.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Input/InputState.swift",
@@ -5378,7 +5380,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_scene_recovery_tests.rs"
       ],
-      "status": "pending"
+      "status": "pending",
+      "notes": "Core persistence and playback cases translated. Application shutdown, context memory recovery and project export assertions remain pending."
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorScratchWorkspaceTests.swift",
@@ -5599,7 +5602,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_editing_tests.rs"
       ],
-      "status": "pending"
+      "status": "pending",
+      "notes": "Core interaction and save-during-transform translated against production persistence. The application-level undo route awaits the application fixture."
     },
     {
       "source": "Editor/Tests/EditorCoreTests/MeshInsetTests.swift",
@@ -5610,7 +5614,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_inset_tests.rs"
       ],
-      "status": "pending"
+      "status": "pending",
+      "notes": "Core preview, save rejection and save/reopen translated against production persistence. Application-level undo still awaits the application fixture."
     },
     {
       "source": "Editor/Tests/EditorCoreTests/MeshLoopCutTests.swift",
@@ -5621,7 +5626,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_loop_cut_tests.rs"
       ],
-      "status": "pending"
+      "status": "pending",
+      "notes": "Core preview, save rejection and save/reopen translated against production persistence. Application-level undo still awaits the application fixture."
     },
     {
       "source": "Editor/Tests/EditorCoreTests/MeshPickerTests.swift",
@@ -5643,7 +5649,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_rendering_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/MeshTopologyEditingTests.swift",

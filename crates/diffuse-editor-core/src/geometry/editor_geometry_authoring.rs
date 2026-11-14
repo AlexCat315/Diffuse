@@ -305,9 +305,17 @@ impl EditorGeometryAuthoring {
         world: Float4x4,
     ) -> Option<Rc<EditorMeshPicker<'static>>> {
         let weak = Rc::downgrade(self);
-        EditorMeshPicker::new(mesh, world, Some(Box::new(move |origin, direction| {
-            weak.upgrade()?.scene.mesh_surface_distance(origin, direction, Some(entity_id))
-        }))).ok().map(Rc::new)
+        EditorMeshPicker::new(
+            mesh,
+            world,
+            Some(Box::new(move |origin, direction| {
+                weak.upgrade()?
+                    .scene
+                    .mesh_surface_distance(origin, direction, Some(entity_id))
+            })),
+        )
+        .ok()
+        .map(Rc::new)
     }
 
     pub fn edit(
