@@ -29,7 +29,7 @@ impl EditorApplication {
         self.request_display_refresh();
     }
 
-    pub(super) fn effective_viewport_drawable_size(&self) -> RenderDrawableSize {
+    pub(crate) fn effective_viewport_drawable_size(&self) -> RenderDrawableSize {
         let drawable = *self.viewport_drawable_size.borrow();
         if self.store.viewport_mode() == EditorViewportMode::Game {
             return self.store.game_preview_resolution().size().unwrap_or(drawable);
@@ -38,11 +38,11 @@ impl EditorApplication {
             self.store.viewport_interaction_downscale_enabled() && self.viewport_interacting())
     }
 
-    pub(super) fn viewport_interacting(&self) -> bool {
+    pub(crate) fn viewport_interacting(&self) -> bool {
         EditorViewportInputController::shared().is_continuous_scene_interaction_active()
     }
 
-    pub(super) fn drive_continuous_viewport_camera(&self, elapsed: f64) {
+    pub(crate) fn drive_continuous_viewport_camera(&self, elapsed: f64) {
         let input = EditorViewportInputController::shared();
         if input.has_freelook_movement_input() && self.store.viewport_mode() == EditorViewportMode::Scene {
             self.scene.freelook_camera(0.0, 0.0, &input.pressed_scancodes(), input.modifiers(), elapsed as f32);
@@ -105,11 +105,15 @@ impl EditorApplication {
                 self.scene.dolly_camera(-y);
             }
             InputEvent::KeyDown(event) => {
-                input.set_pressed_scancode(event.scancode, true);
+                let mut scancodes = input.pressed_scancodes();
+                scancodes.insert(event.scancode);
+                input.set_pressed_scancodes(scancodes);
                 input.set_modifiers(event.modifiers);
             }
             InputEvent::KeyUp(event) => {
-                input.set_pressed_scancode(event.scancode, false);
+                let mut scancodes = input.pressed_scancodes();
+                scancodes.remove(&event.scancode);
+                input.set_pressed_scancodes(scancodes);
                 input.set_modifiers(event.modifiers);
             }
             InputEvent::WindowFocusLost => input.reset(),
@@ -117,7 +121,7 @@ impl EditorApplication {
         }
     }
 
-    pub(super) fn handle_platform_event(&self, event: &InputEvent) {
+    pub(crate) fn handle_platform_event(&self, event: &InputEvent) {
         let action = match event {
             InputEvent::WindowFocusGained => EditorAction::SetWindowFocused(true),
             InputEvent::WindowFocusLost => EditorAction::SetWindowFocused(false),

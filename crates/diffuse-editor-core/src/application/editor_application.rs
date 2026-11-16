@@ -21,7 +21,7 @@ use cove_runtime::PlatformEventBridge;
 use diffuse_ai::context::ai_world_context::AIWorldContext;
 use diffuse_ai::context::world_view::WorldView;
 use diffuse_ai::semantic::scene_semantic_encoder::SceneSemanticEncoder;
-use diffuse_ai::session::Session;
+use diffuse_ai::session::session::Session;
 use diffuse_ai::tools::plugin_capability_executor::PluginCapabilityExecutor;
 use diffuse_ai::tools::tool_policy::ToolPolicy;
 use diffuse_assets::asset_registry::AssetRegistryError;

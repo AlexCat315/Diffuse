@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::thread::JoinHandle;
 
 use diffuse_ai::planning::proposal::Proposal;
+use diffuse_intent::transactions::transaction_ir::TransactionApprovalPolicy;
 use diffuse_plugin::Uuid;
 
 use crate::state::workspace::content::EditorContent;
@@ -188,6 +189,15 @@ pub(crate) struct EditorAgentExecution {
     pub(crate) proposal: Option<Proposal>,
     pub(crate) assistant_message_id: Option<String>,
     pub(crate) confirmation_target_entity_ids: BTreeSet<u64>,
+    /// Last proposed edit confidence, mirrored from the `Proposal` (Swift
+    /// `agentExecution.confidence`).
+    pub(crate) confidence: f64,
+    /// Last proposed semantic intent, mirrored from the `Proposal` (Swift
+    /// `agentExecution.semanticIntent`).
+    pub(crate) semantic_intent: Option<String>,
+    /// Last proposed approval policy, mirrored from the `Proposal` (Swift
+    /// `agentExecution.approvalPolicy`).
+    pub(crate) approval_policy: Option<TransactionApprovalPolicy>,
 }
 
 impl EditorAgentExecution {
@@ -198,6 +208,9 @@ impl EditorAgentExecution {
             proposal: None,
             assistant_message_id: None,
             confirmation_target_entity_ids: BTreeSet::new(),
+            confidence: 0.0,
+            semantic_intent: None,
+            approval_policy: None,
         }
     }
 }
