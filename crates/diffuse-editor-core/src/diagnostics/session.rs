@@ -57,3 +57,11 @@ fn same_diagnostics(left: Option<&Arc<UIDiagnostics>>, right: Option<&Arc<UIDiag
         _ => false,
     }
 }
+
+impl crate::application::editor_application::EditorApplication {
+    /// `setUIDiagnostics(_:)` — replaces the attached UI session, resetting the
+    /// previous one's captures when the identity changes.
+    pub fn set_ui_diagnostics(&self, diagnostics: Option<Arc<UIDiagnostics>>) {
+        self.diagnostic_session.set_ui(diagnostics);
+    }
+}

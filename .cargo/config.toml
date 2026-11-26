@@ -1,2 +1,8 @@
 [alias]
 xtask = "run --quiet --package xtask --"
+
+[env]
+# Swift tests ran on the MainActor, one at a time. The ports share process-wide
+# registries (AssetRegistry, plugin pools) and temp projects, so parallel tests
+# race. Keep the suite serial until those registries are per-test.
+RUST_TEST_THREADS = "1"

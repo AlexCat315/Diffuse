@@ -80,6 +80,27 @@ use crate::workstation::services::EditorWorkstation;
 /// The panel activation hook installed by the app shell.
 pub type ActivatePanelHandler = std::rc::Rc<dyn Fn(&str)>;
 
+/// Swift declares `EditorApplication: @unchecked Sendable`. The assistant host
+/// seams (`PluginQuerySnapshotProvider`, the component-description provider)
+/// hand a weak reference to worker threads; those closures only reach the
+/// editor-thread entry points the session schedules.
+pub(crate) struct SendableAppHandle(pub std::rc::Weak<EditorApplication>);
+
+impl SendableAppHandle {
+    /// Upgrades the weak link; callers run on the editor thread.
+    pub(crate) fn upgrade(&self) -> Option<std::rc::Rc<EditorApplication>> {
+        self.0.upgrade()
+    }
+}
+
+// SAFETY: the handle only carries a `Weak<EditorApplication>`; every call site
+// goes through the same editor-thread entry points `EditorApplication` already
+// exposes to other threads. Callers must not observe the Rc's refcount on two
+// threads at once, which the single owner guarantees.
+unsafe impl Send for SendableAppHandle {}
+// SAFETY: same contract as above.
+unsafe impl Sync for SendableAppHandle {}
+
 #[derive(Default)]
 pub struct EditorApplicationOptions {
     pub seed_preview_scene: bool,
@@ -142,7 +163,7 @@ pub struct EditorApplication {
     /// Guards project-tool execution while a build is in flight.
     pub(crate) project_tool_build_in_progress: RefCell<bool>,
     pub edit_log: EditLog,
-    pub context_memory_store: Option<ContextMemoryStore>,
+    pub context_memory_store: Option<std::sync::Arc<ContextMemoryStore>>,
     pub project_script_catalog_monitor: ProjectScriptCatalogMonitor,
     pub diagnostic_session: EditorDiagnosticSession,
     pub trusted_plugin_host_executable_url: Option<PathBuf>,
@@ -618,7 +639,29 @@ impl EditorApplication {
     }
 
     pub fn set_display_invalidation_handler(&self, handler: Option<Rc<dyn Fn()>>) {
+        if handler.is_none() {
+            self.subscriptions.console.set_wake(None);
+        }
         self.display_invalidation_handler.replace(handler);
+    }
+
+    /// `logConsole(_:severity:detail:target:nextStep:)` — writes one console
+    /// entry; the project directory rides along as log context metadata.
+    pub fn log_console(
+        &self,
+        message: &str,
+        severity: EditorConsoleSeverity,
+        detail: Option<String>,
+        target: Option<EditorIssueTarget>,
+        next_step: Option<String>,
+    ) {
+        self.store.dispatch(EditorAction::AppendConsoleMessage {
+            message: message.into(),
+            severity,
+            detail,
+            target,
+            next_step,
+        });
     }
 
     pub fn request_display_refresh(&self) {

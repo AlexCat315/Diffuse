@@ -300,7 +300,7 @@ impl EditorApplication {
                 );
                 result.insert(
                     "ai_credential_available".into(),
-                    Value::Bool(self.has_stored_ai_key()),
+                    Value::Bool(self.has_stored_ai_key(None)),
                 );
                 result.insert(
                     "script_sdk_available".into(),
@@ -621,18 +621,151 @@ impl EditorApplication {
             .map_err(|error| EditorProjectToolError::new(error.to_string()))
     }
 
-    /// `executeDiagnosticTool(name:input:)` — Swift routes diagnostic tool calls
-    /// through `diagnosticSession`. The Rust `EditorDiagnosticSession` does not yet
-    /// expose a `execute_tool` entry point, so this is wired to the actual
-    /// `cove_devtools` inspection API in the compile pass; for now it reports no
-    /// diagnostic payload and the dispatcher falls through to the "unknown tool"
-    /// arm.
+    /// `executeDiagnosticTool(name:input:)` — routes a UI diagnostic tool call:
+    /// inactive or unknown tools return `None`, the editor-owned tools answer
+    /// directly, and everything else runs against the attached UI session.
     pub(crate) fn execute_diagnostic_tool(
         &self,
-        _name: &str,
-        _input: &[u8],
+        name: &str,
+        input: &[u8],
     ) -> Result<Option<Vec<u8>>, EditorProjectToolError> {
-        Ok(None)
+        use cove_agent::ui_tools::Tools as UITools;
+
+        let Some(tool) = UITools::tool(name) else {
+            return Ok(None);
+        };
+        if name == "get_diagnostics" {
+            let arguments: Value = serde_json::from_slice(input).unwrap_or_default();
+            let limit = arguments
+                .get("limit")
+                .and_then(Value::as_i64)
+                .unwrap_or(50);
+            return self
+                .diagnostic_report(limit)
+                .map(|report| Some(report.to_string().into_bytes()));
+        }
+        // Task guides stay available in headless sessions.
+        if name == "list_skills" {
+            let skills = UITools::skills();
+            let metadata: Vec<Value> = skills
+                .skills
+                .iter()
+                .map(|skill| {
+                    serde_json::json!({"name": skill.name, "description": skill.description})
+                })
+                .collect();
+            let payload = serde_json::json!({"ok": true, "data": metadata});
+            return Ok(Some(payload.to_string().into_bytes()));
+        }
+        if name == "read_skill" {
+            let arguments: Value = serde_json::from_slice(input).unwrap_or_default();
+            let skill_name = arguments
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let library = UITools::skills();
+            let skill = library
+                .read(skill_name)
+                .map_err(|error| EditorProjectToolError::new(error.to_string()))?
+                .clone();
+            let payload = serde_json::json!({
+                "ok": true,
+                "data": {
+                    "name": skill.name,
+                    "description": skill.description,
+                    "instructions": skill.instructions,
+                },
+            });
+            return Ok(Some(payload.to_string().into_bytes()));
+        }
+        let Some(diagnostics) = self.diagnostic_session.ui() else {
+            return Err(EditorProjectToolError::new(
+                "UI diagnostics are unavailable: this editor has no attached graphical UI session.",
+            ));
+        };
+        let arguments: Value = serde_json::from_slice(input).unwrap_or_default();
+        let result = diagnostics
+            .execute_read_json(tool, &arguments)
+            .map_err(|error| EditorProjectToolError::new(error.to_string()))?;
+        if !self.is_active() {
+            return Err(EditorProjectToolError::new("Request cancelled."));
+        }
+        Ok(Some(result.to_string().into_bytes()))
+    }
+
+    /// `diagnosticReport(limit:)` — the editor's own diagnostics payload for the
+    /// UI tool: scene revision, pacing/issues, frame trend and render passes.
+    fn diagnostic_report(&self, limit: i64) -> Result<Value, EditorProjectToolError> {
+        use crate::diagnostics::frame::trend::make_developer_frame_trend_summary;
+        use crate::diagnostics::issues::assessment::make_developer_workbench_issues;
+        use crate::diagnostics::particles::authoring::make_developer_particle_authoring_diagnostic_summary;
+        use crate::diagnostics::particles::runtime::{
+            make_developer_particle_diagnostic_summary, make_developer_particle_emitter_hotspots,
+        };
+        use crate::diagnostics::rendering::passes::make_developer_render_pass_breakdown;
+
+        let state = self.store.state();
+        let selected = self.store.selected_entity_id();
+        let frame_stats = self.store.frame_stats();
+        let render_stats = self.last_render_frame_stats.borrow().clone();
+        let particle = self.scene.current_particle_frame_stats();
+        let events = self.scene.current_particle_simulation_event_apply_report();
+        let scalability = self.scene.current_particle_scalability_state();
+        let render_scene = self.scene.current_render_scene();
+        let particle_summary = make_developer_particle_diagnostic_summary(
+            &particle,
+            &events,
+            &scalability,
+            &render_scene.particle_summary,
+            &render_stats,
+        );
+        let gpu_plan = self
+            .scene
+            .current_particle_gpu_simulation_plan(selected);
+        let module_issues = self
+            .scene
+            .current_particle_module_validation_issues(selected);
+        let authoring_summary = selected.map(|_| {
+            make_developer_particle_authoring_diagnostic_summary(
+                gpu_plan.as_ref(),
+                &module_issues,
+            )
+        });
+        let hotspots = make_developer_particle_emitter_hotspots(&particle, &events, 16);
+        let issues = make_developer_workbench_issues(
+            &frame_stats,
+            &state.timing.frame_stats_history,
+            &render_stats,
+            Some(&particle_summary),
+            authoring_summary.as_ref(),
+            &hotspots,
+            selected,
+            &state.output.console_entries,
+        );
+        let bounded_limit = limit.max(1).min(100) as usize;
+        let total = issues.len();
+        let issues_payload: Vec<Value> = issues
+            .into_iter()
+            .take(bounded_limit)
+            .map(|issue| serde_json::to_value(issue).unwrap_or(Value::Null))
+            .collect();
+        let trend = make_developer_frame_trend_summary(&state.timing.frame_stats_history);
+        let passes: Vec<Value> = make_developer_render_pass_breakdown(&render_stats)
+            .into_iter()
+            .take(100)
+            .map(|pass| serde_json::to_value(pass).unwrap_or(Value::Null))
+            .collect();
+        Ok(serde_json::json!({
+            "ok": true,
+            "sceneRevision": self.scene.revision(),
+            "uiAvailable": self.diagnostic_session.ui().is_some(),
+            "frameSampleCount": state.timing.frame_stats_history.len(),
+            "renderFrameIndex": render_stats.frame_index,
+            "issues": issues_payload,
+            "totalIssueCount": total,
+            "frameTrend": trend.map(|trend| serde_json::to_value(trend).unwrap_or(Value::Null)),
+            "renderPasses": passes,
+        }))
     }
 
     fn validate_project_scripts_directory(&self) -> Result<(), EditorProjectToolError> {

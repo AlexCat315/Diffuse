@@ -229,7 +229,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/editor_project_tools.rs"
       ],
-      "status": "pending",
+      "status": "written",
       "notes": "Rust script read/write and build reporting are implemented. UI diagnostics and the nonblocking editor-thread session bridge are pending."
     },
     {
@@ -307,7 +307,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/ai/ai_settings.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/AI/AgentTasks.swift",
@@ -318,7 +318,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/ai/agent_tasks.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/AI/ComponentDescriptions.swift",
@@ -329,7 +329,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/ai/component_descriptions.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/AI/ContextMemory.swift",
@@ -340,7 +340,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/ai/context_memory.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/AI/Contexts.swift",
@@ -373,7 +373,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/ai/intent_execution.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Assets/AssetWorkflow.swift",
@@ -494,7 +494,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/persistence/scene_persistence.rs"
       ],
-      "status": "pending",
+      "status": "tested",
       "notes": "Core save, open, autosave and interrupted Play recovery are wired. Scene replacement still needs active assistant request cancellation and confirmation resolution from Application/AI/AgentTasks.swift."
     },
     {
@@ -749,7 +749,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/scripting/scripting.rs"
       ],
-      "status": "pending",
+      "status": "compiled",
       "notes": "Catalog and trusted script rebuild on scene replacement translated. Application construction still needs Rust toolchain discovery; the tick loop must drain poll_script_reload and AI session workflow context must be refreshed."
     },
     {
@@ -761,7 +761,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/viewport/renderer_preparation.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Viewport/Viewport.swift",
@@ -772,7 +772,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/viewport/viewport.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Workbench.swift",
@@ -783,7 +783,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/workbench.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Assets/AssetCatalog.swift",
@@ -1113,7 +1113,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/diagnostics/session.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Editing/EditorGizmoController.swift",
@@ -5318,7 +5318,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_project_lifecycle_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorProjectToolsTests.swift",
@@ -5329,7 +5329,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_project_tools_tests.rs"
       ],
-      "status": "pending",
+      "status": "tested",
       "notes": "Script workspace and project-tool guard cases are ported. The scene review case still needs the real app delete intent path."
     },
     {
@@ -5453,7 +5453,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_viewport_camera_isolation_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorViewportGridTests.swift",
@@ -5475,7 +5475,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_viewport_navigation_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorViewportProjectionTests.swift",
@@ -5607,7 +5607,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_editing_tests.rs"
       ],
-      "status": "pending",
+      "status": "tested",
       "notes": "Core interaction and save-during-transform translated against production persistence. The application-level undo route awaits the application fixture."
     },
     {
@@ -5619,7 +5619,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_inset_tests.rs"
       ],
-      "status": "pending",
+      "status": "tested",
       "notes": "Core preview, save rejection and save/reopen translated against production persistence. Application-level undo still awaits the application fixture."
     },
     {
@@ -5631,7 +5631,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_loop_cut_tests.rs"
       ],
-      "status": "pending",
+      "status": "tested",
       "notes": "Core preview, save rejection and save/reopen translated against production persistence. Application-level undo still awaits the application fixture."
     },
     {

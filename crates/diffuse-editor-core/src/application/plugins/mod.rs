@@ -12,6 +12,7 @@ pub mod monitor;
 pub mod plugin_components;
 pub mod plugin_services;
 pub mod plugin_session;
+pub mod plugins;
 pub mod processes;
 pub mod reload;
 pub mod service_jobs;
