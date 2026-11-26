@@ -80,13 +80,13 @@ impl Default for PluginSessionState {
 pub struct PluginSession {
     /// One host process per plugin: a fault in one plugin cannot stall or kill
     /// another. The pool is filled on first use.
-    pub hosts: PluginHostPool,
+    pub hosts: Arc<PluginHostPool>,
     pub manager: PluginManager,
     pub contributions: Arc<PluginContributions>,
     pub editor: PluginEditorIntegration,
     pub runtime: Arc<PluginRuntimeAccess>,
     pub authorization_store: EditorPluginAuthorizationStore,
-    pub components: PluginComponentStore,
+    pub components: Arc<PluginComponentStore>,
     state: Mutex<PluginSessionState>,
     shutdown: Arc<AtomicBool>,
 }
@@ -121,13 +121,13 @@ impl PluginSession {
         let manager = PluginManager::new(contributions.registrar()?, loader, host_capabilities);
         let runtime = Arc::new(PluginRuntimeAccess::new(contributions.clone()));
         Ok(PluginSession {
-            hosts,
+            hosts: Arc::new(hosts),
             manager,
             contributions,
             editor: PluginEditorIntegration::new(),
             runtime,
             authorization_store,
-            components: PluginComponentStore::new(),
+            components: Arc::new(PluginComponentStore::new()),
             state: Mutex::new(PluginSessionState::default()),
             shutdown: Arc::new(AtomicBool::new(false)),
         })

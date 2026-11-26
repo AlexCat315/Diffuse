@@ -351,7 +351,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/ai/contexts.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/AI/Harnesses.swift",
@@ -362,7 +362,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/ai/harnesses.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/AI/IntentExecution.swift",
@@ -528,7 +528,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/commands.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/Contributions.swift",
@@ -550,7 +550,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/document_formatting.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/EditorIntegration.swift",
@@ -672,7 +672,7 @@
         "crates/diffuse-editor-core/src/application/plugins/processes.rs"
       ],
       "d1": "adjust",
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/Reload.swift",
@@ -5750,7 +5750,9 @@
       "source_sha256": "07b4484b22b7c4a50185fbca2c77b1fce7dccbc589b0d4aac252c2b004a3582c",
       "kind": "test",
       "crate": "diffuse-editor-core",
-      "rust": [],
+      "rust": [
+        "crates/diffuse-editor-core/src/tests/editor_core/rendering/native_app_window_tests.rs"
+      ],
       "status": "blocked",
       "blocked_by": "P1: exercises Cove hosts desktop AppKit window/application lifecycle (Application.run, AppRenderingContext, AppWindowRenderSettings, NativeAppFrameCapture, CAMetalLayer/NSWindow) which only exist in ../Cove and cannot be edited; diffuse-editor-core does not depend on cove-hosts and adding that workspace dependency needs §10 confirmation. Cove already covers the same surface in crates/hosts/tests/native_window_lifecycle_tests.rs."
     },
@@ -6686,8 +6688,8 @@
       "rust": [
         "crates/diffuse-media/src/decoding/decoder.rs"
       ],
-      "reason": "通用 demux/decode 由 cove-media 承担；CFFmpegBridge C 源码与同步解码 API 随 8.1.3 底座删除",
-      "status": "removed"
+      "status": "removed",
+      "reason": "通用 demux/decode 由 cove-media 承担；CFFmpegBridge C 源码与同步解码 API 随 8.1.3 底座删除"
     },
     {
       "source": "Engine/Media/Sources/MediaRuntime/Decoding/Readers.swift",
@@ -13446,8 +13448,8 @@
       "rust": [
         "xtask/src/build/ios_staging/entry.rs"
       ],
-      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要",
-      "status": "removed"
+      "status": "removed",
+      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/Bundle.swift",
@@ -13458,8 +13460,8 @@
       "rust": [
         "xtask/src/build/media_staging/bundle.rs"
       ],
-      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要",
-      "status": "removed"
+      "status": "removed",
+      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/Entry.swift",
@@ -13470,8 +13472,8 @@
       "rust": [
         "xtask/src/build/media_staging/entry.rs"
       ],
-      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要",
-      "status": "removed"
+      "status": "removed",
+      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/SourceDownload.swift",
@@ -13482,8 +13484,8 @@
       "rust": [
         "xtask/src/build/media_staging/source_download.rs"
       ],
-      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要",
-      "status": "removed"
+      "status": "removed",
+      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/StageOperation.swift",
@@ -13494,8 +13496,8 @@
       "rust": [
         "xtask/src/build/media_staging/stage_operation.rs"
       ],
-      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要",
-      "status": "removed"
+      "status": "removed",
+      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要"
     },
     {
       "source": "Tools/Developer/Sources/Build/MediaStaging/Targets.swift",
@@ -13506,8 +13508,8 @@
       "rust": [
         "xtask/src/build/media_staging/targets.rs"
       ],
-      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要",
-      "status": "removed"
+      "status": "removed",
+      "reason": "切到 cove-media（FFmpeg 9.x OUT_DIR）与 cove-package 后，FFmpeg 8.1.3 artifact bundle / provenance / iOS staging 底座不再需要"
     },
     {
       "source": "Tools/Developer/Sources/Build/NativeBootstrap/Bootstrap.swift",
@@ -13573,8 +13575,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/arguments.rs"
       ],
-      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
-      "status": "removed"
+      "status": "removed",
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Bootstrap.swift",
@@ -13585,8 +13587,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/bootstrap.rs"
       ],
-      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
-      "status": "removed"
+      "status": "removed",
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Compile.swift",
@@ -13597,8 +13599,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/compile.rs"
       ],
-      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
-      "status": "removed"
+      "status": "removed",
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Entry.swift",
@@ -13609,8 +13611,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/entry.rs"
       ],
-      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
-      "status": "removed"
+      "status": "removed",
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/JSON.swift",
@@ -13621,8 +13623,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/json.rs"
       ],
-      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
-      "status": "removed"
+      "status": "removed",
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/JSONParser.swift",
@@ -13633,8 +13635,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/json_parser.rs"
       ],
-      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
-      "status": "removed"
+      "status": "removed",
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Rebuild.swift",
@@ -13645,8 +13647,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/rebuild.rs"
       ],
-      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
-      "status": "removed"
+      "status": "removed",
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Reflection.swift",
@@ -13657,8 +13659,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/reflection.rs"
       ],
-      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
-      "status": "removed"
+      "status": "removed",
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接"
     },
     {
       "source": "Tools/Developer/Sources/Build/ShaderToolchain/Support.swift",
@@ -13669,8 +13671,8 @@
       "rust": [
         "xtask/src/build/shader_toolchain/support.rs"
       ],
-      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接",
-      "status": "removed"
+      "status": "removed",
+      "reason": "CI/产物流水线已由 Cove Tools/Shaders/*.mjs 与 shader-artifacts.yml 承接"
     },
     {
       "source": "Tools/Developer/Sources/Build/VulkanBootstrap/Bootstrap.swift",
@@ -13681,8 +13683,8 @@
       "rust": [
         "xtask/src/build/vulkan_bootstrap/bootstrap.rs"
       ],
-      "reason": "Cove cove-graphics 改用运行期 dlopen + vendored headers，不再需要 Vulkan SDK 引导",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Cove cove-graphics 改用运行期 dlopen + vendored headers，不再需要 Vulkan SDK 引导"
     },
     {
       "source": "Tools/Developer/Sources/Build/VulkanBootstrap/Entry.swift",
@@ -13693,8 +13695,8 @@
       "rust": [
         "xtask/src/build/vulkan_bootstrap/entry.rs"
       ],
-      "reason": "Cove cove-graphics 改用运行期 dlopen + vendored headers，不再需要 Vulkan SDK 引导",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Cove cove-graphics 改用运行期 dlopen + vendored headers，不再需要 Vulkan SDK 引导"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Boundaries/Checks.swift",
@@ -13705,8 +13707,8 @@
       "rust": [
         "xtask/src/checks/boundaries/checks.rs"
       ],
-      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Boundaries/Entry.swift",
@@ -13717,8 +13719,8 @@
       "rust": [
         "xtask/src/checks/boundaries/entry.rs"
       ],
-      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Boundaries/Manifest.swift",
@@ -13729,8 +13731,8 @@
       "rust": [
         "xtask/src/checks/boundaries/manifest.rs"
       ],
-      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/Baseline.swift",
@@ -13741,8 +13743,8 @@
       "rust": [
         "xtask/src/checks/maintainability/baseline.rs"
       ],
-      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/Entry.swift",
@@ -13753,8 +13755,8 @@
       "rust": [
         "xtask/src/checks/maintainability/entry.rs"
       ],
-      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/Inventory.swift",
@@ -13765,8 +13767,8 @@
       "rust": [
         "xtask/src/checks/maintainability/inventory.rs"
       ],
-      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/OrderedMap.swift",
@@ -13777,8 +13779,8 @@
       "rust": [
         "xtask/src/checks/maintainability/ordered_map.rs"
       ],
-      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写"
     },
     {
       "source": "Tools/Developer/Sources/Checks/Maintainability/StructuralGuard.swift",
@@ -13789,8 +13791,8 @@
       "rust": [
         "xtask/src/checks/maintainability/structural_guard.rs"
       ],
-      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "SwiftPM dump-package / .swift 词法规则专属；Rust 端由 cargo metadata + clippy 重写"
     },
     {
       "source": "Tools/Developer/Sources/CoveDev/Entry.swift",
@@ -13812,8 +13814,8 @@
       "rust": [
         "xtask/src/export/android_export.rs"
       ],
-      "reason": "生成 SwiftPM Package.swift 游戏包，与 D1（用户脚本改 Rust cdylib）冲突；Android 打包由 cove-package 承担",
-      "status": "removed"
+      "status": "removed",
+      "reason": "生成 SwiftPM Package.swift 游戏包，与 D1（用户脚本改 Rust cdylib）冲突；Android 打包由 cove-package 承担"
     },
     {
       "source": "Tools/Developer/Sources/CoveDev/Export/GameplayPackage.swift",
@@ -13824,8 +13826,8 @@
       "rust": [
         "xtask/src/export/gameplay_package.rs"
       ],
-      "reason": "生成 SwiftPM Package.swift 游戏包，与 D1（用户脚本改 Rust cdylib）冲突；Android 打包由 cove-package 承担",
-      "status": "removed"
+      "status": "removed",
+      "reason": "生成 SwiftPM Package.swift 游戏包，与 D1（用户脚本改 Rust cdylib）冲突；Android 打包由 cove-package 承担"
     },
     {
       "source": "Tools/Developer/Sources/CoveDev/Plugins/TypeScriptBuild.swift",
@@ -13847,8 +13849,8 @@
       "rust": [
         "xtask/src/infrastructure/image_codec/decoded_image.rs"
       ],
-      "reason": "仅服务于已删除的 Swift/Wasm 像素验证，Cove cove-imaging 已有等价",
-      "status": "removed"
+      "status": "removed",
+      "reason": "仅服务于已删除的 Swift/Wasm 像素验证，Cove cove-imaging 已有等价"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/AndroidTools.swift",
@@ -13859,8 +13861,8 @@
       "rust": [
         "xtask/src/validation/android/android_tools.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Arguments.swift",
@@ -13871,8 +13873,8 @@
       "rust": [
         "xtask/src/validation/android/arguments.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Bitmap.swift",
@@ -13883,8 +13885,8 @@
       "rust": [
         "xtask/src/validation/android/bitmap.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Command.swift",
@@ -13895,8 +13897,8 @@
       "rust": [
         "xtask/src/validation/android/command.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Demo.swift",
@@ -13907,8 +13909,8 @@
       "rust": [
         "xtask/src/validation/android/demo.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Entry.swift",
@@ -13919,8 +13921,8 @@
       "rust": [
         "xtask/src/validation/android/entry.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Gallery.swift",
@@ -13931,8 +13933,8 @@
       "rust": [
         "xtask/src/validation/android/gallery.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Game.swift",
@@ -13943,8 +13945,8 @@
       "rust": [
         "xtask/src/validation/android/game.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/JSON.swift",
@@ -13955,8 +13957,8 @@
       "rust": [
         "xtask/src/validation/android/json.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Logging.swift",
@@ -13967,8 +13969,8 @@
       "rust": [
         "xtask/src/validation/android/logging.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Rounding.swift",
@@ -13979,8 +13981,8 @@
       "rust": [
         "xtask/src/validation/android/rounding.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Text.swift",
@@ -13991,8 +13993,8 @@
       "rust": [
         "xtask/src/validation/android/text.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Android/Validate.swift",
@@ -14003,8 +14005,8 @@
       "rust": [
         "xtask/src/validation/android/validate.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Arguments.swift",
@@ -14015,8 +14017,8 @@
       "rust": [
         "xtask/src/validation/browser/arguments.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Analysis.swift",
@@ -14027,8 +14029,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/analysis.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Inspection.swift",
@@ -14039,8 +14041,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/inspection.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Logs.swift",
@@ -14051,8 +14053,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/logs.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Native.swift",
@@ -14063,8 +14065,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/native.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Observation.swift",
@@ -14075,8 +14077,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/observation.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Preview.swift",
@@ -14087,8 +14089,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/preview.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Checks/Support.swift",
@@ -14099,8 +14101,8 @@
       "rust": [
         "xtask/src/validation/browser/checks/support.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Entry.swift",
@@ -14111,8 +14113,8 @@
       "rust": [
         "xtask/src/validation/browser/entry.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Chromium.swift",
@@ -14123,8 +14125,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/chromium.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Frame.swift",
@@ -14135,8 +14137,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/frame.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Locator.swift",
@@ -14147,8 +14149,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/locator.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Page.swift",
@@ -14159,8 +14161,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/page.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/Pixels.swift",
@@ -14171,8 +14173,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/pixels.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Harness/ScriptTarget.swift",
@@ -14183,8 +14185,8 @@
       "rust": [
         "xtask/src/validation/browser/harness/script_target.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/JSON.swift",
@@ -14195,8 +14197,8 @@
       "rust": [
         "xtask/src/validation/browser/json.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/BuildFonts.swift",
@@ -14207,8 +14209,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/build_fonts.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/Dev.swift",
@@ -14219,8 +14221,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/dev.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/NativeDemo.swift",
@@ -14231,8 +14233,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/native_demo.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/Serve.swift",
@@ -14243,8 +14245,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/serve.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/Verify.swift",
@@ -14255,8 +14257,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/verify.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Operations/VerifyDev.swift",
@@ -14267,8 +14269,8 @@
       "rust": [
         "xtask/src/validation/browser/operations/verify_dev.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Commands.swift",
@@ -14279,8 +14281,8 @@
       "rust": [
         "xtask/src/validation/browser/support/commands.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Formatting.swift",
@@ -14291,8 +14293,8 @@
       "rust": [
         "xtask/src/validation/browser/support/formatting.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/HTTP.swift",
@@ -14303,8 +14305,8 @@
       "rust": [
         "xtask/src/validation/browser/support/http.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Locked.swift",
@@ -14315,8 +14317,8 @@
       "rust": [
         "xtask/src/validation/browser/support/locked.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Server.swift",
@@ -14327,8 +14329,8 @@
       "rust": [
         "xtask/src/validation/browser/support/server.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/Spawn.swift",
@@ -14339,8 +14341,8 @@
       "rust": [
         "xtask/src/validation/browser/support/spawn.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Support/System.swift",
@@ -14351,8 +14353,8 @@
       "rust": [
         "xtask/src/validation/browser/support/system.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Transport/CDP.swift",
@@ -14363,8 +14365,8 @@
       "rust": [
         "xtask/src/validation/browser/transport/cdp.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Transport/Inbox.swift",
@@ -14375,8 +14377,8 @@
       "rust": [
         "xtask/src/validation/browser/transport/inbox.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Transport/Receiver.swift",
@@ -14387,8 +14389,8 @@
       "rust": [
         "xtask/src/validation/browser/transport/receiver.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Browser/Transport/WebSocket.swift",
@@ -14399,8 +14401,8 @@
       "rust": [
         "xtask/src/validation/browser/transport/web_socket.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/Entry.swift",
@@ -14411,8 +14413,8 @@
       "rust": [
         "xtask/src/validation/gpu/entry.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/Runner.swift",
@@ -14423,8 +14425,8 @@
       "rust": [
         "xtask/src/validation/gpu/runner.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/Tee.swift",
@@ -14435,8 +14437,8 @@
       "rust": [
         "xtask/src/validation/gpu/tee.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/Verification.swift",
@@ -14447,8 +14449,8 @@
       "rust": [
         "xtask/src/validation/gpu/verification.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/GPU/XUnit.swift",
@@ -14459,8 +14461,8 @@
       "rust": [
         "xtask/src/validation/gpu/x_unit.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/IOS/Device.swift",
@@ -14471,8 +14473,8 @@
       "rust": [
         "xtask/src/validation/ios/device.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/IOS/Entry.swift",
@@ -14483,8 +14485,8 @@
       "rust": [
         "xtask/src/validation/ios/entry.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/IOS/Frame.swift",
@@ -14495,8 +14497,8 @@
       "rust": [
         "xtask/src/validation/ios/frame.rs"
       ],
-      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift/Wasm 验证与 Swift Testing XML / .build 产物专属；Rust 端待以 Cargo 产物重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Activate.swift",
@@ -14507,8 +14509,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/activate.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Capture.swift",
@@ -14519,8 +14521,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/capture.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Commands.swift",
@@ -14531,8 +14533,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/commands.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Endpoint.swift",
@@ -14543,8 +14545,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/endpoint.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Input.swift",
@@ -14555,8 +14557,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/input.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Query.swift",
@@ -14567,8 +14569,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/query.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Resize.swift",
@@ -14579,8 +14581,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/resize.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Session.swift",
@@ -14591,8 +14593,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/session.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Socket.swift",
@@ -14603,8 +14605,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/socket.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/DevTools/Timings.swift",
@@ -14615,8 +14617,8 @@
       "rust": [
         "xtask/src/validation/runtime/dev_tools/timings.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Editor/EditorNativeLoop.swift",
@@ -14627,8 +14629,8 @@
       "rust": [
         "xtask/src/validation/runtime/editor/editor_native_loop.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Entry.swift",
@@ -14639,8 +14641,8 @@
       "rust": [
         "xtask/src/validation/runtime/entry.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/AgentDiagnostics.swift",
@@ -14651,8 +14653,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/agent_diagnostics.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/Client.swift",
@@ -14663,8 +14665,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/client.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/CrystalRush.swift",
@@ -14675,8 +14677,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/crystal_rush.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/EditorBridge.swift",
@@ -14687,8 +14689,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/editor_bridge.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/MCP/ProtocolCheck.swift",
@@ -14699,8 +14701,8 @@
       "rust": [
         "xtask/src/validation/runtime/mcp/protocol_check.rs"
       ],
-      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写",
-      "status": "removed"
+      "status": "removed",
+      "reason": "绑定 Swift 二进制与 SwiftPM 产物的验证；协议层由 Cove cove-agent/cove-devtools* 覆盖，Diffuse 业务 E2E 待以 Rust 二进制重写"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/AsyncBridge.swift",
@@ -14733,8 +14735,8 @@
       "rust": [
         "xtask/src/validation/runtime/support/build_products.rs"
       ],
-      "reason": "Swift .build/debug 产物定位；Rust 端改用 target/debug",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift .build/debug 产物定位；Rust 端改用 target/debug"
     },
     {
       "source": "Tools/Developer/Sources/Validation/Runtime/Support/Check.swift",
@@ -14844,8 +14846,8 @@
       "rust": [
         "xtask/src/tests/boundary/manifest_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/BrowserTests/HostTests.swift",
@@ -14856,8 +14858,8 @@
       "rust": [
         "xtask/src/tests/browser/host_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/IOSSimulatorTests/DeviceTests.swift",
@@ -14868,8 +14870,8 @@
       "rust": [
         "xtask/src/tests/ios_simulator/device_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/ImageCodecTests/DecodedImageTests.swift",
@@ -14880,8 +14882,8 @@
       "rust": [
         "xtask/src/tests/image_codec/decoded_image_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/MaintainabilityTests/StructuralGuardTests.swift",
@@ -14892,8 +14894,8 @@
       "rust": [
         "xtask/src/tests/maintainability/structural_guard_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/MediaStagingTests/SourceDownloadTests.swift",
@@ -14904,8 +14906,8 @@
       "rust": [
         "xtask/src/tests/media_staging/source_download_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/PluginStagingTests/PluginStagingTests.swift",
@@ -14927,8 +14929,8 @@
       "rust": [
         "xtask/src/tests/regression_report/regression_report_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/RuntimeValidationTests/AsyncBridgeTests.swift",
@@ -14939,8 +14941,8 @@
       "rust": [
         "xtask/src/tests/runtime_validation/async_bridge_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/RuntimeValidationTests/ConnectionTests.swift",
@@ -14951,8 +14953,8 @@
       "rust": [
         "xtask/src/tests/runtime_validation/connection_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/RuntimeValidationTests/EndpointTests.swift",
@@ -14963,8 +14965,8 @@
       "rust": [
         "xtask/src/tests/runtime_validation/endpoint_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/RuntimeValidationTests/InputSequenceTests.swift",
@@ -14975,8 +14977,8 @@
       "rust": [
         "xtask/src/tests/runtime_validation/input_sequence_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/ShaderToolchainTests/ShaderToolchainTests.swift",
@@ -14987,8 +14989,8 @@
       "rust": [
         "xtask/src/tests/shader_toolchain/shader_toolchain_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/ToolSupportTests/ProcessTests.swift",
@@ -14999,8 +15001,8 @@
       "rust": [
         "xtask/src/tests/tool_support/process_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "Tools/Developer/Tests/ToolSupportTests/ToolSupportTests.swift",
@@ -15011,8 +15013,8 @@
       "rust": [
         "xtask/src/tests/tool_support/tool_support_tests.rs"
       ],
-      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象",
-      "status": "removed"
+      "status": "removed",
+      "reason": "Swift @testable import 工具单测占位；删除 Swift 树后无对象"
     },
     {
       "source": "examples/CrystalRush/Scripts/CrystalRush.swift",
