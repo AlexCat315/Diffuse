@@ -245,7 +245,7 @@ impl EditorApplication {
                         "Exported portable project data without an application",
                         EditorConsoleSeverity::Warning,
                         None,
-                        Some("Build CovePlayer or set COVE_PLAYER_EXECUTABLE, then export again."),
+                        Some("Build diffuse-player or set COVE_PLAYER_EXECUTABLE, then export again."),
                     );
                 }
                 let snapshot = if export.used_play_snapshot {
@@ -367,6 +367,7 @@ fn resolve_player_executable() -> Option<PathBuf> {
     let directory = executable.as_deref().and_then(Path::parent);
     [
         env::var_os("COVE_PLAYER_EXECUTABLE").map(PathBuf::from),
+        directory.map(|dir| dir.join(format!("diffuse-player{}", env::consts::EXE_SUFFIX))),
         directory.map(|dir| dir.join(player_executable_name())),
     ]
     .into_iter()
@@ -403,7 +404,7 @@ fn launch_exported_player(project: &Path) -> io::Result<()> {
         (packaged, cfg!(target_os = "macos"))
     } else {
         let executable = resolve_player_executable().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound,
-            "CovePlayer is not installed next to the Editor. Set COVE_PLAYER_EXECUTABLE to its path."))?;
+            "The player is not installed next to the editor. Set COVE_PLAYER_EXECUTABLE to its path."))?;
         (executable, false)
     };
     // Cove's Windows process jobs kill children when the editor exits. The

@@ -186,7 +186,7 @@ pub struct EngineHost {
     kernel: Arc<LockedState<EngineKernelCoordinator>>,
     state: Arc<LockedState<EngineHostState>>,
     timings: Arc<LockedState<FrameTimingLedger>>,
-    in_game_ui: Mutex<Option<Box<dyn InGameUIProviding>>>,
+    in_game_ui: Option<Arc<dyn InGameUIProviding>>,
     /// Shared rendering device; `None` runs simulation without a GPU.
     pub render_device: Option<Arc<Device>>,
     threads: Mutex<HostThreads>,
@@ -203,7 +203,7 @@ impl EngineHost {
             kernel: Arc::new(LockedState::new(EngineKernelCoordinator::new())),
             state: Arc::new(LockedState::new(EngineHostState::default())),
             timings: Arc::new(LockedState::new(FrameTimingLedger::default())),
-            in_game_ui: Mutex::new(in_game_ui),
+            in_game_ui: in_game_ui.map(Arc::from),
             render_device,
             threads: Mutex::new(HostThreads::default()),
         }
@@ -215,11 +215,10 @@ impl EngineHost {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn take_in_game_ui(&self) -> Option<Box<dyn InGameUIProviding>> {
+    fn in_game_ui_provider(&self) -> Option<Box<dyn InGameUIProviding>> {
         self.in_game_ui
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take()
+            .as_ref()
+            .map(|provider| Box::new(Arc::clone(provider)) as Box<dyn InGameUIProviding>)
     }
 
     pub fn last_timings(&self) -> PhaseTimings {
@@ -250,7 +249,7 @@ impl EngineHost {
         if render_surface.is_none() && !enable_viewport_surface {
             return Ok(None);
         }
-        let in_game_ui = self.take_in_game_ui();
+        let in_game_ui = self.in_game_ui_provider();
         NativeRenderer::prepared(
             &device,
             render_surface,
@@ -291,7 +290,7 @@ impl EngineHost {
             Some(consumer) => Some(consumer),
             None => match self.render_device.clone() {
                 Some(device) if render_surface.is_some() || enable_viewport_surface => {
-                    let in_game_ui = self.take_in_game_ui();
+                    let in_game_ui = self.in_game_ui_provider();
                     match NativeRenderer::new(
                         &device,
                         render_surface,

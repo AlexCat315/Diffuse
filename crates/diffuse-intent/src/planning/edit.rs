@@ -21,7 +21,12 @@ pub fn new_uuid() -> String {
 pub struct WorldRevisionSnapshot {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub scene_revision: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "sequenceRevisionID",
+        alias = "sequenceRevisionId",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub sequence_revision_id: Option<String>,
 }
 
@@ -47,6 +52,7 @@ pub enum EditAuthorKind {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CorrectionDelta {
+    #[serde(rename = "originalProposalID", alias = "originalProposalId")]
     pub original_proposal_id: String,
     pub was_partial_accept: bool,
 }
@@ -65,9 +71,19 @@ impl CorrectionDelta {
 #[serde(rename_all = "camelCase")]
 pub struct EditProvenance {
     pub author_kind: EditAuthorKind,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "sessionID",
+        alias = "sessionId",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub session_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "proposalID",
+        alias = "proposalId",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub proposal_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub correction_delta: Option<CorrectionDelta>,
@@ -92,6 +108,7 @@ impl EditProvenance {
 #[serde(rename_all = "camelCase")]
 pub struct Edit {
     pub id: String,
+    #[serde(rename = "transactionID", alias = "transactionId")]
     pub transaction_id: String,
     pub summary: String,
     pub mutation_summaries: Vec<String>,
@@ -191,10 +208,10 @@ mod tests {
         let provenance = EditProvenance::new(EditAuthorKind::Human);
         let json = serde_json::to_string(&provenance).expect("serialize");
         assert!(
-            !json.contains("sessionId"),
-            "absent sessionId must be omitted: {json}"
+            !json.contains("sessionID"),
+            "absent sessionID must be omitted: {json}"
         );
-        assert!(!json.contains("proposalId"));
+        assert!(!json.contains("proposalID"));
         assert!(!json.contains("correctionDelta"));
         assert!(json.contains("\"authorKind\":\"human\""));
     }
@@ -211,7 +228,12 @@ mod tests {
 
     #[test]
     fn an_edit_round_trips() {
-        let provenance = EditProvenance::new(EditAuthorKind::Ai);
+        let provenance = EditProvenance {
+            session_id: Some("session-1".to_string()),
+            proposal_id: Some("proposal-1".to_string()),
+            correction_delta: Some(CorrectionDelta::new("original-1", true)),
+            ..EditProvenance::new(EditAuthorKind::Ai)
+        };
         let edit = Edit::new(
             "edit-1",
             "tx-1",
@@ -219,12 +241,31 @@ mod tests {
             vec!["translation".to_string()],
             vec!["scene".to_string()],
             provenance,
-            WorldRevisionSnapshot::new(Some(1), None),
+            WorldRevisionSnapshot::new(Some(1), Some("sequence-1".to_string())),
             WorldRevisionSnapshot::new(Some(2), None),
         );
         let json = serde_json::to_string(&edit).expect("serialize");
         let restored: Edit = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(restored, edit);
+        let mut legacy_json = json;
+        for (swift, legacy) in [
+            ("transactionID", "transactionId"),
+            ("sessionID", "sessionId"),
+            ("proposalID", "proposalId"),
+            ("originalProposalID", "originalProposalId"),
+            ("sequenceRevisionID", "sequenceRevisionId"),
+        ] {
+            let swift = format!("\"{swift}\"");
+            assert!(
+                legacy_json.contains(&swift),
+                "missing {swift}: {legacy_json}"
+            );
+            legacy_json = legacy_json.replace(&swift, &format!("\"{legacy}\""));
+        }
+        assert_eq!(
+            serde_json::from_str::<Edit>(&legacy_json).expect("read existing Rust records"),
+            edit
+        );
     }
 
     #[test]

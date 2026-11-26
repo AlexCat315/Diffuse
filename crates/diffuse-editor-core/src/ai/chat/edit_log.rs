@@ -64,12 +64,12 @@ impl EditLog {
     }
 }
 
-/// `Edit` as the log writes it: Swift's synthesized key order and an ISO 8601
-/// timestamp.
+/// `Edit` as the log writes it, with Swift's keys and an ISO 8601 timestamp.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EditLine<'a> {
     id: &'a str,
+    #[serde(rename = "transactionID")]
     transaction_id: &'a str,
     summary: &'a str,
     mutation_summaries: &'a [String],

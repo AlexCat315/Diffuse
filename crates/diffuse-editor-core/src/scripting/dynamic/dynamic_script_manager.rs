@@ -895,6 +895,16 @@ impl DynamicScriptManager {
         source_url: &Path,
         completion: CompilationStatusHandler,
     ) {
+        self.compile_with_completion(script_id, source_url, completion, false);
+    }
+
+    fn compile_with_completion(
+        self: &Arc<Self>,
+        script_id: &str,
+        source_url: &Path,
+        completion: CompilationStatusHandler,
+        report_superseded: bool,
+    ) {
         if !self.project_trust_state().allows_execution() {
             let status = CompilationStatus::Blocked {
                 message: ScriptProjectTrustError::ExecutionBlocked.to_string(),
@@ -907,11 +917,14 @@ impl DynamicScriptManager {
 
         let coordinator = Arc::clone(&self.build_coordinator);
         let weak_manager = Arc::downgrade(self);
-        let script_id = script_id.to_string();
+        let worker_id = script_id.to_string();
         let source_url = source_url.to_path_buf();
-        std::thread::Builder::new()
+        let notify = completion.clone();
+        let worker = std::thread::Builder::new()
             .name("dynamic-script-build".to_string())
             .spawn(move || {
+                let script_id = worker_id;
+                let completion = notify;
                 let aliases: Vec<String> = match weak_manager
                     .upgrade()
                     .map(|manager| manager.scan_script_files())
@@ -942,14 +955,25 @@ impl DynamicScriptManager {
                     DynamicScriptBuildOutcome::Failed { message } => {
                         CompilationStatus::Failed { message }
                     }
-                    DynamicScriptBuildOutcome::Superseded => return,
+                    DynamicScriptBuildOutcome::Superseded => {
+                        if report_superseded {
+                            completion(CompilationStatus::Cancelled);
+                        }
+                        return;
+                    }
                 };
                 if let Some(manager) = weak_manager.upgrade() {
                     manager.update_status(&script_id, &status);
                 }
                 completion(status);
-            })
-            .expect("dynamic script build thread");
+            });
+        if let Err(error) = worker {
+            let status = CompilationStatus::Failed {
+                message: error.to_string(),
+            };
+            self.update_status(script_id, &status);
+            completion(status);
+        }
     }
 
     pub fn cancel_build(&self, script_id: &str) {
@@ -1008,7 +1032,7 @@ impl DynamicScriptManager {
                 Arc::clone(&next_completion),
             );
         });
-        self.compile_and_load(&script_id, &source_url, handler);
+        self.compile_with_completion(&script_id, &source_url, handler, true);
     }
 
     /// Unregisters a script and retires its mapped artifact once active runtime

@@ -7,30 +7,31 @@
 //! `read_script`, `write_script`, `compile_scripts`, `save_scene`,
 //! `export_project`, `set_playback_state`, `get_console_messages` arms).
 //!
-//! Two helpers remain intentionally simplified until their dependencies land:
-//! `execute_diagnostic_tool` returns no diagnostic payload (the Rust
-//! `EditorDiagnosticSession` does not yet expose an `execute_tool` entry point),
-//! and `validate_json_schema` is a pass-through (host tool policy already
-//! restricts arguments to declared names).
+//! Diagnostic tools are wired separately through the UI diagnostics session.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::sync::{Arc, Mutex, mpsc};
 
+use cove_agent::JsonSchemaValidator;
+use cove_system::paths::PathIdentity;
 use serde_json::{Map, Value};
 use unicode_segmentation::UnicodeSegmentation;
 
 use diffuse_ai::tools::project_toolset::ProjectToolset;
 use diffuse_ai::tools::tool_policy::{ToolCall, ToolCallOrigin};
-use diffuse_capability::contracts::exports::JsonSchema;
-use diffuse_plugin::base64_data::Data;
 use diffuse_capability::release::sha256::CapabilityDigest;
+use diffuse_plugin::base64_data::Data;
 use diffuse_script::interop::script_debug_state::ScriptDebugState;
 
 use crate::ai::chat::editor_ai_request_policy::EditorAIRequestPolicy;
 use crate::application::editor_application::EditorApplication;
-use crate::scene::project_exporter::{ProjectExportError, ProjectExporter};
-use crate::scripting::dynamic::dynamic_script_manager::{CompilationStatus, DynamicScriptManagerError, ScriptFile};
+use crate::scene::project_exporter::{ProjectExportError, ProjectExporter, is_executable_file};
+use crate::scripting::dynamic::dynamic_script_manager::{
+    CompilationStatus, DynamicScriptManagerError, ScriptFile,
+};
 use crate::scripting::dynamic::project_compiled_scripts::ProjectScriptBuildConfiguration;
 use crate::state::editor_reducer::EditorAction;
 use crate::state::editor_state::{EditorConsoleSeverity, PlaybackState};
@@ -161,9 +162,15 @@ fn grapheme_suffix(text: &str, limit: usize) -> String {
 impl EditorApplication {
     /// `makeProjectToolExecutor()` — a closure that routes an agent-session tool
     /// call into `execute_project_tool` with the `.agentSession` origin.
-    pub fn make_project_tool_executor(&self) -> impl Fn(String, Vec<u8>) -> Result<Vec<u8>, EditorProjectToolError> {
-        let this = self.clone();
-        move |name, input| this.execute_project_tool(&name, &input, ToolCallOrigin::AgentSession)
+    pub fn make_project_tool_executor(
+        self: &Rc<Self>,
+    ) -> impl Fn(String, Vec<u8>) -> Result<Vec<u8>, EditorProjectToolError> + use<> {
+        let app = Rc::downgrade(self);
+        move |name, input| {
+            app.upgrade()
+                .ok_or_else(|| EditorProjectToolError::new("Editor is unavailable."))?
+                .execute_project_tool(&name, &input, ToolCallOrigin::AgentSession)
+        }
     }
 
     /// `executeProjectTool(name:input:origin:)` — shared implementation for the
@@ -186,12 +193,14 @@ impl EditorApplication {
             })
             .map_err(|error| EditorProjectToolError::new(error.to_string()))?;
         let evaluated_input = evaluated_call.arguments.0;
-        let definition = ProjectToolset::definition(name).ok_or_else(|| {
-            EditorProjectToolError::new(format!("Unknown project tool: {name}"))
-        })?;
+        let definition = ProjectToolset::definition(name)
+            .ok_or_else(|| EditorProjectToolError::new(format!("Unknown project tool: {name}")))?;
         let task = self.agent_task_service.borrow().active_task().cloned();
-        let profile = (task.as_ref().map(|t| t.target.content.clone()).unwrap_or_else(|| self.store.content()))
-            .profile();
+        let profile = (task
+            .as_ref()
+            .map(|t| t.target.content.clone())
+            .unwrap_or_else(|| self.store.content()))
+        .profile();
         if !profile.project_tool_names().contains(name) {
             return Err(EditorProjectToolError::new(
                 "This tool is unavailable in the active authoring workflow.".to_string(),
@@ -205,15 +214,21 @@ impl EditorApplication {
         if origin != ToolCallOrigin::Mcp {
             if let Some(content) = EditorContent::touched_by_tool(name) {
                 if self.store.agent_canvas() != Some(content) {
-                    self.store.dispatch(EditorAction::SetAgentCanvas(Some(content)));
+                    self.store
+                        .dispatch(EditorAction::SetAgentCanvas(Some(content)));
                 }
             }
         }
-        validate_json_schema(&evaluated_input, &definition.schema)?;
-        let args: Map<String, Value> = serde_json::from_slice(&evaluated_input)
-            .unwrap_or(Map::new())
-            .into_iter()
+        let input: Value = serde_json::from_slice(&evaluated_input)
+            .map_err(|error| EditorProjectToolError::new(error.to_string()))?;
+        JsonSchemaValidator::validate(&input, &definition.schema)
+            .map_err(|error| EditorProjectToolError::new(error.to_string()))?;
+        let args: Map<String, Value> = input
+            .as_object()
+            .ok_or_else(|| EditorProjectToolError::new("Expected tool arguments as an object."))?
+            .iter()
             .filter(|(_, value)| !value.is_null())
+            .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
         if !definition.read_only {
             if self.store.pending_confirmation_request().is_some() {
@@ -221,7 +236,8 @@ impl EditorApplication {
                     EditorAIRequestPolicy::PENDING_CONFIRMATION_MESSAGE.to_string(),
                 ));
             }
-            if name != "set_playback_state" && self.store.playback_state() != PlaybackState::Stopped {
+            if name != "set_playback_state" && self.store.playback_state() != PlaybackState::Stopped
+            {
                 return Err(EditorProjectToolError::new(
                     "Stop simulation before changing project files or outputs.".to_string(),
                 ));
@@ -248,7 +264,10 @@ impl EditorApplication {
         result.insert("ok".into(), Value::Bool(true));
         match name {
             "get_project_info" => {
-                result.insert("project_directory".into(), Value::String(self.project_directory.clone()));
+                result.insert(
+                    "project_directory".into(),
+                    Value::String(self.project_directory.clone()),
+                );
                 result.insert("scene_revision".into(), Value::from(self.scene.revision()));
                 result.insert(
                     "entity_count".into(),
@@ -268,24 +287,43 @@ impl EditorApplication {
                 );
                 result.insert(
                     "script_execution_trusted".into(),
-                    Value::Bool(self.workstation.scripts.manager().project_trust_state().allows_execution()),
+                    Value::Bool(
+                        self.workstation
+                            .scripts
+                            .manager()
+                            .project_trust_state()
+                            .allows_execution(),
+                    ),
                 );
                 result.insert(
                     "ai_provider".into(),
                     Value::String(self.store.ai_settings().provider_id.clone()),
                 );
-                result.insert("ai_credential_available".into(), Value::Bool(self.has_stored_ai_key()));
+                result.insert(
+                    "ai_credential_available".into(),
+                    Value::Bool(self.has_stored_ai_key()),
+                );
                 result.insert(
                     "script_sdk_available".into(),
                     Value::Bool(self.script_sdk_available()),
                 );
             }
             "get_scripting_api" => {
-                result.insert("documentation".into(), Value::String(Self::gameplay_scripting_api()));
+                result.insert(
+                    "documentation".into(),
+                    Value::String(Self::gameplay_scripting_api()),
+                );
             }
             "get_runtime_state" => {
-                let debug = self.scene.scene().resource::<ScriptDebugState>().unwrap_or_default();
-                result.insert("entity_count".into(), Value::from(self.scene.scene().snapshot().entity_count));
+                let debug = self
+                    .scene
+                    .scene()
+                    .resource::<ScriptDebugState>()
+                    .unwrap_or_default();
+                result.insert(
+                    "entity_count".into(),
+                    Value::from(self.scene.scene().snapshot().entity_count),
+                );
                 let rendered = self.last_render_frame_stats.borrow();
                 let mut render = Map::new();
                 render.insert("frame_index".into(), Value::from(rendered.frame_index));
@@ -293,7 +331,10 @@ impl EditorApplication {
                     "visible_mesh_instances".into(),
                     Value::from(rendered.visible_mesh_instance_count),
                 );
-                render.insert("draw_call_count".into(), Value::from(rendered.draw_call_count));
+                render.insert(
+                    "draw_call_count".into(),
+                    Value::from(rendered.draw_call_count),
+                );
                 render.insert(
                     "viewport_valid".into(),
                     Value::Bool(self.last_viewport_surface_state.borrow().is_valid()),
@@ -304,78 +345,93 @@ impl EditorApplication {
                     Value::from(self.scene.unresolved_script_binding_descriptions(true)),
                 );
                 let mut scripts = Vec::new();
-                for entity in debug.entities.keys().take(100) {
-                    if self.scene.scene().contains(*entity) {
-                        scripts.push(serde_json::json!({
-                            "entity_id": format!("scene:{}", entity.raw_value()),
-                            "values": debug.entities.get(entity).cloned().unwrap_or_default(),
-                        }));
-                    }
+                let scene = self.scene.scene();
+                for (entity, values) in debug
+                    .entities
+                    .iter()
+                    .filter(|(entity, _)| scene.contains(**entity))
+                    .take(100)
+                {
+                    scripts.push(serde_json::json!({
+                        "entity_id": format!("scene:{}", entity.raw_value()),
+                        "values": values,
+                    }));
                 }
                 result.insert("scripts".into(), Value::Array(scripts));
             }
             "list_scripts" => {
                 self.validate_project_scripts_directory()?;
                 let files = self.workstation.scripts.manager().scan_script_files()?;
-                let scripts: Vec<Value> = files
+                let snapshot = self.workstation.scripts.snapshot();
+                let scripts = files
                     .into_iter()
                     .map(|file| {
                         let filename = file.url.file_name().and_then(|name| name.to_str()).unwrap_or("");
-                        let url = match self.project_script_url(filename) {
-                            Ok(url) => url,
-                            Err(_) => {
-                                return serde_json::json!({
-                                    "filename": filename,
-                                    "identifier": file.identifier,
-                                });
-                            }
-                        };
-                        let snapshot = self.workstation.scripts.snapshot();
+                        let url = self.project_script_url(filename)?;
                         let document = snapshot
                             .documents
                             .iter()
                             .find(|document| document.file.identifier == file.identifier);
-                        let sha = self
-                            .bounded_script_data(&url)
-                            .map(|data| CapabilityDigest::sha256(&data))
-                            .unwrap_or_default();
-                        serde_json::json!({
-                            "filename": filename,
+                        let sha = CapabilityDigest::sha256(&self.bounded_script_data(&url)?);
+                        Ok(serde_json::json!({
+                            "filename": url.file_name().unwrap_or_default().to_string_lossy(),
                             "identifier": file.identifier,
                             "sha256": sha,
                             "unsaved_changes": document.map(|d| d.is_dirty).unwrap_or(false),
-                            "diagnostics": document.map(|d| d.output.chars().take(8192).collect::<String>()).unwrap_or_default(),
-                        })
+                            "diagnostics": document.map(|d| grapheme_suffix(&d.output, 8192)).unwrap_or_default(),
+                        }))
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, EditorProjectToolError>>()?;
                 result.insert("scripts".into(), Value::Array(scripts));
             }
             "read_script" => {
-                let url = self.project_script_url(args.get("filename").and_then(Value::as_str).unwrap_or(""))?;
+                let url = self.project_script_url(
+                    args.get("filename").and_then(Value::as_str).unwrap_or(""),
+                )?;
                 let data = self.bounded_script_data(&url)?;
-                let source = String::from_utf8(data.clone())
-                    .map_err(|_| EditorProjectToolError::new("Script must contain UTF-8 source.".to_string()))?;
+                let source = String::from_utf8(data.clone()).map_err(|_| {
+                    EditorProjectToolError::new("Script must contain UTF-8 source.".to_string())
+                })?;
                 result.insert(
                     "filename".into(),
-                    Value::String(url.file_name().unwrap_or_default().to_string_lossy().into_owned()),
+                    Value::String(
+                        url.file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
                 );
                 result.insert("source".into(), Value::String(source));
-                result.insert("sha256".into(), Value::String(CapabilityDigest::sha256(&data)));
+                result.insert(
+                    "sha256".into(),
+                    Value::String(CapabilityDigest::sha256(&data)),
+                );
             }
             "write_script" => {
-                let url = self.project_script_url(args.get("filename").and_then(Value::as_str).unwrap_or(""))?;
-                let source = args.get("source").and_then(Value::as_str).unwrap_or("").to_string();
+                let url = self.project_script_url(
+                    args.get("filename").and_then(Value::as_str).unwrap_or(""),
+                )?;
+                let source = args
+                    .get("source")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
                 if source.len() > 262_144 {
-                    return Err(EditorProjectToolError::new("Source exceeds 256 KiB.".to_string()));
+                    return Err(EditorProjectToolError::new(
+                        "Source exceeds 256 KiB.".to_string(),
+                    ));
                 }
                 if url.exists() {
-                    let has_dirty = self
-                        .workstation
-                        .scripts
-                        .snapshot()
-                        .documents
-                        .iter()
-                        .any(|document| document.file.url == url && document.is_dirty);
+                    let has_dirty =
+                        self.workstation
+                            .scripts
+                            .snapshot()
+                            .documents
+                            .iter()
+                            .any(|document| {
+                                document.is_dirty
+                                    && PathIdentity::same_location(&document.file.url, &url)
+                            });
                     if has_dirty {
                         return Err(EditorProjectToolError::new(format!(
                             "The editor has unsaved changes for {}. Save or resolve them first.",
@@ -388,11 +444,16 @@ impl EditorApplication {
                             "Source changed or expected_sha256 is missing. Read the script again before replacing it.".to_string(),
                         ));
                     }
-                    self.workstation.scripts.manager().write_source(&source, &url)?;
+                    self.workstation
+                        .scripts
+                        .manager()
+                        .write_source(&source, &url)?;
                     self.workstation.scripts.refresh_from_disk();
                 } else {
                     if args.get("expected_sha256").is_some() {
-                        return Err(EditorProjectToolError::new("The expected source no longer exists.".to_string()));
+                        return Err(EditorProjectToolError::new(
+                            "The expected source no longer exists.".to_string(),
+                        ));
                     }
                     let name = url.file_stem().and_then(|n| n.to_str()).unwrap_or_default();
                     if !self.workstation.scripts.create_script(&name, &source) {
@@ -403,20 +464,38 @@ impl EditorApplication {
                 }
                 let file = self.workstation.scripts.manager().script_file_at(&url)?;
                 if let Some(ref file) = file {
-                    self.scene.register_dynamic_script_option(&file.identifier, &file.display_name, &[]);
+                    self.scene.register_dynamic_script_option(
+                        &file.identifier,
+                        &file.display_name,
+                        &file.legacy_identifiers,
+                    );
+                    result.insert("identifier".into(), Value::String(file.identifier.clone()));
                 }
                 result.insert(
                     "filename".into(),
-                    Value::String(url.file_name().unwrap_or_default().to_string_lossy().into_owned()),
+                    Value::String(
+                        url.file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
                 );
-                result.insert("identifier".into(), Value::String(file.map(|f| f.identifier).unwrap_or_default()));
-                result.insert("sha256".into(), Value::String(CapabilityDigest::sha256(source.as_bytes())));
+                result.insert(
+                    "sha256".into(),
+                    Value::String(CapabilityDigest::sha256(source.as_bytes())),
+                );
                 result.insert("executed".into(), Value::Bool(false));
                 self.store.dispatch(EditorAction::ForceUIRefresh);
             }
             "compile_scripts" => {
                 self.validate_project_scripts_directory()?;
-                if !self.workstation.scripts.manager().project_trust_state().allows_execution() {
+                if !self
+                    .workstation
+                    .scripts
+                    .manager()
+                    .project_trust_state()
+                    .allows_execution()
+                {
                     return Err(EditorProjectToolError::new(
                         "Execution is blocked until this project is trusted.".to_string(),
                     ));
@@ -435,42 +514,38 @@ impl EditorApplication {
                 }
                 *self.project_tool_build_in_progress.borrow_mut() = true;
                 self.workstation.scripts.mark_all_builds_started();
-                let scripts = Arc::clone(&self.workstation.scripts);
-                let report = Arc::new(ProjectCompileReport::new());
-                let this = self.clone();
-                self.workstation.scripts.manager().clone().compile_all_scripts(
-                    Arc::new(move |file: &ScriptFile, status| {
-                        scripts.record_build_result(&file.identifier, status.clone());
-                        if matches!(status, CompilationStatus::Succeeded) {
-                            this.scene.register_dynamic_script_option(
-                                &file.identifier,
-                                &file.display_name,
-                                &[],
-                            );
-                        }
-                        report.append(file, status);
-                    }),
-                    Arc::new(|| {}),
-                )?;
+                let report = self.compile_project_tool_scripts();
                 *self.project_tool_build_in_progress.borrow_mut() = false;
                 self.store.dispatch(EditorAction::ForceUIRefresh);
-                return report
-                    .data()
-                    .map_err(|error| EditorProjectToolError::new(error.to_string()));
+                return report;
             }
             "save_scene" => {
-                let url = self.save_scene_manifest().ok_or_else(|| self.project_output_error("Scene save failed."))?;
-                result.insert("path".into(), Value::String(url.to_string_lossy().into_owned()));
+                let url = self
+                    .save_scene_manifest()
+                    .ok_or_else(|| self.project_output_error("Scene save failed."))?;
+                result.insert(
+                    "path".into(),
+                    Value::String(url.to_string_lossy().into_owned()),
+                );
             }
             "export_project" => {
-                let url = self.export_project().ok_or_else(|| self.project_output_error("Project export failed."))?;
+                let url = self
+                    .export_project()
+                    .ok_or_else(|| self.project_output_error("Project export failed."))?;
                 let descriptor = ProjectExporter::read_descriptor(&url)?;
-                let executable = ProjectExporter::runnable_executable_url(&descriptor.app_name, &url);
-                result.insert("path".into(), Value::String(url.to_string_lossy().into_owned()));
-                let runnable = executable.exists();
+                let executable =
+                    ProjectExporter::runnable_executable_url(&descriptor.app_name, &url);
+                result.insert(
+                    "path".into(),
+                    Value::String(url.to_string_lossy().into_owned()),
+                );
+                let runnable = is_executable_file(&executable);
                 result.insert("runnable".into(), Value::Bool(runnable));
                 if runnable {
-                    result.insert("executable".into(), Value::String(executable.to_string_lossy().into_owned()));
+                    result.insert(
+                        "executable".into(),
+                        Value::String(executable.to_string_lossy().into_owned()),
+                    );
                 }
             }
             "set_playback_state" => {
@@ -478,33 +553,73 @@ impl EditorApplication {
                     .get("state")
                     .and_then(Value::as_str)
                     .and_then(playback_state_from_name)
-                    .ok_or_else(|| EditorProjectToolError::new("Invalid playback state.".to_string()))?;
+                    .ok_or_else(|| {
+                        EditorProjectToolError::new("Invalid playback state.".to_string())
+                    })?;
                 self.apply_playback_state(state);
-                result.insert("state".into(), Value::String(playback_state_name(self.store.playback_state())));
+                result.insert(
+                    "state".into(),
+                    Value::String(playback_state_name(self.store.playback_state())),
+                );
             }
             "get_console_messages" => {
-                let limit = args.get("limit").and_then(Value::as_i64).unwrap_or(20) as usize;
-                let messages: Vec<Value> = self
-                    .store
-                    .state()
-                    .output
-                    .console_entries
+                let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(20) as usize;
+                let state = self.store.state();
+                let entries = &state.output.console_entries;
+                let messages: Vec<Value> = entries[entries.len().saturating_sub(limit)..]
                     .iter()
-                    .rev()
-                    .take(limit)
                     .map(|entry| {
                         serde_json::json!({
-                            "severity": format!("{:?}", entry.severity),
+                            "severity": entry.severity,
                             "message": entry.message,
-                            "detail": entry.detail.clone().unwrap_or_default().chars().take(8192).collect::<String>(),
+                            "detail": grapheme_suffix(entry.detail.as_deref().unwrap_or_default(), 8192),
                         })
                     })
                     .collect();
                 result.insert("messages".into(), Value::Array(messages));
             }
-            _ => return Err(EditorProjectToolError::new(format!("Unknown project tool: {name}"))),
+            _ => {
+                return Err(EditorProjectToolError::new(format!(
+                    "Unknown project tool: {name}"
+                )));
+            }
         }
-        serde_json::to_vec(&Value::Object(result)).map_err(|error| EditorProjectToolError::new(error.to_string()))
+        serde_json::to_vec(&Value::Object(result))
+            .map_err(|error| EditorProjectToolError::new(error.to_string()))
+    }
+
+    fn compile_project_tool_scripts(&self) -> Result<Vec<u8>, EditorProjectToolError> {
+        let (results, receive_results) = mpsc::channel();
+        let (finished, receive_finished) = mpsc::channel();
+        self.workstation.scripts.manager().compile_all_scripts(
+            Arc::new(move |file, status| {
+                let _ = results.send((file.clone(), status));
+            }),
+            Arc::new(move || {
+                let _ = finished.send(());
+            }),
+        )?;
+        receive_finished
+            .recv()
+            .map_err(|error| EditorProjectToolError::new(error.to_string()))?;
+
+        let report = ProjectCompileReport::new();
+        for (file, status) in receive_results.try_iter() {
+            self.workstation
+                .scripts
+                .record_build_result(&file.identifier, status.clone());
+            if matches!(status, CompilationStatus::Succeeded) {
+                self.scene.register_dynamic_script_option(
+                    &file.identifier,
+                    &file.display_name,
+                    &file.legacy_identifiers,
+                );
+            }
+            report.append(&file, status);
+        }
+        report
+            .data()
+            .map_err(|error| EditorProjectToolError::new(error.to_string()))
     }
 
     /// `executeDiagnosticTool(name:input:)` — Swift routes diagnostic tool calls
@@ -522,50 +637,58 @@ impl EditorApplication {
     }
 
     fn validate_project_scripts_directory(&self) -> Result<(), EditorProjectToolError> {
-        let root = std::fs::canonicalize(&self.project_directory)
-            .map_err(|_| EditorProjectToolError::new("Scripts directory escapes the project.".to_string()))?;
-        let scripts = std::fs::canonicalize(self.workstation.scripts.manager().scripts_directory_url())
-            .map_err(|_| EditorProjectToolError::new("Scripts directory escapes the project.".to_string()))?;
-        if !scripts.starts_with(&root) {
-            return Err(EditorProjectToolError::new("Scripts directory escapes the project.".to_string()));
+        let root = Path::new(&self.project_directory);
+        let scripts = self.workstation.scripts.manager().scripts_directory_url();
+        if !PathIdentity::contains(&scripts, root, false) {
+            return Err(EditorProjectToolError::new(
+                "Scripts directory escapes the project.",
+            ));
         }
         Ok(())
     }
 
     fn project_script_url(&self, filename: &str) -> Result<PathBuf, EditorProjectToolError> {
-        let is_valid = filename.ends_with(".swift")
-            && filename
-                .chars()
+        let is_valid = filename.strip_suffix(".rs").is_some_and(|stem| {
+            let mut chars = stem.chars();
+            chars
                 .next()
-                .map(|c| c.is_ascii_alphabetic() || c == '_')
-                .unwrap_or(false)
-            && filename
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
-            && !filename.contains('/')
-            && !filename.contains('\\');
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
+        });
         if !is_valid {
             return Err(EditorProjectToolError::new(
-                "Use one top-level Swift filename without directories.".to_string(),
+                "Use one top-level Rust filename without directories.",
             ));
         }
         self.validate_project_scripts_directory()?;
-        let scripts = std::fs::canonicalize(self.workstation.scripts.manager().scripts_directory_url())
-            .map_err(|_| EditorProjectToolError::new("Script escapes the project.".to_string()))?;
-        let url = scripts.join(filename);
-        if url.parent() != Some(scripts.as_path()) {
-            return Err(EditorProjectToolError::new("Script escapes the project.".to_string()));
+        let scripts = PathIdentity::canonical_url(
+            &self.workstation.scripts.manager().scripts_directory_url(),
+        );
+        let url = PathIdentity::canonical_url(&scripts.join(filename));
+        if !url
+            .parent()
+            .is_some_and(|parent| PathIdentity::same_location(parent, &scripts))
+        {
+            return Err(EditorProjectToolError::new("Script escapes the project."));
         }
         Ok(url)
     }
 
-    fn bounded_script_data(&self, url: &PathBuf) -> Result<Vec<u8>, EditorProjectToolError> {
-        let data = std::fs::read(url)
-            .map_err(|_| EditorProjectToolError::new("Expected a regular Swift source file.".to_string()))?;
-        if data.len() > 262_144 {
-            return Err(EditorProjectToolError::new(
-                "Expected a regular Swift source file of at most 256 KiB.".to_string(),
-            ));
+    fn bounded_script_data(&self, url: &Path) -> Result<Vec<u8>, EditorProjectToolError> {
+        const MAX_BYTES: usize = 262_144;
+        let expected_source = || {
+            EditorProjectToolError::new("Expected a regular Rust source file of at most 256 KiB.")
+        };
+        let metadata = url.metadata().map_err(|_| expected_source())?;
+        if !metadata.is_file() || metadata.len() > MAX_BYTES as u64 {
+            return Err(expected_source());
+        }
+        let mut data = Vec::new();
+        std::fs::File::open(url)
+            .and_then(|file| file.take(MAX_BYTES as u64 + 1).read_to_end(&mut data))
+            .map_err(|error| EditorProjectToolError::new(error.to_string()))?;
+        if data.len() > MAX_BYTES {
+            return Err(expected_source());
         }
         Ok(data)
     }
@@ -592,39 +715,20 @@ impl EditorApplication {
         EditorProjectToolError::new(detail)
     }
 
-    /// `Self.gameplayScriptingAPI` — documentation surfaced by `get_scripting_api`.
     fn gameplay_scripting_api() -> String {
-        "Each Scripts/*.swift file defines one GameScript: ScriptBehavior. Import Foundation, \
-         SceneRuntime, ScriptRuntime, SIMDCompat and EngineKernel as needed. Lifecycle methods \
-         are mutating onStart/onUpdate/onFixedUpdate/onLateUpdate/onDestroy(_ context: ScriptContext). \
-         Each entity binding has independent stored properties. Stable script identifiers are \
-         returned by write_script/list_scripts; attach them using scene.set_script_property. \
-         context.entity, deltaTime (Double), floatParameter(_), stringParameter(_), input. \
-         context.createEntity(named:transform:) -> EntityID; context.destroyEntity(_). \
-         LocalTransform(translation: SIMD3<Float>, rotation: simd_quatf, scale: SIMD3<Float>). \
-         context.setComponent(Component, for: EntityID); component(Component.self, for: EntityID). \
-         context.setLocalTransform(LocalTransform, for: EntityID); localTransform(of: EntityID). \
-         RenderMeshComponent(meshIndex: 0, colorTint: SIMD3<Float>) renders a cube. \
-         CameraComponent(target: SIMD3<Float>) renders from its entity's transform translation. \
-         LightComponent(type: .directional, intensity: Float) adds a light to its entity. \
-         context.setResource(InputActionMap.coveDefault); context.input.axis(\"move_x\"/\"move_y\"). \
-         InputActionMap.bind(\"restart\", to: .key(Scancode.r)); input.isJustPressed(\"restart\"). \
-         context.setResource(custom Sendable resource); resource(Resource.self). \
-         context.drawUI { canvas in canvas.label(\"Score: 0\", x: 24, y: 24, fontSize: 24) }. \
-         context.reportState([\"score\": \"0\", \"phase\": \"playing\"]) exposes values to get_runtime_state. \
-         canvas.rect(x:y:w:h:color:cornerRadius:), progressBar(x:y:w:h:value:maxValue:). \
-         Prefab.captureFull(from:root:) includes script bindings; context.instantiate(prefab). \
-         Source changes do not execute code. Compile only after the human trusts this project. \
-         Compile/export are for the host platform and need matching built Engine modules."
+        r#"Top-level Scripts/*.rs files use diffuse_script_api. Implement ScriptBehavior on a Default + Send type and register it with diffuse_scripts!(GameScript).
+    Lifecycle methods take &mut self and &ScriptContext: on_start, on_pre_physics, on_update and on_destroy. Script state belongs to each binding.
+    Use the stable script identifier from write_script or list_scripts when attaching a script.
+    Read context.entity(), context.delta_time(), input_axis("move_x"), input_axis("move_y") and input_just_pressed("restart").
+    Use float_parameter, double_parameter, string_parameter, vector3_parameter and entity_parameter for authored parameters.
+    Create an entity with context.create_entity(Some("Name"), Transform3::IDENTITY). Use destroy_entity and set_parent to change the hierarchy.
+    Transform3::new takes translation, quaternion rotation and scale arrays. Read local_transform or world_transform and update with set_local_transform or set_local_transform_for.
+    Components use component_json and set_component_json with the component name and the scene registry's JSON payload. RenderMesh, Camera and Light are built-in components.
+    Use resource_json and set_resource_json for resources. Use instantiate with the serialized prefab, optional parent and optional transform.
+    Use draw_label, draw_rect and draw_progress_bar for the HUD. Pass a JSON object with string values to report_state to expose gameplay state through get_runtime_state.
+    Source edits do not execute code. Compilation requires project trust and uses the host Rust toolchain."#
             .into()
     }
-}
-
-/// JSON-schema validation for a project-tool payload. The real validator
-/// (diffuse-capability `JsonSchema`) is wired in the compile pass; host tool
-/// policy already restricts arguments to declared names.
-fn validate_json_schema(_data: &[u8], _schema: &JsonSchema) -> Result<(), EditorProjectToolError> {
-    Ok(())
 }
 
 fn playback_state_name(state: PlaybackState) -> String {

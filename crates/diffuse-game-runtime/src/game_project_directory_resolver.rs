@@ -30,7 +30,19 @@ impl GameProjectDirectoryResolver {
         {
             return Some(environment_path.clone());
         }
-        if let Some(bundle_resource_url) = bundle_resource_url {
+        let inferred_resources = executable_url
+            .and_then(Path::parent)
+            .filter(|directory| directory.file_name().is_some_and(|name| name == "MacOS"))
+            .and_then(Path::parent)
+            .filter(|directory| directory.file_name().is_some_and(|name| name == "Contents"))
+            .filter(|directory| {
+                directory
+                    .parent()
+                    .and_then(Path::extension)
+                    .is_some_and(|extension| extension == "app")
+            })
+            .map(|contents| contents.join("Resources"));
+        if let Some(bundle_resource_url) = bundle_resource_url.or(inferred_resources.as_deref()) {
             let bundled_project = bundle_resource_url.join("CoveProject");
             if Self::is_project_directory(&bundled_project) {
                 return Some(bundled_project.to_string_lossy().into_owned());
@@ -63,9 +75,8 @@ impl GameProjectDirectoryResolver {
     }
 
     /// `resolve(arguments:environment:bundleResourceURL:executableURL:currentDirectoryURL:)`
-    /// with the process defaults Swift reads from `CommandLine`, `ProcessInfo` and
-    /// `Bundle.main`. Rust has no resource bundle, so `bundle_resource_url` stays
-    /// `None`; the portable layout is found through the executable path.
+    /// with the process defaults. The executable path locates resources in a
+    /// macOS app bundle or portable export.
     pub fn resolve_default() -> Option<String> {
         let arguments: Vec<String> = std::env::args().collect();
         let environment: BTreeMap<String, String> = std::env::vars().collect();

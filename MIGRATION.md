@@ -639,6 +639,11 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 - `EditorApplication::request_project_export(run_after_export)` 在编辑器线程捕获场景清单，将复制、构建与签名交给后台线程。宿主在每帧调用 `poll_project_export`，由编辑器线程更新工作台操作状态和日志，并按请求调用 `run_exported_project(&Path)`。`export_project` 是同步入口，可返回 `<project>/export`。同一应用只受理一个导出请求，各编辑器会话通过项目级文件锁串行发布导出包。
 - 导出与保存复用 `authored_scene_manifest`。脚本检测覆盖编辑器已有的顶层 `.rs` 和 Cargo 的 `Scripts/src`，信任检查延伸至导出器实际启动 Cargo 的路径。
 
+### `diffuse-player` 独立播放器（批次 358）
+
+- `diffuse-player` 启动 Cove 窗口，由主线程推进游戏、HUD 和视口输入。着色器准备在线程上执行。取消和重试串行交接渲染器与 HUD 快照提供器。
+- 保留 `--validate-project`、`--simulation-frames` 与 `--validate-install`。编辑器优先搜索环境变量指定的播放器，再查找相邻的 Rust 播放器和旧版 CovePlayer。
+
 ## 9. 进度与批次日志
 
 `python3 Tools/Migration/inventory.py --status` 输出各 crate 的计数；每个批次在下面追加一行：
@@ -1213,24 +1218,33 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 | 2026-11-14 | 批次 357 | diffuse-editor-core（应用导出与运行、场景恢复测试） | 2 | 532 | 迁移同步和后台项目导出、操作状态、预播放快照、脚本信任检查、播放器定位与启动、macOS 临时签名。完成场景恢复套件的播放中导出断言。Windows 定向执行场景恢复和导出器用例，27 项通过。导出生产行标 `written`，恢复测试行标 `tested`。 |
 
+| 2026-11-26 | 批次 358 | diffuse-player、diffuse-exr、xtask | 1 | 248 | 迁移独立播放器，消除 HUD 跨线程共享视图状态，接入 Rust 播放器查找。修复原生引导的 Cargo 资源目录和 Linux ARM64 变体名。macOS 播放器 `cargo check` 通过，OpenEXR 6 项测试通过。 |
+| 2026-11-26 | 批次 359 | diffuse-editor-core、diffuse-ai、diffuse-intent | — | — | 修复项目工具的编译失败，编译完成后在编辑器线程发布结果。迁移 Rust 脚本名和文件边界检查，接回 Cove schema 校验。按 Swift Codable 修正 `Edit` 与 JSONL 的 ID 键名，5 项 `Edit` 测试通过。 |
+
+| 2026-11-26 | 批次 360 | diffuse-android、diffuse-game-runtime | 3 | 177 | 迁移 Android 游戏会话、输入释放和 Codable 快照，复用 Cove GPU 帧计时。修复 macOS 导出播放器从应用包定位内嵌项目。APK 游戏宿主仍受 G2 阻塞。 |
+
 ## 10. 已知问题与需要用户确认的事项
+
+- **Cove 0.3.2 本地依赖图（批次 358）**：当前只读 Cove checkout 使 Cargo 自动解析到 `cove-shell-verbs`（Cove 本地 crate）与 `ttf-parser 0.25.1`（来自 `cove-text`，用于检查 OpenType 字体）。用户于 2026-11-26 按 §2 确认将 `ttf-parser 0.25.1` 写入 `Cargo.lock`。
+- **项目工具（批次 359）**：项目工具直接调用的编译命令已等待真实完成并在编辑器线程更新场景。助手与 MCP 仍需接上非阻塞的编辑器线程命令分发，UI 诊断调用仍待迁移。脚本文件名在实际工作区入口严格校验。工具 schema 通过文字描述公开规则，因为 G10 的 Cove 校验器不能处理对应的正则。
+- **Swift 对等性（批次 358）**：本机未安装手册中的 Cove Swift SDK 0.2.12，完整基线和跨平台门禁仍待验证。桌面播放器入口已覆盖 Cove 的 macOS、Windows、Linux 后端选择。Android 游戏逐帧宿主仍缺 G2 所列接口。
 
 - **应用接线（批次 355–357）**：核心应用已可构造、关闭及导出。桌面外壳启动、逐帧轮询脚本消息、后台导出与自动保存、视口渲染、插件启动及助手会话接线仍待迁移。场景替换已跳过协调器内暂存的确认，取消正在进行的助手请求与同步助手工作流上下文仍等待 AI 应用层。无打包资源的开发环境使用空内置插件目录，带资源的发布路径及 Windows 外平台尚未运行本批测试。
 
 - **项目生命周期与恢复测试（批次 356–357）**：新建与打开的未保存确认、关闭保护脚本缓冲区、自动保存与清理、损坏上下文记忆、播放中导出均通过真实 Rust 应用入口验证。项目生命周期套件的打包示例接线仍保留 `pending`。
 
-- **导出播放器（批次 357）**：保留 `COVE_PLAYER_EXECUTABLE` 和编辑器旁的 `CovePlayer` 查找。Rust 播放器入口仍待迁移，真实游戏启动、脚本交付以及 macOS 签名尚未进行端到端验证。独立播放器通过标准库进程 API 启动与回收，Cove 的 Windows 作业对象缺口已记为 [G13](.migration/cove-gaps.md#g13-cove-process-sessions-cannot-launch-an-independent-player-on-windows)。
+- **导出播放器（批次 357、358）**：保留 `COVE_PLAYER_EXECUTABLE` 和编辑器旁的 `CovePlayer` 查找，并支持 `diffuse-player`。带脚本的完整发布包和 macOS 签名仍待端到端验证。独立播放器通过标准库进程 API 启动与回收，Cove 的 Windows 作业对象缺口已记为 [G13](.migration/cove-gaps.md#g13-cove-process-sessions-cannot-launch-an-independent-player-on-windows)。
 
 - **网格编辑应用接线（批次 354–356）**：网格工具、检查器、叠加生成与场景保存已接线。核心构造已注册网格检查器，桌面视口输入及逐帧提交仍需调用对应入口。三条交互测试迁移行仍待真实应用的撤销路径。Windows 定向用例在测试线程产生 SDL 音频主线程初始化日志，其他平台尚未验证。
 
 - **编辑器调用链（批次 353）**：几何资产编辑与检查器已能通过场景适配器调用，应用启动、网格编辑交互与视口绘制仍待接入。预设创建目前直接调用场景的生成接口，待 `Application/Assets/Assets.swift` 迁移后接回语义标注。迁移的几何测试使用场景适配器和文档工作区验证文件与历史，图形应用端及其他平台尚待验证。资产浏览器仍依赖应用层资产及脚本重载路径。
 
 - **锁文件中的新增传递依赖待确认（2026-11-14）**：工作期间并发提交 `b8278585` 包含 Cove 当前依赖图自动加入的锁文件条目；这些不是本批手动声明的直接第三方依赖，尚未取得 §2 要求的用户确认。新增的第三方包（含版本）为：`addr2line 0.27.1`、`adler2 2.0.1`、`ascii 1.1.0`、`bytemuck 1.25.2`、`byteorder-lite 0.1.0`、`cfg_aliases 0.2.2`、`chunked_transfer 1.5.0`、`cpp_demangle 0.5.1`、`crc32fast 1.5.5`、`ctrlc 3.5.2`、`fallible-iterator 0.3.0`、`fdeflate 0.3.7`、`flate2 1.1.11`、`gimli 0.34.0`、`httpdate 1.0.3`、`image 0.25.10`、`memmap2 0.9.12`、`miniz_oxide 0.8.9/0.9.1`、`moxcms 0.8.1`、`nix 0.31.3`、`object 0.40.0`、`plist 1.10.3`、`png 0.18.1`、`pxfm 0.1.30`、`quick-xml 0.41.0/0.42.0`、`rustc-demangle 0.1.28`、`ruzstd 0.9.1`、`simd-adler32 0.3.10`、`tiny_http 0.12.0`、`twox-hash 2.1.5`、`typed-arena 2.0.2`、`windows-sys 0.59.0`、`windows-targets 0.52.6` 及其各平台架构包、`zlib-rs 0.6.8`、`zune-core 0.5.3`、`zune-jpeg 0.5.15`。另新增四个 Cove 本地包，不属于第三方 crate。不能把锁文件更新视为已获授权；保留并发提交，待确认后再完成依赖门禁。
-- **Android 游戏宿主接线（G2，2026-11-14 复核）**：Cove 已能为 `Game` 注册内容，但注册接口尚不传入游戏所需的设备，也不承接逐帧更新、游戏纹理、按键释放和快照；Diffuse 的 `GameSession` 与静态脚本注册仍须接到该宿主。不得仅凭注册工厂就将 Android 玩家标为完成。
+- **Android 游戏宿主接线（G2，2026-11-14 复核）**：Cove 已能为 `Game` 注册内容，但注册接口尚不传入游戏所需的设备，也不承接逐帧更新、游戏纹理、按键释放和快照；Diffuse 的 Rust `GameSession` 已提供这些行为，仍需接到宿主以及 APK 静态脚本注册。不得仅凭注册工厂就将 Android 玩家标为完成。
 - **媒体工具交付（2026-11-14）**：本机通过 Cove 的 `ffmpeg-tools` 构建并完成导出测试；常规构建仍可从环境变量或已安装程序定位 FFmpeg，发布包复制工具的路径与 Windows 之外的平台尚待验证。媒体检查本身已不再依赖命令行程序。
 
 - **二进制 plist 解析（`PlayerInstallValidator`）**：`Info.plist` 校验目前只解析项目导出器写出的 XML plist；Swift 的 `PropertyListSerialization` 还能读取二进制 plist。完整支持需要 `plist` crate（workspace 未引入），按 §2 待用户确认；在此之前二进制 plist 视为不可读。
-- **`diffuse-intent` 的 `Edit` 序列化键名与 Swift 不一致（2026-11-11 批次 104 发现，未修）**：Swift 合成的 `CodingKey` 保留属性拼写 `sessionID` / `proposalID` / `sequenceRevisionID` / `originalProposalID`，而 [edit.rs](crates/diffuse-intent/src/planning/edit.rs) 的 `rename_all = "camelCase"` 产出 `sessionId` / `proposalId` / `sequenceRevisionId` / `originalProposalId`。批次 104 的 `edit_log.rs` 已用独立的行级 `Serialize` 保证 `edit_log.jsonl` 的磁盘格式正确，`Edit` 自身的 serde 键名仍待统一（是否只改 diff 结构字段，需先确认没有其他持久化载体依赖现行键名）。
+- **`Edit` Codable（批次 359 已修正）**：新写出记录使用 Swift 的 `transactionID`、`sessionID`、`proposalID`、`sequenceRevisionID`、`originalProposalID`。Rust 常规 JSON 解码接受此前的 `Id` 拼法。JSONL 使用 Swift 键名和 ISO 8601 时间。
 
 - **2026-11-07 Cove 现状复核：「照 Swift 原样翻译 133 个 xtask 文件」的规划前提已部分失效（待用户确认，本轮未改 §2 约定、未删文件）**：Cove 已完成 Rust 迁移并删除 Swift 树（`../Cove/CHANGELOG.md` 2026-11-01 破坏性条目），已有自己的 `xtask`（crate `cove-package`，命令 `setup|audit|package|run|android-prepare|devices`）、`cove-media`/`cove-media-rhi`（`ffmpeg-sys-next =9.0.1`，构建脚本内 `git clone -b release/9.0` 编译到 `OUT_DIR`）与 `cove-native-build::setup`；同时明确删除了 SwiftPM 时代的 artifact bundle 清单、modulemap 与 `Tools/Support`（G1 的恢复来源）。据此：① `xtask/src/export/`、`build/ios_staging/`、`build/native_bootstrap/` 与 `cove-package`/`cove-native-build` 职责重复，而 §2.1 规划的 `cove-package` 依赖在 `xtask/Cargo.toml` 和根 `Cargo.toml` 里**都没有声明**（G3 仍写着「`cargo xtask package` wraps `cove_package`」）；② `diffuse-media` 仍走 `DIFFUSE_NATIVE_ROOT` / `vendor/FFmpeg.artifactbundle` + 自带 `CFFmpegBridge`（FFmpeg 8.1.3 tarball），与 Cove 的 `cove-media`（FFmpeg 9.0）是两套底座，§10 的「FFmpeg 归属建议」至今未落地；③ Cove 没有 Rust 版 `checks/` 与 `validation/` 这套 CLI（其 `crates/graphics/tests/*slang_tests.rs` 明写「no Rust `cove-dev` equivalent yet」），但「Cove 没有等价 CLI」不代表 Diffuse 这些实现仍有效，更不代表 Cove 没有 devtools/MCP 能力——这三点均由下方复核条目修正；`build/shader_toolchain/`、`vulkan_bootstrap/`、`plugin_staging/` 同样见下方修正；④ `xtask/src/support/` 按 G1「Diffuse owns this code now」保留，`cove-system` 只覆盖进程/文件/工具定位的一部分且 API 不同，不能直接替换。**批次 83 翻译的 6 个文件（MediaStaging 5 + IOSStaging 1）恰好落在 ①② 的重复区**，存废取决于「`diffuse-media` 是否切到 `cove-media`」这一决策。该问题已于批次 85 由用户定为后者（见下）。
 

@@ -128,7 +128,8 @@
       "rust": [
         "crates/diffuse-player/src/main.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "Standalone Rust player, renderer preparation/retry, HUD, and both validation modes. See MIGRATION.md batch 358."
     },
     {
       "source": "Editor/Sources/CoveProjectExport/main.swift",
@@ -228,7 +229,7 @@
         "crates/diffuse-editor-core/src/ai/editor_project_tools.rs"
       ],
       "status": "pending",
-      "notes": "2026-11-13 批次 345：仅 EditorProjectToolError 与 ProjectCompileReport 已落地（下游 version_control/tools.rs 与 workstation/agent_tools.rs 需要该错误类型）；extension EditorApplication 的 makeProjectToolExecutor / executeProjectTool / validateProjectScriptsDirectory / projectScriptURL / boundedScriptData / projectOutputError / gameplayScriptingAPI 仍待迁移，故本行保持 pending。"
+      "notes": "Rust script read/write and build reporting are implemented. UI diagnostics and the nonblocking editor-thread session bridge are pending."
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Plugins/EditorPluginAuthorizationStore.swift",
@@ -5325,7 +5326,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_project_tools_tests.rs"
       ],
-      "status": "pending"
+      "status": "pending",
+      "notes": "Script workspace and project-tool guard cases are ported. The scene review case still needs the real app delete intent path."
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorReducerTests.swift",
@@ -13301,7 +13303,8 @@
       "rust": [
         "crates/diffuse-android/src/content/game.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "Game content snapshot and session trait implemented in Rust. Android host connection depends on G2."
     },
     {
       "source": "Platforms/Android/Sources/CoveAndroidApp/Content/InputSnapshot.swift",
@@ -13347,7 +13350,8 @@
       "rust": [
         "crates/diffuse-android/src/frame/gpu_timings.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "Reuses the GPU timing reporter already integrated into Cove’s Rust Android surface session."
     },
     {
       "source": "Platforms/Android/Sources/CoveAndroidApp/Frame/RuntimeOptions.swift",
@@ -13380,7 +13384,8 @@
       "rust": [
         "crates/diffuse-android/src/game/session.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "Game session with per-frame HUD, held keys and snapshot is implemented. APK wiring remains blocked by G2."
     },
     {
       "source": "Platforms/Android/Sources/CoveAndroidApp/SurfaceSession.swift",

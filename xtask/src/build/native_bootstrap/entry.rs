@@ -5,11 +5,11 @@
 
 use crate::support::terminal::{Terminal, ToolError};
 
-/// Builds the Engine and CoveUI native C/C++ dependencies.
+/// Builds the native libraries used by Diffuse.
 pub enum NativeBootstrap {}
 
 impl NativeBootstrap {
-    pub const USAGE: &'static str = "cove-dev native-bootstrap [--force]\n\n  --force  Discard Engine/build/native and restage Bun\n           even when it already verifies.\n";
+    pub const USAGE: &'static str = "cargo xtask native-bootstrap [--force]\n\n  --force  Rebuild OpenEXR and Imath from the pinned sources.\n";
 
     pub fn run(arguments: &[String]) -> Result<(), ToolError> {
         if arguments.iter().any(|arg| arg == "--help" || arg == "-h") {

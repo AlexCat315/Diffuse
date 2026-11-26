@@ -79,7 +79,7 @@ fn rerasterizes_cached_text_on_scale_change() {
 #[cfg(target_os = "macos")]
 #[test]
 fn publishes_color_glyphs() {
-    use cove_core::color_glyph_atlas_id;
+    use cove_ui::core::color_glyph_atlas_id;
 
     let _guard = serialized();
     let source = Arc::new(InGameDrawListSource::new());

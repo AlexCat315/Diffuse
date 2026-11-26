@@ -74,3 +74,23 @@ fn resolves_portable_parent_from_argument_zero() {
     assert_eq!(resolved.as_deref(), root.to_str());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn resolves_the_embedded_project_from_the_macos_executable() {
+    let root = temporary_root("cove-player-app-bundle");
+    let contents = root.join("Player.app/Contents");
+    let project = contents.join("Resources/CoveProject");
+    std::fs::create_dir_all(&project).expect("bundle resources");
+    std::fs::write(project.join("build.json"), b"{}").expect("build descriptor");
+
+    let resolved = GameProjectDirectoryResolver::resolve(
+        &[],
+        &BTreeMap::new(),
+        None,
+        Some(&contents.join("MacOS/Player")),
+        &root,
+    );
+
+    assert_eq!(resolved.as_deref(), project.to_str());
+    let _ = std::fs::remove_dir_all(&root);
+}

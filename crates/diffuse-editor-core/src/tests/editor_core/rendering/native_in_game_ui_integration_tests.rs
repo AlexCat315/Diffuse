@@ -7,40 +7,19 @@ use cove_ui_compose::primitives::text::Text;
 use diffuse_assets::asset_registry::AssetRegistry;
 use diffuse_kernel::in_game_canvas::{InGameCanvas, InGameUIColor};
 use diffuse_render::RenderDrawableSize;
-use diffuse_render::RenderPacket;
 use diffuse_render::RenderSettings;
 use diffuse_render::core::frame::render_frame_plan::RenderPassKind;
 use diffuse_render::native::native_renderer::NativeRenderer;
-use diffuse_render::surface::in_game_ui_providing::{
-    InGameUIProviding, InGameUIRecordingOutcome, InGameUIRecordingOutcomeError,
-    NativeInGameUITarget,
-};
+use diffuse_render::surface::in_game_ui_providing::InGameUIProviding;
 use diffuse_render_validation::GridImage;
 use diffuse_render_validation::PostProbeScene;
 use diffuse_render_validation::probes::mesh_probe_scene::MeshProbeScene;
-use diffuse_scene::scene_runtime::SceneRuntimeSnapshot;
 
 use crate::rendering::hud::in_game_ui_host::InGameUIHost;
 use crate::tests::editor_core::rendering::native_viewport_test_context::NativeViewportTestContext;
 
 fn gpu_resources_available() -> bool {
     std::env::var_os("COVE_RESOURCE_PATH").is_some()
-}
-
-/// `InGameUIHost` is constructed once and shared with the renderer, mirroring
-/// Swift's class reference semantics.
-#[derive(Clone)]
-struct SharedHost(Arc<InGameUIHost>);
-
-impl InGameUIProviding for SharedHost {
-    fn record_in_game_ui(
-        &self,
-        packet: &RenderPacket,
-        snapshot: &SceneRuntimeSnapshot,
-        target: NativeInGameUITarget,
-    ) -> Result<InGameUIRecordingOutcome, InGameUIRecordingOutcomeError> {
-        self.0.record_in_game_ui(packet, snapshot, target)
-    }
 }
 
 fn scene_with_hud(
@@ -68,9 +47,8 @@ fn production_scene_hud_parity_across_scale_and_capacity() {
     let hud = context.hud.clone();
     let mut scene =
         scene_with_hud(&context.device, Some(Box::new(hud.clone()))).expect("scene renderer");
-    let native_hud = Arc::new(InGameUIHost::new(context.device.clone()).expect("native HUD"));
-    let reference_hud =
-        Arc::new(InGameUIHost::new(context.reference.device.clone()).expect("reference HUD"));
+    let native_hud = InGameUIHost::new(context.device.clone()).expect("native HUD");
+    let reference_hud = InGameUIHost::new(context.reference.device.clone()).expect("reference HUD");
     native_hud.set_root_view(Text::new("HUD 中🙂"));
     reference_hud.set_root_view(Text::new("HUD 中🙂"));
 
@@ -135,7 +113,7 @@ fn production_scene_hud_parity_across_scale_and_capacity() {
                 );
             }
 
-            hud.set_provider(Some(Box::new(SharedHost(native_hud.clone()))));
+            hud.set_provider(Some(native_hud.render_provider()));
             scene.render_checked(&packet).expect("native HUD frame");
             let native =
                 GridImage::readback(&context.device, color_texture, size).expect("native readback");
@@ -175,7 +153,7 @@ fn production_scene_hud_parity_across_scale_and_capacity() {
                 "declarative HUD must render even with an empty script canvas"
             );
 
-            hud.set_provider(Some(Box::new(SharedHost(reference_hud.clone()))));
+            hud.set_provider(Some(reference_hud.render_provider()));
             let reference_stats = context.reference.render(&packet).expect("reference frame");
             assert_eq!(
                 reference_stats.active_passes.last(),
@@ -233,8 +211,8 @@ fn hud_refreshes_outside_opaque_cache_and_empty_snapshot_clears_it() {
     let device = Arc::new(Device::make(DeviceConfig::default()).expect("device"));
     let hud = super::hud_router::HUDRouter::new();
     let mut scene = scene_with_hud(&device, Some(Box::new(hud.clone()))).expect("scene renderer");
-    let host = Arc::new(InGameUIHost::new(device.clone()).expect("HUD host"));
-    hud.set_provider(Some(Box::new(SharedHost(host.clone()))));
+    let host = InGameUIHost::new(device.clone()).expect("HUD host");
+    hud.set_provider(Some(host.render_provider()));
 
     let size = RenderDrawableSize::new(192, 128);
     let mut packet = PostProbeScene::packet(size, 0);

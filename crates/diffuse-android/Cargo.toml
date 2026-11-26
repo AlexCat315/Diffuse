@@ -25,6 +25,7 @@ cove-logging.workspace = true
 cove-runtime.workspace = true
 cove-text.workspace = true
 cove-ui-compose.workspace = true
+serde.workspace = true
 
 [lints]
 workspace = true

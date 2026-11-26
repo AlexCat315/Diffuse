@@ -17,32 +17,12 @@ use diffuse_render::RenderSettings;
 use diffuse_render::core::frame::render_frame_plan::RenderPassKind;
 use diffuse_render::core::render_stats::RenderFrameStats;
 use diffuse_render::native::native_renderer::NativeRenderer;
-use diffuse_render::surface::in_game_ui_providing::{
-    InGameUIProviding, InGameUIRecordingOutcome, InGameUIRecordingOutcomeError,
-    NativeInGameUITarget,
-};
 use diffuse_render_validation::GridImage;
 use diffuse_render_validation::PostProbeScene;
 use diffuse_render_validation::probes::mesh_probe_scene::MeshProbeScene;
 
-use diffuse_scene::scene_runtime::SceneRuntimeSnapshot;
-
 use super::hud_router::HUDRouter;
 use crate::rendering::hud::in_game_ui_host::InGameUIHost;
-
-#[derive(Clone)]
-struct SharedHud(Arc<InGameUIHost>);
-
-impl InGameUIProviding for SharedHud {
-    fn record_in_game_ui(
-        &self,
-        packet: &RenderPacket,
-        snapshot: &SceneRuntimeSnapshot,
-        target: NativeInGameUITarget,
-    ) -> Result<InGameUIRecordingOutcome, InGameUIRecordingOutcomeError> {
-        self.0.record_in_game_ui(packet, snapshot, target)
-    }
-}
 
 const FRAMES: usize = 180;
 const WARMUP: usize = 30;
@@ -240,9 +220,9 @@ fn release_scene_and_hud_workload() {
         &[],
     )
     .expect("benchmark renderer");
-    let native_hud = Arc::new(InGameUIHost::new(device.clone()).expect("benchmark HUD"));
+    let native_hud = InGameUIHost::new(device.clone()).expect("benchmark HUD");
     native_hud.set_root_view(Text::new("Cove NativeRHI HUD 中🙂"));
-    hud.set_provider(Some(Box::new(SharedHud(native_hud.clone()))));
+    hud.set_provider(Some(native_hud.render_provider()));
 
     for post in [false, true] {
         for size in [

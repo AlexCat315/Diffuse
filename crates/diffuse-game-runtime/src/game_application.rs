@@ -42,6 +42,7 @@ use diffuse_editor_core::scripting::dynamic::project_script_catalog::{
 use diffuse_engine::engine_core::EngineHost;
 use diffuse_engine::engine_ffi::BridgedEngineRuntime;
 use diffuse_kernel::input_event::InputEvent;
+use diffuse_render::native::native_renderer::NativeRenderer;
 use diffuse_render::surface::in_game_ui_providing::InGameUIProviding;
 use diffuse_render::surface::viewport_surface::ViewportSurfaceState;
 use diffuse_render::{RenderDrawableSize, RenderPacketConsumer, RenderSettings};
@@ -141,7 +142,7 @@ impl From<RhiError> for GameApplicationError {
 
 /// Swift's `GameApplication`.
 pub struct GameApplication {
-    pub engine: EngineHost,
+    pub engine: Arc<EngineHost>,
     pub scene: EditorSceneAdapter,
     /// Called on the owner thread whenever the engine publishes a new surface.
     pub on_viewport_surface_changed: RefCell<Option<ViewportSurfaceChangedHandler>>,
@@ -239,7 +240,7 @@ impl GameApplication {
             in_game_ui,
         );
         Ok(GameApplication {
-            engine,
+            engine: Arc::new(engine),
             scene,
             on_viewport_surface_changed: RefCell::new(None),
             viewport_drawable_size: Cell::new(RenderDrawableSize::new(1280, 720)),
@@ -308,18 +309,29 @@ impl GameApplication {
         on_progress: impl Fn(ResourcePreparationProgress) + Send + Sync + 'static,
         is_cancelled: impl Fn() -> bool,
     ) -> Result<(), GameApplicationError> {
-        let settings = Self::default_render_settings();
-        let renderer = self
-            .engine
-            .prepare_renderer(None, true, &settings, on_progress)?;
+        let renderer = Self::prepare_viewport_renderer(&self.engine, on_progress)?;
         if is_cancelled() {
             return Err(GameApplicationError::Cancelled);
         }
+        self.start_prepared_renderer(renderer);
+        Ok(())
+    }
+
+    /// Builds the viewport renderer on a worker using the engine's shared device.
+    pub fn prepare_viewport_renderer(
+        engine: &EngineHost,
+        on_progress: impl Fn(ResourcePreparationProgress) + Send + Sync + 'static,
+    ) -> Result<Option<NativeRenderer>, GameApplicationError> {
+        Ok(engine.prepare_renderer(None, true, &Self::default_render_settings(), on_progress)?)
+    }
+
+    /// Starts the game on its owner thread after the renderer is ready.
+    pub fn start_prepared_renderer(&self, renderer: Option<NativeRenderer>) {
         let consumer: Option<Box<dyn RenderPacketConsumer>> =
             renderer.map(|renderer| Box::new(renderer) as Box<dyn RenderPacketConsumer>);
         self.engine.start(None, true, consumer);
-        self.engine.queue_render_settings(settings);
-        Ok(())
+        self.engine
+            .queue_render_settings(Self::default_render_settings());
     }
 
     /// Advances one frame: script-catalog watch, scene simulation and the

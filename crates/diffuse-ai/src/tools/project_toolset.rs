@@ -43,10 +43,9 @@ impl ProjectToolset {
     fn filename() -> JsonSchema {
         JsonSchema {
             description: Some(
-                "One top-level Swift filename, such as Game.swift. No directories.".to_string(),
+                "One top-level Rust filename, such as Game.rs. The stem starts with an ASCII letter or underscore and contains only ASCII letters, digits, underscores, or hyphens.".to_string(),
             ),
-            pattern: Some("^[A-Za-z_][A-Za-z0-9_-]*\\.swift$".to_string()),
-            ..JsonSchema::string(Some(7), Some(128))
+            ..JsonSchema::string(Some(4), Some(128))
         }
     }
 
@@ -135,13 +134,13 @@ impl ProjectToolset {
             ),
             AgentTool::new(
                 "get_scripting_api",
-                "Read the supported Swift gameplay API and usage examples before authoring scripts.",
+                "Read the supported Rust gameplay API and usage examples before authoring scripts.",
                 object(Vec::new(), Vec::new()),
                 true,
             ),
             AgentTool::new(
                 "get_runtime_state",
-                "Inspect current gameplay entity count, unresolved scripts and values reported by ScriptContext.reportState. Use during play to verify actual behavior.",
+                "Inspect current gameplay entity count, unresolved scripts and values reported by ScriptContext::report_state. Use during play to verify actual behavior.",
                 object(Vec::new(), Vec::new()),
                 true,
             ),
@@ -153,13 +152,13 @@ impl ProjectToolset {
             ),
             AgentTool::new(
                 "read_script",
-                "Read a project Swift source and its SHA-256. Read before modifying an existing file.",
+                "Read a project Rust source and its SHA-256. Read before modifying an existing file.",
                 object(vec![("filename", Self::filename())], vec!["filename"]),
                 true,
             ),
             AgentTool::new(
                 "write_script",
-                "Create or update one project Swift source. Does not execute it. Existing files require the expected_sha256 returned by read_script; unsaved editor buffers are protected.",
+                "Create or update one project Rust source. Does not execute it. Existing files require the expected_sha256 returned by read_script; unsaved editor buffers are protected.",
                 object(
                     vec![
                         ("filename", Self::filename()),
@@ -167,7 +166,7 @@ impl ProjectToolset {
                             "source",
                             string(
                                 Some(
-                                    "Complete UTF-8 Swift source defining GameScript: ScriptBehavior.",
+                                    "Complete UTF-8 Rust source implementing ScriptBehavior and registering it with diffuse_scripts!.",
                                 ),
                                 Some(1),
                                 Some(262_144),

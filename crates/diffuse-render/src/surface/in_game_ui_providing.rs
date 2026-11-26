@@ -81,6 +81,17 @@ pub trait InGameUIProviding: Send + Sync {
     ) -> Result<InGameUIRecordingOutcome, InGameUIRecordingOutcomeError>;
 }
 
+impl<T: InGameUIProviding + ?Sized> InGameUIProviding for Arc<T> {
+    fn record_in_game_ui(
+        &self,
+        packet: &RenderPacket,
+        snapshot: &SceneRuntimeSnapshot,
+        target: NativeInGameUITarget,
+    ) -> Result<InGameUIRecordingOutcome, InGameUIRecordingOutcomeError> {
+        (**self).record_in_game_ui(packet, snapshot, target)
+    }
+}
+
 /// The recorded commands plus an optional acknowledgement token. Swift hands
 /// the provider a borrowed `CommandBuffer`; the RHI records into an owned
 /// buffer, so the frame's buffer is round-tripped through the outcome.

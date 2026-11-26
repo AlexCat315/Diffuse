@@ -352,7 +352,7 @@ dependencies = [
 
 [[package]]
 name = "cove-agent"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "cove-alloc"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "libc",
  "thiserror 2.0.21",
@@ -369,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "cove-browser"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cove-composition",
  "cove-core",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "cove-composition"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cove-composition-macros",
  "cove-core",
@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "cove-composition-macros"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "cove-core"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "cove-platform",
@@ -420,7 +420,7 @@ dependencies = [
 
 [[package]]
 name = "cove-debugger"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "libc",
@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "cove-devtools"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "base64 0.22.1",
  "cove-agent",
@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "cove-devtools-cli"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -477,7 +477,7 @@ dependencies = [
 
 [[package]]
 name = "cove-devtools-protocol"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -486,7 +486,7 @@ dependencies = [
 
 [[package]]
 name = "cove-examples"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cove-alloc",
  "cove-composition",
@@ -507,7 +507,7 @@ dependencies = [
 
 [[package]]
 name = "cove-graphics"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "base64 0.22.1",
  "block2",
@@ -531,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "cove-hosts"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cove-alloc",
  "cove-composition",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "cove-http"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "thiserror 2.0.21",
@@ -564,7 +564,7 @@ dependencies = [
 
 [[package]]
 name = "cove-imaging"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "cove-core",
@@ -574,7 +574,7 @@ dependencies = [
 
 [[package]]
 name = "cove-logging"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "cove-system",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "cove-media"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cove-http",
  "cove-logging",
@@ -597,7 +597,7 @@ dependencies = [
 
 [[package]]
 name = "cove-native-build"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "cmake",
@@ -607,13 +607,14 @@ dependencies = [
 
 [[package]]
 name = "cove-package"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "base64 0.22.1",
  "clap",
  "cove-devtools-cli",
  "cove-devtools-protocol",
  "cove-native-build",
+ "cove-shell-verbs",
  "ctrlc",
  "serde_json",
  "toml",
@@ -621,14 +622,14 @@ dependencies = [
 
 [[package]]
 name = "cove-platform"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "cove-profiling"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "addr2line",
  "libc",
@@ -639,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "cove-runtime"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "cove-core",
@@ -653,13 +654,14 @@ dependencies = [
 
 [[package]]
 name = "cove-shell"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "block2",
  "cc",
  "cove-logging",
  "cove-native-build",
  "cove-platform",
+ "cove-shell-verbs",
  "libc",
  "objc2",
  "objc2-app-kit",
@@ -667,8 +669,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cove-shell-verbs"
+version = "0.3.2"
+
+[[package]]
 name = "cove-system"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "libc",
@@ -679,7 +685,7 @@ dependencies = [
 
 [[package]]
 name = "cove-terminal"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "cove-composition",
@@ -694,19 +700,22 @@ dependencies = [
 
 [[package]]
 name = "cove-text"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "cove-core",
  "cove-native-build",
+ "icu_properties",
+ "png",
  "thiserror 2.0.21",
+ "ttf-parser",
  "unicode-general-category",
  "unicode-segmentation",
 ]
 
 [[package]]
 name = "cove-ui"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cove-browser",
  "cove-composition",
@@ -728,7 +737,7 @@ dependencies = [
 
 [[package]]
 name = "cove-ui-addons"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cove-composition",
  "cove-core",
@@ -744,7 +753,7 @@ dependencies = [
 
 [[package]]
 name = "cove-ui-compose"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "cc",
  "cove-composition",
@@ -765,7 +774,7 @@ dependencies = [
 
 [[package]]
 name = "cove-watch"
-version = "0.3.0-dev"
+version = "0.3.2"
 dependencies = [
  "libc",
 ]
@@ -2813,6 +2822,12 @@ name = "toml_writer"
 version = "1.2.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
+
+[[package]]
+name = "ttf-parser"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "twox-hash"

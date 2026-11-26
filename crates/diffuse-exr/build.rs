@@ -33,6 +33,7 @@ fn variant(target: &str) -> String {
     } else if target.contains("windows") {
         format!("windows-{arch}")
     } else if target.contains("linux") {
+        let arch = if arch == "arm64" { "aarch64" } else { arch };
         format!("linux-{arch}")
     } else {
         panic!(
@@ -128,11 +129,10 @@ fn main() {
         // The MSVC C++ runtime is selected by the compiler flags.
     } else if os == "android" {
         println!("cargo:rustc-link-lib=c++_shared");
+    } else if os == "linux" || os == "windows" {
+        println!("cargo:rustc-link-lib=stdc++");
     } else {
         println!("cargo:rustc-link-lib=c++");
-        if os == "linux" {
-            println!("cargo:rustc-link-lib=stdc++");
-        }
     }
     if os != "windows" {
         println!("cargo:rustc-link-lib=m");

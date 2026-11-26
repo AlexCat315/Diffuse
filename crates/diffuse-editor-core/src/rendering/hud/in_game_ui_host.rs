@@ -13,12 +13,7 @@ use std::sync::Arc;
 
 use cove_graphics::rhi::{Device, RhiResult};
 use diffuse_kernel::in_game_canvas::InGameCanvas;
-use diffuse_render::RenderPacket;
-use diffuse_render::surface::in_game_ui_providing::{
-    InGameUIProviding, InGameUIRecordingOutcome, InGameUIRecordingOutcomeError,
-    NativeInGameUITarget,
-};
-use diffuse_scene::scene_runtime::SceneRuntimeSnapshot;
+use diffuse_render::surface::in_game_ui_providing::InGameUIProviding;
 
 use crate::rendering::hud::renderer::NativeInGameUIRenderer;
 use crate::rendering::hud::snapshots::InGameDrawListSource;
@@ -27,23 +22,8 @@ use crate::rendering::hud::view_graph::InGameViewGraphBridge;
 pub struct InGameUIHost {
     /// Main-thread view pipeline. Touched only by `set_root_view`/`tick`.
     bridge: RefCell<InGameViewGraphBridge>,
-    renderer: NativeInGameUIRenderer,
+    renderer: Arc<NativeInGameUIRenderer>,
 }
-
-// SAFETY: Swift declares `InGameUIHost: @unchecked Sendable` with the same
-// contract this port keeps: the `ViewGraph` pipeline (`bridge`) is main-thread
-// state, reached only from `set_root_view` and `tick`, while the render thread
-// reaches the renderer's snapshot channel (`InGameDrawListSource`, a `Mutex`).
-// The two halves never share `Rc` state, and `InGameUIRecordingOutcome` hands
-// the command buffer back before any other thread observes it.
-unsafe impl Send for InGameUIHost {}
-// SAFETY: `&InGameUIHost` is exposed to the render thread through
-// `InGameUIProviding`. Every `&self` method that touches `bridge` is documented
-// as main-thread-only, and `tick` takes `&self` only because Swift's class API
-// does; `RefCell` enforcement would panic on a cross-thread call rather than
-// corrupt the tree. `record_in_game_ui` never borrows `bridge`; it locks the
-// renderer state instead.
-unsafe impl Sync for InGameUIHost {}
 
 impl InGameUIHost {
     /// Native HUD and scene must share the same device and active frame.
@@ -53,8 +33,12 @@ impl InGameUIHost {
         let renderer = NativeInGameUIRenderer::new(device, source)?;
         Ok(InGameUIHost {
             bridge: RefCell::new(bridge),
-            renderer,
+            renderer: Arc::new(renderer),
         })
+    }
+
+    pub fn render_provider(&self) -> Box<dyn InGameUIProviding> {
+        Box::new(Arc::clone(&self.renderer))
     }
 
     /// Install a CoveUI view tree as the in-game HUD.
@@ -76,16 +60,5 @@ impl InGameUIHost {
     /// `tick(width:height:)` with Swift's default content scale and canvas.
     pub fn tick_default(&self, width: u32, height: u32) {
         self.tick(width, height, 1.0, InGameCanvas::new());
-    }
-}
-
-impl InGameUIProviding for InGameUIHost {
-    fn record_in_game_ui(
-        &self,
-        packet: &RenderPacket,
-        snapshot: &SceneRuntimeSnapshot,
-        target: NativeInGameUITarget,
-    ) -> Result<InGameUIRecordingOutcome, InGameUIRecordingOutcomeError> {
-        self.renderer.record_in_game_ui(packet, snapshot, target)
     }
 }
