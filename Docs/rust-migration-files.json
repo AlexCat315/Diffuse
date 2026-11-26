@@ -384,7 +384,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/assets/asset_workflow.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Assets/Assets.swift",
@@ -395,7 +395,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/assets/assets.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Bridge/MCPAsyncBridge.swift",
@@ -428,7 +428,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/diagnostics/diagnostics.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Diagnostics/Subscriptions.swift",
@@ -3018,7 +3018,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/console/problem_summary.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Details.swift",

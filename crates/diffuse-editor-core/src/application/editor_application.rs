@@ -173,7 +173,14 @@ pub struct EditorApplication {
     pub last_viewport_surface_state: RefCell<ViewportSurfaceState>,
     pub render_settings_generation: RefCell<u64>,
     pub last_queued_render_settings: RefCell<RenderSettings>,
-    pub last_render_frame_stats: RefCell<RenderFrameStats>,
+    /// Written by the engine's render-completion callback, which runs on the
+    /// render thread, so the frame statistics are shared rather than borrowed.
+    pub last_render_frame_stats: std::sync::Arc<std::sync::Mutex<RenderFrameStats>>,
+    /// GPU submit time of the most recent rendered frame, in seconds.
+    pub last_render_submit_seconds: std::sync::Arc<std::sync::Mutex<f64>>,
+    /// Delta-time accumulator for the stable FPS window.
+    pub frame_timing_accumulator: std::cell::Cell<f64>,
+    pub frame_timing_count: std::cell::Cell<u64>,
     pub is_shutting_down: std::sync::atomic::AtomicBool,
     pub activate_panel_handler: RefCell<Option<ActivatePanelHandler>>,
     pub(crate) close_project_handler: RefCell<Option<Rc<dyn Fn()>>>,
@@ -264,6 +271,9 @@ impl EditorApplication {
             return;
         }
 
+        // The averaging window covers ticks whether or not the engine is up, as
+        // Swift's `recordAndDispatchFrameStats` did before the frame counter.
+        self.record_and_dispatch_frame_stats(elapsed, elapsed.min(0.25));
         let next_frame = self.store.frame_index().wrapping_add(1);
         self.store.dispatch(EditorAction::TickFrame(next_frame));
         let events = self.pending_viewport_events.take();
@@ -477,7 +487,12 @@ impl EditorApplication {
             last_viewport_surface_state: RefCell::default(),
             render_settings_generation: RefCell::default(),
             last_queued_render_settings: RefCell::default(),
-            last_render_frame_stats: RefCell::default(),
+            last_render_frame_stats: std::sync::Arc::new(std::sync::Mutex::new(
+                RenderFrameStats::default(),
+            )),
+            last_render_submit_seconds: std::sync::Arc::new(std::sync::Mutex::new(0.0)),
+            frame_timing_accumulator: std::cell::Cell::new(0.0),
+            frame_timing_count: std::cell::Cell::new(0),
             is_shutting_down: AtomicBool::new(false),
             activate_panel_handler: RefCell::default(),
             close_project_handler: RefCell::default(),

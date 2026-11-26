@@ -148,8 +148,17 @@ impl EditorApplication {
         &self,
         handler: Option<Arc<dyn Fn(ViewportSurfaceState) + Send + Sync>>,
     ) {
+        let frame_stats = self.last_render_frame_stats.clone();
+        let submit_seconds = self.last_render_submit_seconds.clone();
         self.engine
             .set_render_completion_handler(Some(Arc::new(move |completion| {
+                *submit_seconds
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    completion.render_submit_seconds;
+                *frame_stats
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = completion.stats.clone();
                 if let Some(handler) = handler.as_ref() {
                     handler(completion.viewport_surface_state.clone());
                 }

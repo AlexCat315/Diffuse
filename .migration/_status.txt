@@ -27,7 +27,7 @@ diffuse-semantic               9    1754         0        0        0        9   
 diffuse-ai                    36   14101         0        0        0       36        0        0
 diffuse-plugin-host            1     307         0        0        0        1        0        0
 diffuse-mcp                    1     297         0        0        0        1        0        0
-diffuse-editor-core          339   48358        56      188       26       66        3        0
+diffuse-editor-core          339   48358        35      189       38       74        3        0
 diffuse-game-runtime          13    1284         0        1        4        8        0        0
 diffuse-export                 1      38         0        0        0        1        0        0
 diffuse-editor-ui            229   37288       157       49        2       17        4        0
@@ -36,4 +36,4 @@ diffuse-player                 1     248         0        1        0        0   
 diffuse-android               13     823         5        3        1        0        4        0
 xtask                        133   14657         0       15        1        3        0      114
 (manifests/scripts)            9
-total                       1337  208269       220      264      310      406       13      124
+total                       1337  208269       199      265      322      414       13      124

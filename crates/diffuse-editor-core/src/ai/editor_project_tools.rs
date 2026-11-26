@@ -323,7 +323,11 @@ impl EditorApplication {
                     "entity_count".into(),
                     Value::from(self.scene.scene().snapshot().entity_count),
                 );
-                let rendered = self.last_render_frame_stats.borrow();
+                let rendered = self
+                    .last_render_frame_stats
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
                 let mut render = Map::new();
                 render.insert("frame_index".into(), Value::from(rendered.frame_index));
                 render.insert(
@@ -707,7 +711,11 @@ impl EditorApplication {
         let state = self.store.state();
         let selected = self.store.selected_entity_id();
         let frame_stats = self.store.frame_stats();
-        let render_stats = self.last_render_frame_stats.borrow().clone();
+        let render_stats = self
+            .last_render_frame_stats
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let particle = self.scene.current_particle_frame_stats();
         let events = self.scene.current_particle_simulation_event_apply_report();
         let scalability = self.scene.current_particle_scalability_state();
