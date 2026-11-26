@@ -198,7 +198,7 @@ impl EditorApplication {
         let task = self.agent_task_service.borrow().active_task().cloned();
         let profile = (task
             .as_ref()
-            .map(|t| t.target.content.clone())
+            .map(|task| task.target.content)
             .unwrap_or_else(|| self.store.content()))
         .profile();
         if !profile.project_tool_names().contains(name) {
@@ -206,18 +206,17 @@ impl EditorApplication {
                 "This tool is unavailable in the active authoring workflow.".to_string(),
             ));
         }
-        if !definition.read_only {
-            if let Some(target) = task.as_ref().map(|t| &t.target) {
-                self.validate_agent_task_target(target)?;
-            }
+        if !definition.read_only
+            && let Some(target) = task.as_ref().map(|task| &task.target)
+        {
+            self.validate_agent_task_target(target)?;
         }
-        if origin != ToolCallOrigin::Mcp {
-            if let Some(content) = EditorContent::touched_by_tool(name) {
-                if self.store.agent_canvas() != Some(content) {
-                    self.store
-                        .dispatch(EditorAction::SetAgentCanvas(Some(content)));
-                }
-            }
+        if origin != ToolCallOrigin::Mcp
+            && let Some(content) = EditorContent::touched_by_tool(name)
+            && self.store.agent_canvas() != Some(content)
+        {
+            self.store
+                .dispatch(EditorAction::SetAgentCanvas(Some(content)));
         }
         let input: Value = serde_json::from_slice(&evaluated_input)
             .map_err(|error| EditorProjectToolError::new(error.to_string()))?;
@@ -456,7 +455,7 @@ impl EditorApplication {
                         ));
                     }
                     let name = url.file_stem().and_then(|n| n.to_str()).unwrap_or_default();
-                    if !self.workstation.scripts.create_script(&name, &source) {
+                    if !self.workstation.scripts.create_script(name, &source) {
                         return Err(EditorProjectToolError::new(
                             "Could not create script. Check editor diagnostics.".to_string(),
                         ));
