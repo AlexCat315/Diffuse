@@ -99,17 +99,23 @@ impl PlayerState {
                 }
             });
         match worker {
-            Ok(worker) => self.task.replace(Some(PreparationTask {
-                cancel,
-                progress,
-                worker,
-            })),
-            Err(error) => {
-                self.preparation
-                    .set(PreparationState::Failed(error.to_string()));
-                None
+            Ok(worker) => {
+                self.task.replace(Some(PreparationTask {
+                    cancel,
+                    progress,
+                    worker,
+                }));
             }
-        };
+            Err(error) => self.fail_preparation(error.to_string()),
+        }
+    }
+
+    fn fail_preparation(&self, message: String) {
+        LogSystem::logger(LOG_TARGET).log(&LogEvent::new(
+            Level::Error,
+            format!("Shader preparation failed: {message}"),
+        ));
+        self.preparation.set(PreparationState::Failed(message));
     }
 
     fn cancel_preparation(&self) {
@@ -150,12 +156,8 @@ impl PlayerState {
             Ok(Err(GameApplicationError::Cancelled)) => {
                 self.preparation.set(PreparationState::Cancelled);
             }
-            Ok(Err(error)) => self
-                .preparation
-                .set(PreparationState::Failed(error.to_string())),
-            Err(_) => self.preparation.set(PreparationState::Failed(
-                "Shader preparation worker stopped.".into(),
-            )),
+            Ok(Err(error)) => self.fail_preparation(error.to_string()),
+            Err(_) => self.fail_preparation("Shader preparation worker stopped.".into()),
         }
     }
 

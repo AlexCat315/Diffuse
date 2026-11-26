@@ -217,7 +217,8 @@
       "rust": [
         "crates/diffuse-editor-core/src/ai/completions.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "Worker drafts a commit message through the completion plugin and cancels its request on failure. Source control UI and plugin startup still need integration."
     },
     {
       "source": "Editor/Sources/EditorCore/AI/EditorProjectTools.swift",
@@ -3966,7 +3967,8 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/tasks/runner.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "Tasks panel and status view observe the task model and invoke its actions. Workbench root integration is pending."
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Tasks/TestExplorer.swift",
@@ -3977,7 +3979,8 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/tasks/test_explorer.rs"
       ],
-      "status": "pending"
+      "status": "written",
+      "notes": "Grouped test results and single-test runs are connected to the Rust TasksPanel."
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/Terminal/Shell.swift",

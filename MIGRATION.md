@@ -1218,14 +1218,19 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 
 | 2026-11-14 | 批次 357 | diffuse-editor-core（应用导出与运行、场景恢复测试） | 2 | 532 | 迁移同步和后台项目导出、操作状态、预播放快照、脚本信任检查、播放器定位与启动、macOS 临时签名。完成场景恢复套件的播放中导出断言。Windows 定向执行场景恢复和导出器用例，27 项通过。导出生产行标 `written`，恢复测试行标 `tested`。 |
 
-| 2026-11-26 | 批次 358 | diffuse-player、diffuse-exr、xtask | 1 | 248 | 迁移独立播放器，消除 HUD 跨线程共享视图状态，接入 Rust 播放器查找。修复原生引导的 Cargo 资源目录和 Linux ARM64 变体名。macOS 播放器 `cargo check` 通过，OpenEXR 6 项测试通过。 |
-| 2026-11-26 | 批次 359 | diffuse-editor-core、diffuse-ai、diffuse-intent | — | — | 修复项目工具的编译失败，编译完成后在编辑器线程发布结果。迁移 Rust 脚本名和文件边界检查，接回 Cove schema 校验。按 Swift Codable 修正 `Edit` 与 JSONL 的 ID 键名，5 项 `Edit` 测试通过。 |
+| 2026-11-26 | 批次 358 | diffuse-player、diffuse-exr、xtask | 1 | 248 | 迁移独立播放器，消除 HUD 跨线程共享视图状态，接入 Rust 播放器查找。修复原生引导的 Cargo 资源目录和 Linux ARM64 变体名。macOS 上播放器 CLI 的项目与安装验证通过，Metal 窗口成功启动，原生视口回归验证成功，`cargo xtask native-bootstrap` 完整执行，OpenEXR 6 项测试通过。 |
+| 2026-11-26 | 批次 359 | diffuse-editor-core、diffuse-ai、diffuse-intent | — | — | 修复项目工具的编译失败，编译完成后在编辑器线程发布结果。迁移 Rust 脚本名和文件边界检查，接回 Cove schema 校验。按 Swift Codable 修正 `Edit` 与 JSONL 的 ID 键名，5 项 `Edit` 测试和 3 项项目工具测试通过（场景待审查用例仍注入待确认请求）。 |
 
-| 2026-11-26 | 批次 360 | diffuse-android、diffuse-game-runtime | 3 | 177 | 迁移 Android 游戏会话、输入释放和 Codable 快照，复用 Cove GPU 帧计时。修复 macOS 导出播放器从应用包定位内嵌项目。APK 游戏宿主仍受 G2 阻塞。 |
+| 2026-11-26 | 批次 360 | diffuse-android、diffuse-game-runtime | 3 | 177 | 迁移 Android 游戏会话、输入释放和 Codable 快照，复用 Cove GPU 帧计时。修复 macOS 导出播放器从应用包定位内嵌项目，4 项目录定位测试通过。Android crate 在 macOS 通过构建检查，APK 游戏宿主仍受 G2 阻塞。 |
+
+| 2026-11-26 | 批次 361 | diffuse-editor-ui（测试列表） | 1 | 68 | 补齐已声明但缺失的 `test_explorer`，保留发现顺序、单项运行、运行期间禁用和失败消息。修正 Git 忽略规则，使 `test_*.rs` 可纳入版本管理。 |
+
+| 2026-11-26 | 批次 362 | diffuse-editor-ui、diffuse-editor-core | 2 | 196 | 接入任务工具栏、测试列表、目标菜单和任务状态。迁移提交消息草稿请求，保留 staged 优先、字形簇上限及取消。工作台根视图与插件启动仍待接线。 |
 
 ## 10. 已知问题与需要用户确认的事项
 
 - **Cove 0.3.2 本地依赖图（批次 358）**：当前只读 Cove checkout 使 Cargo 自动解析到 `cove-shell-verbs`（Cove 本地 crate）与 `ttf-parser 0.25.1`（来自 `cove-text`，用于检查 OpenType 字体）。用户于 2026-11-26 按 §2 确认将 `ttf-parser 0.25.1` 写入 `Cargo.lock`。
+- **macOS 门禁（批次 361）**：工作区 `cargo check --workspace --all-targets` 已通过。严格 Clippy 仍报告已有代码问题，包括 `xtask` 的未接线命令和编辑器核心的未接线模块。
 - **项目工具（批次 359）**：项目工具直接调用的编译命令已等待真实完成并在编辑器线程更新场景。助手与 MCP 仍需接上非阻塞的编辑器线程命令分发，UI 诊断调用仍待迁移。脚本文件名在实际工作区入口严格校验。工具 schema 通过文字描述公开规则，因为 G10 的 Cove 校验器不能处理对应的正则。
 - **Swift 对等性（批次 358）**：本机未安装手册中的 Cove Swift SDK 0.2.12，完整基线和跨平台门禁仍待验证。桌面播放器入口已覆盖 Cove 的 macOS、Windows、Linux 后端选择。Android 游戏逐帧宿主仍缺 G2 所列接口。
 

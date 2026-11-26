@@ -907,6 +907,7 @@ dependencies = [
  "diffuse-game-runtime",
  "diffuse-kernel",
  "diffuse-render",
+ "serde",
 ]
 
 [[package]]

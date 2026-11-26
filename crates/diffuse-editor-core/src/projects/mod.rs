@@ -10,9 +10,6 @@ use std::path::{Component, Path, PathBuf};
 /// exist yet — a project the user just picked — is made absolute and lexically
 /// normalized instead, which is what `standardizedFileURL` does on its own.
 pub fn standardized_path(path: &Path) -> PathBuf {
-    if let Ok(canonical) = std::fs::canonicalize(path) {
-        return without_verbatim_prefix(canonical);
-    }
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -30,7 +27,9 @@ pub fn standardized_path(path: &Path) -> PathBuf {
             other => normalized.push(other.as_os_str()),
         }
     }
-    normalized
+    std::fs::canonicalize(&normalized)
+        .map(without_verbatim_prefix)
+        .unwrap_or(normalized)
 }
 
 /// Windows `canonicalize` returns verbatim paths (`\\?\C:\…`), which are the
