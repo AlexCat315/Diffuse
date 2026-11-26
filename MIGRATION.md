@@ -1232,7 +1232,7 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 ## 10. 已知问题与需要用户确认的事项
 
 - **Cove 0.3.2 本地依赖图（批次 358）**：当前只读 Cove checkout 使 Cargo 自动解析到 `cove-shell-verbs`（Cove 本地 crate）与 `ttf-parser 0.25.1`（来自 `cove-text`，用于检查 OpenType 字体）。用户于 2026-11-26 按 §2 确认将 `ttf-parser 0.25.1` 写入 `Cargo.lock`。
-- **macOS 门禁（批次 363）**：工作区 `cargo check --locked --workspace --all-targets` 已通过。渲染生命周期用例需要将原有 `DiffuseRuntime_RenderBackend.bundle` 放在测试二进制旁或用 `COVE_RESOURCE_PATH` 指定资源根。严格 Clippy 仍报告已有代码问题，包括 `xtask` 的未接线命令和编辑器核心的未接线模块。
+- **macOS 门禁（批次 363）**：工作区 `cargo check --locked --workspace --all-targets` 已通过。渲染生命周期用例需要将原有 `DiffuseRuntime_RenderBackend.bundle` 放在测试二进制旁或用 `COVE_RESOURCE_PATH` 指定资源根。 暂存资源后的工作区运行通过 2527 项单元与集成测试，CrystalRush 玩法仍被标记忽略。组合运行的 `diffuse-editor-ui` Rustdoc 报 E0463，单独运行该 crate 的文档门禁通过。严格 Clippy 仍报告已有代码问题，包括 `xtask` 的未接线命令和编辑器核心的未接线模块。
 - **项目工具（批次 359）**：项目工具直接调用的编译命令已等待真实完成并在编辑器线程更新场景。助手与 MCP 仍需接上非阻塞的编辑器线程命令分发，UI 诊断调用仍待迁移。脚本文件名在实际工作区入口严格校验。工具 schema 通过文字描述公开规则，因为 G10 的 Cove 校验器不能处理对应的正则。
 - **Swift 对等性（批次 358）**：本机未安装手册中的 Cove Swift SDK 0.2.12，完整基线和跨平台门禁仍待验证。桌面播放器入口已覆盖 Cove 的 macOS、Windows、Linux 后端选择。Android 游戏逐帧宿主仍缺 G2 所列接口。
 
