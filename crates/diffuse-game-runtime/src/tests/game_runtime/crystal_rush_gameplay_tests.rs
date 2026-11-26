@@ -1,11 +1,6 @@
 //! Ported from `Editor/Tests/GameRuntimeTests/CrystalRushGameplayTests.swift`.
 //!
-//! The Swift case compiles `examples/CrystalRush/Scripts/CrystalRush.swift`
-//! through `DynamicScriptManager` and runs the compiled artifacts. D1 replaces
-//! the Swift script with a Rust `Scripts/` crate; `Docs/rust-migration-files.json`
-//! still marks `examples/CrystalRush/Scripts/src/lib.rs` as pending, so the full
-//! translation is kept with its original assertions and ignored until that
-//! example and its `Scripts/Cargo.toml` exist (MIGRATION.md §5).
+//! Builds the migrated Rust example and exercises the exported dynamic library.
 //!
 //! Two mechanical differences from the Swift test are part of the port rather
 //! than the fixture gap:
@@ -30,6 +25,7 @@ use diffuse_scene::input_action::Scancode;
 use diffuse_scene::rendering::render_extraction::RenderMeshComponent;
 use diffuse_script::ScriptDebugState;
 use diffuse_script::core::script_component::{ScriptBinding, ScriptBindingID};
+use diffuse_script::dynamic_script::script_c_bridge_context::ScriptErrorState;
 use diffuse_script::interop::component_registry_script_codec::encode_script_binding;
 
 use crate::game_application::GameApplication;
@@ -120,9 +116,13 @@ fn entity(game: &GameApplication, name: &str) -> EntityID {
         .unwrap_or_else(|| panic!("missing entity {name}"))
 }
 
-fn position(game: &GameApplication, name: &str, point: Float3) {
-    game.scene
-        .set_entity_local_translation(entity(game, name).raw_value(), point);
+fn position(game: &GameApplication, point: Float3) {
+    let player = entity(game, "Player");
+    game.scene.with_scene_mut(|scene| {
+        let transform = scene.local_transform(player).expect("player transform");
+        let _ = scene.set_local_transform(transform.with_translation(point), player);
+    });
+    assert_eq!(translation(game, "Player"), point, "move player");
 }
 
 fn translation(game: &GameApplication, name: &str) -> Float3 {
@@ -132,7 +132,6 @@ fn translation(game: &GameApplication, name: &str) -> Float3 {
 }
 
 #[test]
-#[ignore = "blocked: examples/CrystalRush/Scripts/src/lib.rs (Rust script) is still pending"]
 fn playable_loop() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -143,6 +142,17 @@ fn playable_loop() -> Result<(), Box<dyn std::error::Error>> {
     let output = export_root.join("export");
     let scripts = root.join("examples").join("CrystalRush").join("Scripts");
     copy_directory(&scripts, &project.join("Scripts"))?;
+    let manifest_path = project.join("Scripts/Cargo.toml");
+    let manifest_source = std::fs::read_to_string(&manifest_path)?;
+    // The test's copy lives outside the repository, so anchor its SDK dependency.
+    let sdk = root.join("crates/diffuse-script-api");
+    std::fs::write(
+        &manifest_path,
+        manifest_source.replace(
+            "\"../../../crates/diffuse-script-api\"",
+            &format!("{sdk:?}"),
+        ),
+    )?;
 
     let source = project.join("Scripts").join("src").join("lib.rs");
     assert!(
@@ -222,7 +232,7 @@ fn playable_loop() -> Result<(), Box<dyn std::error::Error>> {
     for index in 1..=8 {
         let name = format!("Crystal {index}");
         let gem_translation = translation(&game, &name);
-        position(&game, &name, gem_translation);
+        position(&game, gem_translation);
         tick(&game, &mut frame, 1, Vec::new());
         let gem = entity(&game, &name);
         assert_eq!(
@@ -230,7 +240,10 @@ fn playable_loop() -> Result<(), Box<dyn std::error::Error>> {
                 .scene()
                 .component::<RenderMeshComponent>(gem)
                 .map(|component| component.is_visible),
-            Some(false)
+            Some(false),
+            "{name} was not collected. State: {:?}. Script errors: {:?}",
+            values(&game),
+            game.scene.scene().resource::<ScriptErrorState>(),
         );
     }
     assert_eq!(values(&game).get("score").map(String::as_str), Some("8"));
@@ -247,7 +260,7 @@ fn playable_loop() -> Result<(), Box<dyn std::error::Error>> {
 
     for expected_hearts in [2, 1, 0] {
         let enemy_translation = translation(&game, "Sentinel 1");
-        position(&game, "Sentinel 1", enemy_translation);
+        position(&game, enemy_translation);
         tick(&game, &mut frame, 1, Vec::new());
         let expected = expected_hearts.to_string();
         assert_eq!(
@@ -255,7 +268,7 @@ fn playable_loop() -> Result<(), Box<dyn std::error::Error>> {
             Some(expected.as_str())
         );
         if expected_hearts > 0 {
-            position(&game, "Player", Float3::new(8.0, 0.6, 6.0));
+            position(&game, Float3::new(8.0, 0.6, 6.0));
             tick(&game, &mut frame, 86, Vec::new());
         }
     }
@@ -263,7 +276,7 @@ fn playable_loop() -> Result<(), Box<dyn std::error::Error>> {
 
     tick(&game, &mut frame, 1, vec![key(Scancode::R, true)]);
     tick(&game, &mut frame, 1, vec![key(Scancode::R, false)]);
-    position(&game, "Player", Float3::new(8.0, 0.6, 6.0));
+    position(&game, Float3::new(8.0, 0.6, 6.0));
     tick(&game, &mut frame, 120, vec![key(Scancode::D, true)]);
     assert_eq!(
         values(&game).get("player_x").map(String::as_str),

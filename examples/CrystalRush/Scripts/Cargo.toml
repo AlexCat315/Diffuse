@@ -1,0 +1,14 @@
+[package]
+name = "crystal-rush-scripts"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+diffuse-script-api = { path = "../../../crates/diffuse-script-api" }

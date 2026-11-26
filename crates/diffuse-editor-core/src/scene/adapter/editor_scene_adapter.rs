@@ -148,12 +148,8 @@ impl EditorSceneAdapter {
         self.scene.borrow().clone()
     }
 
-    /// Mutates the authored scene in place. Swift's class exposed `scene` as a
-    /// mutable property; the accessor keeps `&self` call sites working.
-    pub(crate) fn with_scene_mut<Result>(
-        &self,
-        body: impl FnOnce(&mut SceneRuntime) -> Result,
-    ) -> Result {
+    /// Mutates the live scene in place, including during game simulation.
+    pub fn with_scene_mut<Result>(&self, body: impl FnOnce(&mut SceneRuntime) -> Result) -> Result {
         body(&mut self.scene.borrow_mut())
     }
 

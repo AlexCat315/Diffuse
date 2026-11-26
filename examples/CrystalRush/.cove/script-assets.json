@@ -1,15 +1,14 @@
 {
   "assets" : [
     {
-      "contentFingerprint" : "58b5d98a71233d89cd0d03ca82232662",
-      "fileSystemIdentity" : "16777234:527210",
+      "contentFingerprint" : "7538ed467f215ed441639cf678c7a856",
       "id" : {
         "rawValue" : "F8097892-F6BF-4A3A-9BD3-998A843EA625"
       },
       "legacyIdentifiers" : [
         "scripts.crystalrush"
       ],
-      "relativePath" : "CrystalRush.swift"
+      "relativePath" : "src/lib.rs"
     }
   ],
   "version" : 1

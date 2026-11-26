@@ -6485,8 +6485,8 @@
       "rust": [
         "crates/diffuse-game-runtime/src/tests/game_runtime/crystal_rush_gameplay_tests.rs"
       ],
-      "status": "blocked",
-      "blocked_by": "P1: examples/CrystalRush/Scripts/src/lib.rs (D1 example script) is still pending; test is translated and #[ignore]d until the example builds"
+      "status": "tested",
+      "notes": "Gameplay passes through the exported Rust dynamic library. Fixture movement now edits the live player transform as in Swift."
     },
     {
       "source": "Editor/Tests/GameRuntimeTests/GameProjectAssetIndexLoaderTests.swift",
@@ -15024,7 +15024,8 @@
         "examples/CrystalRush/Scripts/src/lib.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested",
+      "notes": "Rust crate compiles against the script ABI. The exported game completes its original playable-loop assertions."
     }
   ]
 }
