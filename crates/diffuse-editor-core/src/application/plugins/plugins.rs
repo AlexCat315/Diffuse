@@ -194,7 +194,7 @@ impl EditorApplication {
         inspection: &PluginInspection,
         authorised_at: &diffuse_capability::support::swift_date::SwiftDate,
     ) -> Result<PluginAuthorizationRecord, PluginError> {
-        PluginAuthorizationRecord::from_inspection(inspection, authorised_at.clone())
+        PluginAuthorizationRecord::from_inspection(inspection, *authorised_at)
     }
 
     /// A stored record is reusable only when every current inspection field is
@@ -260,22 +260,17 @@ impl EditorApplication {
                         id,
                     ) {
                         let capability = PluginComponentCapability::capability_id(id);
-                        match client.prepare_capability(
-                            &binding,
-                            &capability,
-                            PluginComponentCapability::input(),
-                            None,
-                        ) {
-                            Ok(PluginPreparedCapabilityResult::Read(payload)) => {
-                                if let Ok(declarations) =
-                                    super::plugin_components::PluginComponentDeclaration::decode(
-                                        &payload,
-                                    )
-                                {
-                                    components.set(declarations, id);
-                                }
-                            }
-                            Ok(_) | Err(_) => {}
+                        if let Ok(PluginPreparedCapabilityResult::Read(payload)) =
+                            client.prepare_capability(
+                                &binding,
+                                &capability,
+                                PluginComponentCapability::input(),
+                                None,
+                            )
+                            && let Ok(declarations) =
+                                super::plugin_components::PluginComponentDeclaration::decode(&payload)
+                        {
+                            components.set(declarations, id);
                         }
                     }
                     let components = Arc::downgrade(&components);

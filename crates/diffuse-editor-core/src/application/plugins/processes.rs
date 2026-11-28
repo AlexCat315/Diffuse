@@ -51,14 +51,13 @@ impl EditorApplication {
         if permissions
             .entry_points()
             .contains(VersionControlContribution::ENTRY_POINT)
-        {
-            if let Some(repository) = VersionControlProvider::repository_containing(
+            && let Some(repository) = VersionControlProvider::repository_containing(
                 &root,
                 &BTreeSet::new(),
                 Some(&providers),
-            ) {
-                context.workspace = repository.root;
-            }
+            )
+        {
+            context.workspace = repository.root;
         }
         #[cfg(windows)]
         let separator = ';';

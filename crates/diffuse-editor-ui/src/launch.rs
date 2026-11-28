@@ -4,15 +4,33 @@ use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::process::ExitCode;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use cove_logging::{Level, LogEvent, LogSystem, LogValue};
+use cove_graphics::rhi::{Device, DeviceConfig, GraphicsApi};
+use cove_logging::{Level, LogEvent, LogSystem, LogValue, LoggingConfiguration};
+use cove_ui::hosts::desktop::{AppWindowTitleBarStyle, Application, ApplicationCallbacks};
+use cove_ui::hosts::desktop::diagnostics::{devtools, integration};
+use cove_ui::ApplicationConfiguration;
+use cove_ui_compose::AnyView;
+use cove_ui_compose::app_storage::{AppStorageDefaults, FileAppStorageStore};
+use diffuse_card_battle::core::battle_state_machine::BattleStateMachine;
+use diffuse_card_battle::rules::battle_command::BattleCommand;
+use diffuse_card_battle::support::battle_hud_snapshot::BattleHUDSnapshot;
+use diffuse_card_battle::support::battle_identifiers::BattlePlayerID;
+use diffuse_card_battle::support::battle_sample_factory::BattleSampleFactory;
+use diffuse_editor_core::rendering::hud::in_game_ui_host::InGameUIHost;
 use diffuse_editor_core::application::editor_application::EditorApplication;
 use diffuse_editor_core::state::editor_state::PlaybackState;
 use diffuse_intent::invocation::capability_invocation::ConfirmationSeverity;
 
+use crate::hud::battle_hud_model::BattleHUDModel;
+use crate::hud::in_game_battle_hud_view::InGameBattleHUDView;
 use crate::launch_options::EditorAppLaunchOptions;
+use crate::projects::editor_launch_context::EditorLaunchContext;
+use crate::root::editor_launch_root::EditorLaunchRoot;
+use crate::root::root_view_factory::persistence_directory;
 use crate::release_install_validator::EditorInstallValidator;
 
 const LOG_TARGET: &str = "com.cove.editor";
@@ -23,7 +41,14 @@ static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 pub fn run() -> ExitCode {
     let arguments = std::env::args().collect::<Vec<_>>();
     let environment = std::env::vars().collect();
-    match run_editor(&arguments, &environment) {
+    let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+        let mut logging = LoggingConfiguration::default();
+        logging.apply_process_environment()?;
+        LogSystem::bootstrap(Some("Diffuse"), logging, None)?;
+        run_editor(&arguments, &environment)
+    })();
+    LogSystem::flush();
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             LogSystem::logger(LOG_TARGET).log(&LogEvent::new(Level::Error, error.to_string()));
@@ -75,11 +100,87 @@ fn run_editor(
         editor.run(flag("--approve-scene-edits"));
         return Ok(());
     }
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "The graphical editor launcher is still being migrated.",
-    )
-    .into())
+    run_desktop(arguments, environment, options)
+}
+
+fn run_desktop(
+    arguments: &[String],
+    environment: &BTreeMap<String, String>,
+    options: EditorAppLaunchOptions,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let settings_requested = EditorAppLaunchOptions::settings_requested(arguments);
+    let state_directory = persistence_directory(environment.get("COVE_EDITOR_STATE_DIRECTORY").map(String::as_str))?;
+    AppStorageDefaults::set_store(Arc::new(FileAppStorageStore::new(state_directory.join("app-storage.json"))));
+    let device = Arc::new(Device::make(editor_render_configuration(arguments, environment, options.backend_config)?)?);
+    let in_game_ui = InGameUIHost::new(device.clone())?;
+    if environment.get("COVE_EDITOR_SAMPLE_HUD").is_some_and(|value| value == "1") {
+        let battle = BattleStateMachine::reduce(
+            &BattleSampleFactory::make_three_kingdoms_duel(),
+            &BattleCommand::StartPlayerTurn { draw_count: 4 },
+        );
+        if let Some(snapshot) = BattleHUDSnapshot::make(&battle, &BattlePlayerID::player()) {
+            in_game_ui.set_root_view(InGameBattleHUDView::new(Rc::new(BattleHUDModel::new(snapshot))));
+        }
+    }
+    let context = EditorLaunchContext::new(
+        device.clone(), in_game_ui, state_directory, settings_requested,
+        EditorAppLaunchOptions::watch_plugin_packages_requested(arguments, environment),
+        EditorAppLaunchOptions::review_plugin_path(arguments),
+    );
+    context.restore_projects(options.project_directory.as_deref());
+    let mut config = ApplicationConfiguration::new(Some("Diffuse"));
+    config.rendering.clear_color = [30.0 / 255.0, 31.0 / 255.0, 34.0 / 255.0, 1.0];
+    config.window.title_bar_style = if settings_requested {
+        AppWindowTitleBarStyle::Standard
+    } else {
+        AppWindowTitleBarStyle::HiddenInset
+    };
+    if settings_requested {
+        config.window.width = 1040;
+        config.window.height = 780;
+    }
+    integration::set_diagnostics_factory(Some(devtools::factory()));
+    let result = Application::run(
+        config,
+        Some(device),
+        AnyView::new(EditorLaunchRoot::new(context.clone(), settings_requested)),
+        ApplicationCallbacks {
+            events: context.events.clone(),
+            tick: Some(Rc::new({
+                let context = context.clone();
+                move |elapsed| context.tick(elapsed)
+            })),
+            ready: Some(Rc::new({
+                let context = context.clone();
+                move |display| context.wire_display(display)
+            })),
+            ..ApplicationCallbacks::default()
+        },
+    );
+    integration::set_diagnostics_factory(None);
+    context.shutdown();
+    Ok(result?)
+}
+
+fn editor_render_configuration(
+    arguments: &[String],
+    environment: &BTreeMap<String, String>,
+    mut config: DeviceConfig,
+) -> Result<DeviceConfig, Box<dyn std::error::Error>> {
+    let requested = match arguments.iter().position(|value| value == "--renderer") {
+        Some(index) => arguments.get(index + 1).map(String::as_str)
+            .ok_or("--renderer requires native, metal, vulkan, or dx12.")?,
+        None => environment.get("COVE_RENDERER").map(String::as_str).unwrap_or("native"),
+    };
+    let api = match requested.to_ascii_lowercase().as_str() {
+        "native" => return Ok(config),
+        "metal" => GraphicsApi::Metal,
+        "vulkan" => GraphicsApi::Vulkan,
+        "dx12" | "d3d12" => GraphicsApi::Dx12,
+        _ => return Err(format!("Unknown renderer '{requested}'.").into()),
+    };
+    config.preferred_backends = vec![api];
+    Ok(config)
 }
 
 struct HeadlessEditor {

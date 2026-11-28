@@ -1273,11 +1273,19 @@ Swift 版中 Diffuse 已经复用 Cove 的公共层：`CapabilityRuntime` 以 `@
 | 2026-11-28 | 批次 382 | diffuse-editor、diffuse-editor-core（应用入口、MCP 与插件重载） | 3 | 624 | Rust 可执行程序接入安装校验与无界面编辑器。Cove 回环传输把请求交给编辑器线程，场景能力通过现有工作流范围、工具策略、版本化快照和本地确认。真实 Bun 插件可按 AI 事件延迟激活，包变更后重载拒绝旧授权。新增回环、事务、文件监控和插件能力测试。用 Rust MCP 标准输入输出进程发现 53 项工具并读取场景。 |
 | 2026-11-28 | 批次 382 语义记录 | — | — | — | `EditorApplication::start_mcp_bridge` 接受 `DIFFUSE_MCP_PORT`，默认 9898。`tick` 轮询有界请求队列和插件包变化。超时请求在编辑器线程接纳前作废，接纳后的结果由原请求返回。插件进程池缓存每个已创建的客户端，授权检查始终由插件管理器执行。无界面进程使用 60 Hz 模拟和显式选择的可逆编辑确认。 |
 
+| 2026-11-28 | 批次 383 | diffuse-editor-ui（场景文件选择和战斗 HUD） | 2 | 277 | 场景文件选择走 Cove 窗口原生对话框，播放时禁用，选中的文件继续走现有的未保存审核。战斗 HUD 保留对手与玩家状态、手牌、技能、能量槽，使用 `Observed` 订阅模型。视图挂载后的状态更新测试和场景文件分发测试通过，编辑器 UI 全部 69 项通过。 |
+| 2026-11-28 | 批次 383 语义记录 | — | — | — | 原生文件选择走 `AppDisplayHandleHolder::current().request_open_file`，Web 宿主走 `FilePicker`。`InGameBattleHUDView::new(Rc<BattleHUDModel>)` 注册 `Observed::dynamic_field`。视图已可交给 `InGameUIHost::set_root_view`，桌面 sample HUD 的启动接线依赖窗口入口。 |
+
 ## 10. 已知问题与需要用户确认的事项
 
 - **编辑器入口（批次 382）**：`Launch.swift` 的无界面和安装校验分支已迁移。默认图形启动、脚本编辑器演示、项目窗口和 HUD 接线仍在清单中。插件宿主回调、安装恢复及替换授权流程还需继续处理。插件安装资源布局及 Linux、Windows 实机运行留待对应门禁。
 - **MCP 传输（批次 382）**：Cove 停止回环监听后，空闲连接由客户端结束。编辑器关闭时清空请求队列并拒绝后续命令。Cove 的连接关闭缺口记为 [G14](.migration/cove-gaps.md#g14-stopping-the-local-agent-server-leaves-accepted-connections-open)。
 
+- **macOS 验证（批次 382）**：`cargo check --locked --workspace --all-targets` 通过。编辑器核心 445 项通过，Metal HUD 图像对等性项在启用着色器资源后失败，同一资源目录下批次 382 之前构建的测试二进制也复现。编辑器 UI 67 项和 MCP 39 项通过。Rust 无界面进程通过 MCP 发现与调用测试，收到 SIGTERM 后执行编辑器关闭流程。单独启动自动确认模式，验证可逆编辑自动应用，破坏性编辑继续等待确认。
+
+- **原生渲染门禁（批次 382–383）**：工作区单元与集成测试在 `diffuse-render-validation` 的 9 项 Metal 验证处停止，运行至失败前累计 1609 项通过。涉及透明排序、粒子、后处理、PBR 和视口缩容。该 crate 本批无源码改动，仍需定位当前 GPU 结果差异。
+
+- **严格 Clippy（批次 382–383）**：`cargo clippy --locked --workspace --all-targets -- -D warnings` 仍因 `diffuse-plugin-host` 测试类型复杂度、`xtask` 未接线代码与编辑器核心既有告警失败。
 
 - **Cove 0.3.2 本地依赖图（批次 358）**：当前只读 Cove checkout 使 Cargo 自动解析到 `cove-shell-verbs`（Cove 本地 crate）与 `ttf-parser 0.25.1`（来自 `cove-text`，用于检查 OpenType 字体）。用户于 2026-11-26 按 §2 确认将 `ttf-parser 0.25.1` 写入 `Cargo.lock`。
 - **macOS 门禁（批次 363）**：工作区 `cargo check --locked --workspace --all-targets` 已通过。渲染生命周期用例需要将原有 `DiffuseRuntime_RenderBackend.bundle` 放在测试二进制旁或用 `COVE_RESOURCE_PATH` 指定资源根。 暂存资源后的工作区运行通过 2527 项单元与集成测试，CrystalRush 玩法仍被标记忽略。组合运行的 `diffuse-editor-ui` Rustdoc 报 E0463，单独运行该 crate 的文档门禁以及单独运行工作区文档门禁均通过。严格 Clippy 仍报告已有代码问题，包括 `xtask` 的未接线命令和编辑器核心的未接线模块。

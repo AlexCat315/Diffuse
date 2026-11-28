@@ -8,7 +8,8 @@ use std::cell::{OnceCell, RefCell};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use cove_runtime::scene::WakeCallback;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::sync::mpsc::{self, Receiver};
@@ -187,6 +188,7 @@ pub struct EditorApplication {
     pub activate_panel_handler: RefCell<Option<ActivatePanelHandler>>,
     pub(crate) close_project_handler: RefCell<Option<Rc<dyn Fn()>>>,
     pub(crate) display_invalidation_handler: RefCell<Option<Rc<dyn Fn()>>>,
+    background_display_waker: Arc<Mutex<Option<WakeCallback>>>,
     pub(crate) geometry_authoring: OnceCell<Rc<EditorGeometryAuthoring>>,
     pub(crate) mesh_editing: OnceCell<Rc<EditorMeshEditing>>,
     pub(crate) scene_persistence: OnceCell<EditorScenePersistence>,
@@ -227,7 +229,8 @@ impl EditorApplication {
         self.last_prepared_scene_revision.set(None);
         self.render_gate.replace(EditorViewportRenderGate::new());
         self.engine.start(None, false, renderer.map(|renderer| Box::new(renderer) as Box<_>));
-        self.engine.set_render_completion_handler(Some(Arc::new(|_| cove_runtime::scene::wake_scene_thread())));
+        let wake = self.background_display_waker();
+        self.engine.set_render_completion_handler(Some(Arc::new(move |_| wake())));
         let app = Rc::downgrade(self);
         self.subscriptions.set_events(Some(self.events.subscribe(move |event| {
             if let Some(app) = app.upgrade() {
@@ -502,6 +505,7 @@ impl EditorApplication {
             activate_panel_handler: RefCell::default(),
             close_project_handler: RefCell::default(),
             display_invalidation_handler: RefCell::default(),
+            background_display_waker: Arc::default(),
             geometry_authoring: OnceCell::new(),
             mesh_editing: OnceCell::new(),
             scene_persistence: OnceCell::new(),
@@ -686,6 +690,23 @@ impl EditorApplication {
             target,
             next_step,
         });
+    }
+
+    /// Installs the desktop host's invalidation endpoint for worker results.
+    pub fn set_background_display_waker(&self, waker: Option<WakeCallback>) {
+        *self.background_display_waker.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = waker;
+    }
+
+    pub(crate) fn background_display_waker(&self) -> WakeCallback {
+        let slot = self.background_display_waker.clone();
+        Arc::new(move || {
+            let waker = slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+            if let Some(waker) = waker {
+                waker();
+            } else {
+                cove_runtime::scene::wake_scene_thread();
+            }
+        })
     }
 
     pub fn request_display_refresh(&self) {

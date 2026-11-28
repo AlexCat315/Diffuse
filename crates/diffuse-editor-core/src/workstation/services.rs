@@ -31,7 +31,7 @@ pub struct EditorWorkstation {
     pub scripts: Arc<ScriptWorkspaceModel>,
     pub documents: Arc<EditorDocumentWorkspace>,
     pub media: EditorMediaWorkspace,
-    pub version_control: EditorVersionControl,
+    pub version_control: Arc<EditorVersionControl>,
     pub tasks: Arc<EditorTasks>,
     root: PathBuf,
 }
@@ -54,7 +54,7 @@ impl EditorWorkstation {
         Ok(Arc::new_cyclic(|weak: &Weak<EditorWorkstation>| {
             let documents = Arc::new(EditorDocumentWorkspace::new(&root));
             // Every domain requests its binding from the same lifecycle owner.
-            let version_control = EditorVersionControl::new(&root, plugins.clone());
+            let version_control = Arc::new(EditorVersionControl::new(&root, plugins.clone()));
             let tasks = Arc::new(EditorTasks::new(&root, plugins.clone()));
             // Every tab in the served language gets the language service:
             // scripts as part of the game, other project files analyzed in place.

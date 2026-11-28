@@ -2863,7 +2863,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/commands/scene_files.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Commands/Shortcut.swift",
@@ -2896,7 +2896,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/hud/in_game_battle_hud_view.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorUI/Launch.swift",

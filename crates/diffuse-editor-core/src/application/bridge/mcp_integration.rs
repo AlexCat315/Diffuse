@@ -54,7 +54,7 @@ pub(crate) struct EditorMcpBridge {
 }
 
 impl EditorMcpBridge {
-    fn start(port: u16) -> io::Result<Self> {
+    fn start(port: u16, wake: cove_runtime::scene::WakeCallback) -> io::Result<Self> {
         let (sender, requests) = mpsc::sync_channel(MAX_QUEUED_REQUESTS);
         let server = AgentLocalServer::new(
             port,
@@ -68,7 +68,7 @@ impl EditorMcpBridge {
                 };
                 let result = match sender.try_send(request) {
                     Ok(()) => {
-                        cove_runtime::scene::wake_scene_thread();
+                        wake();
                         match admission.recv_timeout(DISPATCH_TIMEOUT) {
                             Ok(()) => reply
                                 .recv()
@@ -117,7 +117,7 @@ impl EditorApplication {
         {
             return Ok(port);
         }
-        let started = EditorMcpBridge::start(port)?;
+        let started = EditorMcpBridge::start(port, self.background_display_waker())?;
         let bound = started.server.bound_port().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::AddrNotAvailable,
@@ -126,6 +126,10 @@ impl EditorApplication {
         })?;
         *bridge = Some(started);
         Ok(bound)
+    }
+
+    pub fn stop_mcp_bridge(&self) {
+        self.mcp_bridge.take();
     }
 
     pub fn poll_mcp_bridge(self: &Rc<Self>) {
@@ -144,7 +148,7 @@ impl EditorApplication {
                     .send(self.handle_mcp_message(&request.command));
             }
         }
-        cove_runtime::scene::wake_scene_thread();
+        self.request_display_refresh();
     }
 
     pub(crate) fn handle_mcp_message(self: &Rc<Self>, data: &[u8]) -> Vec<u8> {

@@ -145,3 +145,16 @@ Format:
 - Needed: stop accepting new connections, close existing sockets, and collect their workers during shutdown.
 - Diffuse meanwhile: dropping the editor mailbox first releases queued requests and prevents further editor access. Connection lifetimes still follow Cove transport behavior.
 - Status: open, verified against the Cove 0.3.2 transport implementation on 2026-11-28.
+
+## G15: Desktop AppDisplayHandle display requests are not drained by the host
+- Needed by: event-driven desktop editor frames on asynchronous scene renders, plugin changes, and local MCP requests.
+- Cove today: `AppDisplayHandle::request_display` sets the handle's signal and wakes the event loop. The runtime has an `external_display_request_drain` hook, but the desktop application does not connect it to `AppDisplayHandle::drain_display_request`.
+- Needed: the host should drain the display request and invalidate the affected window before deciding whether a frame is due.
+- Status: open, confirmed against Cove 0.3.2 desktop/runtime source on 2026-11-28.
+
+## G16: Desktop diagnostics readiness returns a boolean instead of the diagnostics instance
+- Needed by: editor MCP UI diagnostics, trace captures, and session transfer when switching projects.
+- Cove today: the desktop `diagnostics_ready` callback receives only the capture flag. The DevTools factory owns `RuntimeProbe` and its inspection session privately.
+- Needed: the active inspection handle or an equivalent query/capture interface exposed from the desktop host.
+- Diffuse meanwhile: the Cove DevTools window inspection session starts through Cove's public factory. The editor-specific MCP UI diagnostics attachment still needs the instance.
+- Status: open, confirmed against Cove 0.3.2 desktop diagnostics API on 2026-11-28.
