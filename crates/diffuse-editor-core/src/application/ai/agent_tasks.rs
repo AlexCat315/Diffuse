@@ -114,23 +114,6 @@ impl EditorApplication {
         scope
     }
 
-    /// `beginAgentSceneDocument()` — a new document invalidates requests even
-    /// when the replacement scene reuses the old numeric revision.
-    pub(crate) fn begin_agent_scene_document(&self) {
-        if self.store.pending_confirmation_request().is_some() {
-            self.skip_pending_confirmation();
-        }
-        self.cancel_active_ai_request();
-        self.agent_execution.borrow_mut().assistant_message_id = None;
-        self.agent_execution
-            .borrow_mut()
-            .confirmation_target_entity_ids
-            .clear();
-        self.store
-            .dispatch(EditorAction::SetPendingConfirmationRequest(None));
-        self.store.dispatch(EditorAction::BeginSceneDocument);
-    }
-
     /// `cancelAgentTask()` — stops the in-flight request and cancels the
     /// session's active run.
     pub(crate) fn cancel_agent_task(&self) {

@@ -137,3 +137,11 @@ Format:
 - Needed: an independent launch API for desktop GUI applications, preserving native argument paths and providing child reaping while the launching process runs.
 - Diffuse meanwhile: the player launches directly with Rust's process API and a reaper thread. macOS signing, script builds and player validation continue to use Cove process APIs.
 - Status: open (source inspection, 2026-11-14).
+
+## G14: Stopping the local agent server leaves accepted connections open
+
+- Needed by: Diffuse's editor MCP bridge when a project closes and the listener is restarted.
+- Cove today: `AgentLocalServer::stop()` closes the listener and joins the accept thread. Connection workers are detached and idle workers stay blocked in reads until their clients disconnect.
+- Needed: stop accepting new connections, close existing sockets, and collect their workers during shutdown.
+- Diffuse meanwhile: dropping the editor mailbox first releases queued requests and prevents further editor access. Connection lifetimes still follow Cove transport behavior.
+- Status: open, verified against the Cove 0.3.2 transport implementation on 2026-11-28.

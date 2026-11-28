@@ -231,6 +231,23 @@ impl SwiftToolchainResolver {
         let fixed_compiler = binary_directory.join(compiler_name());
         let fixed_lsp = binary_directory.join(language_server_name());
         let fixed_cargo = binary_directory.join(cargo_name());
+        // An explicit language-server override must resolve to the paired
+        // analyzer; anything else would analyze with a different installation
+        // than it compiles with.
+        if let Some(override_path) =
+            environment.get(RustAnalyzerExecutableLocator::OVERRIDE_ENVIRONMENT_KEY)
+            && !override_path.trim().is_empty()
+            && let Ok(executable) = diffuse_script::dynamic_script::script_compiler::ScriptCompiler::resolve_executable_url(
+                override_path,
+                environment,
+            )
+            && std::fs::canonicalize(&executable).ok().as_deref()
+                != std::fs::canonicalize(&fixed_lsp).ok().as_deref()
+        {
+            return Err(SwiftToolchainError::Unavailable(format!(
+                "The configured language server does not belong to this toolchain: {override_path}",
+                )));
+        }
         if !is_executable(&fixed_compiler)
             || !is_executable(&fixed_lsp)
             || !is_executable(&fixed_cargo)

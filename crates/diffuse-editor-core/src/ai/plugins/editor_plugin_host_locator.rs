@@ -45,11 +45,17 @@ impl EditorPluginHostLocator {
             return validated_executable(injected_url);
         }
         let name = Self::executable_name();
+        let cargo_name = if cfg!(windows) {
+            "diffuse-plugin-host.exe"
+        } else {
+            "diffuse-plugin-host"
+        };
         let mut candidates: Vec<PathBuf> = Vec::new();
         candidates.push(bundle_url.join("Contents").join("Helpers").join(name));
         if let Some(directory) = executable_url.and_then(Path::parent) {
             candidates.push(directory.join("Tools").join(name));
             candidates.push(directory.join(name));
+            candidates.push(directory.join(cargo_name));
         }
         #[cfg(debug_assertions)]
         {
@@ -58,7 +64,9 @@ impl EditorPluginHostLocator {
             // `<workspace>/target/debug`.
             let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
             if let Some(repository_root) = manifest_dir.ancestors().nth(2) {
-                candidates.push(repository_root.join("target").join("debug").join(name));
+                let debug = repository_root.join("target").join("debug");
+                candidates.push(debug.join(name));
+                candidates.push(debug.join(cargo_name));
             }
         }
         candidates

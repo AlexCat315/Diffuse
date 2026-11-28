@@ -12,6 +12,8 @@ use diffuse_editor_core::state::editor_state::PlaybackState;
 use diffuse_editor_core::state::workspace::content::EditorContent;
 use diffuse_editor_core::tasks::results::TaskKind;
 
+use diffuse_editor_core::application::editor_application::EditorApplication;
+
 use crate::ai::surface::EditorStudioView;
 use crate::commands::command::{EditorCommand, EditorPaletteScope, EditorPanelArea};
 use crate::commands::policy::{
@@ -61,6 +63,27 @@ impl EditorCommandContext {
             workbench,
             agent_panel_id,
         }
+    }
+
+    /// `init(app:)` — reads the live editor state once so menus, the palette
+    /// and keyboard shortcuts all project the same snapshot.
+    pub fn from_application(app: &std::rc::Rc<EditorApplication>) -> Self {
+        let document = app
+            .workstation
+            .documents
+            .snapshot()
+            .selected()
+            .map(|document| EditorCommandDocument::new(document.is_dirty()));
+        EditorCommandContext::new(
+            app.store.content(),
+            app.store.playback_state(),
+            app.can_undo(),
+            app.can_redo(),
+            !app.store.selected_entity_ids().is_empty(),
+            document,
+            app.workbench_catalog(),
+            app.agent_panel_id(),
+        )
     }
 
     /// Swift's `init(content:)` with every other argument at its default.

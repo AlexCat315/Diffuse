@@ -356,16 +356,22 @@ impl EditorApplication {
                 answer
             })
             .collect();
-        self.drop_agent_execution();
         self.resolve_pending_confirmation(&ConfirmationResolution::new(
             request.batch_id.clone(),
             request.correlation_id.clone(),
             answers,
             false,
         ));
+        // A staging record that never reached the pipeline (or failed to
+        // resolve) still has to leave review; the pipeline clears it itself on
+        // the discard path, so this only runs for the leftover case.
+        if self.store.pending_confirmation_request().is_some() {
+            self.drop_agent_execution();
+        }
     }
 
-    /// The bookkeeping `skipPendingConfirmation` performs on the request state.
+    /// The bookkeeping `skipPendingConfirmation` performs when the pipeline
+    /// never owned the request.
     fn drop_agent_execution(&self) {
         self.store
             .dispatch(EditorAction::SetPendingConfirmationRequest(None));

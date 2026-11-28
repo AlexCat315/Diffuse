@@ -6,6 +6,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use super::installations::PluginInstallations;
 use super::service_jobs::PluginServiceJobs;
@@ -17,7 +18,7 @@ pub type PeerProvider = Rc<dyn Fn() -> Vec<Rc<EditorApplication>>>;
 
 pub struct PluginEditorIntegration {
     pub workbench: WorkbenchSession,
-    pub jobs: PluginServiceJobs,
+    pub jobs: Arc<PluginServiceJobs>,
     pub workspace_catalog: RefCell<BTreeMap<String, String>>,
     pub workspace_resolver: RefCell<Option<WorkspaceResolver>>,
     pub peers: RefCell<Option<PeerProvider>>,
@@ -34,7 +35,7 @@ impl PluginEditorIntegration {
     pub fn new() -> Self {
         PluginEditorIntegration {
             workbench: WorkbenchSession::new(),
-            jobs: PluginServiceJobs::new(),
+            jobs: Arc::new(PluginServiceJobs::new()),
             workspace_catalog: RefCell::new(BTreeMap::new()),
             workspace_resolver: RefCell::new(None),
             peers: RefCell::new(None),

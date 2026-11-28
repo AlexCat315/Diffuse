@@ -78,30 +78,23 @@ impl PluginHostPool {
         let notify_id = plugin_id.to_string();
         let notify = self.on_crash.clone();
         let handler = self.host_call_handler.clone();
-        let client = Arc::new(PluginHostProcessClient::new(
+        let mut client = PluginHostProcessClient::new(
             executable,
             Vec::new(),
             Some(Box::new(move |_generation| notify(&notify_id))),
-        ));
+        );
         let call_id = plugin_id.to_string();
-        let mut client = client;
-        {
-            let client = Arc::get_mut(&mut client).expect("client was just created");
-            client.on_host_call = Some(Box::new(move |call: &PluginHostServiceCall| {
-                let handler = handler
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let Some(handler) = handler.as_ref() else {
-                    return Err(PluginHostClientError::CommunicationFailed.into());
-                };
-                handler(&call_id, call)
-            }));
-        }
-        let inserted = clients
-            .get(plugin_id)
-            .cloned()
-            .expect("client was just inserted");
-        Ok(inserted)
+        client.on_host_call = Some(Box::new(move |call: &PluginHostServiceCall| {
+            let callback = handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+                .ok_or(PluginHostClientError::CommunicationFailed)?;
+            callback(&call_id, call)
+        }));
+        let client = Arc::new(client);
+        clients.insert(plugin_id.to_owned(), client.clone());
+        Ok(client)
     }
 
     pub fn existing(&self, plugin_id: &str) -> Option<Arc<PluginHostProcessClient>> {

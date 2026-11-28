@@ -135,8 +135,13 @@ impl PluginPackageMonitor {
         let mut guard = lock
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let changed = packages.iter()
+            .filter(|(id, path)| guard.packages.get(*id) != Some(*path))
+            .map(|(id, path)| (id.clone(), path.clone()))
+            .collect();
+        guard.previous_snapshot.retain(|id, _| packages.contains_key(id));
+        guard.previous_snapshot.extend(Self::snapshot(&changed));
         guard.packages = packages;
-        guard.previous_snapshot = Self::snapshot(&guard.packages);
     }
 
     fn snapshot(packages: &BTreeMap<String, PathBuf>) -> BTreeMap<String, Entry> {

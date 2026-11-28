@@ -279,8 +279,7 @@ impl EditorApplication {
     ) {
         if let Some(updated_scene) = execution_context.scene_runtime.take() {
             self.scene.set_scene(updated_scene);
-            let revision = self.scene.scene().snapshot().revision;
-            self.scene.notify_revision_handlers(revision);
+            self.scene.notify_revision_changed_default();
         }
 
         match result.disposition {

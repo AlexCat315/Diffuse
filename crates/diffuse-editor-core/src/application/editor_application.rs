@@ -52,6 +52,7 @@ use crate::ai::chat::editor_ai_settings::{EditorAISettings, EditorCapabilitySett
 use crate::ai::plugins::editor_plugin_host_locator::EditorPluginHostLocator;
 use crate::ai::tools::access::EditorToolAccess;
 use crate::ai::tools::audit::EditorToolAudit;
+use crate::application::bridge::mcp_integration::EditorMcpBridge;
 use crate::application::diagnostics::subscriptions::EditorSubscriptions;
 use crate::application::persistence::scene_persistence::EditorScenePersistence;
 use crate::application::plugins::plugin_session::{PluginSession, PluginSessionError};
@@ -143,6 +144,7 @@ pub struct EditorApplication {
     pub observation_bus: Arc<ObservationBus>,
     pub intent_coordinator: IntentRuntimeCoordinator,
     pub(crate) tool_access: EditorToolAccess,
+    pub(crate) mcp_bridge: RefCell<Option<EditorMcpBridge>>,
     pub intent_transaction_builder: IntentTransactionBuilder,
     pub ai_world_context: AIWorldContext,
     pub perception_service: PerceptionService,
@@ -247,6 +249,8 @@ impl EditorApplication {
         if !self.is_active() {
             return;
         }
+        self.poll_mcp_bridge();
+        self.poll_watched_plugin_packages();
         for record in self.subscriptions.console.take() {
             self.store.dispatch(EditorAction::AppendLogRecord(record));
         }
@@ -464,6 +468,7 @@ impl EditorApplication {
             tool_access: EditorToolAccess::new(
                 options.tool_policy.unwrap_or_else(EditorToolAudit::policy),
             ),
+            mcp_bridge: RefCell::default(),
             intent_transaction_builder: IntentTransactionBuilder::new(),
             ai_world_context,
             perception_service,
@@ -514,6 +519,8 @@ impl EditorApplication {
             app.log_warning("Recovered plugin authorization storage", detail.clone());
         }
         app.connect_scene_callbacks();
+        app.install_commit_policies();
+        app.configure_plugin_runtime();
         app.reload_scripts_after_scene_replacement();
         Ok(app)
     }
@@ -559,7 +566,7 @@ impl EditorApplication {
         self.mesh_editing();
     }
 
-    fn log_warning(&self, message: &str, detail: String) {
+    pub(crate) fn log_warning(&self, message: &str, detail: String) {
         self.store.dispatch(EditorAction::AppendConsoleMessage {
             message: message.into(),
             severity: EditorConsoleSeverity::Warning,
@@ -573,6 +580,8 @@ impl EditorApplication {
         if self.is_shutting_down.swap(true, Ordering::AcqRel) {
             return;
         }
+        self.mcp_bridge.take();
+        self.stop_watching_plugin_packages();
         self.subscriptions.console.stop();
         self.project_export.take();
         self.leave_geometry_editing();

@@ -3,13 +3,7 @@
 //! A plugin that ships in the editor's resources. Each is found by listing
 //! `Resources/Plugins`; its manifest decides where it runs.
 //!
-//! Two pieces of the Swift file have no Rust counterpart yet and land with
-//! their anchors: `EditorApplication`'s `bundledPlugins`/`enableBundledPlugins`
-//! extension (no application shell in Rust yet) and `languageServer()` (needs
-//! `LanguageCatalog.served` / `PluginLanguageService`). `VersionControlSystem`
-//! is still pending in `version_control/model.rs`, so the version-control host
-//! carries the contributed system identifier under the same `^[a-z][a-z0-9-]{0,31}$`
-//! rule Swift's `VersionControlSystem(rawValue:)` applies.
+//! The application registers enabled packages and projects their contributed catalogs.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -264,5 +258,137 @@ fn application_support_directory() -> PathBuf {
                     .join(".local")
                     .join("share")
             })
+    }
+}
+
+impl crate::application::editor_application::EditorApplication {
+    pub(super) fn refresh_contribution_snapshots(&self) {
+        use crate::contributions::agents::AgentCatalog;
+        use crate::contributions::ai_providers::AIProviderCatalog;
+        use crate::contributions::languages::LanguageCatalog;
+        use crate::state::editor_reducer::EditorAction;
+
+        let contributions = &self.plugin_session.contributions;
+        let themes = contributions.themes.snapshot();
+        let providers = contributions.providers.snapshot();
+        let languages = contributions.languages.snapshot();
+        let agents = contributions.agents.snapshot();
+        let mut state = self.plugin_session.state();
+        let themes_changed = state.theme_revision != Some(themes.revision);
+        state.theme_revision = Some(themes.revision);
+        if state.provider_revision != Some(providers.revision) {
+            state.providers = AIProviderCatalog::new(
+                providers
+                    .values
+                    .into_iter()
+                    .map(|item| item.value)
+                    .collect(),
+            );
+            state.provider_revision = Some(providers.revision);
+        }
+        if state.language_revision != Some(languages.revision) {
+            state.languages = LanguageCatalog::from_packages(
+                languages
+                    .values
+                    .into_iter()
+                    .map(|item| item.value)
+                    .collect(),
+            );
+            state.language_revision = Some(languages.revision);
+        }
+        if state.agent_revision != Some(agents.revision) {
+            state.agents = AgentCatalog::from_packages(
+                agents.values.into_iter().map(|item| item.value).collect(),
+            );
+            state.agent_revision = Some(agents.revision);
+        }
+        drop(state);
+        if themes_changed {
+            self.store.dispatch(EditorAction::ThemeCatalogChanged);
+        }
+        let snapshots = contributions
+            .workbench()
+            .iter()
+            .map(|catalog| catalog.snapshot())
+            .collect::<Vec<_>>();
+        self.plugin_session.editor.workbench.update(&snapshots);
+        self.request_display_refresh();
+    }
+}
+
+impl crate::application::editor_application::EditorApplication {
+    pub fn bundled_plugins(&self) -> &'static [BundledPlugin] {
+        BundledPlugins::catalog()
+    }
+
+    pub fn is_bundled_plugin_enabled(&self, plugin: &BundledPlugin) -> bool {
+        self.enabled_plugin_manifests().contains_key(&plugin.id)
+    }
+
+    /// Registers declarative packages and mounts runtime packages on startup.
+    pub fn enable_bundled_plugins(self: &std::rc::Rc<Self>) {
+        use crate::state::editor_state::EditorConsoleSeverity;
+        use diffuse_capability::support::swift_date::SwiftDate;
+        use diffuse_plugin::plugin_authorization::{
+            PluginAuthorizationRecord, PluginContractDeriver,
+        };
+
+        let mut state = self.plugin_session.state();
+        if state.bundled_started || !self.is_active() {
+            return;
+        }
+        state.bundled_started = true;
+        drop(state);
+
+        let application_wide = self.plugin_session.editor.peers.borrow().is_some();
+        let disabled =
+            BundledPlugins::disabled(Path::new(&self.project_directory), application_wide)
+                .unwrap_or_default();
+        let loader = PluginPackageLoader::new(
+            CapabilityRegistry::default(),
+            None,
+            ContributionPointRegistry::standard(),
+        );
+        for plugin in BundledPlugins::catalog()
+            .iter()
+            .filter(|plugin| !disabled.contains(&plugin.id))
+        {
+            let enable = || -> Result<(), super::plugins::PluginLifecycleError> {
+                if self.is_bundled_plugin_enabled(plugin) {
+                    return Ok(());
+                }
+                let package = loader.load(&plugin.package)?;
+                if package.manifest.id != plugin.id {
+                    return Err(diffuse_plugin::plugin_authorization::PluginAuthorizationError::NoLongerValid.into());
+                }
+                let authorization = PluginAuthorizationRecord::from_package(
+                    &package,
+                    PluginContractDeriver::contracts(&package),
+                    SwiftDate::now(),
+                )?;
+                self.enable_plugin(&plugin.package, &authorization)?;
+                Ok(())
+            };
+            if let Err(error) = enable() {
+                self.log_console(
+                    &format!("{} could not start", plugin.name),
+                    EditorConsoleSeverity::Warning,
+                    Some(error.to_string()),
+                    None,
+                    None,
+                );
+            }
+        }
+        if let Err(error) = self.activate_plugins("onStartup") {
+            self.log_console(
+                "Plugin startup failed",
+                EditorConsoleSeverity::Warning,
+                Some(error.to_string()),
+                None,
+                None,
+            );
+        }
+        self.workstation.version_control.refresh();
+        self.workstation.tasks.refresh();
     }
 }

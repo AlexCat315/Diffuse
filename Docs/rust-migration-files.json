@@ -151,7 +151,7 @@
       "rust": [
         "crates/diffuse-editor/src/main.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/AI/Chat/AIChatMessage.swift",
@@ -417,7 +417,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/bridge/mcp_integration.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Diagnostics/Diagnostics.swift",
@@ -528,7 +528,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/commands.rs"
       ],
-      "status": "written"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/Contributions.swift",
@@ -683,7 +683,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/application/plugins/reload.rs"
       ],
-      "status": "pending"
+      "status": "written"
     },
     {
       "source": "Editor/Sources/EditorCore/Application/Plugins/ServiceJobs.swift",
@@ -3702,7 +3702,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/panels/script_editor/diagnostics/completion_conversion.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorUI/Panels/ScriptEditor/Diagnostics/Diagnostics.swift",
@@ -4432,7 +4432,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/settings/shortcuts.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorUI/Settings/WorkspaceInformation.swift",
@@ -4699,7 +4699,7 @@
       "rust": [
         "crates/diffuse-editor-ui/src/ai/editor_command_search.rs"
       ],
-      "status": "pending"
+      "status": "compiled"
     },
     {
       "source": "Editor/Sources/EditorUI/ai/Surface.swift",
@@ -5075,7 +5075,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/agent_profile_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/AssetImportResolverTests.swift",
@@ -5175,7 +5175,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_agent_transaction_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorAssetFileWorkflowTests.swift",
@@ -5197,7 +5197,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_asset_reload_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorBunWorkflowTests.swift",
@@ -5241,7 +5241,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_diagnostics_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorEntityCreationTests.swift",
@@ -5409,7 +5409,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/editor_script_playback_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/EditorSelectionReducerTests.swift",
@@ -5665,7 +5665,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/mesh_topology_editing_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Particles/FeedbackTests.swift",
@@ -6066,7 +6066,7 @@
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/toolchain_installation_tests.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/Scripting/SwiftToolchainResolutionTests.swift",
@@ -6078,7 +6078,7 @@
         "crates/diffuse-editor-core/src/tests/editor_core/scripting/toolchain_resolution_tests.rs"
       ],
       "d1": "rewrite",
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorCoreTests/StepFixture.swift",
@@ -6133,7 +6133,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/editor_core/workstation_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/EditorWorkbenchTests/AgentPluginSurfaceTests.swift",
@@ -6587,7 +6587,7 @@
       "rust": [
         "crates/diffuse-editor-core/src/tests/script_system/language_workspace_edit_tests.rs"
       ],
-      "status": "pending"
+      "status": "tested"
     },
     {
       "source": "Editor/Tests/ScriptSystemTests/ScriptAssetRegistryTests.swift",

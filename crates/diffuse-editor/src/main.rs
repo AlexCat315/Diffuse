@@ -1,3 +1,5 @@
-//! Binary entry point. See MIGRATION.md §5.
+//! `Editor/Sources/EditorApp/main.swift`.
 
-fn main() {}
+fn main() -> std::process::ExitCode {
+    diffuse_editor_ui::launch::run()
+}

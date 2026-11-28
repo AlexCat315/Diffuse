@@ -2,7 +2,7 @@
 //!
 //! The lifecycle owner, host infrastructure and domain snapshots of one editor.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -54,6 +54,7 @@ pub struct PluginSessionState {
     pub ai_provider: Option<AIProviderDescriptor>,
     pub package_monitor: Option<PluginPackageMonitor>,
     pub bundled_startup: Option<JoinHandle<()>>,
+    pub(super) bundled_started: bool,
     pub projection: Option<JoinHandle<Result<(), String>>>,
 }
 
@@ -72,6 +73,7 @@ impl Default for PluginSessionState {
             ai_provider: None,
             package_monitor: None,
             bundled_startup: None,
+            bundled_started: false,
             projection: None,
         }
     }
@@ -87,6 +89,7 @@ pub struct PluginSession {
     pub runtime: Arc<PluginRuntimeAccess>,
     pub authorization_store: EditorPluginAuthorizationStore,
     pub components: Arc<PluginComponentStore>,
+    pub(super) watched_changes: Arc<Mutex<BTreeSet<String>>>,
     state: Mutex<PluginSessionState>,
     shutdown: Arc<AtomicBool>,
 }
@@ -128,6 +131,7 @@ impl PluginSession {
             runtime,
             authorization_store,
             components: Arc::new(PluginComponentStore::new()),
+            watched_changes: Arc::default(),
             state: Mutex::new(PluginSessionState::default()),
             shutdown: Arc::new(AtomicBool::new(false)),
         })

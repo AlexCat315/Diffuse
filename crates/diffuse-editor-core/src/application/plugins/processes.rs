@@ -13,6 +13,8 @@ use diffuse_plugin::plugin_authorization::PluginAuthorizationRecord;
 use diffuse_plugin::processes::contract::{PluginProcessContext, PluginProcessError};
 
 use crate::application::editor_application::EditorApplication;
+use crate::contributions::runtime_access::PluginRuntimeAccess;
+use crate::scripting::dynamic::dynamic_script_manager::DynamicScriptManager;
 use crate::scripting::toolchain::resolution::SwiftToolchainResolver;
 use crate::version_control::providers::VersionControlProvider;
 
@@ -24,12 +26,24 @@ impl EditorApplication {
         &self,
         authorization: &PluginAuthorizationRecord,
     ) -> Result<PluginProcessContext, PluginProcessError> {
+        Self::build_plugin_process_context(
+            &self.project_directory,
+            self.workstation.scripts.manager(),
+            &self.plugin_session.runtime,
+            authorization,
+        )
+    }
+
+    pub(super) fn build_plugin_process_context(
+        project_directory: &str,
+        scripts: &DynamicScriptManager,
+        runtime: &PluginRuntimeAccess,
+        authorization: &PluginAuthorizationRecord,
+    ) -> Result<PluginProcessContext, PluginProcessError> {
         let permissions = &authorization.host;
-        let root = PathIdentity::canonical_url(Path::new(&self.project_directory));
+        let root = PathIdentity::canonical_url(Path::new(project_directory));
         let mut context = PluginProcessContext::new(root.clone());
-        let providers: Vec<VersionControlProvider> = self
-            .plugin_session
-            .runtime
+        let providers: Vec<VersionControlProvider> = runtime
             .version_control_providers()
             .into_iter()
             .filter(|provider| provider.plugin_id() == authorization.plugin_id)
@@ -70,10 +84,7 @@ impl EditorApplication {
             .collect();
         for rule in &permissions.processes {
             if rule.command == "sourcekit-lsp" {
-                let configured = self
-                    .workstation
-                    .scripts
-                    .manager()
+                let configured = scripts
                     .swift_toolchain()
                     .map(|toolchain| toolchain.language_server_url);
                 let executable = match configured {

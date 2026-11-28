@@ -86,6 +86,16 @@ impl EditorApplication {
         }
 
         self.store.dispatch(EditorAction::SetAISettings(settings.clone()));
+        self.rebuild_ai_session(settings, &providers);
+        self.plugin_session.state().ai_provider = provider;
+        true
+    }
+
+    pub(crate) fn rebuild_session_after_plugin_projection(self: &Rc<Self>) {
+        self.rebuild_ai_session(&self.store.ai_settings(), &self.ai_provider_catalog());
+    }
+
+    fn rebuild_ai_session(self: &Rc<Self>, settings: &EditorAISettings, providers: &AIProviderCatalog) {
         self.store.dispatch(EditorAction::ClearChatHistory);
 
         let old_session = self.session.borrow_mut().clone();
@@ -98,7 +108,7 @@ impl EditorApplication {
         let tool_policy = Some(self.tool_access.policy.clone());
         let new_session = Self::make_session(
             settings,
-            &providers,
+            providers,
             agents.agent(&settings.agent_id),
             &Default::default(),
             plugin_executor,
@@ -129,8 +139,6 @@ impl EditorApplication {
             }
         }
         self.session.replace(new_session);
-        self.plugin_session.state().ai_provider = provider;
-        true
     }
 
     /// `applyCapabilitySettings(_:)` — stores the release phase and rebuilds the

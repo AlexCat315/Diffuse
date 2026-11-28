@@ -66,6 +66,23 @@ impl EditorApplication {
                 });
             }
         }
+        // Swift's `beginAgentSceneDocument()` bookkeeping: a replacement
+        // document invalidates the active request, its proposal and any
+        // captured review target set before the new revision is published.
+        if self.agent_task_service.borrow().active_task().is_some() {
+            self.update_agent_task(
+                crate::ai::chat::editor_agent_task_service::EditorAgentTaskPhase::Cancelled,
+                "Task cancelled",
+            );
+        }
+        {
+            let mut execution = self.agent_execution.borrow_mut();
+            execution.assistant_message_id = None;
+            execution.confirmation_target_entity_ids.clear();
+            execution.proposal = None;
+            execution.request_id = None;
+            execution.request_task.take();
+        }
         self.store
             .dispatch(EditorAction::SetPendingConfirmationRequest(None));
         self.store.dispatch(EditorAction::BeginSceneDocument);
